@@ -204,6 +204,44 @@ callback:
   ledger_metadata: {source: "callback", provider_txn_id: "required"}
   audit_required: true   # every callback (success OR signature-fail) MUST emit an audit ledger row
 
+  # ── OPTIONAL fork-receiver pattern: fail-closed provider routing ────────────
+  # BACKLOG P3-86, decision recorded 2026-07-29. Referenced from the header of
+  # practices/evals/contract_enum_parity_guard.sh.
+  #
+  # WHY THIS EXISTS. contract_enum_parity_guard proves, mechanically, that the provider
+  # vocabulary this contract advertises equals the vocabulary this tree legislates
+  # (provider.type_allowed, above). What it structurally CANNOT prove is the absence of a
+  # provider that only exists under a configuration no test sets — a property-conditional
+  # @Bean returning a JDK Proxy, or a wire literal injected via @Value/System.getProperty.
+  # There is no absence proof over an unexercised configuration; claiming one would be a
+  # broad-but-false guarantee, which is the exact green-but-hollow class this catalog exists
+  # to block. The guard's boundary is therefore stated by enumeration and left there.
+  #
+  # The only SOUND alternative is not a better absence proof — it is fail-closed ROUTING:
+  # reject at runtime any provider slug the contract does not declare, so an undeclared
+  # provider cannot be reached even if a bean for it exists.
+  #
+  # WHY IT IS OPTIONAL AND NOT ENFORCED. Registering one's own PG is precisely what a
+  # fork-receiver is expected to do (R26 autonomy). A catalog-enforced closed set would mean
+  # every fork must edit the catalog's contract to add its own provider — a policy decision
+  # about the fork's deployment, outside catalog scope. Shipped as a pattern, not a gate.
+  fail_closed_provider_routing:
+    status: optional-fork-receiver-pattern
+    applies_to: "POST /api/payments/callback/{provider}"
+    pattern: >-
+      Resolve {provider} against the contract-declared slug set (mirrored here as
+      provider.type_allowed) BEFORE selecting a PaymentCallbackVerifier bean. An unknown slug
+      is rejected 404/422 without ever reaching a verifier, so a provider present only under
+      an unexercised configuration is unreachable rather than merely unproven.
+    closes: >-
+      The deliberate-evasion residual the enum-parity guard documents: conditional runtime
+      beans and configuration-dependent wire values. Routing does not need to enumerate what
+      exists — it enumerates what is ALLOWED, which is decidable from the contract.
+    cost: >-
+      A fork adding a PG must add its slug to the contract + this manifest before the route
+      resolves. That coupling is the point (it is what makes the vocabulary closed), but it
+      is a deployment-policy choice, which is why the catalog ships it rather than gating it.
+
 split:
   # Split tender (split-tender payment vertical, 2026-06-25): one order paid by N tenders.
   applicability: "any order that may be paid by more than one payment row sharing one order_id (multi-card, gift-card + card)."

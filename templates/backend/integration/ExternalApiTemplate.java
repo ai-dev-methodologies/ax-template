@@ -3,7 +3,7 @@
  * template_id: backend/integration/ExternalApiTemplate
  * layer: backend-application
  * domain: integration
- * anchors_rule: resilient-http-client-required.md (PRACTICES-HTTP-002)
+ * anchors_rule: resilience-circuit-breaker-retry-bulkhead.md
  * provenance_class: internal_design
  * evidence:
  *   - source_type: external

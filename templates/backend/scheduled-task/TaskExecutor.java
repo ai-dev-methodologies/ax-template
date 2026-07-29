@@ -3,7 +3,7 @@
  * template_id: backend/scheduled-task/TaskExecutor
  * layer: backend-domain
  * domain: scheduled-task
- * anchors_rule: api-controller-service-separation.md (PRACTICES-API-003)
+ * anchors_rule: core-singleton-no-mutable-state.md
  * provenance_class: internal_design
  * evidence:
  *   - source_type: external

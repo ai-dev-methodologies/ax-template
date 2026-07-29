@@ -20,15 +20,9 @@ imports_forbidden: [other L4 domains]
 
 import React, { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import DashboardView, { type AuthState } from './dashboard-view'
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? '/api'
-
-interface AuthState {
-  email: string
-  roles: string[]
-  verificationState: string
-  providerLinks?: Array<{ provider: string }>
-}
 
 /**
  * DashboardPage — L4 auth vertical placeholder protected page.
@@ -62,61 +56,5 @@ export default function DashboardPage() {
     router.push('/login')
   }
 
-  return (
-    <div className="min-h-svh p-8">
-      <div className="mx-auto max-w-2xl space-y-8">
-        <header className="flex items-center justify-between">
-          <h1 className="text-2xl font-semibold">Dashboard</h1>
-          <button
-            type="button"
-            onClick={handleLogout}
-            className="inline-flex items-center rounded-md border border-input bg-background px-4 py-2 text-sm font-medium shadow-sm hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-          >
-            Sign out
-          </button>
-        </header>
-
-        {authState ? (
-          <div className="rounded-lg border p-6 space-y-3">
-            <h2 className="text-sm font-medium text-muted-foreground uppercase tracking-wide">
-              Account
-            </h2>
-            <dl className="space-y-2 text-sm">
-              <div className="flex gap-2">
-                <dt className="font-medium w-36 shrink-0">Email</dt>
-                <dd className="text-muted-foreground">{authState.email}</dd>
-              </div>
-              <div className="flex gap-2">
-                <dt className="font-medium w-36 shrink-0">Roles</dt>
-                <dd className="text-muted-foreground">{authState.roles?.join(', ')}</dd>
-              </div>
-              <div className="flex gap-2">
-                <dt className="font-medium w-36 shrink-0">Email verified</dt>
-                <dd className="text-muted-foreground">
-                  {authState.verificationState === 'verified' ? 'Yes' : 'Pending'}
-                </dd>
-              </div>
-              {authState.providerLinks && authState.providerLinks.length > 0 && (
-                <div className="flex gap-2">
-                  <dt className="font-medium w-36 shrink-0">Linked providers</dt>
-                  <dd className="text-muted-foreground">
-                    {authState.providerLinks.map(p => p.provider).join(', ')}
-                  </dd>
-                </div>
-              )}
-            </dl>
-          </div>
-        ) : (
-          <div className="rounded-lg border p-6">
-            <p className="text-sm text-muted-foreground">Loading profile…</p>
-          </div>
-        )}
-
-        {/* Fork: replace this placeholder with your actual dashboard content */}
-        <div className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">
-          Your dashboard content goes here.
-        </div>
-      </div>
-    </div>
-  )
+  return <DashboardView authState={authState} onLogout={handleLogout} />
 }

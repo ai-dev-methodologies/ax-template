@@ -4,12 +4,18 @@ export interface SignupRequest { email: string; password: string; }
 export interface SignupResponse { userId: string; verificationRequired: boolean; }
 export interface LoginRequest { email: string; password: string; }
 export interface LoginResponse { accessToken: string; expiresIn: number; }
-export interface UserProfile { 
-  userId: string; 
-  email: string; 
-  roles: string[]; 
-  verificationState: string; 
-  providerLinks: { provider: string; connectedAt: string; providerUserId?: string }[];
+/**
+ * P1-73 — matches GET /api/auth/me byte-for-byte (AuthSessionController#me,
+ * UserProfileResponse{userId, email, role, emailVerified, linkedProviders}; see
+ * contracts/auth-openapi.yaml `AuthState`). `role` is a SINGLE string, never a roles
+ * array; `linkedProviders` is a flat array of provider names, never provider-link objects.
+ */
+export interface UserProfile {
+  userId: string;
+  email: string;
+  role: string;
+  emailVerified: boolean;
+  linkedProviders: string[];
 }
 export interface VerifyEmailRequest { token: string; }
 export interface PasswordResetRequest { email: string; }

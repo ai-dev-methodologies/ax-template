@@ -8,10 +8,11 @@ evidence:
     upstream_id: shadcn-ui-2026-05
     section: form
     quote: "Building forms with React Hook Form and Zod."
-  - source_type: upstream_id
-    upstream_id: wcag-2-2
-    section: 3.3.1-error-identification
+  - source_type: external
+    citation: "WCAG 2.2 SC 3.3.1 Error Identification (Level A) — full normative text, W3C Recommendation 2023-10-05"
+    url: "https://www.w3.org/TR/WCAG22/#error-identification"
     quote: "If an input error is automatically detected, the item that is in error is identified and the error is described to the user in text."
+    quoted_at: "2026-07-29"
 a11y_criteria:
   - "WCAG 2.2 SC 3.3.1 Error Identification — FormMessage renders error in text"
   - "WCAG 2.2 SC 3.3.3 Error Suggestion"

@@ -15,8 +15,9 @@ imports_forbidden: []
 ---
 */
 import * as React from 'react'
-import SearchPalette from '@/components/search/SearchPalette'
-import RecentSearches, { useRecentSearches } from '@/components/search/RecentSearches'
+import SearchPalette from 'templates/L2/blocks/search-palette'
+import { useRecentSearches } from 'templates/L2/blocks/recent-searches'
+import SearchLandingView from './search-landing-view'
 
 /**
  * Search landing page — entry point for the (search) route group.
@@ -32,21 +33,7 @@ import RecentSearches, { useRecentSearches } from '@/components/search/RecentSea
  *   3. Replace the router.push navigation with your routing strategy if not using Next.js.
  */
 export default function SearchPage() {
-  return (
-    <main className="container mx-auto px-4 py-16 max-w-2xl text-center">
-      <h1 className="text-3xl font-bold mb-4">검색</h1>
-      <p className="text-muted-foreground mb-8 text-sm">
-        Cmd+K 또는 아래 입력창으로 검색하세요.
-      </p>
-
-      {/*
-        SearchPalette: Cmd+K trigger + IME-safe input.
-        In a real fork, pass onSearch with router.push:
-          onSearch={(q) => router.push(`/search/results?q=${encodeURIComponent(q)}`)}
-      */}
-      <SearchPaletteIsland />
-    </main>
-  )
+  return <SearchPaletteIsland />
 }
 
 /**
@@ -63,16 +50,15 @@ function SearchPaletteIsland() {
   }
 
   return (
-    <div className="flex flex-col items-center gap-6">
-      <SearchPalette
-        onSearch={handleSearch}
-        placeholder="무엇을 찾으시나요?"
-        className="w-full max-w-md"
-      />
-      <RecentSearches
-        onSelect={handleSearch}
-        className="w-full max-w-md text-left"
-      />
-    </div>
+    <SearchLandingView
+      paletteSlot={
+        <SearchPalette
+          onSearch={handleSearch}
+          placeholder="무엇을 찾으시나요?"
+          className="w-full max-w-md"
+        />
+      }
+      onSelectRecent={handleSearch}
+    />
   )
 }

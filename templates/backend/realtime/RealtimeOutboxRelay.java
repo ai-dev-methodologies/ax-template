@@ -2,6 +2,7 @@
  * @ax-template-meta
  * template_id: backend/realtime/RealtimeOutboxRelay
  * layer: backend-cross-cutting
+ * anchors_rule: transactional-outbox-no-dual-write.md
  * provenance_class: internal_design
  * opt_in_via: ax.realtime.sse.enabled=true (blueprints/realtime-policy-manifest.yaml)
  * serverless_safe: false

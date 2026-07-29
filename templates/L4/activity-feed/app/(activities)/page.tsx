@@ -24,49 +24,13 @@ imports_forbidden: [L4/auth, L4/crud, L4/practices, L4/payment]
 import * as React from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import EmptyState from 'templates/L2/blocks/empty-state'
-import ErrorBoundary from 'templates/L2/blocks/error-boundary'
-import Pagination from 'templates/L2/blocks/pagination'
-import { useCallerId, sameUser } from 'templates/L0/fork-receiver-kit/use-caller-id'
+import { useCallerId } from 'templates/L0/fork-receiver-kit/use-caller-id'
 import { parseError } from 'templates/L0/fork-receiver-kit/parse-error'
+import ActivityFeedView, {
+  type ActivityFeedResponse,
+} from './activity-feed-view'
 
 // ─── types ───────────────────────────────────────────────────────────────────
-
-/**
- * ActivityEvent — single feed row.
- *
- * Anchored to R38 caller-authentication-only-no-userid-param: the
- * server scopes the feed to the caller via Authentication.getName().
- * The client NEVER sends ?userId= — visibility is server-derived from
- * (actor === caller) OR (audience contains caller).
- *
- * R52 (backend-contract wave 1) closed the R44 P2-F7 audience peer
- * leak: the response DTO no longer carries the full audience user-id
- * set. Instead, `youAreInAudience` is a server-computed boolean — the
- * client can still disambiguate "I sent this" (actor === caller) from
- * "Someone CC'd me" (youAreInAudience === true), without learning the
- * other audience members' identities.
- */
-interface ActivityEvent {
-  id: string
-  actorUserId: string
-  verb: string
-  objectType: string
-  objectId: string
-  subjectType: string | null
-  subjectId: string | null
-  metadata: Record<string, unknown>
-  youAreInAudience: boolean
-  createdAt: string
-  readAt: string | null
-}
-
-interface ActivityFeedResponse {
-  items: ActivityEvent[]
-  page: number
-  size: number
-  totalElements: number
-}
 
 interface MarkAllReadResponse {
   markedCount: number
@@ -125,53 +89,6 @@ async function markAllRead(): Promise<MarkAllReadResponse> {
   return res.json()
 }
 
-// ─── helpers ──────────────────────────────────────────────────────────────────
-
-/**
- * verbLabel — humanize a verb token.
- *
- * The backend stores raw ActivityStreams verbs (e.g. 'create', 'mention',
- * 'approve'). The UI maps the common ones to readable phrases and falls
- * back to the raw verb so an unknown verb is visible (rather than
- * silently dropped). Fork-receivers extend the map per their domain.
- */
-function verbLabel(verb: string): string {
-  switch (verb) {
-    case 'create':
-      return 'created'
-    case 'update':
-      return 'updated'
-    case 'delete':
-      return 'deleted'
-    case 'mention':
-      return 'mentioned you in'
-    case 'approve':
-      return 'approved'
-    case 'reject':
-      return 'rejected'
-    case 'comment':
-      return 'commented on'
-    default:
-      return verb
-  }
-}
-
-function objectLabel(type: string, id: string): string {
-  return `${type}/${id}`
-}
-
-function timeAgo(iso: string, now: Date): string {
-  const ms = Math.max(0, now.getTime() - new Date(iso).getTime())
-  const min = ms / 60_000
-  if (min < 1) return 'just now'
-  if (min < 60) return `${Math.floor(min)}m ago`
-  const hr = min / 60
-  if (hr < 24) return `${Math.floor(hr)}h ago`
-  const d = hr / 24
-  if (d < 7) return `${Math.floor(d)}d ago`
-  return new Date(iso).toLocaleDateString()
-}
-
 // ─── page ────────────────────────────────────────────────────────────────────
 
 /**
@@ -209,12 +126,6 @@ export default function ActivityFeedPage() {
 
   // ─── all hooks BEFORE any conditional early return ─────────────────────────
 
-  const [now, setNow] = React.useState(() => new Date())
-  React.useEffect(() => {
-    const t = setInterval(() => setNow(new Date()), 60_000)
-    return () => clearInterval(t)
-  }, [])
-
   // R82 — Providers wires a QueryClient default refetchInterval (see
   // app/providers.tsx), so this page MUST expose dataUpdatedAt as the
   // visible polling-cadence signal for operators on a second monitor.
@@ -231,6 +142,10 @@ export default function ActivityFeedPage() {
     () => new Set(),
   )
 
+  // R82 — mutation-in-flight-uses-aria-busy: pendingReadIds is threaded through as a prop
+  // so ActivityFeedView (the co-located pure presentational view — P2-42) can render
+  // aria-busy on each row's Mark-read button and the Mark-all-read button; the attributes
+  // live there, not in this file, because that markup moved with the render layer.
   const read = useMutation({
     mutationFn: markRead,
     onMutate: (id: string) => {
@@ -309,232 +224,26 @@ export default function ActivityFeedPage() {
     [router, searchParams],
   )
 
-  const unreadCount = React.useMemo(
-    () => (data ? data.items.filter((e) => e.readAt === null).length : 0),
-    [data],
-  )
-
-  // R44 iter3 (iter2-N1 high): the iter2 client-side sort lifted unread
-  // to the top of the CURRENT page only, teaching the user to trust an
-  // incomplete signal — unread items on later pages stayed invisible
-  // behind page 0's reordered list. iter3 drops the within-page sort.
-  // Heavy users get unread visibility through (a) the blue dot per row
-  // and (b) the global 'Show unread only' toggle, which is server-
-  // scoped and therefore covers every page authoritatively. A true
-  // 'unread-first' ordering belongs on the server (?sort=unread,
-  // createdAt) and is tracked as a deferred backend-contract change.
-
   // ─── render ─────────────────────────────────────────────────────────────────
 
   return (
-    <ErrorBoundary>
-      <div className="space-y-4">
-        <header className="flex items-baseline justify-between gap-2">
-          <div>
-            <h1 className="text-lg font-semibold">
-              {unread ? 'Unread activity' : 'Activity'}
-            </h1>
-            <p className="text-sm text-muted-foreground">
-              Events where you are the actor or are in the audience. Read state
-              persists per user.
-            </p>
-            {/* R82 — visible polling-cadence timestamp. aria-live polite
-                so screen readers announce the freshness silently without
-                interrupting focus. */}
-            <p
-              className="text-xs text-muted-foreground"
-              aria-live="polite"
-            >
-              {dataUpdatedAt
-                ? `Updated ${new Date(dataUpdatedAt).toLocaleTimeString()}`
-                : ''}
-            </p>
-          </div>
-          <div className="flex gap-2">
-            <button
-              type="button"
-              className="rounded border px-3 py-1.5 text-sm hover:bg-muted disabled:opacity-50"
-              onClick={() => updateUnread(!unread)}
-            >
-              {unread ? 'Show all' : 'Show unread only'}
-            </button>
-            <button
-              type="button"
-              className="rounded border px-3 py-1.5 text-sm hover:bg-muted disabled:opacity-50 aria-busy:opacity-60"
-              disabled={markAll.isPending}
-              /* R82 — aria-busy reflects the mark-all-read mutation
-                 lifecycle on this background-polled page so screen
-                 readers track the in-flight state (WCAG SC 4.1.3). */
-              aria-busy={markAll.isPending || undefined}
-              onClick={() => {
-                // R44 iter2 (P1-F3 CRITICAL): the backend marks the
-                // entire account's unread as read, not just the visible
-                // page. Confirm ALWAYS (no threshold), with copy that
-                // matches the server semantics. The "on this page"
-                // language from iter1 was a UI lie that would silently
-                // wipe unread evidence outside the visible window.
-                if (
-                  !window.confirm(
-                    'Mark every unread activity on your account as read?\n\nThis cannot be undone from this UI and includes items not visible on the current page.',
-                  )
-                ) {
-                  return
-                }
-                markAll.mutate()
-              }}
-              title="Marks all unread activity on your account — confirm required"
-            >
-              Mark all read
-            </button>
-          </div>
-        </header>
-
-        {/* R44 iter3 (iter2-N4 P1-low): split banners + Dismiss to drop
-             sticky TanStack error state. The two mutations now surface
-             independently so a simultaneous failure of both is visible. */}
-        {read.error && (
-          <div
-            role="alert"
-            className="flex items-start justify-between gap-3 rounded border border-red-300 bg-red-50 px-3 py-1.5 text-sm text-red-900"
-          >
-            <span>Mark read failed: {read.error.message}</span>
-            <button
-              type="button"
-              className="shrink-0 text-xs underline"
-              onClick={() => read.reset()}
-            >
-              Dismiss
-            </button>
-          </div>
-        )}
-        {markAll.error && (
-          <div
-            role="alert"
-            className="flex items-start justify-between gap-3 rounded border border-red-300 bg-red-50 px-3 py-1.5 text-sm text-red-900"
-          >
-            <span>Mark all read failed: {markAll.error.message}</span>
-            <button
-              type="button"
-              className="shrink-0 text-xs underline"
-              onClick={() => markAll.reset()}
-            >
-              Dismiss
-            </button>
-          </div>
-        )}
-
-        {isLoading ? (
-          <div className="py-12 text-center text-sm text-muted-foreground">
-            Loading activity…
-          </div>
-        ) : error ? (
-          <EmptyState title="Failed to load activity" description={(error as Error).message} />
-        ) : !data || data.items.length === 0 ? (
-          <EmptyState
-            title={unread ? 'No unread activity' : 'No activity yet'}
-            description={
-              unread
-                ? 'You are caught up. Switch to "Show all" to see read activity.'
-                : 'When someone interacts with content that involves you, it will show up here.'
-            }
-            actionLabel={unread ? 'Show all' : undefined}
-            onAction={unread ? () => updateUnread(false) : undefined}
-          />
-        ) : (
-          <>
-            <ul className="divide-y rounded border">
-              {data.items.map((e) => {
-                const isUnread = e.readAt === null
-                // R44 iter3 (iter2-N3): pending state lives in the
-                // component, not in the cache. Removes the empty-
-                // string sentinel collision class.
-                const isPendingRead = isUnread && pendingReadIds.has(e.id)
-                const youAreActor = sameUser(e.actorUserId, callerId)
-                const youAreSubject = e.subjectId !== null && sameUser(e.subjectId, callerId)
-                return (
-                  <li
-                    key={e.id}
-                    className={`flex items-start gap-3 px-4 py-3 ${
-                      isUnread && !isPendingRead ? 'bg-blue-50/40' : ''
-                    } ${isPendingRead ? 'opacity-60' : ''}`}
-                  >
-                    <span
-                      className={`mt-1.5 inline-block h-2 w-2 shrink-0 rounded-full ${
-                        isUnread && !isPendingRead ? 'bg-blue-600' : 'bg-transparent'
-                      }`}
-                      role="img"
-                      aria-label={isUnread && !isPendingRead ? 'Unread' : 'Read'}
-                    />
-                    <div className="min-w-0 flex-1">
-                      <div className="text-sm">
-                        <span className="font-mono">
-                          {youAreActor ? 'You' : e.actorUserId}
-                        </span>{' '}
-                        <span className="text-muted-foreground">{verbLabel(e.verb)}</span>{' '}
-                        <span className="font-mono">{objectLabel(e.objectType, e.objectId)}</span>
-                        {e.subjectId && (
-                          <>
-                            {' '}
-                            <span className="text-muted-foreground">on behalf of</span>{' '}
-                            <span className="font-mono">
-                              {/* R44 iter2 (P1-F7): caller-as-subject
-                                   gets 'you' to match the actor handling.
-                                   Verbatim ID exposure of delegation
-                                   partners (P2-F14) is still surfaced
-                                   to peers in this scaffold; backend DTO
-                                   scoping is the proper closure (deferred). */}
-                              {youAreSubject ? 'you' : e.subjectId}
-                            </span>
-                          </>
-                        )}
-                      </div>
-                      <div className="mt-0.5 text-xs text-muted-foreground">
-                        {timeAgo(e.createdAt, now)}
-                        {isPendingRead
-                          ? // R44 iter2 (P2-F12 CRITICAL) + iter3 (N3):
-                            // no fabricated time. Pending state shows
-                            // "marking read…" with no timestamp until
-                            // the cache invalidation completes and the
-                            // backend's authoritative readAt arrives.
-                            ' · marking read…'
-                          : !isUnread &&
-                            e.readAt &&
-                            ` · read ${timeAgo(e.readAt, now)}`}
-                      </div>
-                    </div>
-                    {/* R44 iter2 (P1-F2 + P1-F13): explicit Mark-read
-                         action — row click no longer mutates state. The
-                         button is keyboard-focusable + has an aria-label.
-                         iter3 (N3): per-row pending state from the typed
-                         Set so the button disables only on its own row,
-                         not across the whole list. */}
-                    {isUnread && (
-                      <button
-                        type="button"
-                        className="shrink-0 rounded border px-2 py-1 text-xs hover:bg-muted disabled:opacity-50 aria-busy:opacity-60"
-                        disabled={isPendingRead}
-                        /* R82 — aria-busy reflects the per-row read
-                           mutation lifecycle on this background-polled
-                           page (WCAG SC 4.1.3). */
-                        aria-busy={isPendingRead || undefined}
-                        aria-label={`Mark activity ${e.id} as read`}
-                        onClick={() => read.mutate(e.id)}
-                      >
-                        {isPendingRead ? 'Marking…' : 'Mark read'}
-                      </button>
-                    )}
-                  </li>
-                )
-              })}
-            </ul>
-            <Pagination
-              page={data.page}
-              totalPages={Math.max(1, Math.ceil(data.totalElements / data.size))}
-              onPageChange={updatePage}
-            />
-          </>
-        )}
-      </div>
-    </ErrorBoundary>
+    <ActivityFeedView
+      data={data}
+      error={error as Error | null}
+      isLoading={isLoading}
+      dataUpdatedAt={dataUpdatedAt}
+      callerId={callerId}
+      unread={unread}
+      onToggleUnread={() => updateUnread(!unread)}
+      onMarkAllRead={() => markAll.mutate()}
+      markAllPending={markAll.isPending}
+      readErrorMessage={read.error?.message ?? null}
+      onDismissReadError={() => read.reset()}
+      markAllErrorMessage={markAll.error?.message ?? null}
+      onDismissMarkAllError={() => markAll.reset()}
+      pendingReadIds={pendingReadIds}
+      onMarkRead={(id) => read.mutate(id)}
+      onPageChange={updatePage}
+    />
   )
 }

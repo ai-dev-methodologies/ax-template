@@ -8,10 +8,11 @@ evidence:
     upstream_id: shadcn-ui-2026-05
     section: dialog
     quote: "A window overlaid on either the primary window or another dialog window, rendering the content underneath inert."
-  - source_type: upstream_id
-    upstream_id: wcag-2-2
-    section: 2.1.2-no-keyboard-trap
-    quote: "If keyboard focus can be moved to a component of the page using a keyboard interface, then focus can be moved away from that component using only a keyboard interface."
+  - source_type: external
+    citation: "WCAG 2.2 SC 2.1.2 No Keyboard Trap (Level A) — full normative text, W3C Recommendation 2023-10-05"
+    url: "https://www.w3.org/TR/WCAG22/#no-keyboard-trap"
+    quote: "If keyboard focus can be moved to a component of the page using a keyboard interface, then focus can be moved away from that component using only a keyboard interface, and, if it requires more than unmodified arrow or tab keys or other standard exit methods, the user is advised of the method for moving focus away."
+    quoted_at: "2026-07-29"
 a11y_criteria:
   - "WCAG 2.2 SC 4.1.2 — role='dialog', aria-labelledby, aria-describedby via Radix"
   - "WCAG 2.2 SC 2.1.2 No Keyboard Trap — focus trapped inside, Escape closes"

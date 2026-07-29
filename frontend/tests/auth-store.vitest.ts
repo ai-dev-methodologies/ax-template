@@ -2,6 +2,9 @@ import { describe, it, expect, beforeAll, afterAll, afterEach } from 'vitest';
 import { setupServer } from 'msw/node';
 import { handlers } from '../src/mocks/handlers';
 import { useAuthStore } from '@ax/core';
+// P1-73 — the /auth/me MSW mock now serves this golden fixture verbatim; assert against
+// it rather than a hand-picked literal so the test cannot silently drift from the mock.
+import authMeGolden from './_fixtures/auth-me.golden.json';
 
 const server = setupServer(...handlers);
 
@@ -26,19 +29,19 @@ describe('Auth Store', () => {
     const state = useAuthStore.getState();
     expect(state.accessToken).toBe('mock-access-token');
     expect(state.user).not.toBeNull();
-    expect(state.user?.email).toBe('test@example.com');
+    expect(state.user?.email).toBe(authMeGolden.email);
   });
 
   it('logout clears user and token', async () => {
-    useAuthStore.setState({ 
-      accessToken: 'mock-token', 
-      user: { 
-        userId: '1', 
-        email: 'a@b.com', 
-        roles: ['USER'], 
-        verificationState: 'verified',
-        providerLinks: []
-      } 
+    useAuthStore.setState({
+      accessToken: 'mock-token',
+      user: {
+        userId: '1',
+        email: 'a@b.com',
+        role: 'MEMBER',
+        emailVerified: true,
+        linkedProviders: []
+      }
     });
     await useAuthStore.getState().logout();
     const state = useAuthStore.getState();

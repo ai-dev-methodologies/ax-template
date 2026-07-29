@@ -3,7 +3,7 @@
  * template_id: backend/email-outbox/EmailOutboxService
  * layer: backend-domain
  * domain: email-outbox
- * anchors_rule: api-controller-service-separation.md (PRACTICES-API-003)
+ * anchors_rule: transactional-outbox-no-dual-write.md
  * provenance_class: internal_design
  * evidence:
  *   - source_type: external

@@ -86,7 +86,11 @@ checklist:
 
   # ── 2. Per-domain test tasks (the catalog's binary pass/fail surface) ───────
   - id: per-domain-tests
-    title: "Per-domain ./gradlew test{Domain} suite (89 tasks)"
+    # P3-79: the title carries NO task count. A hand-written numeral here went
+    # stale (it said 89 while the step held 115 commands) and under-reported the
+    # R25 run scale by a third. The authoritative count is the length of the
+    # `commands:` list below — derive it from disk, never from prose.
+    title: "Per-domain ./gradlew test{Domain} suite"
     parallel: false  # gradle daemon serializes anyway; keep stderr deterministic
     # The growing domain matrix + the R22 BEFORE_CLASS DirtiesContext on hot
     # @SpringBootTest classes pushes cumulative wall-clock past the global
@@ -461,9 +465,12 @@ checklist:
          editing the assertion violates spec_ref_guard.
       5. Re-run the single domain task first, then re-run this whole step.
 
-  # ── 3. Hard guards (95 live mechanical guards under run-all-guards.sh) ──────
+  # ── 3. Hard guards (run-all-guards.sh) ─────────────────────────────────────
+  # P3-79: no guard count in the prose here either. run-all-guards.sh prints its
+  # own live/fixture tallies at run time; a numeral copied into this file goes
+  # stale the next time a guard is registered.
   - id: hard-guards
-    title: "95 live mechanical hard guards (run-all-guards.sh --include-fixtures)"
+    title: "Live mechanical hard guards (run-all-guards.sh --include-fixtures)"
     parallel: false
     commands:
       - command: "bash practices/evals/run-all-guards.sh --include-fixtures"

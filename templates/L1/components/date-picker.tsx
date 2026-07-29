@@ -8,10 +8,11 @@ evidence:
     upstream_id: shadcn-ui-2026-05
     section: date-picker
     quote: "A date picker component with range and presets. Built using the Popover and the Calendar components."
-  - source_type: upstream_id
-    upstream_id: wcag-2-2
-    section: 2.4.11-focus-appearance
-    quote: "When a user interface component receives keyboard focus, the focus indicator is not entirely hidden."
+  - source_type: external
+    citation: "WCAG 2.2 SC 2.4.11 Focus Not Obscured (Minimum) (Level AA) — full normative text, W3C Recommendation 2023-10-05"
+    url: "https://www.w3.org/TR/WCAG22/#focus-not-obscured-minimum"
+    quote: "When a user interface component receives keyboard focus, the component is not entirely hidden due to author-created content."
+    quoted_at: "2026-07-29"
 a11y_criteria:
   - "WCAG 2.2 SC 2.4.11 Focus Appearance — trigger button has visible focus ring"
   - "WCAG 2.2 SC 4.1.2 — trigger button aria-label includes selected date or placeholder"

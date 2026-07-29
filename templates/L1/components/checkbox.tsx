@@ -10,8 +10,8 @@ evidence:
     quote: "A control that allows the user to toggle between checked and not checked."
   - source_type: upstream_id
     upstream_id: wcag-2-2
-    section: 1.4.11-non-text-contrast
-    quote: "The visual presentation of the following have a contrast ratio of at least 3:1 against adjacent color(s): User Interface Components."
+    section: "SC 1.4.11 — Non-text Contrast — Level AA"
+    quote: "The visual presentation of the following have a contrast ratio of at least 3:1 against adjacent color(s): User Interface Components: Visual information required to identify user interface components and states"
 a11y_criteria:
   - "WCAG 2.2 SC 4.1.2 Name/Role/Value — aria-checked state managed by Radix"
   - "WCAG 2.2 SC 1.4.11 Non-text Contrast — border uses --color-border (≥3:1)"

@@ -3,7 +3,7 @@
  * template_id: backend/search/SearchIndexService
  * layer: backend-domain
  * domain: search
- * anchors_rule: api-controller-service-separation.md (PRACTICES-API-003)
+ * anchors_rule: api-pagination-pageable.md
  * provenance_class: internal_design
  * evidence:
  *   - source_type: external

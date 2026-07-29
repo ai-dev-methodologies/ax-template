@@ -7,7 +7,7 @@ evidence:
   - source_type: upstream_id
     upstream_id: next-intl-2026-05
     section: "Relative Time"
-    quote: "next-intl provides useFormatter() for relative time: format.relativeTime(new Date('2024-01-01')) → '1년 전'"
+    quote: "`next-intl` provides `useFormatter()` for relative time:"
   - source_type: external
     citation: "MDN Intl.RelativeTimeFormat — relative time formatting API"
     url: "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Intl/RelativeTimeFormat"

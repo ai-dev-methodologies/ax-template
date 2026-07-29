@@ -37,11 +37,24 @@
 #        • the FULL step set blocks.
 #   4. Runs each dependent guard ITSELF under a PYTHONPATH shim whose yaml.py raises
 #      ImportError, and asserts it FAILS CLOSED: exit 2 (the repo's "cannot verify"
-#      convention), never 0, and never an "all pass"-shaped message. The preflight only
-#      protects the R25 path — a fork-receiver or CI invoking a guard directly, or anything
-#      reading a guard's exit code, needs the guarantee to hold at the guard itself.
+#      convention), never 0, never an "all pass"-shaped message, AND with output that names
+#      the parser. The preflight only protects the R25 path — a fork-receiver or CI invoking
+#      a guard directly, or anything reading a guard's exit code, needs the guarantee to
+#      hold at the guard itself.
 #      Scripts that cannot be executed safely are listed in PROBE_EXEMPT with a reason,
 #      REPORTED in the output, and asserted statically instead — never silently skipped.
+#
+#      TWO defects were found in THIS probe while wiring the first .py dependent (P2-44),
+#      and the second is the reason the message check exists:
+#        (a) the interpreter was hardcoded to `bash`, correct only while every dependent was
+#            a shell script. Handed a python file, bash dies on syntax with exit 2 — the
+#            very code this check reads as proof of failing closed — identically with and
+#            without PyYAML. Fixed by probing with the script's own interpreter.
+#        (b) (a) alone only MOVED the vacuity. Measured on that same .py dependent: with
+#            PyYAML installed it exits 2 from argparse ("the following arguments are
+#            required: --map"); without it, exit 2 from the import guard. A code-only check
+#            cannot tell those apart. So the output must NAME the parser — that is what
+#            makes absence distinguishable from an ordinary usage error.
 #   Weakening the preflight, adding a PyYAML-dependent guard behind a non-evals/ wrapper,
 #   or letting a guard skip-with-exit-0 again, flips this guard to FAIL.
 #
@@ -304,6 +317,16 @@ PROBE_EXEMPT = {
 FAILCLOSED_MARK = re.compile(r"cannot verify.*PyYAML|PyYAML.*cannot (?:verify|run)|"
                              r"PyYAML is required|PyYAML not installed", re.I)
 ALLPASS_RE = re.compile(r"all rules pass|all checks PASS|: OK —|all guards PASS", re.I)
+# exit 2 ALONE does not prove a guard failed closed ON THE PARSER — plenty of unrelated
+# conditions exit 2 too. Measured on the first .py dependent: WITH PyYAML installed,
+# `python3 lib/coverage_map_guard.py` exits 2 from argparse ("the following arguments are
+# required: --map"), and WITHOUT it exits 2 from the import guard. Identical code, opposite
+# causes — so a code-only check would have accepted the argparse error as proof of failing
+# closed, which is the same vacuity the interpreter fix above was meant to remove rather
+# than relocate. The output must therefore NAME the parser. A traceback that says
+# "ModuleNotFoundError: No module named 'yaml'" satisfies this as legitimately as a
+# hand-written message does — both tell the caller the parser is why nothing was verified.
+PARSER_MENTION_RE = re.compile(r"yaml", re.I)
 
 probed, exempted = 0, []
 for path in all_deps:
@@ -318,8 +341,15 @@ for path in all_deps:
         exempted.append((rel, reason))
         continue
     env = dict(os.environ, PYTHONPATH=shim + os.pathsep + os.environ.get("PYTHONPATH", ""))
+    # The probe must use the script's OWN interpreter. This used to be a hardcoded
+    # `bash`, which was correct only while every dependent happened to be a shell
+    # script: the first .py dependent (the gap-convergence engine's guard body, wired
+    # in by P2-44) was handed to bash, which died on python syntax with `exit 2` — the
+    # SAME code this check accepts as proof of failing closed. It "passed" identically
+    # whether PyYAML was present or not, i.e. the evidence was vacuous.
+    interpreter = "python3" if path.endswith(".py") else "bash"
     try:
-        p = subprocess.run(["bash", path], env=env, cwd=root,
+        p = subprocess.run([interpreter, path], env=env, cwd=root,
                            capture_output=True, text=True, timeout=300)
     except subprocess.TimeoutExpired:
         violations.append(f"{rel} hung under simulated PyYAML absence (>300s)")
@@ -335,6 +365,13 @@ for path in all_deps:
                f"exits {p.returncode} — non-zero, but not the repo's 2 = 'cannot verify' "
                f"convention, so a caller cannot tell a tooling failure from a real violation")
         violations.append(f"{rel} {why} under simulated PyYAML absence. Last line: {last}")
+    elif not PARSER_MENTION_RE.search(out):
+        last = (out.strip().splitlines() or ["(silent)"])[-1][:120]
+        violations.append(
+            f"{rel} exits 2 under simulated PyYAML absence but NOTHING in its output names "
+            f"the parser, so this exit is indistinguishable from an unrelated tooling or "
+            f"usage error that also exits 2 (an argparse 'required argument' failure does). "
+            f"Say why verification was impossible. Last line: {last}")
     if ALLPASS_RE.search(out):
         violations.append(
             f"{rel} emits an all-pass-shaped message under simulated PyYAML absence: "

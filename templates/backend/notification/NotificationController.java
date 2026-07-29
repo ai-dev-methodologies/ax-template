@@ -3,7 +3,7 @@
  * template_id: backend/notification/NotificationController
  * layer: backend-domain
  * domain: notification
- * anchors_rule: api-controller-service-separation.md (PRACTICES-API-003)
+ * anchors_rule: caller-authentication-only-no-userid-param.md
  * provenance_class: internal_design
  * evidence:
  *   - source_type: external

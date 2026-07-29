@@ -8,10 +8,11 @@ evidence:
     upstream_id: shadcn-ui-2026-05
     section: badge
     quote: "Displays a badge or a component that looks like a badge."
-  - source_type: upstream_id
-    upstream_id: wcag-2-2
-    section: 1.4.1-use-of-color
-    quote: "Color is not used as the only visual means of conveying information."
+  - source_type: external
+    citation: "WCAG 2.2 SC 1.4.1 Use of Color (Level A) — full normative text, W3C Recommendation 2023-10-05"
+    url: "https://www.w3.org/TR/WCAG22/#use-of-color"
+    quote: "Color is not used as the only visual means of conveying information, indicating an action, prompting a response, or distinguishing a visual element."
+    quoted_at: "2026-07-29"
 a11y_criteria:
   - "WCAG 2.2 SC 1.4.3 Contrast — 4.5:1 for normal text"
   - "WCAG 2.2 SC 1.4.1 — Status badges must carry text label, not color alone"

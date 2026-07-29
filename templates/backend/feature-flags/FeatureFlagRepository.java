@@ -3,6 +3,7 @@
  * template_id: backend/feature-flags/FeatureFlagRepository
  * layer: backend-domain
  * domain: feature-flags
+ * anchors_rule: testing-archunit-repository-shape.md
  * provenance_class: internal_design
  * evidence:
  *   - source_type: external

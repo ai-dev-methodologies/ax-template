@@ -1,4 +1,8 @@
 import { http, HttpResponse } from 'msw';
+// P1-73 — the SAME golden fixture the BE contract-parity test
+// (AuthMeGoldenContractParityTest) serializes and compares against, so this mock can
+// never drift from the real GET /api/auth/me wire shape.
+import authMeGolden from '../../tests/_fixtures/auth-me.golden.json';
 
 const API = '/api';
 
@@ -21,15 +25,7 @@ export const handlers = [
   http.post(`${API}/auth/logout`, () =>
     new HttpResponse(null, { status: 204 })
   ),
-  http.get(`${API}/auth/me`, () =>
-    HttpResponse.json({ 
-      userId: 'test-uuid-123', 
-      email: 'test@example.com', 
-      roles: ['USER'], 
-      verificationState: 'verified',
-      providerLinks: [{ provider: 'email', connectedAt: new Date().toISOString() }]
-    })
-  ),
+  http.get(`${API}/auth/me`, () => HttpResponse.json(authMeGolden)),
   http.post(`${API}/auth/email/password-reset-request`, () =>
     HttpResponse.json({ message: 'If the email exists, a reset link has been sent' })
   ),

@@ -1,0 +1,4 @@
+schema_version: 2
+# fixture allowlist for domain_mode_consistency_guard.
+domains:
+  demo-domain: backend_only

@@ -24,66 +24,10 @@ imports_forbidden: [L4/auth, L4/crud, L4/practices, L4/payment]
 import * as React from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import VirtualizedTable, { type ColumnDef } from 'templates/L2/blocks/virtualized-table'
-import EmptyState from 'templates/L2/blocks/empty-state'
-import ErrorBoundary from 'templates/L2/blocks/error-boundary'
-
-// ─── types ───────────────────────────────────────────────────────────────────
-
-type SessionStatus = 'ACTIVE' | 'REVOKED' | 'EXPIRED'
-
-/**
- * SessionSummary — caller's own session row.
- *
- * Anchored to R38 pii-masked-at-dto-boundary:
- *   - ipAddressMasked (e.g. "203.0.113.x" — last octet stripped)
- *   - userAgentSummary (e.g. "Chrome 124 on macOS" — fingerprint not reachable)
- *
- * The raw IP / UA columns exist on the backend entity but are @JsonIgnore;
- * they MUST NOT be added to this interface.
- */
-interface SessionSummary {
-  id: string
-  status: SessionStatus
-  jti: string
-  deviceLabel: string | null
-  ipAddressMasked: string
-  userAgentSummary: string
-  createdAt: string
-  lastSeenAt: string | null
-  expiresAt: string
-  revokedAt: string | null
-  revokedByUserId: string | null
-  expired: boolean
-}
-
-interface SessionListResponse {
-  items: SessionSummary[]
-  totalElements: number
-}
-
-// ─── data fetching ───────────────────────────────────────────────────────────
-
-async function fetchMySessions(): Promise<SessionListResponse> {
-  const res = await fetch('/api/sessions')
-  if (!res.ok) throw new Error(`Failed to load sessions (HTTP ${res.status})`)
-  return res.json()
-}
-
-async function revokeSession(id: string): Promise<void> {
-  const res = await fetch(`/api/sessions/${id}`, { method: 'DELETE' })
-  // RFC 9110 §9.3.5: 204 on absent is also success (anchors R38
-  // http-delete-idempotency-rfc9110 rule). DO NOT treat 404 / 204 / 200
-  // differently from the success path.
-  if (!res.ok && res.status !== 204) {
-    throw new Error(`Failed to revoke session (HTTP ${res.status})`)
-  }
-}
-
-async function revokeOthers(): Promise<{ revoked: number; kept: number }> {
-  const res = await fetch('/api/sessions/revoke-others', { method: 'POST' })
-  if (!res.ok) throw new Error(`Failed to revoke other sessions (HTTP ${res.status})`)
-  return res.json()
-}
+import SessionManagementView, {
+  type SessionListResponse,
+  type SessionSummary,
+} from './session-management-view'
 
 // ─── column definitions ───────────────────────────────────────────────────────
 
@@ -134,6 +78,30 @@ const COLUMNS: ColumnDef<SessionSummary>[] = [
     sortable: true,
   },
 ]
+
+// ─── data fetching ───────────────────────────────────────────────────────────
+
+async function fetchMySessions(): Promise<SessionListResponse> {
+  const res = await fetch('/api/sessions')
+  if (!res.ok) throw new Error(`Failed to load sessions (HTTP ${res.status})`)
+  return res.json()
+}
+
+async function revokeSession(id: string): Promise<void> {
+  const res = await fetch(`/api/sessions/${id}`, { method: 'DELETE' })
+  // RFC 9110 §9.3.5: 204 on absent is also success (anchors R38
+  // http-delete-idempotency-rfc9110 rule). DO NOT treat 404 / 204 / 200
+  // differently from the success path.
+  if (!res.ok && res.status !== 204) {
+    throw new Error(`Failed to revoke session (HTTP ${res.status})`)
+  }
+}
+
+async function revokeOthers(): Promise<{ revoked: number; kept: number }> {
+  const res = await fetch('/api/sessions/revoke-others', { method: 'POST' })
+  if (!res.ok) throw new Error(`Failed to revoke other sessions (HTTP ${res.status})`)
+  return res.json()
+}
 
 // ─── page ────────────────────────────────────────────────────────────────────
 
@@ -200,42 +168,13 @@ export default function MySessionsPage() {
   )
 
   return (
-    <ErrorBoundary>
-      <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <p className="text-sm text-muted-foreground">
-            Active sessions on your account. IPs are masked and User-Agent strings are
-            summarized — the raw values are stored server-side for forensics but never
-            leave the database layer.
-          </p>
-          <button
-            type="button"
-            className="rounded border px-3 py-1.5 text-sm hover:bg-muted disabled:opacity-50"
-            disabled={revokeOthersMutation.isPending}
-            onClick={() => revokeOthersMutation.mutate()}
-          >
-            Revoke other sessions
-          </button>
-        </div>
-
-        {isLoading ? (
-          <div className="py-12 text-center text-sm text-muted-foreground">
-            Loading sessions…
-          </div>
-        ) : error ? (
-          <EmptyState
-            title="Failed to load sessions"
-            description={(error as Error).message}
-          />
-        ) : !data || data.items.length === 0 ? (
-          <EmptyState
-            title="No sessions"
-            description="You have no recorded sessions yet."
-          />
-        ) : (
-          <VirtualizedTable data={data.items} columns={columns} />
-        )}
-      </div>
-    </ErrorBoundary>
+    <SessionManagementView
+      data={data}
+      error={error as Error | null}
+      isLoading={isLoading}
+      tableSlot={data ? <VirtualizedTable data={data.items} columns={columns} /> : null}
+      onRevokeOthers={() => revokeOthersMutation.mutate()}
+      revokeOthersPending={revokeOthersMutation.isPending}
+    />
   )
 }

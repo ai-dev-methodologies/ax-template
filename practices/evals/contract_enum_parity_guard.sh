@@ -228,9 +228,36 @@
 #                           same-shaped vocabulary from another domain. Genuine cross-domain
 #                           reuse is allowlisted IN THE GUARD (VOCAB_CROSS_DOMAIN_SOURCES),
 #                           never asserted in the manifest. An empty resolution FAILS.
-#                           RESIDUAL, registered not chased: two enums in the SAME package with
-#                           identical constant sets could still be swapped for each other — the
-#                           same residual §2a carries, and no such pair exists today.
+#                           P3-87 (2026-07-29) CLOSED the residual this line used to register:
+#                           two enums in the SAME package with identical constant sets could be
+#                           swapped for each other past domain coherence. §2a-bis now indexes
+#                           same-package same-set pairs and REFUSES an ambiguous java_enum
+#                           binding unless it declares enum_disambiguation {dto_reference,
+#                           reason} — a file on disk that names THIS enum's simple name (the
+#                           siblings differ there by construction). Non-redundancy-checked both
+#                           ways: ambiguous-without-declaration FAILS, and a declaration whose
+#                           ambiguity has disappeared FAILS as stale. No such pair exists today,
+#                           so this is boundary precision, not a live-defect fix — the fixtures
+#                           construct the pair (fail_same_package_same_set / pass_disambiguated /
+#                           fail_stale_disambiguation).
+#
+# DELIBERATE-EVASION BOUNDARY (P3-86, declared FINAL at its 5th narrowing, 2026-07-29).
+# Four cross-family adversarial rounds plus the vocab_scan producer-resolution pass ended
+# with a residual that is not "not yet implemented" — it is not provable here at all:
+#   (a) a property-conditional @Bean that implements the SPI via a JDK Proxy under a
+#       configuration no test sets — the bytecode axis has no compiled class to name, and the
+#       running-registry axis is empty because the property is off;
+#   (b) a wire literal injected through @Value / System.getProperty — the value any test
+#       observes need not be the value at runtime.
+# No absence proof over an UNEXERCISED configuration can exist. Asserting coverage here would
+# be a broad-but-false guarantee — the same green-but-hollow defect this guard exists to
+# catch — so the boundary is stated by enumeration and the enumeration is not weakened.
+# The sound alternative is not a stronger absence proof but FAIL-CLOSED ROUTING (reject any
+# provider slug the contract does not declare, so an undeclared provider is unreachable
+# rather than merely unproven). That is a fork-receiver DEPLOYMENT policy — closing the set
+# means every fork must edit the catalog contract to register its own PG, which collides with
+# R26 autonomy — so it ships as an OPTIONAL documented pattern, not a gate:
+#   blueprints/payment-manifest.yaml#callback.fail_closed_provider_routing.
 #
 # HONEST SCOPE — what is exhaustive where:
 #   ts_union / java_enum_decl  → EXHAUSTIVE over the whole declaration. An unknown
@@ -452,6 +479,57 @@ def contract_domain_key(rel):
     return re.sub(r'[^a-z0-9]', '', stem.lower())
 
 cross_domain_used = set()
+
+# ── 2a-bis. SAME-PACKAGE AMBIGUITY (P3-87) ───────────────────────────────────
+# Domain coherence (§2a) checks the enum's PACKAGE LEAF against the contract's domain, so
+# it catches an FQCN that wandered into another domain. It cannot see a swap WITHIN one
+# package: two enums in the same package carrying IDENTICAL constant sets are, to every
+# check above, interchangeable — repoint the binding at the sibling and the guard compares
+# the contract to the wrong enum, forever, while the real one drifts unobserved. That is
+# the same failure the round-3 review reproduced across packages, minus the one signal that
+# caught it. No such pair exists in this tree today (live must stay at exit 0), which makes
+# this a BOUNDARY PRECISION check rather than a live-defect fix: the moment such a pair is
+# introduced, every binding into it must say WHICH of the two it means, and corroborate it
+# against something the manifest author does not write.
+#
+# The required corroboration is `enum_disambiguation: {dto_reference, reason}` —
+# `dto_reference` names an on-disk file that must mention the bound enum's SIMPLE NAME.
+# Siblings have different simple names by construction, so the reference discriminates them;
+# prose alone would be one more author assertion. Non-redundancy-checked in both directions:
+# an ambiguous binding without the declaration FAILS, and a declaration whose ambiguity has
+# since disappeared FAILS as stale — same discipline as wire_extra / CROSS_DOMAIN_BINDINGS.
+_enums_by_pkg = {}
+for _fq, _pkg in java_enum_pkgs.items():
+    _enums_by_pkg.setdefault(_pkg, []).append(_fq)
+
+SAME_SET_SIBLINGS = {}
+for _pkg, _fqs in _enums_by_pkg.items():
+    for _a in _fqs:
+        _sibs = sorted(b for b in _fqs
+                       if b != _a and set(java_enums[b]) == set(java_enums[_a]))
+        if _sibs:
+            SAME_SET_SIBLINGS[_a] = _sibs
+
+def check_enum_disambiguation(dis, fq):
+    """(err|None) — the declaration must resolve to a file that names THIS enum."""
+    if not isinstance(dis, dict):
+        return "`enum_disambiguation` must be a mapping {dto_reference, reason}"
+    ref = str(dis.get('dto_reference') or '').strip()
+    reason = str(dis.get('reason') or '').strip()
+    if not ref:
+        return "`enum_disambiguation` requires `dto_reference:` — a repo-relative file that " \
+               "references this enum (the response/request type serving this contract path)"
+    if not reason:
+        return "`enum_disambiguation` requires a `reason:`"
+    path = os.path.join(repo, ref)
+    if not os.path.isfile(path):
+        return f"`enum_disambiguation.dto_reference` {ref} is not a file in this tree"
+    simple = fq.rsplit('.', 1)[-1]
+    body = open(path, encoding='utf-8', errors='ignore').read()
+    if not re.search(r'\b' + re.escape(simple) + r'\b', body):
+        return (f"`enum_disambiguation.dto_reference` {ref} never mentions {simple!r} — it "
+                f"cannot corroborate WHICH of the same-set enums this block binds")
+    return None
 
 # ── 2b. wire_source extraction (P0-2) ────────────────────────────────────────
 # A wire_only block is NOT exempt from parity: it declares a producer and the guard
@@ -1085,6 +1163,7 @@ wire_source_extracted = 0
 wire_source_unproduced = 0
 unproduced_canonical_bound = 0
 runtime_verified = 0
+enum_disambiguation_bound = 0   # P3-87 — 0 today; no same-package same-set pair exists
 
 for key in sorted(claimed):
     if key not in discovered:
@@ -1244,6 +1323,34 @@ for key in sorted(claimed):
             f"unobserved. Point the entry at {domain_key!r}'s enum, or — if this really is "
             f"shared vocabulary — add the ({key[0]}, {pkg_leaf}) pair to CROSS_DOMAIN_BINDINGS "
             f"in the guard with a reason")
+    # SAME-PACKAGE AMBIGUITY (P3-87) — see §2a-bis. Domain coherence above proves the enum
+    # lives in the right domain; it says nothing about WHICH enum of that domain this is
+    # when two of them carry the same constants.
+    sibs = SAME_SET_SIBLINGS.get(fq, [])
+    dis = e.get('enum_disambiguation')
+    if sibs:
+        if not (isinstance(dis, dict) and dis):
+            violations.append(
+                f"{where}: AMBIGUOUS BINDING — {fq} shares its exact constant set with "
+                f"{sibs} in the SAME package, so the two are interchangeable to every check "
+                f"here: repoint this entry at the sibling and the guard would compare the "
+                f"contract to the wrong enum while the right one drifts unobserved. Declare "
+                f"`enum_disambiguation: {{dto_reference, reason}}` naming the request/response "
+                f"type that serves this contract path and really references {fq.rsplit('.', 1)[-1]!r} "
+                f"— or, better, give the two enums distinct constant sets if they are in fact "
+                f"different vocabularies")
+        else:
+            derr = check_enum_disambiguation(dis, fq)
+            if derr:
+                violations.append(f"{where}: {derr}")
+            else:
+                enum_disambiguation_bound += 1
+    elif isinstance(dis, dict) and dis:
+        violations.append(
+            f"{where}: `enum_disambiguation` is STALE — no other enum in {fq.rsplit('.', 1)[0]!r} "
+            f"carries the same constant set any more, so nothing is ambiguous and the "
+            f"declaration corroborates nothing. Delete it (same non-redundancy discipline as "
+            f"wire_extra / CROSS_DOMAIN_BINDINGS: an unused allowance rots into a lie)")
     java_set = set(java_enums[fq])
     wire_raw = discovered[key]
     lower = str(e.get('wire_case', '')).lower() == 'lower'

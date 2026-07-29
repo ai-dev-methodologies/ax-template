@@ -11,11 +11,11 @@ evidence:
   - source_type: upstream_id
     upstream_id: mdn-navigator-online-2026-05
     section: "online / offline events"
-    quote: "Listen for network state changes via window events: window.addEventListener('online', ...) window.addEventListener('offline', ...)"
+    quote: "Listen for network state changes via `window` events:"
   - source_type: upstream_id
     upstream_id: mdn-navigator-online-2026-05
     section: "visibilitychange pattern"
-    quote: "Recheck navigator.onLine when the document becomes visible again to catch transitions that occurred while the tab was in the background."
+    quote: "Recheck `navigator.onLine` when the document becomes visible again to catch transitions that occurred while the tab was in the background"
 dependencies: []
 imports_from: [L1]
 imports_forbidden: [L4, app/, lib/auth/, lib/payment/]

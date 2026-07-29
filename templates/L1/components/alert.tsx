@@ -8,10 +8,11 @@ evidence:
     upstream_id: shadcn-ui-2026-05
     section: alert
     quote: "Displays a callout for user attention."
-  - source_type: upstream_id
-    upstream_id: wcag-2-2
-    section: 1.3.1-info-and-relationships
+  - source_type: external
+    citation: "WCAG 2.2 SC 1.3.1 Info and Relationships (Level A) — full normative text, W3C Recommendation 2023-10-05"
+    url: "https://www.w3.org/TR/WCAG22/#info-and-relationships"
     quote: "Information, structure, and relationships conveyed through presentation can be programmatically determined or are available in text."
+    quoted_at: "2026-07-29"
 a11y_criteria:
   - "WCAG 2.2 SC 1.3.1 — use role='alert' for critical alerts, role='status' for informational"
   - "WCAG 2.2 SC 1.4.1 — do not rely on color alone; include icon or label"

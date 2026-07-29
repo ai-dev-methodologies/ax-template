@@ -33,6 +33,29 @@
 # runs (read-only snapshot / container), which is fork-receiver infrastructure, not a shell
 # check — recorded here rather than papered over.
 #
+# DECISION (BACKLOG P3-89, recorded 2026-07-29): KEEP step-boundary sampling. The reviewer
+# who raised this confirmed the intra-step window is REACHABLE, and confirmed the paragraph
+# above describes it accurately — so this is a scope decision, not a correction.
+#   BENEFIT of intra-step periodic sampling: shrinks the window from "one step" to "one
+#     sampling interval". It does NOT close the class — any interval leaves a smaller window,
+#     and only an immutable tree removes it. So the ceiling on the benefit is a constant
+#     factor, never a category change.
+#   COST: a background sampler running for the length of an R25 run (~2,200s observed) has to
+#     be spawned, reaped on every exit path including SIGTERM/timeout, and kept from racing
+#     the steps it samples — a watcher whose own failure modes (orphaned process, false
+#     "mutated" from reading a file mid-write) would land on the PUSH path, the most
+#     load-bearing gate in the catalog. Buying a constant-factor reduction with new
+#     concurrency on that path is a bad trade.
+#   The exposure is also already bounded by the OTHER links: the pushed commit's tree must be
+#   clean at both endpoints and equal to the audited fingerprint, so exploiting the intra-step
+#   window requires an edit that is applied and reverted inside one step — the deliberate,
+#   reviewer-constructed shape, not an accident.
+#   REVISIT TRIGGER (explicit, so this is falsifiable rather than permanent): a DEMONSTRATED
+#   real evasion — an intra-step mutation that laundered a push and was not constructed for
+#   the purpose of demonstrating it. On that evidence, prefer an immutable-tree run
+#   (read-only snapshot / container) over a sampler; the sampler is the option this decision
+#   rejects, not the goal.
+#
 # SCOPE (anti-over-correction, asserted): only PUSH eligibility tightens. A run whose steps
 # write only GIT-IGNORED artifacts (every real R25 run does: build/, .ax-verify/) is still
 # settled, and a legitimate clean run still ships. Assertions 2 and 3 pin both.

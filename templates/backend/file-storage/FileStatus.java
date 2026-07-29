@@ -1,5 +1,14 @@
-// @ax-template-meta: template_id=backend/file-storage/FileStatus layer=backend domain=file-storage
-// evidence: FILE-SCAN-001 (PENDING→READY|QUARANTINED lifecycle), FILE-SCAN-002 (PENDING download 202)
+/**
+ * @ax-template-meta
+ * template_id: backend/file-storage/FileStatus
+ * layer: backend
+ * domain: file-storage
+ * anchors_rule: soft-delete-audit-trail.md
+ * provenance_class: internal_design
+ * evidence:
+ *   - source_type: internal
+ *     rationale: "File-storage upload lifecycle enum. Realises specs/file-storage-l0.yaml#FILE-SCAN-001 (PENDING -> READY|QUARANTINED) and #FILE-SCAN-002 (a PENDING download answers 202 + Retry-After). DELETED is a status flip that preserves the row, which is why this enum anchors the soft-delete-preserves-audit-trail invariant."
+ */
 package com.ax.template.authblueprint.filestorage;
 
 /**

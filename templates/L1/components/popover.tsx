@@ -8,10 +8,11 @@ evidence:
     upstream_id: shadcn-ui-2026-05
     section: popover
     quote: "Displays rich content in a portal, triggered by a button."
-  - source_type: upstream_id
-    upstream_id: wcag-2-2
-    section: 2.4.3-focus-order
-    quote: "If a Web page can be navigated sequentially and the navigation sequences affect meaning or operation, focusable components receive focus in an order that preserves meaning and operation."
+  - source_type: external
+    citation: "WCAG 2.2 SC 2.4.3 Focus Order (Level A) — full normative text, W3C Recommendation 2023-10-05"
+    url: "https://www.w3.org/TR/WCAG22/#focus-order"
+    quote: "If a web page can be navigated sequentially and the navigation sequences affect meaning or operation, focusable components receive focus in an order that preserves meaning and operability."
+    quoted_at: "2026-07-29"
 a11y_criteria:
   - "WCAG 2.2 SC 4.1.2 — trigger button has aria-expanded via Radix"
   - "WCAG 2.2 SC 2.4.3 Focus Order"

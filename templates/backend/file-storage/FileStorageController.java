@@ -1,6 +1,14 @@
-// @ax-template-meta: template_id=backend/file-storage/FileStorageController layer=backend domain=file-storage
-// evidence: FILE-AUTHZ-001 (all endpoints authenticated), FILE-SCAN-002 (202+Retry-After),
-//           FILE-SEC-001 (302 redirect to presigned URL)
+/**
+ * @ax-template-meta
+ * template_id: backend/file-storage/FileStorageController
+ * layer: backend
+ * domain: file-storage
+ * anchors_rule: caller-authentication-only-no-userid-param.md
+ * provenance_class: internal_design
+ * evidence:
+ *   - source_type: internal
+ *     rationale: "Thin @RestController for /api/files. Realises specs/file-storage-l0.yaml#FILE-AUTHZ-001 (every endpoint authenticated), #FILE-SCAN-002 (202 + Retry-After while scanning) and #FILE-SEC-001 (302 to a presigned URL). The owner is resolved from @AuthenticationPrincipal and there is no userId path or query parameter anywhere on the surface — the structural form of the anchored invariant."
+ */
 package com.ax.template.authblueprint.filestorage;
 
 import org.springframework.http.HttpHeaders;

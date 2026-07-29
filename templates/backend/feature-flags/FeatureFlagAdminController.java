@@ -3,7 +3,7 @@
  * template_id: backend/feature-flags/FeatureFlagAdminController
  * layer: backend-domain
  * domain: feature-flags
- * anchors_rule: api-controller-service-separation.md (PRACTICES-API-003)
+ * anchors_rule: bfla-privileged-endpoint-authz-presence.md
  * provenance_class: internal_design
  * evidence:
  *   - source_type: external

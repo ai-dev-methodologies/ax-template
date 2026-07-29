@@ -166,6 +166,51 @@ class ApprovalVisibilitySelectorContractTest {
             .when().get("/api/approvals/" + c.requestId()).then().statusCode(404);
     }
 
+    // ── P3-76: the step-scoped action set, on the LIVE wire ─────────────────
+
+    @Test
+    @Tag("WF-AUTHZ-003")
+    @Tag("WF-STEP-001")
+    @DisplayName("P3-76: steps[].allowedActions identifies WHICH step is the caller's, and advances with the 결재선")
+    void stepScopedAllowedActions_trackTheChain() {
+        Actor requester = actor("p376-requester");
+        Actor first = actor("p376-first");
+        Actor second = actor("p376-second");
+        Created c = createDraft(requester, List.of(first.id(), second.id()), "p376 chain");
+        submit(requester, c.requestId());
+
+        // The later approver is VISIBLE (SUBMITTED + assigned) but her step is not hers to
+        // act on yet — the request-scoped array cannot express that, the step-scoped one can.
+        given().header("Authorization", "Bearer " + second.token())
+            .when().get("/api/approvals/" + c.requestId())
+            .then()
+                .statusCode(200)
+                .body("allowedActions", Matchers.contains("view"))
+                .body("steps[0].allowedActions", Matchers.empty())
+                .body("steps[1].allowedActions", Matchers.empty());
+
+        // … while for the FIRST approver, step 0 is open and step 1 is not hers at all.
+        given().header("Authorization", "Bearer " + first.token())
+            .when().get("/api/approvals/" + c.requestId())
+            .then()
+                .statusCode(200)
+                .body("steps[0].allowedActions",
+                      Matchers.containsInAnyOrder("approve", "reject"))
+                .body("steps[1].allowedActions", Matchers.empty());
+
+        act(first, c.requestId(), c.stepIds().get(0), true);
+
+        // The chain advanced: now the SECOND step is the actionable one — the case a
+        // client cannot get right from the request-scoped array alone.
+        given().header("Authorization", "Bearer " + second.token())
+            .when().get("/api/approvals/" + c.requestId())
+            .then()
+                .statusCode(200)
+                .body("steps[0].allowedActions", Matchers.empty())
+                .body("steps[1].allowedActions",
+                      Matchers.containsInAnyOrder("approve", "reject"));
+    }
+
     // ── P2-38a real-selector contract: GET /approvals ↔ isRequester ─────────
 
     @Test

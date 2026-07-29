@@ -95,7 +95,12 @@ items:
     notes: >
       Test: UserA requests with approvers [B, C]. UserC tries to approve step 0 (assigned to B) → 403.
       Implementation: ApprovalService.approve() checks step.approverUserId == caller before invoking
-      the state machine.
+      the state machine. P3-76: the same predicates now also answer the question POSITIVELY on the
+      wire — ApprovalStepResponse.allowedActions carries the caller's permitted actions per step
+      (approve/reject only), computed by ApprovalActionEvaluator.allowedStepActions, so a client
+      renders its action panel from the server's answer instead of re-deriving which step is
+      actionable. The request-scoped array (P2-38b) is the union of these per-step sets, so the two
+      cannot disagree.
     policy_ref: "blueprints/approval-workflow-manifest.yaml#authz"
 
   # ─── STEP family (3 items) ─────────────────────────────────────────────────

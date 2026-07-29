@@ -457,8 +457,61 @@ NOOP_PLACEHOLDER_EXIT = {
 # (`true; true`, `: && true`). Splitting is only ever used to REQUIRE that EVERY fragment is
 # a placeholder — a chain containing one real command has a non-placeholder fragment and is
 # admitted, so the split can never widen the denylist.
-NOOP_SEPARATOR_RE = re.compile(r";|&&|\|\|")
+#
+# P3-88: once every fragment is known to be a placeholder, the chain's exit status is not
+# "the last fragment's" — it is whatever SHORT-CIRCUIT evaluation produces. The old model
+# read the last fragment and therefore admitted two shapes that do certify a step with
+# nothing run: `true || false` (real status 0; the model said 1) and `false && true` (real
+# status 1; the model said 0). Every token here has a FIXED status, so the chain is fully
+# decidable — no shell semantics are being guessed. `exit N` additionally TERMINATES the
+# shell, so nothing after an executed `exit` runs (`exit 1 || true` is status 1, not 0).
+#
+# The boundary is unchanged and still finite: this models `;`, `&&`, `||` and newlines over
+# chains whose every fragment is one of the tokens above. Wrappers (`bash -c …`), grouping
+# (`{ …; }`, `( … )`), pipelines (`|`), negation (`!`), backgrounding (`&`), redirections and
+# any variable expansion put the command outside the denylist entirely — it is ADMITTED,
+# because deciding whether an arbitrary shell command does work is undecidable.
+NOOP_SEPARATOR_RE = re.compile(r"\s*(;|&&|\|\|)\s*")
+NOOP_TRAILING_OP_RE = re.compile(r"(?:;|&&|\|\|)\s*\Z")
 NOOP_TRAILING_COMMENT_RE = re.compile(r"\s+#.*\Z")
+
+
+def noop_chain_status(lines):
+    """Exit status of an ALL-PLACEHOLDER chain, or None when the shape is not one.
+
+    Returns None (→ the command is ADMITTED) whenever any fragment is not a known
+    placeholder token, which is what keeps this a denylist rather than an analysis.
+    """
+    joined = ""
+    for line in lines:
+        if not joined:
+            joined = line
+        elif NOOP_TRAILING_OP_RE.search(joined):
+            joined += " " + line          # bash continues the chain after a dangling ;/&&/||
+        else:
+            joined += " ; " + line        # otherwise a newline is a command separator
+
+    parts = NOOP_SEPARATOR_RE.split(joined)
+    frags = [NOOP_TRAILING_COMMENT_RE.sub("", f).strip() for f in parts[0::2]]
+    ops = parts[1::2]
+    if frags and frags[-1] == "" and ops:     # a trailing `;` leaves one empty fragment
+        frags, ops = frags[:-1], ops[:-1]
+    if not frags or any(f not in NOOP_PLACEHOLDER_EXIT for f in frags):
+        return None
+
+    status = NOOP_PLACEHOLDER_EXIT[frags[0]]
+    if frags[0].startswith("exit"):
+        return status                          # the shell is gone; the rest is unreachable
+    for i, frag in enumerate(frags[1:], start=1):
+        op = ops[i - 1]
+        if op == "&&" and status != 0:
+            continue                           # short-circuited: not executed
+        if op == "||" and status == 0:
+            continue                           # short-circuited: not executed
+        status = NOOP_PLACEHOLDER_EXIT[frag]
+        if frag.startswith("exit"):
+            return status
+    return status
 
 
 def command_runs_nothing(text, expected_exit=0):
@@ -482,13 +535,13 @@ def command_runs_nothing(text, expected_exit=0):
     # same placeholder). Stripping is safe even where it is wrong — e.g. `grep '#' f` becomes
     # `grep '` — because the result is then matched against the denylist, and anything that is
     # not literally one of those tokens is admitted.
-    fragments = [NOOP_TRAILING_COMMENT_RE.sub("", f).strip()
-                 for line in effective for f in NOOP_SEPARATOR_RE.split(line)]
-    fragments = [f for f in fragments if f]
-    if not fragments or any(f not in NOOP_PLACEHOLDER_EXIT for f in fragments):
+    #
+    # P3-88: the chain's status comes from SHORT-CIRCUIT evaluation, not from the last
+    # fragment — see noop_chain_status. `true || false` and `false && true` are placeholders
+    # that certify a step; the previous last-fragment model admitted both.
+    status = noop_chain_status(effective)
+    if status is None:
         return None
-    # Exit status of the whole thing = the last fragment's (shell `;` semantics; the &&/||
-    # chains that survive the all-placeholders test degenerate to the same answer).
     # expected_exit is compared as an int because the runner compares it with `[ -eq ]`,
     # which treats `expected_exit: "0"` and `expected_exit: 0` identically; an unparsable
     # value is left to the runner to reject rather than silently treated as 0.
@@ -496,7 +549,7 @@ def command_runs_nothing(text, expected_exit=0):
         expected = int(expected_exit)
     except (TypeError, ValueError):
         return None
-    if NOOP_PLACEHOLDER_EXIT[fragments[-1]] != expected:
+    if status != expected:
         return None
     return "a no-op placeholder"
 

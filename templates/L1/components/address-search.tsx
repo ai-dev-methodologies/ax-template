@@ -11,10 +11,11 @@ evidence:
     upstream_id: kakao-postcode-2026-05
     section: oncomplete-callback
     quote: "The callback receives a data object with address information. Key properties: zonecode, roadAddress, jibunAddress"
-  - source_type: upstream_id
-    upstream_id: wcag-2-2
-    section: 1.3.1-info-and-relationships
-    quote: "Information, structure, and relationships conveyed through presentation can be programmatically determined."
+  - source_type: external
+    citation: "WCAG 2.2 SC 1.3.1 Info and Relationships (Level A) — full normative text, W3C Recommendation 2023-10-05"
+    url: "https://www.w3.org/TR/WCAG22/#info-and-relationships"
+    quote: "Information, structure, and relationships conveyed through presentation can be programmatically determined or are available in text."
+    quoted_at: "2026-07-29"
 a11y_criteria:
   - "WCAG 2.2 SC 1.3.1 — address fields labelled individually (우편번호, 도로명, 지번, 상세)"
   - "WCAG 2.2 SC 4.1.2 — search button role='button' with descriptive aria-label"

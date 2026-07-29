@@ -129,7 +129,24 @@ tasks.withType<Test> {
     // This is ax-template's OWN test-harness setting. It imposes nothing on fork-receivers'
     // CI policy — that boundary (CLAUDE.md) is about merge gates, not about whether our own
     // suite is deterministic.
-    systemProperty("spring.test.context.cache.maxSize", "128")
+    //
+    // BACKLOG P3-84 (surveillance, 2026-07-29). Raising an eviction ceiling means contexts
+    // are retained LONGER, so a test that unfairly depends on cache state an earlier test
+    // left behind would stop being exposed. No such test is known — this is a watch item,
+    // and the probe for it is to re-run the aggregate with the OLD ceiling and see whether
+    // anything new fails (a new failure under a lower ceiling is real inter-test state
+    // leakage, NOT flake — fix the test, never the ceiling).
+    //
+    // The ceiling is therefore overridable. It has to be: a bare
+    // `-Dspring.test.context.cache.maxSize=32` on the gradle command line does NOT reach the
+    // forked test JVM (it sets the property on the DAEMON), and the line below would pin 128
+    // regardless — the probe would silently run the ordinary suite and "pass" while proving
+    // nothing. `-P` (not `-D`) because a project property is per-invocation, whereas a
+    // daemon `-D` persists into later runs that reuse the same daemon and would silently run
+    // the whole suite at the probe's ceiling. Same findProperty idiom as the pit.* scoping
+    // below. Default is unchanged at 128.
+    systemProperty("spring.test.context.cache.maxSize",
+        (project.findProperty("contextCacheMaxSize") as String?) ?: "128")
 }
 
 // PIT mutation testing — the mechanical backstop for non-vacuity. A scoped run mutates a

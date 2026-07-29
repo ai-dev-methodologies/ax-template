@@ -3,6 +3,7 @@
  * template_id: backend/identity-verification/VerifiedIdentityRepository
  * layer: backend-domain
  * domain: identity-verification
+ * anchors_rule: testing-archunit-repository-shape.md
  * provenance_class: internal_design
  * evidence:
  *   - source_type: external

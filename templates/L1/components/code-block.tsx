@@ -10,10 +10,11 @@ evidence:
   - source_type: external
     citation: "MDN Web Docs — <pre> element: preformatted text which is to be presented exactly as written in the HTML file."
     url: "https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/pre"
-  - source_type: upstream_id
-    upstream_id: wcag-2-2
-    section: 1.3.1-info-and-relationships
-    quote: "Information, structure, and relationships conveyed through presentation can be programmatically determined."
+  - source_type: external
+    citation: "WCAG 2.2 SC 1.3.1 Info and Relationships (Level A) — full normative text, W3C Recommendation 2023-10-05"
+    url: "https://www.w3.org/TR/WCAG22/#info-and-relationships"
+    quote: "Information, structure, and relationships conveyed through presentation can be programmatically determined or are available in text."
+    quoted_at: "2026-07-29"
 a11y_criteria:
   - "WCAG 2.2 SC 1.3.1 — <pre><code> conveys code block semantics programmatically"
   - "WCAG 2.2 SC 2.1.1 — copy button keyboard accessible (Enter/Space triggers copy)"

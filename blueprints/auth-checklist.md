@@ -3,7 +3,7 @@
 ## 1. Auth Boundary & OpenAPI Contract
 - [ ] `contracts/auth-openapi.yaml` acts as the single source of truth for auth endpoints.
 - [ ] Implementation precisely matches the OpenAPI schema for requests, responses, and error definitions.
-- [ ] The `/auth/me` endpoint returns minimal UI state (userId, email, roles, providerLinks, verificationState).
+- [ ] The `/auth/me` endpoint returns minimal UI state (userId, email, role, emailVerified, linkedProviders).
 - [ ] Controller layer is free of business logic.
 
 ## 2. Security Defaults (CSRF & CORS)

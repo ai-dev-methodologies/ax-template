@@ -9,9 +9,9 @@ describe('Auth State Scenarios', () => {
       user: {
         userId: '123',
         email: 'test@example.com',
-        roles: ['user'],
-        providerLinks: ['google'],
-        verificationState: 'verified',
+        role: 'MEMBER',
+        linkedProviders: ['GOOGLE'],
+        emailVerified: true,
       },
       isLoading: false,
     };

@@ -1,6 +1,6 @@
 ---
 sentinel:
-  source_concat_sha256: "a70be0aed1ea25498f8546a8201f3499d56ee5bb9345505439cf823805606e82"
+  source_concat_sha256: "64e9c95220ae0247ad37dc5e0a8712ba716618b152e9f555177e9fe36eee8894"
   rule_count: 102
   generated_by: "practices-react/generate_agents.sh"
 ---
@@ -4722,13 +4722,16 @@ const enriched = orders.map((o) => ({
 }))
 ```
 
-### Same fix, explicit loop (no array methods)
+### Same fix, spread-free (non-mutating copy)
 
 ```typescript
 const userById = new Map()
 for (const u of users) userById.set(u.id, u)
-for (const o of orders) o.user = userById.get(o.userId)
+const enriched = orders.map((o) => Object.assign({}, o, { user: userById.get(o.userId) }))
 ```
+
+Note the copy: enriching by assigning onto `o` would mutate the caller's `orders`
+rows. `Object.assign({}, o, …)` produces a new object, same as the spread form above.
 
 ### When it pays off
 

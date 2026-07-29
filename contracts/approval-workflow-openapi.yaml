@@ -278,6 +278,22 @@ components:
         comment:
           type: string
           nullable: true
+        allowedActions:
+          type: array
+          description: |
+            P3-76 — the actions THIS caller may invoke on THIS step, computed
+            server-side by ApprovalActionEvaluator.allowedStepActions from the same
+            ApprovalActionGuards predicates ApprovalService enforces on the action path.
+            ApprovalRequestResponse.allowedActions says whether the caller may approve
+            SOMETHING on the request; it cannot say WHICH step is theirs, so a client
+            rendering an action panel had to re-derive the step. Clients MUST prefer this
+            over re-deriving. Narrower vocabulary than the request-scoped block by
+            construction: `view` is request-scoped and `submit`/`cancel` act on the
+            request as a whole, so neither can appear here. Empty when the caller may do
+            nothing with this step. Consumers MUST ignore unrecognized tokens.
+          items:
+            type: string
+            enum: [approve, reject]
 
     ApprovalRequestResponse:
       type: object

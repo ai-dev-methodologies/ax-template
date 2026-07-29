@@ -3,6 +3,7 @@
  * template_id: backend/billing/BillingMapper
  * layer: backend-domain
  * domain: billing
+ * anchors_rule: api-no-entity-leak.md
  * provenance_class: internal_design
  * evidence:
  *   - source_type: external

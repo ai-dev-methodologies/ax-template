@@ -1,9 +1,9 @@
 {
-  "_provenance": "S2.AUTHZ.XB (2026-07-27; rewritten 2026-07-28 for P2-38a/b + P3-63) — cross-boundary authz-action-set parity. Domain: approval-workflow (전자결재), specs/approval-workflow-l0.yaml (WF-AUTHZ-001..003, WF-STEP-001, WF-LIFECYCLE-001..004). THE GAP THIS FIXTURE ORIGINALLY DOCUMENTED IS NOW CLOSED: ApprovalRequestResponse carries a server-computed `allowedActions` field (P2-38b), produced by ApprovalActionEvaluator, which delegates every decision to ApprovalActionGuards — the SAME predicates ApprovalService enforces on the action path (P2-38a). So `expectedActions` is no longer hand-derived from cited guards: backend/src/test/java/.../common/AuthorizedActionSetParityTest.java now CALLS the production ApprovalActionEvaluator, and frontend/tests/authz-action-parity.vitest.ts calls the single shared selector at templates/L0/fork-receiver-kit/authorized-actions.ts, which the L4 detail page also imports (P2-39). Neutering a predicate in ApprovalActionGuards therefore flips BOTH the action-path test and this parity test — that is the mutation lock. P3-63 changed one behaviour deliberately: an approver who ACTED keeps `view` after the request goes terminal (they may see the outcome of their own decision); an assigned-but-UNACTED approver still gets nothing. The two rows below are the distinguishing pair.",
+  "_provenance": "S2.AUTHZ.XB (2026-07-27; rewritten 2026-07-28 for P2-38a/b + P3-63) — cross-boundary authz-action-set parity. Domain: approval-workflow (전자결재), specs/approval-workflow-l0.yaml (WF-AUTHZ-001..003, WF-STEP-001, WF-LIFECYCLE-001..004). THE GAP THIS FIXTURE ORIGINALLY DOCUMENTED IS NOW CLOSED: ApprovalRequestResponse carries a server-computed `allowedActions` field (P2-38b), produced by ApprovalActionEvaluator, which delegates every decision to ApprovalActionGuards — the SAME predicates ApprovalService enforces on the action path (P2-38a). So `expectedActions` is no longer hand-derived from cited guards: backend/src/test/java/.../common/AuthorizedActionSetParityTest.java now CALLS the production ApprovalActionEvaluator, and frontend/tests/authz-action-parity.vitest.ts calls the single shared selector at templates/L0/fork-receiver-kit/authorized-actions.ts, which the L4 detail page also imports (P2-39). Neutering a predicate in ApprovalActionGuards therefore flips BOTH the action-path test and this parity test — that is the mutation lock. P3-63 changed one behaviour deliberately: an approver who ACTED keeps `view` after the request goes terminal (they may see the outcome of their own decision); an assigned-but-UNACTED approver still gets nothing. The two rows below are the distinguishing pair. P3-76 (2026-07-29) added the step-scoped leg: every row now also carries `expectedStepActions` (step id -> the actions the caller may invoke on THAT step), which ApprovalStepResponse.allowedActions emits from ApprovalActionEvaluator.allowedStepActions. The request-scoped set is the UNION of the per-step sets plus the request-scoped tokens, computed by calling the same method, so the two legs cannot disagree by construction. A ninth row (second_step_approver_actionable_after_first_approved) supplies the case where the actionable step is NOT steps[0]. P3-76 follow-up (2026-07-29) — ID-COMPARISON PARITY: four rows whose callerId differs from the stored id only in case or padding. authorized-actions.sameId used to trim+toLowerCase while every BE comparison is String.equals, so such a caller was authorized by the FE fallback and rejected by the server. sameId is now EXACT (the server is authoritative) and these rows pin the denial on BOTH legs; re-introducing either normalization turns them RED.",
   "rows": [
     {
       "label": "requester_draft_own_request",
-      "_note": "Requester viewing/acting on their own DRAFT request. view: requester branch of findVisibleTo is unconditional on status (ApprovalRequestRepository.java:39-42, first OR-arm). submit/cancel: ApprovalService.loadOwn requires requesterUserId==caller (ApprovalService.java:245-251) AND the REAL ApprovalRequestStateMachine allows DRAFT->SUBMITTED and DRAFT->CANCELLED (ApprovalRequestStateMachine.java:25-26). approve/reject absent: alice is not an approver on any step here.",
+      "_note": "Requester viewing/acting on their own DRAFT request. view: requester branch of findVisibleTo is unconditional on status (ApprovalRequestRepository.java:39-42, first OR-arm). submit/cancel: ApprovalService.loadOwn requires requesterUserId==caller (ApprovalService.java:245-251) AND the REAL ApprovalRequestStateMachine allows DRAFT->SUBMITTED and DRAFT->CANCELLED (ApprovalRequestStateMachine.java:25-26). approve/reject absent: alice is not an approver on any step here. P3-76 step scope: the request is DRAFT, so isActionable is false and carol's step offers nothing — alice's submit/cancel are REQUEST-scoped and never appear on a step.",
       "request": {
         "requesterUserId": "alice",
         "status": "DRAFT",
@@ -21,11 +21,14 @@
         "cancel",
         "submit",
         "view"
-      ]
+      ],
+      "expectedStepActions": {
+        "1a2b3c4d-0000-4000-8000-000000000001": []
+      }
     },
     {
       "label": "approver_first_step_pending_submitted",
-      "_note": "The assigned approver on the (only, first) PENDING step of a SUBMITTED request. view: approver branch of findVisibleTo requires status==SUBMITTED, which holds (ApprovalRequestRepository.java:39-42, second OR-arm). approve/reject: request is exactly SUBMITTED (ApprovalService.java:195-202), carol matches the step's approverUserId (ApprovalService.java:209-217), no earlier step exists so the ordering guard is vacuously satisfied (ApprovalService.java:219-227), and the REAL ApprovalStepStateMachine allows PENDING->APPROVED and PENDING->REJECTED (ApprovalStepStateMachine.java:26-27). submit/cancel absent: carol is not the requester, so loadOwn 404s (ApprovalService.java:245-251).",
+      "_note": "The assigned approver on the (only, first) PENDING step of a SUBMITTED request. view: approver branch of findVisibleTo requires status==SUBMITTED, which holds (ApprovalRequestRepository.java:39-42, second OR-arm). approve/reject: request is exactly SUBMITTED (ApprovalService.java:195-202), carol matches the step's approverUserId (ApprovalService.java:209-217), no earlier step exists so the ordering guard is vacuously satisfied (ApprovalService.java:219-227), and the REAL ApprovalStepStateMachine allows PENDING->APPROVED and PENDING->REJECTED (ApprovalStepStateMachine.java:26-27). submit/cancel absent: carol is not the requester, so loadOwn 404s (ApprovalService.java:245-251). P3-76 step scope: carol's own step is the one she may act on. `view` is absent because visibility is request-scoped (canView takes a request, not a step).",
       "request": {
         "requesterUserId": "alice",
         "status": "SUBMITTED",
@@ -43,11 +46,17 @@
         "approve",
         "reject",
         "view"
-      ]
+      ],
+      "expectedStepActions": {
+        "1a2b3c4d-0000-4000-8000-000000000001": [
+          "approve",
+          "reject"
+        ]
+      }
     },
     {
       "label": "non_participant_submitted",
-      "_note": "A caller who is neither requester nor any step's approver. Deny-by-default across the board: findVisibleTo has no matching OR-arm (ApprovalRequestRepository.java:39-42) so the request is not even visible (IDOR-safe 404), and the step loop in ApprovalService.actOnStep never matches an approverUserId (ApprovalService.java:204-217) so approve/reject are unreachable regardless of request status.",
+      "_note": "A caller who is neither requester nor any step's approver. Deny-by-default across the board: findVisibleTo has no matching OR-arm (ApprovalRequestRepository.java:39-42) so the request is not even visible (IDOR-safe 404), and the step loop in ApprovalService.actOnStep never matches an approverUserId (ApprovalService.java:204-217) so approve/reject are unreachable regardless of request status. P3-76 step scope: deny-by-default reaches the step level too — dave is not the assigned approver, so isAssignedApprover short-circuits before the step machine is consulted.",
       "request": {
         "requesterUserId": "alice",
         "status": "SUBMITTED",
@@ -61,11 +70,14 @@
         ]
       },
       "callerId": "dave",
-      "expectedActions": []
+      "expectedActions": [],
+      "expectedStepActions": {
+        "1a2b3c4d-0000-4000-8000-000000000001": []
+      }
     },
     {
       "label": "second_step_approver_visible_but_out_of_order",
-      "_note": "THE key FE/BE-parity trap this fixture exists to pin: erin is the assigned approver of the SECOND step (orderIndex 1) of a SUBMITTED request, so she IS visible per findVisibleTo's approver OR-arm (ApprovalRequestRepository.java:39-42 does not check ordering, only status==SUBMITTED) -- a naive FE that renders an approve/reject button merely because the caller's id appears among steps[].approverUserId would show one here. But the first step (orderIndex 0, carol, still PENDING) is not APPROVED yet, so ApprovalService's strict-ordering guard rejects any action on erin's step with 409 STEP_OUT_OF_ORDER (ApprovalService.java:219-227) before the step's own state machine is ever consulted. Expected: view only.",
+      "_note": "THE key FE/BE-parity trap this fixture exists to pin: erin is the assigned approver of the SECOND step (orderIndex 1) of a SUBMITTED request, so she IS visible per findVisibleTo's approver OR-arm (ApprovalRequestRepository.java:39-42 does not check ordering, only status==SUBMITTED) -- a naive FE that renders an approve/reject button merely because the caller's id appears among steps[].approverUserId would show one here. But the first step (orderIndex 0, carol, still PENDING) is not APPROVED yet, so ApprovalService's strict-ordering guard rejects any action on erin's step with 409 STEP_OUT_OF_ORDER (ApprovalService.java:219-227) before the step's own state machine is ever consulted. Expected: view only. P3-76 step scope, and the reason a step-scoped field was needed at all: BOTH steps are empty for erin — step 0 because it is not hers, step 1 because isNextActionableStep is false. A client holding only the request-scoped array cannot tell those two apart from 'no actionable step'; here the server says it directly.",
       "request": {
         "requesterUserId": "alice",
         "status": "SUBMITTED",
@@ -87,11 +99,15 @@
       "callerId": "erin",
       "expectedActions": [
         "view"
-      ]
+      ],
+      "expectedStepActions": {
+        "1a2b3c4d-0000-4000-8000-000000000001": [],
+        "2b3c4d5e-0000-4000-8000-000000000002": []
+      }
     },
     {
       "label": "acted_approver_keeps_view_after_terminal",
-      "_note": "P3-63 (narrow widening). carol APPROVED her step and the request went terminal (APPROVED). BEFORE: the visibility rule's approver arm required status==SUBMITTED, so the moment the chain completed carol lost all access — she could not see the outcome of her own decision. NOW ApprovalActionGuards.canView adds a THIRD arm: an approver whose own step carries actedByUserId == caller keeps `view` once the request is terminal. Still view-only: APPROVED is terminal in the request machine's ALLOWED map, and she is not the requester.",
+      "_note": "P3-63 (narrow widening). carol APPROVED her step and the request went terminal (APPROVED). BEFORE: the visibility rule's approver arm required status==SUBMITTED, so the moment the chain completed carol lost all access — she could not see the outcome of her own decision. NOW ApprovalActionGuards.canView adds a THIRD arm: an approver whose own step carries actedByUserId == caller keeps `view` once the request is terminal. Still view-only: APPROVED is terminal in the request machine's ALLOWED map, and she is not the requester. P3-76 step scope: carol keeps request-scoped `view`, but her step offers nothing — the request is terminal so isActionable is false, and her step is APPROVED so the step machine has no transitions left either.",
       "request": {
         "requesterUserId": "alice",
         "status": "APPROVED",
@@ -108,11 +124,14 @@
       "callerId": "carol",
       "expectedActions": [
         "view"
-      ]
+      ],
+      "expectedStepActions": {
+        "1a2b3c4d-0000-4000-8000-000000000001": []
+      }
     },
     {
       "label": "unacted_approver_no_view_after_terminal",
-      "_note": "P3-63's other half — the qualifier that keeps the widening NARROW. carol REJECTED step 0, which sent the request terminal (REJECTED) before erin (step 1) was ever asked to decide. erin is an assigned approver but her step carries no actedByUserId, so canView's third arm does not fire and she gets nothing — a rejection upstream must not retroactively disclose the request to approvers who were never reached. Paired with acted_approver_keeps_view_after_terminal, this row is what makes the widening falsifiable: drop the acted-only qualifier and THIS row goes red.",
+      "_note": "P3-63's other half — the qualifier that keeps the widening NARROW. carol REJECTED step 0, which sent the request terminal (REJECTED) before erin (step 1) was ever asked to decide. erin is an assigned approver but her step carries no actedByUserId, so canView's third arm does not fire and she gets nothing — a rejection upstream must not retroactively disclose the request to approvers who were never reached. Paired with acted_approver_keeps_view_after_terminal, this row is what makes the widening falsifiable: drop the acted-only qualifier and THIS row goes red. P3-76 step scope: nothing anywhere for erin. The request is terminal (isActionable false) even though her own step is still PENDING — the step machine would allow the transition, and the REQUEST-level guard is what forbids it.",
       "request": {
         "requesterUserId": "alice",
         "status": "REJECTED",
@@ -133,11 +152,15 @@
         ]
       },
       "callerId": "erin",
-      "expectedActions": []
+      "expectedActions": [],
+      "expectedStepActions": {
+        "1a2b3c4d-0000-4000-8000-000000000001": [],
+        "1a2b3c4d-0000-4000-8000-000000000002": []
+      }
     },
     {
       "label": "assigned_approver_no_view_on_draft",
-      "_note": "P3-63 negative #2 — a DRAFT has not been sent to the 결재선 yet. carol is named on step 0 but the request is still the requester's private draft, so canView gives her nothing (neither the SUBMITTED arm nor the terminal-acted arm applies). Guards against a widening that leaks unsubmitted drafts.",
+      "_note": "P3-63 negative #2 — a DRAFT has not been sent to the 결재선 yet. carol is named on step 0 but the request is still the requester's private draft, so canView gives her nothing (neither the SUBMITTED arm nor the terminal-acted arm applies). Guards against a widening that leaks unsubmitted drafts. P3-76 step scope: a DRAFT has not been sent to the 결재선, so the assigned approver's step is not actionable either.",
       "request": {
         "requesterUserId": "alice",
         "status": "DRAFT",
@@ -151,11 +174,14 @@
         ]
       },
       "callerId": "carol",
-      "expectedActions": []
+      "expectedActions": [],
+      "expectedStepActions": {
+        "1a2b3c4d-0000-4000-8000-000000000001": []
+      }
     },
     {
       "label": "requester_own_request_after_terminal_approval",
-      "_note": "The requester viewing their own now-terminal (APPROVED) request. view: requester branch is unconditional on status (ApprovalRequestRepository.java:39-42, first OR-arm) so alice keeps visibility. submit/cancel absent: the REAL ApprovalRequestStateMachine's ALLOWED map has an empty transition set for APPROVED (ApprovalRequestStateMachine.java:29 -- terminal), so both the real markSubmitted and markCancelled calls throw IllegalStateException.",
+      "_note": "The requester viewing their own now-terminal (APPROVED) request. view: requester branch is unconditional on status (ApprovalRequestRepository.java:39-42, first OR-arm) so alice keeps visibility. submit/cancel absent: the REAL ApprovalRequestStateMachine's ALLOWED map has an empty transition set for APPROVED (ApprovalRequestStateMachine.java:29 -- terminal), so both the real markSubmitted and markCancelled calls throw IllegalStateException. P3-76 step scope: alice is not an approver on any step, so no step is hers regardless of lifecycle stage.",
       "request": {
         "requesterUserId": "alice",
         "status": "APPROVED",
@@ -171,7 +197,130 @@
       "callerId": "alice",
       "expectedActions": [
         "view"
-      ]
+      ],
+      "expectedStepActions": {
+        "1a2b3c4d-0000-4000-8000-000000000001": []
+      }
+    },
+    {
+      "label": "second_step_approver_actionable_after_first_approved",
+      "_note": "P3-76's discriminating row — the ONLY one where the actionable step is not the first. carol approved step 0, so the 결재선 has advanced to erin: the request is still SUBMITTED, erin is the assigned approver of step 1, and every earlier step is APPROVED, so isNextActionableStep now holds and her step carries approve/reject. Paired with second_step_approver_visible_but_out_of_order (identical shape, step 0 still PENDING, everything empty), this row is what makes actionableStepFor falsifiable: a server-first selector that returns steps[0], or a local derivation that ignores ordering, gets THIS row or THAT one wrong — no implementation can satisfy both by accident.",
+      "request": {
+        "requesterUserId": "alice",
+        "status": "SUBMITTED",
+        "steps": [
+          {
+            "id": "1a2b3c4d-0000-4000-8000-000000000001",
+            "orderIndex": 0,
+            "approverUserId": "carol",
+            "status": "APPROVED",
+            "actedByUserId": "carol"
+          },
+          {
+            "id": "2b3c4d5e-0000-4000-8000-000000000002",
+            "orderIndex": 1,
+            "approverUserId": "erin",
+            "status": "PENDING"
+          }
+        ]
+      },
+      "callerId": "erin",
+      "expectedActions": [
+        "approve",
+        "reject",
+        "view"
+      ],
+      "expectedStepActions": {
+        "1a2b3c4d-0000-4000-8000-000000000001": [],
+        "2b3c4d5e-0000-4000-8000-000000000002": [
+          "approve",
+          "reject"
+        ]
+      }
+    },
+    {
+      "label": "mixed_case_requester_id_denied",
+      "_note": "P3-76 follow-up / id-comparison parity. The BE compares ids with a bare String.equals (ApprovalActionGuards :42 isAssignedApprover, :63 isRequester, :109 hasActed), so this caller — who differs from the stored id ONLY in CASE — is NOT the requester and gets nothing. The row exists because the FE fallback USED TO trim and case-fold in authorized-actions.sameId, which authorized exactly this caller while the server rejected them: the fallback offered an action the BE answers with 404 (the request is not even visible). Both legs now assert the denial, so the two id semantics cannot drift apart again.",
+      "request": {
+        "requesterUserId": "alice",
+        "status": "DRAFT",
+        "steps": [
+          {
+            "id": "1a2b3c4d-0000-4000-8000-000000000001",
+            "orderIndex": 0,
+            "approverUserId": "carol",
+            "status": "PENDING"
+          }
+        ]
+      },
+      "callerId": "ALICE",
+      "expectedActions": [],
+      "expectedStepActions": {
+        "1a2b3c4d-0000-4000-8000-000000000001": []
+      }
+    },
+    {
+      "label": "whitespace_padded_requester_id_denied",
+      "_note": "P3-76 follow-up / id-comparison parity. The BE compares ids with a bare String.equals (ApprovalActionGuards :42 isAssignedApprover, :63 isRequester, :109 hasActed), so this caller — who differs from the stored id ONLY in PADDING — is NOT the requester and gets nothing. The row exists because the FE fallback USED TO trim and case-fold in authorized-actions.sameId, which authorized exactly this caller while the server rejected them: the fallback offered an action the BE answers with 404 (the request is not even visible). Both legs now assert the denial, so the two id semantics cannot drift apart again.",
+      "request": {
+        "requesterUserId": "alice",
+        "status": "DRAFT",
+        "steps": [
+          {
+            "id": "1a2b3c4d-0000-4000-8000-000000000001",
+            "orderIndex": 0,
+            "approverUserId": "carol",
+            "status": "PENDING"
+          }
+        ]
+      },
+      "callerId": " alice ",
+      "expectedActions": [],
+      "expectedStepActions": {
+        "1a2b3c4d-0000-4000-8000-000000000001": []
+      }
+    },
+    {
+      "label": "mixed_case_approver_id_denied",
+      "_note": "P3-76 follow-up / id-comparison parity. The BE compares ids with a bare String.equals (ApprovalActionGuards :42 isAssignedApprover, :63 isRequester, :109 hasActed), so this caller — who differs from the stored id ONLY in CASE — is NOT the assigned approver and gets nothing. The row exists because the FE fallback USED TO trim and case-fold in authorized-actions.sameId, which authorized exactly this caller while the server rejected them: the fallback offered an action the BE answers with 403 NOT_APPROVER. Both legs now assert the denial, so the two id semantics cannot drift apart again.",
+      "request": {
+        "requesterUserId": "alice",
+        "status": "SUBMITTED",
+        "steps": [
+          {
+            "id": "1a2b3c4d-0000-4000-8000-000000000001",
+            "orderIndex": 0,
+            "approverUserId": "carol",
+            "status": "PENDING"
+          }
+        ]
+      },
+      "callerId": "CAROL",
+      "expectedActions": [],
+      "expectedStepActions": {
+        "1a2b3c4d-0000-4000-8000-000000000001": []
+      }
+    },
+    {
+      "label": "whitespace_padded_approver_id_denied",
+      "_note": "P3-76 follow-up / id-comparison parity. The BE compares ids with a bare String.equals (ApprovalActionGuards :42 isAssignedApprover, :63 isRequester, :109 hasActed), so this caller — who differs from the stored id ONLY in PADDING — is NOT the assigned approver and gets nothing. The row exists because the FE fallback USED TO trim and case-fold in authorized-actions.sameId, which authorized exactly this caller while the server rejected them: the fallback offered an action the BE answers with 403 NOT_APPROVER. Both legs now assert the denial, so the two id semantics cannot drift apart again.",
+      "request": {
+        "requesterUserId": "alice",
+        "status": "SUBMITTED",
+        "steps": [
+          {
+            "id": "1a2b3c4d-0000-4000-8000-000000000001",
+            "orderIndex": 0,
+            "approverUserId": "carol",
+            "status": "PENDING"
+          }
+        ]
+      },
+      "callerId": " carol ",
+      "expectedActions": [],
+      "expectedStepActions": {
+        "1a2b3c4d-0000-4000-8000-000000000001": []
+      }
     }
   ]
 }

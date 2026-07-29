@@ -148,3 +148,63 @@ secrets:
     (e.g. recipes/internal-it INTERNAL-IT-INV-005) rather than promoted to a
     standalone practices/rules/*.md file. Promotion is deferred indefinitely;
     see templates/DECISIONS.md TD-2026-05-22-025 Follow-ups (M5 framing).
+
+# ─── inbound replay dedup (RECEIVER axis) ─────────────────────────────────────
+# BACKLOG P3-56(b), decision recorded 2026-07-29.
+#
+# Sender-side sections above are this manifest's main axis; this section covers the
+# RECEIVER axis it already cross-references under sign.anchor_reuse_note, because the
+# reference implementation makes a choice a fork-receiver must consciously re-make.
+#
+# WHAT THE REFERENCE DOES TODAY: InboundSignatureVerifier.verify() marks the event_id as
+# seen during step (4) of verification — ReplayDedupStore.firstSeen — and there is no
+# rollback path. Verification is therefore the CLAIM point.
+#
+# WHY THAT IS SAFE HERE AND NOT NECESSARILY IN A FORK: this tree's call sites verify and
+# then do nothing with the body, so "verified" and "processed" are the same instant. Once a
+# fork-receiver does real work after verify(), the two come apart and the current shape
+# drops events: if downstream processing fails AFTER verification, the sender's legitimate
+# retry carrying the SAME event_id is rejected 409 WEBHOOK_EVENT_REPLAYED for the remainder
+# of the tolerance window (300s default) — the event is lost, and the sender sees a 4xx that
+# looks deliberate. Marking at verification time trades at-least-once delivery for
+# at-most-once, silently.
+#
+# Spec anchor: specs/webhook-signing-l0.yaml#WHSIGN-REPLAY-001 (the dedup obligation itself
+# is unchanged — this section governs WHEN the claim becomes permanent, not whether it exists).
+inbound-replay-dedup:
+  reference_claim_point: at-verification
+  reference_rationale: >-
+    No processing follows verify() in this tree, so the claim cannot outlive a failure that
+    does not exist. Kept deliberately simple; a fork-receiver that adds processing MUST move
+    to one of the patterns below rather than inherit this one by default.
+  fork_receiver_patterns:
+    - id: mark-after-success
+      description: >-
+        Verify, process, and only then commit the claim. The dedup store gains a two-phase
+        API (tentative claim → commit) or the claim is written in the SAME transaction as the
+        processing result, so a rollback takes the claim with it.
+      guarantees: at-least-once delivery; a retry after a failed attempt is accepted
+      cost: >-
+        Two concurrent deliveries of the same event_id can both pass verification before
+        either commits, so processing must be idempotent on its own — bind event_id to
+        idempotency-l0 (IDEMPOTENCY-KEY-001), which is the delegation ReplayDedupStore's
+        javadoc already points a fork-receiver at.
+    - id: unmark-on-failure
+      description: >-
+        Keep the claim at verification time, and release it explicitly on any processing
+        failure (a finally/compensating path that calls a new ReplayDedupStore.release).
+      guarantees: at-least-once for handled failures
+      cost: >-
+        NOT sound against process death between claim and release — the claim then survives
+        for the full window and the event is dropped anyway. Acceptable only where the
+        window is short relative to the sender's retry schedule.
+    - id: keep-at-verification
+      description: Inherit the reference posture unchanged.
+      guarantees: at-most-once; a duplicate can never be processed twice
+      cost: >-
+        A processing failure is indistinguishable from a replay to the sender for the whole
+        tolerance window. Choose this ONLY when dropping an event is preferable to processing
+        it twice AND the deployment has an out-of-band reconciliation path.
+  default_for_forks: mark-after-success
+  trace:
+    WHSIGN-REPLAY-001: replay dedup within the tolerance window (claim-point policy above)

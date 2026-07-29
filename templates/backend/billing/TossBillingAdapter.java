@@ -3,6 +3,7 @@
  * template_id: backend/billing/TossBillingAdapter
  * layer: backend-domain
  * domain: billing
+ * anchors_rule: webhook-hmac-required.md
  * provenance_class: internal_design
  * evidence:
  *   - source_type: upstream_id

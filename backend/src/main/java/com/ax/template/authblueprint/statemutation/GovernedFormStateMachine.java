@@ -49,6 +49,53 @@ public class GovernedFormStateMachine {
         REOPEN_EDGES = new EnumMap<>(FormState.class);
         REOPEN_EDGES.put(FormState.SUBMITTED, EnumSet.of(FormState.DRAFT));
         REOPEN_EDGES.put(FormState.APPROVED, EnumSet.of(FormState.DRAFT));
+
+        // BACKLOG P3-56(c) — the declared graph is checked HERE, once, at class init.
+        // This replaces a bare Java `assert` inside transition(), which was a no-op under a
+        // production JVM (-da is the default): a FORWARD edge added later that WIDENS the
+        // mutable-set would have produced no signal at all. See validateForwardEdgesMonotone.
+        validateForwardEdgesMonotone(ALLOWED, REOPEN_EDGES);
+    }
+
+    /**
+     * STATEMUTATION-MONOTONE-001, checked over the DECLARED graph rather than per call.
+     *
+     * <p>Every non-REOPEN (i.e. FORWARD) edge must tighten or keep the mutable-set
+     * ({@link StateFieldPolicy#isMonotoneForward}); widening is legitimate only through a
+     * REOPEN, which the catalog requires be recorded with a reason. Validating the tables at
+     * class-initialisation is strictly stronger than the per-call check it replaces: it
+     * covers EVERY declared edge, including ones no request and no test ever exercises, and
+     * it fails at startup rather than on whichever unlucky request first walks the bad edge.
+     * A widening FORWARD edge therefore cannot reach {@link #transition}.
+     *
+     * <p>Package-private and parameterised on the tables so the invariant is directly
+     * testable against a deliberately-broken graph — an inline check over the private
+     * constants could only ever be exercised on the (correct) real graph, which is how the
+     * original `assert` came to be untested as well as disabled.
+     *
+     * @throws IllegalStateException naming the offending edge — a declaration defect in this
+     *         class, not a client error, so it is deliberately not a
+     *         {@link StateMutationException} (nothing a caller sends can cause it).
+     */
+    static void validateForwardEdgesMonotone(Map<FormState, Set<FormState>> allowed,
+                                             Map<FormState, Set<FormState>> reopenEdges) {
+        for (Map.Entry<FormState, Set<FormState>> edges : allowed.entrySet()) {
+            FormState from = edges.getKey();
+            Set<FormState> reopen = reopenEdges.getOrDefault(from, EnumSet.noneOf(FormState.class));
+            for (FormState to : edges.getValue()) {
+                if (reopen.contains(to)) {
+                    continue;   // a recorded REOPEN is allowed to widen
+                }
+                if (!StateFieldPolicy.isMonotoneForward(from, to)) {
+                    throw new IllegalStateException(
+                        "FORWARD edge " + from + " → " + to + " widens the mutable-set from "
+                        + StateFieldPolicy.mutableFields(from) + " to "
+                        + StateFieldPolicy.mutableFields(to)
+                        + " — declare it in REOPEN_EDGES (a recorded re-open) or remove it "
+                        + "(STATEMUTATION-MONOTONE-001)");
+                }
+            }
+        }
     }
 
     private final MemberWriter members;
@@ -77,9 +124,10 @@ public class GovernedFormStateMachine {
             }
             kind = KIND_REOPEN;
         } else {
-            // A FORWARD edge MUST tighten (or keep) the mutable-set — never widen (STATEMUTATION-MONOTONE-001).
-            assert StateFieldPolicy.isMonotoneForward(from, to)
-                : "FORWARD edge " + from + " → " + to + " must not widen the mutable-set";
+            // A FORWARD edge MUST tighten (or keep) the mutable-set — never widen
+            // (STATEMUTATION-MONOTONE-001). Enforced over the whole declared graph by
+            // validateForwardEdgesMonotone at class init (P3-56(c)), so a widening FORWARD
+            // edge cannot reach this line: it is rejected before the first instance exists.
             kind = KIND_FORWARD;
         }
         Instant now = Instant.now(clock);

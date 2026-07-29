@@ -8,10 +8,11 @@ evidence:
     upstream_id: shadcn-ui-2026-05
     section: scroll-area
     quote: "Augments native scroll functionality for custom, cross-browser styling."
-  - source_type: upstream_id
-    upstream_id: wcag-2-2
-    section: 2.1.1-keyboard
-    quote: "All functionality of the content is operable through a keyboard interface without requiring specific timings for individual keystrokes."
+  - source_type: external
+    citation: "WCAG 2.2 SC 2.1.1 Keyboard (Level A) — full normative text, W3C Recommendation 2023-10-05"
+    url: "https://www.w3.org/TR/WCAG22/#keyboard"
+    quote: "All functionality of the content is operable through a keyboard interface without requiring specific timings for individual keystrokes, except where the underlying function requires input that depends on the path of the user's movement and not just the endpoints."
+    quoted_at: "2026-07-29"
 a11y_criteria:
   - "WCAG 2.2 SC 2.1.1 Keyboard — scrollable region must be keyboard-reachable"
   - "WCAG 2.2 SC 1.4.11 Non-text Contrast — scrollbar track ≥3:1"

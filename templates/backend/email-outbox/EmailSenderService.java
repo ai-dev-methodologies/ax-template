@@ -3,7 +3,10 @@
  * template_id: backend/email-outbox/EmailSenderService
  * layer: backend-domain
  * domain: email-outbox
- * anchors_rule: api-controller-service-separation.md (PRACTICES-API-003)
+ * anchors_rule_absent: outbound-email PORT interface. The nearest catalog abstraction rule
+ *   (messaging-publisher-interface) is scoped to broker SDKs leaking into the domain via a
+ *   MessagePublisher; anchoring an SMTP/provider port there would over-claim. Enumerated in
+ *   JAVA_NO_ANCHOR_EXEMPT in practices/evals/evidence_guard.sh.
  * provenance_class: internal_design
  * evidence:
  *   - source_type: external

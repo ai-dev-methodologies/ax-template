@@ -3,7 +3,7 @@
  * template_id: backend/feature-flags/FeatureFlagService
  * layer: backend-domain
  * domain: feature-flags
- * anchors_rule: service-layer-owns-business-logic.md (PRACTICES-ARCH-001)
+ * anchors_rule: testing-archunit-layer-boundary.md
  * provenance_class: internal_design
  * evidence:
  *   - source_type: external

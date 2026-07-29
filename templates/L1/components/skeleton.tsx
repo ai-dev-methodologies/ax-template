@@ -9,9 +9,9 @@ evidence:
     section: skeleton
     quote: "Use to show a placeholder while content is loading."
   - source_type: upstream_id
-    upstream_id: wcag-2-2
-    section: 4.1.3-status-messages
-    quote: "In content implemented using markup languages, status messages can be programmatically determined through role or properties."
+    upstream_id: wcag-22-techniques-2026-05
+    section: "Success Criterion (SC)"
+    quote: "In content implemented using markup languages, status messages can be programmatically determined through role or properties such that they can be presented to the user by assistive technologies without receiving focus."
 a11y_criteria:
   - "WCAG 2.2 SC 4.1.3 Status Messages — parent region needs aria-busy='true' + aria-label='Loading'"
   - "Individual Skeleton divs are aria-hidden='true'"

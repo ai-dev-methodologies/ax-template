@@ -695,3 +695,241 @@ items:
     fixture_arg: '--templates-root'
     anchor: 'rel not in JAVA_NO_EVIDENCE_EXEMPT'
     neuter: 'False'
+
+  # ── domain_mode_consistency_guard [100] (P3-83) ─────────────────────────────
+  # fixture: demo-domain declares full_trio in its spec while the allowlist and the L4
+  #          README both say backend_only — the ratelimit-shaped lie, in a 1-domain tree.
+  # anchor:  the comparison that decides a domain's declarations disagree.
+  # neuter:  condition-constant False → no domain is ever divergent, the contradiction is
+  #          never recorded, and the fixture stops failing → exit 0.
+  - id: domain_mode_consistency/fail_spec_contradicts_allowlist
+    guard: practices/evals/domain_mode_consistency_guard.sh
+    fixture: practices/evals/fixtures/domain-mode-consistency/fail_spec_contradicts_allowlist
+    fixture_arg: '--root'
+    anchor: 'len(set(declared.values())) > 1'
+    neuter: 'False'
+
+  # fixture: the README Status VALUE itself names two modes ("backend-only, or arguably
+  #          full-trio"), which the guard must refuse to rank rather than pick one.
+  # anchor:  the test for more than one distinct mode token inside the Status value.
+  # neuter:  condition-constant False → the ambiguous value silently contributes NO
+  #          declaration instead of erroring, and the tree passes → exit 0.
+  - id: domain_mode_consistency/fail_readme_ambiguous
+    guard: practices/evals/domain_mode_consistency_guard.sh
+    fixture: practices/evals/fixtures/domain-mode-consistency/fail_readme_ambiguous
+    fixture_arg: '--root'
+    anchor: 'len(found) > 1'
+    neuter: 'False'
+
+  # fixture: spec and allowlist agree, but no README declares a mode, so the (C) census is
+  #          0 against the floor of 1 the fixture tree declares in its own
+  #          practices/evals/domain_mode_floors.yaml (the tree must be able to SAY this on
+  #          disk: [87] can only invoke `<guard> --root <fixture>` and cannot pass a number).
+  # anchor:  the README census floor comparison.
+  # neuter:  condition-constant False → the (C) axis may shrink to nothing while the guard
+  #          reports agreement proven against zero declarations → exit 0.
+  - id: domain_mode_consistency/fail_floor_breach
+    guard: practices/evals/domain_mode_consistency_guard.sh
+    fixture: practices/evals/fixtures/domain-mode-consistency/fail_floor_breach
+    fixture_arg: '--root'
+    anchor: 'readme_declarations < MIN_README_DECLARATIONS'
+    neuter: 'False'
+
+  # ── react-substance x4 — substance_guard.sh in its practices-react dialect ──
+  # (BACKLOG P3-82. run-all invokes these as `--catalog practices-react <fixture>`, three
+  #  tokens, which this manifest's invocation shapes cannot express. The guard's own parser
+  #  accepts the glued `--catalog=VALUE` form as ONE token and then matches a bare absolute
+  #  path via its `/*` case, so the same react-dialect run IS reachable as shape 2.)
+  #
+  # fixture: a react rule whose impactDescription is empty — clause 1.
+  # anchor:  the bare clause-1 emptiness test.
+  # neuter:  condition-constant False → the clause can never be empty → exit 0.
+  - id: react_substance/fail_react_no_impact
+    guard: practices/evals/substance_guard.sh
+    fixture: practices/evals/fixtures/react-substance/fail_react_no_impact
+    fixture_arg: '--catalog=practices-react'
+    anchor: 'not impact_desc'
+    neuter: 'False'
+
+  # fixture: a verification block with no `notes:` key AND no `## Verification` heading, so
+  #          clause 2 must fail through BOTH sub-paths.
+  # anchor:  the frontmatter-notes sub-check.
+  # neuter:  sentinel-string — the .get() default becomes a NEUTER_ token, so a MISSING
+  #          notes key yields a truthy default and clause 2 wrongly passes → exit 0.
+  #          (condition-constant is unavailable here: the bare `not clause2_ok` text is
+  #          byte-identical at two sites, so anchor uniqueness would fail.)
+  - id: react_substance/fail_react_no_verification
+    guard: practices/evals/substance_guard.sh
+    fixture: practices/evals/fixtures/react-substance/fail_react_no_verification
+    fixture_arg: '--catalog=practices-react'
+    anchor: 'isinstance(ver, dict) and str(ver.get("notes", "")).strip()'
+    neuter: 'isinstance(ver, dict) and str(ver.get("notes", "NEUTER_MISSING_NOTES_DEFAULT")).strip()'
+
+  # fixture: the rule's only fenced block is a `// TODO: fill in a real example` stub.
+  # anchor:  the bare clause-3 outcome test (unique — unlike clause 2 it has one site).
+  # neuter:  condition-constant False → clause 3 always reports satisfied → exit 0.
+  - id: react_substance/fail_react_placeholder_fence
+    guard: practices/evals/substance_guard.sh
+    fixture: practices/evals/fixtures/react-substance/fail_react_placeholder_fence
+    fixture_arg: '--catalog=practices-react'
+    anchor: 'not clause3_ok'
+    neuter: 'False'
+
+  # fixture: no https?:// URL anywhere in frontmatter or body — clause 4.
+  # anchor:  the bare clause-4 URL-presence test.
+  # neuter:  condition-constant False → a URL is always considered found → exit 0.
+  - id: react_substance/fail_react_no_url
+    guard: practices/evals/substance_guard.sh
+    fixture: practices/evals/fixtures/react-substance/fail_react_no_url
+    fixture_arg: '--catalog=practices-react'
+    anchor: 'not (url_re.search(fm_text_for_url) or url_re.search(body))'
+    neuter: 'False'
+
+  # ── l2_frontmatter_deps [93] (P3-82) ────────────────────────────────────────
+  # fixture: invoice-list.tsx declares `dependencies: [currency-formatter]` but actually
+  #          imports the L1 sibling currency-input — the swapped-reference case.
+  # anchor:  the classifier that records an import as an L1 sibling.
+  # neuter:  condition-constant False → imported_l1 stays empty for the file, so the
+  #          "a DIFFERENT real sibling IS imported instead" branch never fires → exit 0.
+  - id: l2_frontmatter_deps/fail_stale_dependency
+    guard: practices/evals/l2_frontmatter_deps_guard.sh
+    fixture: practices/evals/fixtures/l2_frontmatter_deps_guard/fail_stale_dependency
+    fixture_arg: '--root'
+    anchor: 'layer == "L1"'
+    neuter: 'False'
+
+  # ── l4_presentational_view [94] (P3-82) ─────────────────────────────────────
+  # fixture: the "view" still calls useQuery itself — not props-only.
+  # anchor:  the data-fetching-hook regex applied to the view file's text.
+  # neuter:  condition-constant False → hook detection is defeated for every entry → exit 0.
+  - id: l4_presentational_view/fail_hook_in_view
+    guard: practices/evals/l4_presentational_view_guard.sh
+    fixture: practices/evals/fixtures/l4-presentational-view/fail_hook_in_view
+    fixture_arg: '--root'
+    fixture_arg2: '--ledger'
+    fixture2: practices/evals/fixtures/l4-presentational-view/fail_hook_in_view/ledger.yaml
+    anchor: 'DATA_FETCH_HOOK_RE.search(view_text)'
+    neuter: 'False'
+
+  # fixture: the ledger declares min_entries: 2 but carries only 1 entry.
+  # anchor:  the ledger-shrink floor comparison.
+  # neuter:  condition-constant False → an entry can be deleted to hide a regression → exit 0.
+  - id: l4_presentational_view/fail_shrunk_ledger
+    guard: practices/evals/l4_presentational_view_guard.sh
+    fixture: practices/evals/fixtures/l4-presentational-view/fail_shrunk_ledger
+    fixture_arg: '--root'
+    fixture_arg2: '--ledger'
+    fixture2: practices/evals/fixtures/l4-presentational-view/fail_shrunk_ledger/ledger.yaml
+    anchor: 'len(entries) < min_entries'
+    neuter: 'False'
+
+  # fixture: the view file exists but page.tsx re-inlined the JSX and no longer imports it.
+  # anchor:  the page-imports-its-view test.
+  # neuter:  condition-constant False → a silent re-inline stops being detected → exit 0.
+  - id: l4_presentational_view/fail_reinlined
+    guard: practices/evals/l4_presentational_view_guard.sh
+    fixture: practices/evals/fixtures/l4-presentational-view/fail_reinlined
+    fixture_arg: '--root'
+    fixture_arg2: '--ledger'
+    fixture2: practices/evals/fixtures/l4-presentational-view/fail_reinlined/ledger.yaml
+    anchor: 'not import_re.search(page_text)'
+    neuter: 'False'
+
+  # ── Lane D submissions (P3-81 / P3-87), 2026-07-29 ──────────────────────────
+  # fixture: eslint.own-blocks.config.mjs has `// 'ax/no-god-route': 'warn',` — the rule
+  #          name appears ONLY inside a line comment, which the old whole-file `grep -qF`
+  #          reported as wired. Expected: exit 1, MISSING ax/no-god-route.
+  # anchor:  the line-comment branch of the comment stripper — the exact logic the decoy
+  #          exercises.
+  # neuter:  condition-constant False → `//` comments are no longer stripped, the commented
+  #          rule name counts as wiring again, and the fixture stops failing → exit 0.
+  # NOTE: submitted with anchor `code = "".join(out)` / neuter `code = src  # ...`, which
+  #       [87] REJECTS (matches none of the 6 shapes — verified: "UNKNOWN: neuter does not
+  #       match any allowlisted PIT-style operator shape"). Re-anchored on the branch the
+  #       fixture actually exercises, which is also a tighter kill than reassembly.
+  - id: lint_own_blocks/fail_comment_fooled
+    guard: practices-react/evals/lint_own_blocks_guard.sh
+    fixture: practices-react/evals/fixtures/lint-own-blocks/fail_comment_fooled
+    fixture_arg: '--root'
+    anchor: 'c == "/" and i + 1 < n and src[i + 1] == "/"'
+    neuter: 'False'
+
+  # fixture: two same-package enums with identical constant sets, with the binding left
+  #          undeclared — the ROUND-3 residual ("two enums in the SAME package could still
+  #          be swapped"), which P3-87 closes. No such pair exists live, so the fixture
+  #          constructs one.
+  # anchor:  the same-constant-set sibling test that builds the ambiguity index.
+  # neuter:  condition-constant False → no pair is ever ambiguous, the required
+  #          enum_disambiguation is never demanded → exit 0.
+  - id: contract_enum_parity/fail_same_package_same_set
+    guard: practices/evals/contract_enum_parity_guard.sh
+    fixture: practices/evals/fixtures/contract_enum_parity_guard/fail_same_package_same_set
+    fixture_arg: '--root'
+    anchor: 'b != _a and set(java_enums[b]) == set(java_enums[_a])'
+    neuter: 'False'
+
+  # fixture: an `enum_disambiguation` declared where nothing is ambiguous any more — the
+  #          non-redundancy direction (an unused allowance rots into a lie).
+  # anchor:  the manifest key lookup that feeds BOTH disambiguation branches.
+  # neuter:  sentinel-string — the key becomes a NEUTER_ token, so `dis` is always None and
+  #          the stale-declaration branch can never fire. Specific: this fixture has no
+  #          same-set sibling by construction, so the ambiguous-binding branch is not
+  #          reachable in it and only the stale check is being killed.
+  # NOTE: submitted as anchor `elif isinstance(dis, dict) and dis:` / neuter `elif False:`,
+  #       which [87] REJECTS — condition-constant requires the WHOLE neuter to be `False`,
+  #       and the bare condition `isinstance(dis, dict) and dis` appears TWICE (the `if not
+  #       (...)` at the ambiguous branch and this `elif`), so it fails anchor uniqueness.
+  #       Re-anchored on the unique key lookup with an allowlisted sentinel swap.
+  - id: contract_enum_parity/fail_stale_disambiguation
+    guard: practices/evals/contract_enum_parity_guard.sh
+    fixture: practices/evals/fixtures/contract_enum_parity_guard/fail_stale_disambiguation
+    fixture_arg: '--root'
+    anchor: "dis = e.get('enum_disambiguation')"
+    neuter: "dis = e.get('NEUTER_DISAMBIG_KEY')"
+
+  # ── Lane E submission (P3-90), 2026-07-29 ──────────────────────────────────
+  # fixture: a template whose `anchors_rule:` names a rule file that is not on disk. It
+  #          differs from pass_anchors_clean by exactly that one pointer, so nothing else
+  #          can be producing the exit 1.
+  # anchor:  the switch that arms the whole anchors axis — `RULES_DIR.is_dir()`.
+  # neuter:  condition-constant False → the axis never runs, stale rule pointers stop being
+  #          resolved at all, and the fixture passes → exit 0.
+  # SCOPE, stated honestly: this kills the AXIS, not just the `is_file()` branch Lane E
+  # named. That branch is `if (RULES_DIR / ref).is_file(): resolved += 1 / else: <error>`,
+  # so the only allowlisted constant (`False`) sends control to the ELSE and the error still
+  # fires — the fixture would stay at exit 1 and prove nothing. Falsifying the axis switch
+  # is the nearest allowlisted mutation that actually flips it, and the axis is what the
+  # fixture exercises.
+  - id: template_evidence/fail_stale_anchors_rule
+    guard: practices/evals/evidence_guard.sh
+    fixture: practices/evals/fixtures/template-evidence/fail_stale_anchors_rule
+    fixture_arg: '--templates-root'
+    anchor: 'RULES_DIR.is_dir()'
+    neuter: 'False'
+
+# ── JUSTIFIED NON-REGISTRATIONS ───────────────────────────────────────────────
+# Recorded here rather than left as an unexplained absence — the (P2-33) fail_vocab_scan
+# precedent. A fixture listed below is NOT unproven by neglect; it is unprovable through
+# THIS harness, and the reason is mechanical.
+#
+# evidence_quote_spotcheck / fail_template_fabricated_anchor  (BACKLOG P3-82)
+#   run-all reproduces this fixture as:
+#     evidence_quote_spotcheck_guard.sh --strict --include-templates --strict-templates --root <fixture>
+#   i.e. THREE boolean switches plus one value-taking flag. This manifest can express at
+#   most one value-consuming flag+path pair (fixture_arg/fixture) plus optionally a second
+#   (fixture_arg2/fixture2) — but a second pair requires fixture_arg2 to CONSUME its path,
+#   and every remaining switch this guard accepts is a bare boolean that shifts by one, so
+#   the path lands as a free token and the parser rejects it. Measured, every reachable
+#   invocation (2026-07-29):
+#     <guard> <fixture>                                   -> exit 2 (unknown arg)
+#     <guard> --root <fixture>                            -> exit 0 (advisory; no --strict)
+#     <guard> --strict <fixture>                          -> exit 2 (unknown arg)
+#     <guard> --root <fixture> --strict <repo_root>       -> exit 2 (unknown arg)
+#     <guard> --root <fixture> --templates-only-protected <repo_root> -> exit 2 (unknown arg)
+#     <guard> --root=<fixture>                            -> exit 0 (advisory)
+#     <guard> '--strict --strict-templates --templates-only-protected --root' <fixture> -> exit 2
+#   Step 2 of the algorithm requires the ORIGINAL guard to exit exactly 1, and no reachable
+#   invocation does. This is a limitation of the harness's invocation vocabulary, not a
+#   defect in the fixture: the fixture DOES reproduce the failure under run-all's own
+#   invocation, where it is registered and asserted at exit 1. Closing it means teaching
+#   this manifest boolean-flag arguments, which is a change to [87] and out of scope here.

@@ -8,10 +8,11 @@ evidence:
     upstream_id: shadcn-ui-2026-05
     section: button
     quote: "Displays a button or a component that looks like a button."
-  - source_type: upstream_id
-    upstream_id: wcag-2-2
-    section: 2.5.8-target-size-minimum
-    quote: "The size of the target for pointer inputs is at least 24 by 24 CSS pixels."
+  - source_type: external
+    citation: "WCAG 2.2 SC 2.5.8 Target Size (Minimum) (Level AA) — full normative text, W3C Recommendation 2023-10-05"
+    url: "https://www.w3.org/TR/WCAG22/#target-size-minimum"
+    quote: "The size of the target for pointer inputs is at least 24 by 24 CSS pixels, except when: Spacing - Undersized targets are positioned so that if a 24 CSS pixel diameter circle is centered on the bounding box of each, the circles do not intersect another target or the circle for another undersized target; Equivalent - The function can be achieved through a different control on the same page that meets this criterion; Inline - The target is in a sentence or its size is otherwise constrained by the line-height of non-target text; User Agent Control - The size of the target is determined by the user agent and is not modified by the author; Essential - A particular presentation of the target is essential or is legally required for the information being conveyed."
+    quoted_at: "2026-07-29"
 a11y_criteria:
   - "WCAG 2.2 SC 2.5.8 Target Size (Minimum) — min-h-6 min-w-6 enforced"
   - "WCAG 2.2 SC 4.1.2 Name/Role/Value — aria-label required when icon-only"

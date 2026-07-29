@@ -8,10 +8,11 @@ evidence:
     upstream_id: shadcn-ui-2026-05
     section: separator
     quote: "Visually or semantically separates content."
-  - source_type: upstream_id
-    upstream_id: wcag-2-2
-    section: 1.3.1-info-and-relationships
-    quote: "Information, structure, and relationships conveyed through presentation can be programmatically determined."
+  - source_type: external
+    citation: "WCAG 2.2 SC 1.3.1 Info and Relationships (Level A) — full normative text, W3C Recommendation 2023-10-05"
+    url: "https://www.w3.org/TR/WCAG22/#info-and-relationships"
+    quote: "Information, structure, and relationships conveyed through presentation can be programmatically determined or are available in text."
+    quoted_at: "2026-07-29"
 a11y_criteria:
   - "WCAG 2.2 SC 1.3.1 — Radix renders role='separator' or role='none' by context"
   - "Decorative separators must be aria-hidden='true'"

@@ -3,7 +3,11 @@
  * template_id: backend/scheduled-task/LockingPolicy
  * layer: backend-domain
  * domain: scheduled-task
- * anchors_rule: api-controller-service-separation.md (PRACTICES-API-003)
+ * anchors_rule_absent: distributed-lock port; the catalog states no lock invariant. NOTE also that
+ *   DbRowLockingPolicy.tryAcquire is findById -> check -> save (read-then-write), not the
+ *   SELECT ... FOR UPDATE SKIP LOCKED this block used to claim, so anchoring it to
+ *   shared-counter-claim-must-be-atomic would have made the template violate its own anchor.
+ *   Enumerated in JAVA_NO_ANCHOR_EXEMPT in practices/evals/evidence_guard.sh.
  * provenance_class: internal_design
  * evidence:
  *   - source_type: external

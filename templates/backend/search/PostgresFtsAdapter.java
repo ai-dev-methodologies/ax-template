@@ -3,6 +3,7 @@
  * template_id: backend/search/PostgresFtsAdapter
  * layer: backend-domain
  * domain: search
+ * anchors_rule: api-pagination-pageable.md
  * provenance_class: external_canonical
  * evidence:
  *   - source_type: upstream_id

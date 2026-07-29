@@ -1,8 +1,9 @@
-/*
+/**
  * @ax-template-meta
  * template_id: backend/notification/NotificationPreferencesRepository
  * layer: backend
  * domain: notification
+ * anchors_rule: testing-archunit-repository-shape.md
  * domain_mode: full_trio
  * backend_operation_id: getNotificationPreferences
  * evidence:

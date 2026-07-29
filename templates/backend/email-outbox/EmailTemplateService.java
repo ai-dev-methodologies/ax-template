@@ -3,7 +3,7 @@
  * template_id: backend/email-outbox/EmailTemplateService
  * layer: backend-domain
  * domain: email-outbox
- * anchors_rule: api-controller-service-separation.md (PRACTICES-API-003)
+ * anchors_rule: transaction-readonly-queries.md
  * provenance_class: internal_design
  * evidence:
  *   - source_type: external

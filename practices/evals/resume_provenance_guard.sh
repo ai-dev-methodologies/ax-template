@@ -502,6 +502,42 @@ checklist:
         expected_exit: 0
 YAML
       ;;
+      noopshortcircuitor) cat <<'YAML'
+version: 1
+defaults:
+  working_directory: "."
+  timeout_seconds: 20
+checklist:
+  - id: required-but-shortcircuit-or
+    title: "P3-88 — `true || false` exits 0 by SHORT-CIRCUIT; a last-fragment model reads 1 and admits it"
+    commands:
+      - command: 'true || false'
+        expected_exit: 0
+  - id: green
+    title: "trivially green step"
+    commands:
+      - command: 'touch step-ran'
+        expected_exit: 0
+YAML
+      ;;
+      noopshortcircuitand) cat <<'YAML'
+version: 1
+defaults:
+  working_directory: "."
+  timeout_seconds: 20
+checklist:
+  - id: required-but-shortcircuit-and
+    title: "P3-88 — `false && true` exits 1 by SHORT-CIRCUIT; a last-fragment model reads 0 and admits it"
+    commands:
+      - command: 'false && true'
+        expected_exit: 1
+  - id: green
+    title: "trivially green step"
+    commands:
+      - command: 'touch step-ran'
+        expected_exit: 0
+YAML
+      ;;
       realwork) cat <<'YAML'
 version: 1
 defaults:
@@ -828,7 +864,10 @@ fi
 # Four shapes, each of which used to publish green with the step having run nothing. The
 # fifth (a non-mapping command entry) is asserted too: it has no `command:` key at all.
 echo "── [malformed step] harness: a required step that cannot be run, or cannot be identified"
-MALFORMED_SHAPES="emptycommands commentonly whitespaceonly blankid notmapping nooptrue noopcolon noopexit0 noopchain"
+# P3-88 adds the two SHORT-CIRCUIT shapes: the denylist used to take the chain's status from
+# its LAST FRAGMENT, so `true || false` (really 0) was read as 1 and `false && true` (really 1)
+# was read as 0 — both were admitted and would have certified their step with nothing run.
+MALFORMED_SHAPES="emptycommands commentonly whitespaceonly blankid notmapping nooptrue noopcolon noopexit0 noopchain noopshortcircuitor noopshortcircuitand"
 for shape in $MALFORMED_SHAPES; do
     malformed_step_launders "$VC_SUBJECT" subject "$shape"; SHAPE_LAUNDERED=$?
     echo "  subject          : $EW_DESC"

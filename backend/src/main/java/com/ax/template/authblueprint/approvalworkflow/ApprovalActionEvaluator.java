@@ -69,26 +69,53 @@ public class ApprovalActionEvaluator {
             }
         }
 
-        // approve / reject require ALL THREE action-path guards to hold, then the step
-        // machine's transition table. Dropping any one of them here would offer an action
-        // the BE answers with 409/403 — exactly the parity trap the golden pins.
-        if (guards.isActionable(request)) {
-            for (ApprovalStep step : request.getSteps()) {
-                if (!guards.isAssignedApprover(step, callerUserId)) {
-                    continue;
-                }
-                if (!guards.isNextActionableStep(request, step)) {
-                    continue;
-                }
-                if (stepStateMachine.canTransition(step.getStatus(), ApprovalStepStatus.APPROVED)) {
-                    actions.add(APPROVE);
-                }
-                if (stepStateMachine.canTransition(step.getStatus(), ApprovalStepStatus.REJECTED)) {
-                    actions.add(REJECT);
-                }
-            }
+        // approve / reject are STEP-scoped decisions. The request-scoped answer is the
+        // union of the per-step answers — computed by the very method the wire's
+        // step-scoped field is built from (P3-76), so the two can never disagree.
+        for (ApprovalStep step : request.getSteps()) {
+            actions.addAll(allowedStepActions(request, step, callerUserId));
         }
 
+        return List.copyOf(actions);
+    }
+
+    /**
+     * P3-76 — the actions {@code callerUserId} may invoke on THIS step, sorted.
+     *
+     * <p>The request-scoped set answers "may I approve something here?" but not "WHICH
+     * step is mine to act on", so a client holding only that array had to re-derive the
+     * step — reintroducing, one level down, exactly the client-side authorization guess
+     * P2-38b removed. This method is the server's answer to the narrower question.
+     *
+     * <p>Same zero-local-policy discipline: every branch is a {@link ApprovalActionGuards}
+     * call or a probe of the REAL step machine's transition table. Dropping any one of
+     * them would offer an action {@link ApprovalService} answers with 403/409 — the parity
+     * trap the golden pins.
+     *
+     * <p>Only {@link #APPROVE} / {@link #REJECT} can ever appear: view is request-scoped
+     * (a step is not independently visible), and submit/cancel act on the request as a
+     * whole. The contract's step-scoped block declares that narrower vocabulary.
+     */
+    public List<String> allowedStepActions(ApprovalRequest request, ApprovalStep step, String callerUserId) {
+        if (request == null || step == null || callerUserId == null) {
+            return List.of();
+        }
+        if (!guards.isActionable(request)) {
+            return List.of();
+        }
+        if (!guards.isAssignedApprover(step, callerUserId)) {
+            return List.of();
+        }
+        if (!guards.isNextActionableStep(request, step)) {
+            return List.of();
+        }
+        TreeSet<String> actions = new TreeSet<>();
+        if (stepStateMachine.canTransition(step.getStatus(), ApprovalStepStatus.APPROVED)) {
+            actions.add(APPROVE);
+        }
+        if (stepStateMachine.canTransition(step.getStatus(), ApprovalStepStatus.REJECTED)) {
+            actions.add(REJECT);
+        }
         return List.copyOf(actions);
     }
 }

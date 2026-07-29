@@ -24,9 +24,25 @@
 #    blocks; their sequential awaits are intentional).
 #
 # Exit 0 = clean. Exit 1 = a shipped block carries an ax/* violation.
+#
+# Usage:
+#   bash practices-react/evals/lint_own_blocks_guard.sh
+#   bash practices-react/evals/lint_own_blocks_guard.sh --root DIR   # fixture tree
+#
+# --root points the guard at an alternate repo root (a fixture tree carrying
+# frontend/eslint.own-blocks.config.mjs + practices-react/eslint-plugin-ax/rules/).
+# A fixture tree has no frontend/node_modules, so only the rule-list check runs
+# there — which is exactly the axis the fixtures pin.
 set -uo pipefail
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --root) ROOT="$(cd "$2" && pwd)"; shift 2 ;;
+    --root=*) ROOT="$(cd "${1#--root=}" && pwd)"; shift ;;
+    *) echo "lint_own_blocks: FAIL — unknown argument: $1"; exit 1 ;;
+  esac
+done
 FE="$ROOT/frontend"
 CONFIG="eslint.own-blocks.config.mjs"
 TMP="$FE/.lint-own-blocks-tmp"
@@ -59,12 +75,100 @@ fi
 #     not a coverage gap.
 EXCLUDED_RULES=("ax/no-app-local-ui-primitives")
 
+# ── P3-81 — "wired" is a config-object KEY, not a substring of the file ──────
+# The original check asked `grep -qF "'ax/<rule>'" $CONFIG`, which is true for a
+# rule name appearing ANYWHERE in the file — including inside a comment. Two
+# concrete miscalls follow: a rule commented out ("// 'ax/foo': 'error', //
+# disabled for now") counts as wired and the MISSING arm goes quiet, and a
+# comment that quotes an excluded rule name while explaining WHY it is excluded
+# trips the CONTRADICTION arm. (Live is safe today only because the P3-55
+# exclusion note happens to spell the rule name without quotes — an accident,
+# not a property.)
+#
+# `wired_rules()` parses instead: comments are stripped string-aware, the
+# `rules: { … }` object(s) are brace-matched, and only ax/* names in KEY
+# position are collected. A key whose value is `'off'`/`"off"`/`0` is NOT wired
+# either — a disabled rule does not lint the blocks, which is the same hollow
+# wiring this check exists to catch.
+#
+# Stated boundary (finite, on purpose): the parse covers the literal object
+# shape this catalog's config uses. A config that builds its rule map
+# dynamically (spread of an imported preset, computed keys, `Object.assign`)
+# reads as NOT wired and fails loudly rather than passing silently — the
+# fail-closed direction.
+wired_rules() {
+  CONFIG_PATH="$1" python3 - <<'PY'
+import os, re, sys
+
+src = open(os.environ["CONFIG_PATH"], encoding="utf-8").read()
+
+# 1. Strip JS comments, respecting string/template literals so that a `//`
+#    inside a URL string is not mistaken for a line comment.
+out, i, n = [], 0, len(src)
+while i < n:
+    c = src[i]
+    if c in "'\"`":
+        q = c
+        out.append(c); i += 1
+        while i < n:
+            if src[i] == "\\":
+                out.append(src[i:i + 2]); i += 2; continue
+            out.append(src[i])
+            i += 1
+            if src[i - 1] == q:
+                break
+        continue
+    if c == "/" and i + 1 < n and src[i + 1] == "/":
+        while i < n and src[i] != "\n":
+            i += 1
+        continue
+    if c == "/" and i + 1 < n and src[i + 1] == "*":
+        i += 2
+        while i + 1 < n and not (src[i] == "*" and src[i + 1] == "/"):
+            i += 1
+        i += 2
+        continue
+    out.append(c); i += 1
+code = "".join(out)
+
+# 2. Brace-match every `rules: {` object; keys are only read inside those.
+bodies = []
+end = len(code)
+for m in re.finditer(r"\brules\s*:\s*\{", code):
+    depth, j = 1, m.end()
+    while j < end and depth:
+        if code[j] == "{":
+            depth += 1
+        elif code[j] == "}":
+            depth -= 1
+        j += 1
+    bodies.append(code[m.end():j - 1])
+
+# 3. Key position only, and a key switched off is not wired.
+KEY = re.compile(r"""(['"])(ax/[A-Za-z0-9_-]+)\1\s*:\s*([^,\n}]*)""")
+wired = set()
+for b in bodies:
+    for _, name, value in KEY.findall(b):
+        v = value.strip().strip("'\"").strip()
+        if v in ("off", "0"):
+            continue
+        wired.add(name)
+for w in sorted(wired):
+    print(w)
+PY
+}
+
 RULES_DIR="$ROOT/practices-react/eslint-plugin-ax/rules"
 if [ -d "$RULES_DIR" ]; then
   catalog_rules=()
   while IFS= read -r f; do
     catalog_rules+=("ax/$(basename "$f" .js)")
   done < <(find "$RULES_DIR" -maxdepth 1 -name '*.js' | sort)
+
+  WIRED="$(wired_rules "$FE/$CONFIG")"
+  is_wired() {
+    printf '%s\n' "$WIRED" | grep -qx -- "$1"
+  }
 
   is_excluded() {
     local needle="$1"
@@ -78,13 +182,13 @@ if [ -d "$RULES_DIR" ]; then
   for r in "${catalog_rules[@]:-}"; do
     [ -z "$r" ] && continue
     is_excluded "$r" && continue
-    grep -qF "'$r'" "$FE/$CONFIG" || missing+=("$r")
+    is_wired "$r" || missing+=("$r")
   done
 
   contradicted=()
   for ex in "${EXCLUDED_RULES[@]:-}"; do
     [ -z "$ex" ] && continue
-    grep -qF "'$ex'" "$FE/$CONFIG" && contradicted+=("$ex")
+    is_wired "$ex" && contradicted+=("$ex")
   done
 
   if [ "${#missing[@]}" -gt 0 ] || [ "${#contradicted[@]}" -gt 0 ]; then

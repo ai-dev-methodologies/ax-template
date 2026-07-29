@@ -120,6 +120,15 @@ authz:
     than re-derive; templates/L0/fork-receiver-kit/authorized-actions.ts does exactly that
     and is the single client-side selector (P2-39), imported by both the L4 detail page and
     the cross-boundary parity test.
+  step_scoped_action_set: >
+    P3-76 — ApprovalStepResponse.allowedActions carries the caller's permitted actions on
+    THAT step (approve/reject only; view is request-scoped and submit/cancel act on the
+    request), computed by ApprovalActionEvaluator.allowedStepActions with the same zero
+    local policy. The request-scoped array cannot say WHICH step is the caller's to act
+    on, so a client rendering an action panel still had to re-derive it — the client-side
+    guess P2-38b removed, one level down. authorized-actions.ts#actionableStepFor is now
+    server-first on this field and derives locally only for a fork-receiver backend that
+    predates it.
 
 # ─── query ─────────────────────────────────────────────────────────────────
 query:
@@ -147,6 +156,7 @@ verification_checkpoints:
   - "Wrong approver returns 403 (WF-AUTHZ-003)"
   - "An approver who ACTED can still GET the request after it goes terminal; a DRAFT assignee, an unacted later approver after a rejection, and an unrelated user all get 404 (WF-AUTHZ-002, P3-63)"
   - "allowedActions on the live response tracks caller and lifecycle stage; neutering any ApprovalActionGuards predicate turns BOTH the action-path test and the parity test red (P2-38a/b)"
+  - "Step-scoped allowedActions identifies WHICH step the caller may act on: the out-of-order later approver's step carries an empty set while the request-scoped array is non-empty for the first-step approver (WF-AUTHZ-003, WF-STEP-001, P3-76)"
   - "Out-of-order step action returns 409 (WF-STEP-001)"
   - "Comment + actor + timestamp persisted atomically with status (WF-STEP-002, WF-STEP-003)"
   - "Inbox returns oldest-first pending steps (WF-QUERY-001)"

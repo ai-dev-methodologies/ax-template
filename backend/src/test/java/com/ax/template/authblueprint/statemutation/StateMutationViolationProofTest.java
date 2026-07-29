@@ -15,9 +15,12 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.EnumSet;
+import java.util.Map;
 import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * VIOLATION proof for state-conditional-mutability-l0. Structural assertions a deliberate break
@@ -77,6 +80,43 @@ class StateMutationViolationProofTest {
         // which is exactly why a widening must be a recorded REOPEN, never a FORWARD edge.
         assertThat(StateFieldPolicy.isMonotoneForward(FormState.SUBMITTED, FormState.DRAFT))
             .as("re-opening widens — not a forward-monotone edge").isFalse();
+    }
+
+    // ── STATEMUTATION-MONOTONE-001 (P3-56(c)) — the monotonicity guard is a REAL check ──
+    // It used to be a bare Java `assert` inside transition(), i.e. a no-op under a production
+    // JVM (-da default): a FORWARD edge added later that WIDENED the mutable-set produced no
+    // signal anywhere. It is now validateForwardEdgesMonotone, run over the whole declared
+    // graph at class init. These two assertions are the RED-on-revert lock: delete the throw
+    // (or the loop) and `rejectsAWideningForwardEdge` fails.
+    @Test @Tag("STATEMUTATION-MONOTONE-001")
+    void violation_declaredGraphPassesTheMonotonicityValidator() {
+        // Forcing class INITIALISATION runs the static block, which validates the SHIPPED
+        // tables. Asserted this way rather than by re-declaring the graph here, so the test
+        // cannot drift away from the tables it is supposed to be checking.
+        assertThatCode(() -> Class.forName(GovernedFormStateMachine.class.getName(),
+                                           true, getClass().getClassLoader()))
+            .as("the declared edge graph must satisfy STATEMUTATION-MONOTONE-001 at class init")
+            .doesNotThrowAnyException();
+    }
+
+    @Test @Tag("STATEMUTATION-MONOTONE-001")
+    void violation_rejectsAWideningForwardEdge() {
+        // APPROVED → DRAFT widens ({} → {TITLE, BODY, REVIEWER_NOTE}). Declared as a FORWARD
+        // edge (i.e. absent from the reopen table) it is exactly the defect the dead `assert`
+        // could not report. An undeclared reopen table makes it a FORWARD edge.
+        assertThatThrownBy(() -> GovernedFormStateMachine.validateForwardEdgesMonotone(
+                Map.<FormState, Set<FormState>>of(FormState.APPROVED, EnumSet.of(FormState.DRAFT)),
+                Map.<FormState, Set<FormState>>of()))
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessageContaining("APPROVED")
+            .hasMessageContaining("DRAFT")
+            .hasMessageContaining("widens the mutable-set");
+
+        // …and the SAME edge declared as a recorded REOPEN is accepted — so the validator
+        // discriminates on the declaration, not merely on the pair of states.
+        GovernedFormStateMachine.validateForwardEdgesMonotone(
+            Map.<FormState, Set<FormState>>of(FormState.APPROVED, EnumSet.of(FormState.DRAFT)),
+            Map.<FormState, Set<FormState>>of(FormState.APPROVED, EnumSet.of(FormState.DRAFT)));
     }
 
     // ── STATEMUTATION-MONOTONE-001 — transitions append-only, one per (form, seq), no public setter ──

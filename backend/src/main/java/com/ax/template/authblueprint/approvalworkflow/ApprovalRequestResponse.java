@@ -42,7 +42,7 @@ public record ApprovalRequestResponse(
                                                ApprovalActionEvaluator evaluator, String callerUserId) {
         Map<String, Object> payload = parse(r.getPayloadJson(), objectMapper);
         List<ApprovalStepResponse> steps = r.getSteps().stream()
-            .map(ApprovalStepResponse::from)
+            .map(s -> ApprovalStepResponse.from(s, r, evaluator, callerUserId))
             .toList();
         return new ApprovalRequestResponse(
             r.getId(),

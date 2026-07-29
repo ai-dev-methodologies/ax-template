@@ -203,7 +203,13 @@ live_root = os.environ.get("LIVE_ROOT") == "1"
 # deletion. LIVE_MIN_PROTECTED_ENTRIES MAY NOT BE REDUCED.
 PROTECTED_LEDGER_REL = os.path.join("practices", "evals",
                                     "evidence_protected_template_anchors.txt")
-LIVE_MIN_PROTECTED_ENTRIES = 2
+# 2026-07-29: 2 → 18. Sixteen further anchors were verified disk-clean and promoted to
+# FATAL in the ledger. Raising this constant is the OTHER HALF of that ratchet: without it
+# the ledger directive could be lowered back to 2 in a single edit and sixteen anchors would
+# silently leave the fatal set while the gate still reported green — exactly the shrink the
+# two-number duplication exists to prevent. Live protected sweep with all 18: 18 file(s),
+# 22 anchor(s), 0 finding(s), exit 0.
+LIVE_MIN_PROTECTED_ENTRIES = 18
 
 # Identity pinning (codex round-3). A COUNT is not an identity: min_entries=2 was satisfied
 # by duplicating one clean row after deleting the row that actually matters. These exact
@@ -235,6 +241,26 @@ def normalize(s):
           .replace('“', '"').replace('”', '"')
           .replace('—', '-').replace('–', '-')
           .replace('…', '...').replace(' ', ' '))
+    # MARKDOWN CARRIAGE (P3-69 normalizer fix, 2026-07-29). An evidence `quote` is PROSE;
+    # the snapshot stores that same prose inside MARKDOWN. Two markdown constructs inject
+    # characters that belong to the container, not to the sentence, and a verbatim citation
+    # therefore cannot reproduce them:
+    #   · blockquote continuation — a multi-line `> ` block repeats the marker on EVERY
+    #     line, so after whitespace collapse the body reads "... fallback UI instead > of
+    #     the component tree ...". Demonstrated true-positive-that-should-pass:
+    #     templates/L2/blocks/translation-boundary.tsx cites react-19-error-boundary.
+    #     snapshot.md:18-20 verbatim and was reported as a mismatch purely because of the
+    #     two `> ` continuations inside the quoted block.
+    #   · inline code spans — the snapshot writes `getVirtualItems()` with backticks; the
+    #     citing prose writes the same token bare.
+    # Both are applied to BOTH SIDES of the comparison (the function is the single
+    # normalizer for quote, section and snapshot body), and both are strictly RELAXING:
+    # they can only turn a mismatch into a match, never the reverse, so no previously
+    # detected fabrication can be hidden by this change (the rules/ sweep stays at 0
+    # findings across 185 quotes, verified). The blockquote strip is line-anchored and MUST
+    # run before the `\s+` collapse below, or the markers are already mid-line by then.
+    s = re.sub(r'(?m)^[ \t]*>[ \t]?', '', s)
+    s = s.replace('`', '')
     return re.sub(r'\s+', ' ', s).strip()
 
 def strip_html(s):

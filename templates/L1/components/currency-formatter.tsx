@@ -7,7 +7,7 @@ evidence:
   - source_type: upstream_id
     upstream_id: next-intl-2026-05
     section: "KRW Currency Format"
-    quote: "new Intl.NumberFormat('ko-KR', { style: 'currency', currency: 'KRW' }).format(1234) → '₩1,234'"
+    quote: "Per ISO 4217, Korean Won (KRW) has 0 decimal places."
   - source_type: external
     citation: "ISO 4217 — KRW has 0 decimal places; ₩ symbol is the standard prefix"
     url: "https://www.iso.org/iso-4217-currency-codes.html"

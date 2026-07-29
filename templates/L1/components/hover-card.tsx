@@ -8,10 +8,11 @@ evidence:
     upstream_id: shadcn-ui-2026-05
     section: hover-card
     quote: "For sighted users to preview content available behind a link."
-  - source_type: upstream_id
-    upstream_id: wcag-2-2
-    section: 1.4.13-content-on-hover-or-focus
-    quote: "Where receiving and then removing pointer hover or keyboard focus triggers additional content to become visible and then hidden, the following are true: Dismissible, Hoverable, Persistent."
+  - source_type: external
+    citation: "WCAG 2.2 SC 1.4.13 Content on Hover or Focus (Level AA) — full normative text, W3C Recommendation 2023-10-05"
+    url: "https://www.w3.org/TR/WCAG22/#content-on-hover-or-focus"
+    quote: "Where receiving and then removing pointer hover or keyboard focus triggers additional content to become visible and then hidden, the following are true: Dismissible: A mechanism is available to dismiss the additional content without moving pointer hover or keyboard focus, unless the additional content communicates an input error or does not obscure or replace other content; Hoverable: If pointer hover can trigger the additional content, then the pointer can be moved over the additional content without the additional content disappearing; Persistent: The additional content remains visible until the hover or focus trigger is removed, the user dismisses it, or its information is no longer valid. Exception: The visual presentation of the additional content is controlled by the user agent and is not modified by the author."
+    quoted_at: "2026-07-29"
 a11y_criteria:
   - "WCAG 2.2 SC 1.4.13 — content dismissible by Escape"
   - "WCAG 2.2 SC 2.5.8 — adequate target size"

@@ -3,7 +3,7 @@
  * template_id: backend/integration/WebClientConfig
  * layer: backend-infrastructure
  * domain: integration
- * anchors_rule: resilient-http-client-required.md (PRACTICES-HTTP-002)
+ * anchors_rule: http-explicit-timeouts.md
  * provenance_class: internal_design
  * evidence:
  *   - source_type: external

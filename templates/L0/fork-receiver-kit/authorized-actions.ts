@@ -5,7 +5,7 @@ layer: L0
 provenance_class: internal_design
 evidence:
   - source_type: internal
-    rationale: "S2.AUTHZ.XB / P2-39 — the approval-workflow authz action-set existed as TWO unlinked client-side copies: a selector local to frontend/tests/authz-action-parity.vitest.ts (which the golden fixture tested) and templates/L4/approval-workflow/app/(approvals)/[id]/page.tsx's describeChain (which shipped to fork-receivers and was tested by nothing). The tested copy and the shipped copy could disagree without any gate noticing — a parity test protecting zero shipped lines. This module is the ONE implementation both import. It prefers the server's own answer (ApprovalRequestResponse.allowedActions, added by P2-38b, computed by ApprovalActionEvaluator from the same ApprovalActionGuards predicates ApprovalService enforces) and falls back to local derivation only for a fork-receiver whose backend predates that field."
+    rationale: "S2.AUTHZ.XB / P2-39 — the approval-workflow authz action-set existed as TWO unlinked client-side copies: a selector local to frontend/tests/authz-action-parity.vitest.ts (which the golden fixture tested) and templates/L4/approval-workflow/app/(approvals)/[id]/page.tsx's describeChain (which shipped to fork-receivers and was tested by nothing). The tested copy and the shipped copy could disagree without any gate noticing — a parity test protecting zero shipped lines. This module is the ONE implementation both import. It prefers the server's own answer (ApprovalRequestResponse.allowedActions, added by P2-38b, computed by ApprovalActionEvaluator from the same ApprovalActionGuards predicates ApprovalService enforces) and falls back to local derivation only for a fork-receiver whose backend predates that field. P3-76 extended the same posture to actionableStepFor — the decision an action panel gates on — once ApprovalStepResponse began carrying step-scoped allowedActions; before that the request-scoped array could not identify WHICH step was the caller's, so this helper was derivation-only."
   - source_type: external
     citation: "OWASP API Security Top 10 (2023) — API5:2023 Broken Function Level Authorization"
     url: "https://owasp.org/API-Security/editions/2023/en/0xa5-broken-function-level-authorization/"
@@ -25,6 +25,12 @@ imports_forbidden: [L1, L2, L3, L4, app/, lib/]
  * introduce disagreement. Local derivation exists solely as a documented fallback for a
  * fork-receiver running a backend older than P2-38b — and it is written to mirror the
  * backend's guards branch for branch, each one cited below.
+ *
+ * P3-76 completed that posture at the STEP level: the request-scoped array says whether
+ * the caller may approve something, never which step is theirs, so `actionableStepFor` —
+ * the decision an action panel actually gates on — was pure local derivation until the
+ * steps started carrying their own `allowedActions`. Both entry points are now
+ * server-first with a derivation fallback of the same shape.
  *
  * <h2>Why the fallback must keep the ordering check</h2>
  * A second-step approver on a SUBMITTED request is VISIBLE but not ACTIONABLE until every
@@ -51,6 +57,12 @@ export interface AuthorizedActionsStep {
   status: ApprovalStepStatus
   /** Set once the assigned approver decides. Drives the P3-63 terminal-visibility arm. */
   actedByUserId?: string | null
+  /**
+   * P3-76 — the server's own answer for THIS step (`approve` / `reject` only). Present on
+   * any backend at or after that change. The request-scoped array cannot say WHICH step is
+   * the caller's, so this is the field an action panel should gate on.
+   */
+  allowedActions?: string[] | null
 }
 
 export interface AuthorizedActionsRequest {
@@ -87,14 +99,33 @@ const ACTION_ORDER: ApprovalAction[] = ['approve', 'cancel', 'reject', 'submit',
 /**
  * Identity comparison used for every caller/approver match.
  *
- * Trimmed + case-folded, and an empty id never matches anything — a blank caller must not
- * be granted an action by accident. Deliberately duplicated from `use-caller-id.sameUser`
- * rather than imported: this module is a pure, dependency-free L0 leaf so a fork-receiver
- * can lift it alone, and the two definitions are pinned identical by the parity test.
+ * <h3>EXACT, because the backend is exact (P3-76 follow-up)</h3>
+ * This used to trim and case-fold. The backend does neither: every id comparison the
+ * approval domain enforces is a bare {@code String.equals} —
+ * `ApprovalActionGuards.isAssignedApprover` (:42), `isRequester` (:63) and `hasActed`
+ * (:109). So a caller id differing only in case or padding was AUTHORIZED by this
+ * fallback and REJECTED by the server: the fallback offered an action the BE answers
+ * with 403/404, which is precisely the divergence this module exists to prevent. The
+ * server is authoritative, so the fold and the trim are gone.
+ *
+ * Normalizing identity for an authorization decision is a policy choice, not a
+ * convenience: whether `ALICE` is `alice` is the identity provider's answer to give, and
+ * a client that assumes one cannot be right when the server assumes the other. A
+ * fork-receiver whose backend really is case-insensitive should change BOTH sides.
+ *
+ * The empty-never-matches rule stays. It makes this comparison marginally STRICTER than
+ * the backend's (Java's `"".equals("")` is true), which is the safe direction: the
+ * fallback may withhold an action the BE would allow, never offer one it would refuse.
+ * In practice unreachable — an approval request cannot be created with a blank approver.
+ *
+ * <p>NOT identical to `use-caller-id.sameUser`, which trims: that is a general-purpose UI
+ * identity helper with its own tested contract, while this one mirrors an enforcement
+ * predicate. Deliberately duplicated rather than imported so this module stays a pure,
+ * dependency-free L0 leaf a fork-receiver can lift alone.
  */
 function sameId(a: string | null | undefined, b: string | null | undefined): boolean {
-  const na = (a ?? '').trim().toLowerCase()
-  const nb = (b ?? '').trim().toLowerCase()
+  const na = a ?? ''
+  const nb = b ?? ''
   if (na === '' || nb === '') return false
   return na === nb
 }
@@ -151,8 +182,42 @@ export function canView(
 /**
  * The step this caller may act on right now, or null. This is the single decision the L4
  * detail page needs in order to render its action panel — it must NOT re-derive it.
+ *
+ * <h3>Server-first (P3-76)</h3>
+ * When the steps carry `allowedActions`, THAT is the answer: the backend computed it from
+ * the same guards it enforces, per step. Before P3-76 only the request-scoped array
+ * existed, which says whether the caller may approve SOMETHING but not WHICH step — so
+ * this helper had no server answer to prefer and derived locally, reintroducing one level
+ * down the client-side authorization guess the request-scoped field removed.
+ *
+ * Presence is decided across the whole step list, not per step: a backend at or after
+ * P3-76 emits the field on EVERY step (empty where the caller may do nothing), so a single
+ * step carrying it means the server has spoken and an empty sibling is a real "no", not a
+ * missing answer to fall back on.
  */
 export function actionableStepFor(
+  request: AuthorizedActionsRequest,
+  callerId: string | null | undefined,
+): AuthorizedActionsStep | null {
+  const ordered = [...request.steps].sort((a, b) => a.orderIndex - b.orderIndex)
+  if (ordered.some((s) => Array.isArray(s.allowedActions))) {
+    for (const step of ordered) {
+      // Set membership, not Array.includes inside the loop — ax/no-array-includes-in-loop.
+      const granted = new Set(step.allowedActions ?? [])
+      if (granted.has('approve') || granted.has('reject')) return step
+    }
+    return null
+  }
+  return deriveActionableStepFor(request, callerId)
+}
+
+/**
+ * Local derivation of {@link actionableStepFor} — the documented fallback for a
+ * fork-receiver backend that predates P3-76. Exported so the parity test can assert it
+ * agrees with the server's per-step answer on every golden row, which is what keeps the
+ * fallback from drifting away from the backend it stands in for.
+ */
+export function deriveActionableStepFor(
   request: AuthorizedActionsRequest,
   callerId: string | null | undefined,
 ): AuthorizedActionsStep | null {

@@ -51,13 +51,16 @@ const enriched = orders.map((o) => ({
 }))
 ```
 
-### Same fix, explicit loop (no array methods)
+### Same fix, spread-free (non-mutating copy)
 
 ```typescript
 const userById = new Map()
 for (const u of users) userById.set(u.id, u)
-for (const o of orders) o.user = userById.get(o.userId)
+const enriched = orders.map((o) => Object.assign({}, o, { user: userById.get(o.userId) }))
 ```
+
+Note the copy: enriching by assigning onto `o` would mutate the caller's `orders`
+rows. `Object.assign({}, o, …)` produces a new object, same as the spread form above.
 
 ### When it pays off
 

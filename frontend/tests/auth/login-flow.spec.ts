@@ -39,7 +39,7 @@ test.describe('Auth login flow — TDD anchor', () => {
 
     // Intercept the API call — both Vite (5173) and Next.js (3000) proxy /api to :8080
     // MSW mock returns { accessToken: 'mock-access-token', expiresIn: 3600 }
-    // and GET /api/auth/me returns { userId, email, roles, verificationState }
+    // and GET /api/auth/me returns { userId, email, role, emailVerified, linkedProviders }
     await page.getByRole('button', { name: /이메일 로그인/i }).click();
 
     // After successful login the store sets accessToken and navigate() goes to /dashboard

@@ -20,7 +20,7 @@ imports_forbidden: [L4, app/, lib/payment/]
 'use client'
 
 import * as React from 'react'
-import { formatCurrencyAmount } from '@/templates/L1/components/currency-input'
+import { formatCurrencyAmount } from 'templates/L1/components/currency-input'
 
 export interface InvoiceItem {
   id: string

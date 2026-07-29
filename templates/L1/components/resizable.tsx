@@ -8,10 +8,11 @@ evidence:
     upstream_id: shadcn-ui-2026-05
     section: resizable
     quote: "Accessible resizable panel groups and layouts with keyboard support."
-  - source_type: upstream_id
-    upstream_id: wcag-2-2
-    section: 2.5.1-pointer-gestures
-    quote: "All functionality that uses multipoint or path-based gestures for operation can be operated with a single pointer."
+  - source_type: external
+    citation: "WCAG 2.2 SC 2.5.1 Pointer Gestures (Level A) — full normative text, W3C Recommendation 2023-10-05"
+    url: "https://www.w3.org/TR/WCAG22/#pointer-gestures"
+    quote: "All functionality that uses multipoint or path-based gestures for operation can be operated with a single pointer without a path-based gesture, unless a multipoint or path-based gesture is essential."
+    quoted_at: "2026-07-29"
 a11y_criteria:
   - "WCAG 2.2 SC 2.5.1 Pointer Gestures — single-pointer alternative required for drag"
   - "WCAG 2.2 SC 2.5.8 Target Size — divider handle needs adequate hit area"

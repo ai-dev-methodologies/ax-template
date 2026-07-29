@@ -499,3 +499,18 @@ the trigger event, do not relitigate.
 - Follow-ups: snake_case / broader identity-name conventions (BACKLOG candidate, not yet registered —
   low priority given 0 live violations found).
 - Commits: (this commit — not yet pushed; wave-2 INTEGRATION lane)
+
+## TD-2026-07-29-P3-56a — audit-log LIST/GET stays any-authenticated
+- Verified ALREADY ON DISK (blueprints/audit-log-manifest.yaml `rbac.read_policy`, landed 2026-07-28) — deliberately NOT re-authored. Default `any-authenticated` with stated rationale (masked actorIp, metadataJson never exposed, OWASP ASVS V7) plus two least-privilege options a fork MUST choose between: `self-only`, `auditor-role-only`. Closure class: decision-recorded.
+
+## TD-2026-07-29-P3-56b — webhook inbound replay claim point
+- blueprints/webhook-manifest.yaml#inbound-replay-dedup. The reference marks event_id seen at VERIFICATION time (InboundSignatureVerifier step 4 → ReplayDedupStore.firstSeen) with no rollback. Safe here ONLY because nothing processes the body after verify(); once a fork adds processing, a downstream failure turns the sender's legitimate retry into a 409 for the whole 300s window — at-least-once silently traded for at-most-once. Three patterns documented with guarantees AND costs; default_for_forks: mark-after-success (its concurrent-delivery cost is discharged by binding event_id to idempotency-l0). Catalog documents, does not gate: R26.
+
+## TD-2026-07-29-P3-84 — ContextCache ceiling surveillance
+- Adopt the row's own probe: re-run the aggregate at the OLD ceiling; any NEW failure is real inter-test state leakage, not flake — fix the test, never the ceiling. Trigger: before any major test-infra change and at least quarterly. The ceiling was made overridable (-PcontextCacheMaxSize, default 128) because the originally-specified -Dspring.test.context.cache.maxSize=32 does not reach the forked test JVM — the probe as first written would have proven nothing. -P over -D: a daemon -D persists into later runs reusing that daemon.
+
+## TD-2026-07-29-P3-86 — contract-enum enforcement boundary, FINAL at the 5th narrowing
+- Residual is deliberate evasion, not laziness: (a) a property-conditional @Bean implementing the SPI via a JDK Proxy under a configuration no test sets; (b) a wire literal injected via @Value/System.getProperty. No absence proof over an UNEXERCISED configuration can exist; claiming coverage would be the broad-but-false guarantee this catalog exists to block. Boundary stated by enumeration in the guard header, UNWEAKENED. The sound alternative is fail-closed ROUTING, shipped as an OPTIONAL fork-receiver pattern (blueprints/payment-manifest.yaml#callback.fail_closed_provider_routing, referenced from the guard header) — closing the provider set would force every fork to edit the catalog contract to register its own PG, a deployment-policy decision colliding with R26 autonomy.
+
+## TD-2026-07-29-P3-89 — keep step-boundary tree sampling
+- Recorded in practices/evals/midrun_tree_mutation_guard.sh header. Intra-step periodic sampling shrinks the window by a constant factor and never closes the class — only an immutable tree does. Cost: a ~2,200s background sampler needing reaping on every exit path incl. SIGTERM, whose own failure modes (orphaned process, false "mutated" from reading a file mid-write) land on the PUSH path. Exposure is already bounded by the sibling links (both endpoints clean and equal to the audited fingerprint). REVISIT TRIGGER: a demonstrated real evasion not constructed to demonstrate one; on that evidence prefer an immutable-tree run (read-only snapshot / container) over a sampler.

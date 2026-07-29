@@ -1,6 +1,14 @@
-// @ax-template-meta: template_id=backend/file-storage/FileStorageService layer=backend domain=file-storage
-// evidence: FILE-AUTHZ-001..003, FILE-UPLOAD-001..003, FILE-SCAN-001..002, FILE-QUOTA-001,
-//           FILE-SEC-001, FILE-OBS-001
+/**
+ * @ax-template-meta
+ * template_id: backend/file-storage/FileStorageService
+ * layer: backend
+ * domain: file-storage
+ * anchors_rule: soft-delete-audit-trail.md
+ * provenance_class: internal_design
+ * evidence:
+ *   - source_type: internal
+ *     rationale: "Core file-storage service. Realises specs/file-storage-l0.yaml FILE-AUTHZ-001..003, FILE-UPLOAD-001..003, FILE-SCAN-001..002, FILE-QUOTA-001, FILE-SEC-001 and FILE-OBS-001. deleteFile flips status to DELETED and records the event rather than removing the row — the anchored invariant. NOTE: the entity additionally carries @SQLDelete/@Where per soft-delete-only-on-base-entity.md; the two rules read this one domain differently and the divergence is recorded in the P3-90 closure rather than resolved here."
+ */
 package com.ax.template.authblueprint.filestorage;
 
 import io.micrometer.core.instrument.MeterRegistry;

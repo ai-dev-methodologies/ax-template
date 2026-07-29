@@ -168,7 +168,7 @@ template**. 모든 layer에서 **규칙을 기계적으로 강제하는 선 순�
 
 ```
 fork ax-template
-    ↓ (25 L4 domains + 11 active recipes + 233 Java rules + 102 React rules + 15 ESLint rules + 101 hard guards + AGENTS.md sentinel)
+    ↓ (25 L4 domains + 11 active recipes + 233 Java rules + 102 React rules + 15 ESLint rules + 102 hard guards + AGENTS.md sentinel)
 새 도메인 추가 — METHODOLOGY.md의 5-step 따라
     ↓
 AI agent가 Spring + React 코드 작성
@@ -420,6 +420,16 @@ cd backend && ./gradlew testCrud      # CRUD spec 검증 (GREEN)
 cd backend && ./gradlew testPractices # practices/ 233룰 검증 (GREEN)
 cd backend && ./gradlew testPortability  # advisory: 외부 fixture에 룰 적용
 
+# R22 ContextCache 감시 프로브 (BACKLOG P3-84) — 예전 상한으로 aggregate 재실행.
+# 트리거: 대형 test-infra 변경 전(신규 @SpringBootTest 배치, Spring/Boot 업그레이드,
+#         cache-size 변경) + 최소 분기 1회.
+# 기대 exit 0. 평소 aggregate 대비 새로 깨지는 것이 있으면 그것은 flake가 아니라
+# 진짜 테스트 간 상태 누수다 — 상한을 올려 덮지 말고 그 테스트를 고친다.
+# -D가 아니라 -P: 데몬 -D는 같은 데몬을 재사용하는 이후 실행까지 남아
+# 전체 스위트를 몰래 프로브 상한으로 돌린다.
+(cd backend && JAVA_HOME=/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home \
+   ./gradlew test -PcontextCacheMaxSize=32)
+
 # Frontend
 cd frontend && npm run build
 cd frontend && npm run test
@@ -454,7 +464,7 @@ ax-template/
 ├── practices/                 # AI-targeted catalog (skill 핵심 자산)
 │   ├── rules/                 # 233룰, 22+ categories (R50/R58/R61 추가분 포함)
 │   ├── upstream/              # 외부 사실 snapshot
-│   ├── evals/                 # 4 hard gates + 101 hard guards
+│   ├── evals/                 # 4 hard gates + 102 hard guards
 │   ├── AGENTS.md              # AI agent 진입점 (sha sentinel)
 │   ├── SKILL.md               # practices 서브시스템 skill
 │   ├── MAINTAINER.md

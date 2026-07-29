@@ -3,7 +3,7 @@
  * template_id: backend/feature-flags/FeatureFlagController
  * layer: backend-domain
  * domain: feature-flags
- * anchors_rule: api-controller-service-separation.md (PRACTICES-API-003)
+ * anchors_rule: testing-archunit-layer-boundary.md
  * provenance_class: internal_design
  * evidence:
  *   - source_type: external

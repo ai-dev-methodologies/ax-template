@@ -16,15 +16,7 @@ usage: |
   Replace 'YOUR_API_BASE' with your backend URL or use next.config.ts rewrites.
 ---
 */
-import { FeatureFlagToggle } from '@/templates/L2/blocks/feature-flag-toggle'
-import Link from 'next/link'
-
-interface FeatureFlag {
-  name: string
-  enabled: boolean
-  description: string | null
-  updatedAt: string
-}
+import FeatureFlagsListView, { type FeatureFlag } from './feature-flags-list-view'
 
 interface FlagPage {
   content: FeatureFlag[]
@@ -52,48 +44,5 @@ export default async function FeatureFlagsPage() {
   const apiBase = process.env.BACKEND_API_BASE ?? ''
   const { content: flags, totalElements } = await fetchFlags(apiBase)
 
-  return (
-    <main>
-      <h1>Feature Flags</h1>
-      <p>{totalElements} flag(s) defined</p>
-
-      {flags.length === 0 ? (
-        <p>No flags defined.</p>
-      ) : (
-        <table>
-          <thead>
-            <tr>
-              <th>Name</th>
-              <th>Status</th>
-              <th>Description</th>
-              <th>Last Updated</th>
-              <th>Detail</th>
-            </tr>
-          </thead>
-          <tbody>
-            {flags.map((flag) => (
-              <tr key={flag.name}>
-                <td>
-                  <code>{flag.name}</code>
-                </td>
-                <td>
-                  <FeatureFlagToggle
-                    name={flag.name}
-                    initialEnabled={flag.enabled}
-                    apiBase={apiBase}
-                    label={`Toggle ${flag.name}`}
-                  />
-                </td>
-                <td>{flag.description ?? '—'}</td>
-                <td>{new Date(flag.updatedAt).toLocaleString('ko-KR')}</td>
-                <td>
-                  <Link href={`/admin/feature-flags/${flag.name}`}>Edit</Link>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
-    </main>
-  )
+  return <FeatureFlagsListView flags={flags} totalElements={totalElements} apiBase={apiBase} />
 }

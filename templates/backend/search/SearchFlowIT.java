@@ -3,6 +3,7 @@
  * template_id: backend/search/SearchFlowIT
  * layer: backend-test
  * domain: search
+ * anchors_rule: testing-restassured-blackbox.md
  * provenance_class: internal_design
  * evidence:
  *   - source_type: upstream_id

@@ -22,6 +22,7 @@ import * as React from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useRouter, useParams } from 'next/navigation'
 import type { NotificationItemData } from 'templates/L2/blocks/notification-item'
+import NotificationDetailView from './notification-detail-view'
 
 // ─── API helpers ─────────────────────────────────────────────────────────────
 
@@ -103,96 +104,14 @@ export default function NotificationDetailPage() {
     }
   }, [isError, router])
 
-  if (isLoading) {
-    return (
-      <div className="mx-auto max-w-2xl py-6 px-4" aria-busy="true">
-        <div className="h-6 w-32 animate-pulse rounded bg-muted mb-4" />
-        <div className="space-y-3">
-          <div className="h-8 w-3/4 animate-pulse rounded bg-muted" />
-          <div className="h-32 animate-pulse rounded bg-muted" />
-        </div>
-      </div>
-    )
-  }
-
-  if (!notification) return null
-
-  const TYPE_LABELS: Record<string, string> = {
-    SYSTEM:    'System',
-    ALERT:     'Alert',
-    REMINDER:  'Reminder',
-    PROMOTION: 'Promotion',
-    ACCOUNT:   'Account',
-  }
-
   return (
-    <div className="mx-auto max-w-2xl py-6 px-4">
-      {/* Back navigation */}
-      <button
-        type="button"
-        onClick={() => router.push('/inbox')}
-        className="mb-6 flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
-        aria-label="Back to inbox"
-      >
-        ← Back to Inbox
-      </button>
-
-      <article aria-label={`Notification: ${notification.title}`}>
-        {/* Type + time header */}
-        <div className="flex items-center justify-between gap-4 mb-4">
-          <span className="inline-flex items-center rounded-full bg-muted px-2.5 py-0.5 text-xs font-medium text-muted-foreground">
-            {TYPE_LABELS[notification.type] ?? notification.type}
-          </span>
-          <time
-            dateTime={notification.createdAt}
-            className="text-xs text-muted-foreground"
-          >
-            {new Date(notification.createdAt).toLocaleString()}
-          </time>
-        </div>
-
-        {/* Title */}
-        <h1 className="text-xl font-semibold mb-3">{notification.title}</h1>
-
-        {/* Body */}
-        <p className="text-sm text-muted-foreground leading-relaxed whitespace-pre-wrap">
-          {notification.body}
-        </p>
-
-        {/* Action URL CTA */}
-        {notification.actionUrl && (
-          <a
-            href={notification.actionUrl}
-            className="mt-6 inline-flex items-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
-          >
-            View details
-          </a>
-        )}
-
-        {/* Read status */}
-        <div className="mt-6 flex items-center justify-between border-t pt-4">
-          <span className={`text-xs ${notification.status === 'READ' ? 'text-muted-foreground' : 'text-blue-600 font-medium'}`}>
-            {notification.status === 'READ' ? 'Read' : 'Unread'}
-          </span>
-
-          {/* Dismiss action */}
-          <button
-            type="button"
-            onClick={() => dismissMutation.mutate(id)}
-            disabled={dismissMutation.isPending}
-            className="text-xs text-destructive hover:underline disabled:opacity-50"
-            aria-label="Dismiss this notification"
-          >
-            {dismissMutation.isPending ? 'Dismissing…' : 'Dismiss'}
-          </button>
-        </div>
-
-        {dismissMutation.isError && (
-          <p role="alert" className="mt-2 text-xs text-destructive">
-            Failed to dismiss. Please try again.
-          </p>
-        )}
-      </article>
-    </div>
+    <NotificationDetailView
+      isLoading={isLoading}
+      notification={notification}
+      onBack={() => router.push('/inbox')}
+      onDismiss={(dismissId) => dismissMutation.mutate(dismissId)}
+      dismissPending={dismissMutation.isPending}
+      dismissIsError={dismissMutation.isError}
+    />
   )
 }

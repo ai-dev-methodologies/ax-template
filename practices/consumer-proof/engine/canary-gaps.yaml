@@ -317,6 +317,7 @@ canaries:
 
   - id: CANARY-017
     canary: true
+    stale: true
     need: "A step-scoped authorized-action field on the wire: ApprovalStepResponse carrying allowedActions
       so the FE approve/reject gate can be server-first instead of re-deriving via actionableStepFor.
       PRD W6b specified it; wave-4 shipped the request-scoped field only."
@@ -328,3 +329,14 @@ canaries:
       verified_at: "2026-07-28"
       false_positive_note: "ApprovalStepResponse is a 7-field record (id, orderIndex, approverUserId, status, actedByUserId, actedAt, comment) with no action-set member — confirmed by reading the file, not only by grep."
     excluded_from_backlog: true
+    staleness_note: "STALE as of 2026-07-29 (P3-76 closure): the absence_proof command now MATCHES —
+      ApprovalStepResponse is an 8-field record whose 8th member IS `List<String> allowedActions`,
+      emitted by ApprovalActionEvaluator.allowedStepActions, and authorized-actions.ts#actionableStepFor
+      consumes it server-first (re-run: `grep -rliE \"ApprovalStepResponse.{0,80}allowedActions|
+      allowedActions.{0,80}ApprovalStepResponse\" backend/src frontend templates` returns matches, exit 0).
+      Per this file's staleness protocol (see header comment) this canary can no longer prove the loop's
+      gap-detection reflex. Kept on disk (not deleted) as an honest historical record that CANARY-017 was
+      surfaced and closed. NOT superseded by a replacement canary — CANARY-016 (the FE fallback's
+      duplicated ALLOWED transition tables) remains OPEN and still covers the S2.AUTHZ.XB cell, though
+      P3-76 narrowed it: the fallback's step-scoped ACTION SET is now pinned to the BE's by
+      authz-action-parity.vitest.ts, while the request-machine table it mirrors is not."

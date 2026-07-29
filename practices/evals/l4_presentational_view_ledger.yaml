@@ -10,19 +10,21 @@
 # never quietly removed while claiming the conversion still holds).
 #
 # Full conversion of all ~79 L4 page.tsx files is explicitly NOT the goal here
-# (see BACKLOG "L4 render-testability — remainder" row) — this ledger tracks
-# the right-sized exemplar set: audit-log's pre-existing exemplar
-# (audit-log-detail-view.tsx, S2.AUDIT-PII.XB) plus 3 newly-converted verticals
-# (payment, email-outbox, crud). webhook and approval-workflow are DEFERRED —
-# their page.tsx files are concurrently targeted by W1 (P2-34, webhook
-# vocabulary reconciliation, touches nearly every line of
-# webhook/app/page.tsx) and W7 (P2-39, approval-workflow's describeChain
-# replaced by an L0-imported selector) in the same wave's WS-W lane; extracting
-# their render layer in parallel would create a direct file collision with
-# those in-flight edits. Convert them in a follow-up pass once W1/W7 have
-# landed.
+# (see BACKLOG "L4 render-testability — remainder" / P2-42 rows) — this ledger
+# tracks the right-sized exemplar set. BACKLOG P2-42 pass 1 (2026-07-2x)
+# converted the 13 remaining app-bearing verticals whose primary page was
+# ≤~470 LOC: auth, billing, comment-thread, data-subject-rights,
+# favorites-bookmarks, feature-flags, file-storage, notification, practices,
+# scheduled-task, search, session-management, api-key — on top of the
+# pre-existing audit-log exemplar and the 3 P2-28 conversions (payment,
+# email-outbox, crud) = 17. Pass 2 then converted webhook, tag-categorization,
+# activity-feed (the ledger's earlier DEFERRED note on webhook referred to a
+# since-closed BACKLOG P2-34 collision in a past wave — no longer applies), and
+# finally approval-workflow (814 LOC, largest of the 21) once this wave's
+# Lane B (P3-76) landed and was confirmed — = 21. All 21 app-bearing L4
+# verticals are now ledgered; P2-42 is closed.
 
-min_entries: 4
+min_entries: 21
 
 entries:
   - domain: audit-log
@@ -48,3 +50,105 @@ entries:
     page: "templates/L4/crud/app/(crud)/items/[id]/page.tsx"
     view: "templates/L4/crud/app/(crud)/items/[id]/item-detail-view.tsx"
     note: "New conversion (P2-28) — composes templates/L3/pages/detail-page (React-only, safe to import)."
+
+  - domain: billing
+    surface: invoices
+    page: "templates/L4/billing/app/(billing)/invoices/page.tsx"
+    view: "templates/L4/billing/app/(billing)/invoices/billing-invoices-view.tsx"
+    note: "New conversion (P2-42 pass 1) — composes templates/L2/blocks/invoice-list; also fixed that block's own @/templates/... bare-specifier drift (unresolvable under the vitest project's own @/ alias, which points at frontend/src) to templates/... so it is directly renderable."
+
+  - domain: search
+    surface: landing
+    page: "templates/L4/search/app/(search)/page.tsx"
+    view: "templates/L4/search/app/(search)/search-landing-view.tsx"
+    note: "New conversion (P2-42 pass 1) — takes the cmdk-dependent SearchPalette element as a paletteSlot prop (cmdk cannot resolve from a templates/L2/blocks/ file rendered outside frontend/, same class as this file's own next-navigation/react-query gaps) and composes templates/L2/blocks/recent-searches directly (zero external-npm deps). Also fixed the page's fork-illustrative @/components/search/* import paths to the catalog's own templates/L2/blocks/* specifiers so both the page and its view actually resolve in this repo."
+
+  - domain: session-management
+    surface: list
+    page: "templates/L4/session-management/app/(sessions)/page.tsx"
+    view: "templates/L4/session-management/app/(sessions)/session-management-view.tsx"
+    note: "New conversion (P2-42 pass 1) — templates/L2/blocks/virtualized-table has its own unresolvable dependency one level deeper (@tanstack/react-virtual, same class of gap as @tanstack/react-query and cmdk), so the view takes the already-instantiated table as a tableSlot prop instead of constructing VirtualizedTable itself; templates/L2/blocks/{empty-state,error-boundary} have zero external-npm deps and are composed directly."
+
+  - domain: api-key
+    surface: list
+    page: "templates/L4/api-key/app/(api-key)/page.tsx"
+    view: "templates/L4/api-key/app/(api-key)/api-key-list-view.tsx"
+    note: "New conversion (P2-42 pass 1) — same VirtualizedTable/tableSlot pattern as session-management. Also fixed two pre-existing prop-shape mismatches uncovered while extracting: the page called FilterBar with a fields/onChange/type:'select' shape that does not match its actual filters/activeValues/onFilter chip-toggle API (fixed as a single-select-over-chips adapter), and called EmptyState with actionLabel/onAction which EmptyState does not accept (it takes actionSlot; fixed to a real button). Both were latent — they would have thrown or silently no-op'd the first time this page was actually rendered."
+
+  - domain: feature-flags
+    surface: list
+    page: "templates/L4/feature-flags/app/(admin)/feature-flags/page.tsx"
+    view: "templates/L4/feature-flags/app/(admin)/feature-flags/feature-flags-list-view.tsx"
+    note: "New conversion (P2-42 pass 1) — the page is an async Server Component (fetch at render time); the view is a plain non-async props->JSX split. Composes templates/L2/blocks/feature-flag-toggle directly (plain fetch, no data-fetching hook). Uses a plain <a> instead of next/link's Link for the per-row Edit link (next/link is unresolvable outside frontend/, same class of gap as cmdk/@tanstack/*; matches the crud/payment views' own plain-<a> precedent)."
+
+  - domain: practices
+    surface: rule-detail
+    page: "templates/L4/practices/app/(practices)/rule/[id]/page.tsx"
+    view: "templates/L4/practices/app/(practices)/rule/[id]/rule-detail-view.tsx"
+    note: "New conversion (P2-42 pass 1) — the page is an async Server Component reading practices/rules/*.md off the filesystem (loadRuleById); the view is a plain non-async props->JSX split. Only the ParsedRule TYPE is imported from ../../../../lib/rule-parser (type-only import, erased at compile time, no runtime fs dependency). Uses plain <a> instead of next/link's Link (same rationale as the feature-flags conversion)."
+
+  - domain: notification
+    surface: detail
+    page: "templates/L4/notification/app/(notification)/[id]/page.tsx"
+    view: "templates/L4/notification/app/(notification)/[id]/notification-detail-view.tsx"
+    note: "New conversion (P2-42 pass 1) — same class as the crud/payment/email-outbox/session-management conversions (useQuery/useMutation stays on the page). Only the NotificationItemData TYPE is imported from templates/L2/blocks/notification-item (type-only, erased at compile time)."
+
+  - domain: file-storage
+    surface: detail
+    page: "templates/L4/file-storage/app/(file-storage)/files/[id]/page.tsx"
+    view: "templates/L4/file-storage/app/(file-storage)/files/[id]/file-detail-view.tsx"
+    note: "New conversion (P2-42 pass 1) — templates/L2/blocks/toast-queue has its own unresolvable dependency ('sonner' npm package, same class of gap as @tanstack/react-virtual/cmdk), so useToast() stays entirely on the page (never imported by the view — the toast side-effect is invisible to this render surface). Also fixed two pre-existing bugs uncovered while extracting: the page never passed ConfirmDialog its required `open` prop (so the delete confirmation could never actually appear — `!open` was always true) and passed a non-existent `confirmVariant` prop instead of the real `destructive: boolean`. Both fixed here; a vitest asserting the confirm flow would otherwise fail against the real component."
+
+  - domain: scheduled-task
+    surface: history
+    page: "templates/L4/scheduled-task/app/(admin)/scheduled-tasks/[id]/page.tsx"
+    view: "templates/L4/scheduled-task/app/(admin)/scheduled-tasks/[id]/scheduled-task-history-view.tsx"
+    note: "New conversion (P2-42 pass 1) — two useQuery calls (task + history) stay on the page; the ROLE_ADMIN gate (useCallerRole) also stays on the page (same precedent as email-outbox), rendered before the view. Composes templates/L2/blocks/{empty-state,error-boundary} and templates/L0/fork-receiver-kit/parse-error's sanitizeStoredError directly (all zero external-npm deps)."
+
+  - domain: data-subject-rights
+    surface: request-detail
+    page: "templates/L4/data-subject-rights/app/(dsr)/privacy/requests/[id]/page.tsx"
+    view: "templates/L4/data-subject-rights/app/(dsr)/privacy/requests/[id]/request-detail-view.tsx"
+    note: "New conversion (P2-42 pass 1) — same class as (crud)/items/[id]/item-detail-view.tsx (composes templates/L3/pages/detail-page, React-only, safe to import). Loading/404 states and the extend-mutation orchestration stay on the page; the view takes the resolved request + extend-form state as props."
+
+  - domain: favorites-bookmarks
+    surface: list
+    page: "templates/L4/favorites-bookmarks/app/(favorites)/page.tsx"
+    view: "templates/L4/favorites-bookmarks/app/(favorites)/favorites-list-view.tsx"
+    note: "New conversion (P2-42 pass 1, largest of the 13 pass-1 domains) — the per-row 'global count' widget (RowCount) has its OWN nested useQuery (lazy-reveal), a data-fetching hook one level deeper than the page's top-level query, so it stays page-local and is threaded into the view via a `renderCount` render-prop rather than being defined in the view file. The confirmingRemove confirm-dialog state also stays page-owned (not view-local) because the remove mutation's onSettled callback clears it — lifting it into the view would break that behavior. templates/L2/blocks/{empty-state,error-boundary,confirm-dialog} have zero external-npm deps and are composed directly."
+
+  - domain: comment-thread
+    surface: thread
+    page: "templates/L4/comment-thread/app/(comments)/[entityType]/[entityId]/page.tsx"
+    view: "templates/L4/comment-thread/app/(comments)/[entityType]/[entityId]/comment-thread-view.tsx"
+    note: "New conversion (P2-42 pass 1) — the recursive CommentBranch renderer and the buildTree data-shaping helper move to the view unmodified (zero data-fetching dependencies, only local useState for the reply/edit forms). The page's three useMutation calls (post/edit/delete) and the top-level useQuery stay on the page; the view takes the resolved flat comment list + mutation-trigger callbacks as props."
+
+  - domain: auth
+    surface: dashboard
+    page: "templates/L4/auth/app/(authenticated)/dashboard/page.tsx"
+    view: "templates/L4/auth/app/(authenticated)/dashboard/dashboard-view.tsx"
+    note: "New conversion (P2-42 pass 1, converted last in this pass — Lane A/P1-73 had already landed its AuthState contract-parity edit (role/emailVerified/linkedProviders, matching contracts/auth-openapi.yaml) to this exact file in the same wave; this conversion builds on that already-landed shape, not the pre-P1-73 one). The page's useEffect+fetch('/auth/me') and the logout flow stay on the page; the view takes the resolved authState + an onLogout callback."
+
+  - domain: webhook
+    surface: endpoints
+    page: "templates/L4/webhook/app/(admin)/webhooks/page.tsx"
+    view: "templates/L4/webhook/app/(admin)/webhooks/webhook-endpoints-view.tsx"
+    note: "New conversion (P2-42 pass 2) — the ledger header's earlier DEFERRED note for webhook (W1/P2-34 file-collision) referred to that item's OWN wave, already closed (BACKLOG P2-34, 2026-07-28); this current wave's Lane B (P3-76/P3-91/P3-85) does not touch this page.tsx (only the webhook OpenAPI contract), so no collision applies here. SecretRevealPanel (navigator.clipboard + beforeunload) and the per-row delete confirm() move to the view unmodified (zero data-fetching deps) — same precedent as email-outbox-view's window.confirm-stays-in-the-view rationale. ROLE_ADMIN gate stays on the page (same precedent as email-outbox/scheduled-task)."
+
+  - domain: tag-categorization
+    surface: library
+    page: "templates/L4/tag-categorization/app/(tags)/page.tsx"
+    view: "templates/L4/tag-categorization/app/(tags)/tag-library-view.tsx"
+    note: "New conversion (P2-42 pass 2) — the recursive TagRow renderer, buildTree helper, and the entire Add/Edit form's local draft state (incl. the unsaved-draft window.confirm gate) move to the view. create/update are threaded in as Promise-returning callbacks (page wraps mutateAsync) so the view can reset its own draft fields only on success without lifting that state to the page. previewSlug (../slug-preview) is a pure string function, zero deps, imported directly."
+
+  - domain: activity-feed
+    surface: inbox
+    page: "templates/L4/activity-feed/app/(activities)/page.tsx"
+    view: "templates/L4/activity-feed/app/(activities)/activity-feed-view.tsx"
+    note: "New conversion (P2-42 pass 2) — only the `sameUser` pure comparator is imported from templates/L0/fork-receiver-kit/use-caller-id (not the useCallerId hook itself, which stays on the page since it derives the caller's identity). The Mark-all-read window.confirm gate and the local `now` timeAgo ticker move to the view (same precedent as favorites-list-view's local `now` state / webhook-endpoints-view's confirm()-in-view). Fixed a pre-existing prop-shape mismatch uncovered while extracting: the page called EmptyState with actionLabel/onAction, which EmptyState does not accept (it takes actionSlot; fixed to a real button, same class as the api-key conversion's fix)."
+
+  - domain: approval-workflow
+    surface: detail
+    page: "templates/L4/approval-workflow/app/(approvals)/[id]/page.tsx"
+    view: "templates/L4/approval-workflow/app/(approvals)/[id]/approval-detail-view.tsx"
+    note: "New conversion (P2-42 pass 2, largest of all 21 at 814 LOC — converted last, after this wave's Lane B/P3-76 landed and was confirmed) — describeChain/findUpstreamApprovedComments/findDuplicateApprovers/StepTimeline are pure derivations over the resolved request (using sameUser from use-caller-id and isRequester/can/actionableStepFor from templates/L0/fork-receiver-kit/authorized-actions, both zero-external-dep) and move to the view unmodified. Approve/reject are threaded in as Promise-returning callbacks (page wraps mutateAsync + invalidate + best-effort inbox refetch + router.push) so the view can clear its own comment draft only on success without lifting that state to the page — same pattern as tag-library-view's onCreateTag/onUpdateTag. The reject-confirm and cancel-with-approvals-already-acted window.confirm gates stay in the view (same precedent as tag-library-view/webhook-endpoints-view)."

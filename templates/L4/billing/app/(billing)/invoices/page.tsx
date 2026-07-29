@@ -14,7 +14,7 @@ imports_forbidden: [L4/auth, L4/payment]
 ---
 */
 import React from 'react'
-import { InvoiceList } from '@/templates/L2/blocks/invoice-list'
+import BillingInvoicesView from './billing-invoices-view'
 
 /**
  * InvoicesPage — displays billing invoices for the authenticated user.
@@ -23,10 +23,5 @@ import { InvoiceList } from '@/templates/L2/blocks/invoice-list'
  * via GET /api/billing/invoices (operationId: listInvoices).
  */
 export default function InvoicesPage() {
-  return (
-    <div className="space-y-6">
-      <h1 className="text-2xl font-bold">청구서</h1>
-      <InvoiceList invoices={[]} />
-    </div>
-  )
+  return <BillingInvoicesView invoices={[]} />
 }

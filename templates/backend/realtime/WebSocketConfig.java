@@ -2,6 +2,7 @@
  * @ax-template-meta
  * template_id: backend/realtime/WebSocketConfig
  * layer: backend-cross-cutting
+ * anchors_rule: realtime-single-protocol-declared.md
  * provenance_class: internal_design
  * opt_in_via: ax.realtime.websocket.enabled=true (blueprints/realtime-policy-manifest.yaml)
  * serverless_safe: false

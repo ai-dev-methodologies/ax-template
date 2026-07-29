@@ -1,5 +1,14 @@
-// @ax-template-meta: template_id=backend/file-storage/PresignedUrlService layer=backend domain=file-storage
-// evidence: FILE-SEC-001 (internal storage path never exposed; presigned URL only)
+/**
+ * @ax-template-meta
+ * template_id: backend/file-storage/PresignedUrlService
+ * layer: backend
+ * domain: file-storage
+ * anchors_rule: presigned-url-signature-required.md
+ * provenance_class: internal_design
+ * evidence:
+ *   - source_type: internal
+ *     rationale: "Issues and verifies time-limited HMAC-SHA256 download tokens encoding fileId + expiry. Realises specs/file-storage-l0.yaml#FILE-SEC-001: the internal storage path is never exposed, only a signed, TTL-bound URL."
+ */
 package com.ax.template.authblueprint.filestorage;
 
 import org.springframework.beans.factory.annotation.Value;

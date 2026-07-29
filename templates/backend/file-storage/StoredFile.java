@@ -1,6 +1,14 @@
-// @ax-template-meta: template_id=backend/file-storage/StoredFile layer=backend domain=file-storage
-// evidence: FILE-AUTHZ-002 (ownerUserId isolation), FILE-UPLOAD-003 (sanitized name),
-//           FILE-SEC-001 (storageKey excluded from DTO), FILE-SCAN-001 (FileStatus lifecycle)
+/**
+ * @ax-template-meta
+ * template_id: backend/file-storage/StoredFile
+ * layer: backend
+ * domain: file-storage
+ * anchors_rule: soft-delete-only-on-base-entity.md
+ * provenance_class: internal_design
+ * evidence:
+ *   - source_type: internal
+ *     rationale: "JPA entity for an uploaded file (owner, sanitised name, MIME, size, internal storageKey, status, expiry, @Version) using @SQLDelete + @Where timestamp soft delete. Realises specs/file-storage-l0.yaml#FILE-AUTHZ-002, #FILE-UPLOAD-003, #FILE-SEC-001 and #FILE-SCAN-001. The anchored rule names this template in its own protects_template_ids."
+ */
 package com.ax.template.authblueprint.filestorage;
 
 import jakarta.persistence.*;

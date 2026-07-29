@@ -1,0 +1,11 @@
+# Floors this fixture tree declares for itself.
+#
+# The tree carries NO README Status line, so its (C) census is 0 and this floor of 1 is
+# breached. Declaring it on disk (rather than only via --min-readme-declarations) is what
+# lets fixture_kill_proof_guard [87] reproduce the failure — [87] can invoke a guard only
+# as `<guard> --root <fixture>` and cannot pass a number.
+#
+# Honoured ONLY on a non-catalog tree: on the catalog the floors are constants in the guard,
+# so dropping a file like this into practices/evals/ cannot lower them.
+min_readme_declarations: 1
+min_crosschecked: 1

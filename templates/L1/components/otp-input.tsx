@@ -12,10 +12,11 @@ evidence:
     upstream_id: shadcn-ui-2026-05
     section: input-otp
     quote: "Accessible one-time password component with copy paste functionality."
-  - source_type: upstream_id
-    upstream_id: wcag-2-2
-    section: 1.3.5-identify-input-purpose
-    quote: "The purpose of each input field collecting information about the user can be programmatically determined."
+  - source_type: external
+    citation: "WCAG 2.2 SC 1.3.5 Identify Input Purpose (Level AA) — full normative text, W3C Recommendation 2023-10-05"
+    url: "https://www.w3.org/TR/WCAG22/#identify-input-purpose"
+    quote: "The purpose of each input field collecting information about the user can be programmatically determined when: The input field serves a purpose identified in the Input Purposes for User Interface Components section; and The content is implemented using technologies with support for identifying the expected meaning for form input data."
+    quoted_at: "2026-07-29"
 a11y_criteria:
   - "WCAG 2.2 SC 1.3.5 — autocomplete='one-time-code' on the underlying input"
   - "WCAG 2.2 SC 2.1.1 — keyboard navigable; tab/arrow moves between slots"

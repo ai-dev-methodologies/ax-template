@@ -11,7 +11,7 @@ evidence:
   - source_type: upstream_id
     upstream_id: react-19-error-boundary
     section: "Reset key pattern"
-    quote: "A common pattern to reset an error boundary is to change a key prop. When key changes, React remounts the subtree from scratch, clearing the error state."
+    quote: "A common pattern to reset an error boundary is to change a `key` prop. When `key` changes, React remounts the subtree from scratch, clearing the error state"
 dependencies: []
 imports_from: [L1]
 imports_forbidden: [L4, app/, lib/auth/, lib/payment/]

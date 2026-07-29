@@ -25,35 +25,12 @@ import * as React from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { useQuery } from '@tanstack/react-query'
 import EmptyState from 'templates/L2/blocks/empty-state'
-import ErrorBoundary from 'templates/L2/blocks/error-boundary'
 import { useCallerId, useCallerRole } from 'templates/L0/fork-receiver-kit/use-caller-id'
-import { parseError, sanitizeStoredError } from 'templates/L0/fork-receiver-kit/parse-error'
-
-// ─── types ───────────────────────────────────────────────────────────────────
-
-type TaskStatus = 'ENABLED' | 'DISABLED'
-type JobOutcome = 'SUCCESS' | 'FAILURE' | 'SKIPPED'
-
-interface TaskResponse {
-  id: string
-  name: string
-  cronExpression: string
-  status: TaskStatus
-  handlerBean: string
-  lastRunAt: string | null
-  createdAt: string
-  updatedAt: string
-}
-
-interface HistoryRow {
-  id: string
-  taskName: string
-  startedAt: string
-  finishedAt: string | null
-  outcome: JobOutcome
-  errorMessage: string | null
-  hostInstance: string
-}
+import { parseError } from 'templates/L0/fork-receiver-kit/parse-error'
+import ScheduledTaskHistoryView, {
+  type TaskResponse,
+  type HistoryRow,
+} from './scheduled-task-history-view'
 
 // ─── data ─────────────────────────────────────────────────────────────────────
 
@@ -67,27 +44,6 @@ async function fetchHistory(id: string): Promise<HistoryRow[]> {
   const res = await fetch(`/api/admin/scheduled-tasks/${encodeURIComponent(id)}/history`)
   if (!res.ok) throw await parseError(res, 'Failed to load history')
   return res.json()
-}
-
-// ─── helpers ──────────────────────────────────────────────────────────────────
-
-function outcomeClass(o: JobOutcome): string {
-  switch (o) {
-    case 'SUCCESS':
-      return 'bg-green-100 text-green-900'
-    case 'FAILURE':
-      return 'bg-red-100 text-red-900'
-    case 'SKIPPED':
-      return 'bg-muted text-muted-foreground'
-  }
-}
-
-function durationMs(startedAt: string, finishedAt: string | null): string {
-  if (!finishedAt) return 'running…'
-  const ms = Math.max(0, new Date(finishedAt).getTime() - new Date(startedAt).getTime())
-  if (ms < 1000) return `${ms}ms`
-  if (ms < 60_000) return `${(ms / 1000).toFixed(1)}s`
-  return `${Math.floor(ms / 60_000)}m ${Math.floor((ms % 60_000) / 1000)}s`
 }
 
 // ─── page ────────────────────────────────────────────────────────────────────
@@ -126,114 +82,16 @@ export default function ScheduledTaskHistoryPage() {
   }
 
   return (
-    <ErrorBoundary>
-      <div className="space-y-6">
-        <div className="flex justify-end">
-          <button
-            type="button"
-            className="rounded border px-3 py-1 text-xs hover:bg-muted"
-            onClick={() => router.push('/admin/scheduled-tasks')}
-          >
-            ← Back to task list
-          </button>
-        </div>
-
-        {task.isLoading ? (
-          <div className="py-12 text-center text-sm text-muted-foreground">
-            Loading task…
-          </div>
-        ) : task.error ? (
-          <EmptyState
-            title="Failed to load task"
-            description={(task.error as Error).message}
-          />
-        ) : !task.data ? (
-          <EmptyState title="Not found" description="This task does not exist or you do not have access." />
-        ) : (
-          <header className="space-y-1">
-            <h1 className="text-lg font-semibold">{task.data.name}</h1>
-            <div className="text-sm text-muted-foreground">
-              cron <code>{task.data.cronExpression}</code> · handler{' '}
-              <code>{task.data.handlerBean}</code> ·{' '}
-              <span
-                className={
-                  task.data.status === 'ENABLED' ? 'text-green-700' : 'text-muted-foreground'
-                }
-              >
-                {task.data.status}
-              </span>
-            </div>
-          </header>
-        )}
-
-        <section>
-          <div className="mb-2 flex items-baseline justify-between">
-            <h2 className="text-sm font-semibold uppercase text-muted-foreground">
-              Recent executions
-            </h2>
-            <div className="flex items-center gap-2 text-xs text-muted-foreground">
-              {history.dataUpdatedAt
-                ? `Updated ${new Date(history.dataUpdatedAt).toLocaleTimeString()}`
-                : ''}
-              <button
-                type="button"
-                className="rounded border px-2 py-1 hover:bg-muted"
-                onClick={() => history.refetch()}
-              >
-                Refresh
-              </button>
-            </div>
-          </div>
-
-          {history.isLoading ? (
-            <div className="py-8 text-center text-sm text-muted-foreground">
-              Loading history…
-            </div>
-          ) : history.error ? (
-            <EmptyState
-              title="Failed to load history"
-              description={(history.error as Error).message}
-            />
-          ) : !history.data || history.data.length === 0 ? (
-            <EmptyState
-              title="No execution history yet"
-              description="This task has not run since the history retention window started."
-            />
-          ) : (
-            <ul className="divide-y rounded border">
-              {history.data.map((h) => (
-                <li key={h.id} className="flex items-start gap-3 px-4 py-3">
-                  <div className="min-w-0 flex-1 space-y-1">
-                    <div className="flex items-center gap-2">
-                      <span
-                        className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] uppercase ${outcomeClass(h.outcome)}`}
-                      >
-                        {h.outcome}
-                      </span>
-                      <span className="truncate text-sm">
-                        started {new Date(h.startedAt).toLocaleString()}
-                      </span>
-                      <span className="shrink-0 text-xs text-muted-foreground">
-                        · {durationMs(h.startedAt, h.finishedAt)}
-                      </span>
-                    </div>
-                    <div className="text-xs text-muted-foreground">
-                      host <code>{h.hostInstance}</code>
-                    </div>
-                    {h.errorMessage && (
-                      <div className="rounded border border-red-200 bg-red-50/50 px-2 py-1 text-xs text-red-800">
-                        {/* R48 lesson (F4): defense-in-depth — apply
-                             PII/secret deny-list before rendering. */}
-                        error: <code>{sanitizeStoredError(h.errorMessage)}</code>
-                      </div>
-                    )}
-                  </div>
-                </li>
-              ))}
-            </ul>
-          )}
-        </section>
-      </div>
-    </ErrorBoundary>
+    <ScheduledTaskHistoryView
+      task={task.data}
+      taskLoading={task.isLoading}
+      taskError={task.error as Error | null}
+      history={history.data}
+      historyLoading={history.isLoading}
+      historyError={history.error as Error | null}
+      historyDataUpdatedAt={history.dataUpdatedAt}
+      onBack={() => router.push('/admin/scheduled-tasks')}
+      onRefetchHistory={() => history.refetch()}
+    />
   )
 }

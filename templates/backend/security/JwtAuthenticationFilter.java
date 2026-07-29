@@ -2,8 +2,16 @@
  * @ax-template-meta
  * template_id: backend/security/JwtAuthenticationFilter
  * layer: backend-cross-cutting
- * anchors_rule: auth-asvs-l1.yaml#ASVS-2.7.1
- *               error-rfc7807-problem-detail.md (PRACTICES-ERR-002)
+ * anchors_rule: security-stateless-session-policy.md
+ *               error-rfc7807-problem-detail.md
+ * anchors_note: the previous value claimed auth-asvs-l1.yaml#ASVS-2.7.1, an id this spec
+ *   does not define (its ids are ASVS-V<n>.<n>.<n>) AND a requirement — ASVS 4.0 2.7.1 is
+ *   Out-of-Band Verifier — that has nothing to do with a bearer-token filter. It went
+ *   unnoticed because _check-anchors.py only looked for *.md tokens and so checked
+ *   nothing here. Repointed to the catalog rule this filter actually embodies. The
+ *   evidence block below still carries the same mis-scoped ASVS 2.7.1 citation; that is
+ *   evidence CONTENT, outside this axis, and is reported to the backlog rather than
+ *   rewritten to a section that has not been verified against the ASVS source.
  * provenance_class: external_canonical
  * evidence:
  *   - source_type: external

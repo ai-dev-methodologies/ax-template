@@ -3,6 +3,7 @@
  * template_id: backend/integration/WebhookOutbox
  * layer: backend-domain
  * domain: integration
+ * anchors_rule: transactional-outbox-no-dual-write.md
  * provenance_class: internal_design
  * usage: |
  *   Replace 'com.example.app' with your base package.

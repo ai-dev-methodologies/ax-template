@@ -14,6 +14,7 @@ import org.yaml.snakeyaml.Yaml;
 import java.io.IOException;
 import java.io.Reader;
 import java.io.UncheckedIOException;
+import java.math.BigInteger;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -66,6 +67,32 @@ import static org.assertj.core.api.Assertions.assertThat;
  * checked-in file — deterministic and offline, no network and no generated
  * artifact.
  *
+ * <h2>The TYPE axis (P3-85, 2026-07-29)</h2>
+ * Member NAMES agreeing is not member TYPES agreeing. Until this axis existed the
+ * sweep locked the member SET only, so the reproduction recorded in the BACKLOG
+ * row passed: change any contract's {@code totalPages} from {@code type: integer}
+ * to {@code type: string} and every member name is unchanged, so the sweep stayed
+ * GREEN while the contract promised a wire type the code does not emit — a strict
+ * generated client would fail to parse a response this test called conformant.
+ * <p>
+ * Each declared member's {@code type} (and {@code format}, where the contract
+ * states one) is now compared against the ACTUAL JSON type of the emitted value
+ * (see {@link #jsonTypeOf} / {@link #assertMemberTypeMatchesContract}). The
+ * comparison follows JSON Schema: an integral value satisfies a declared
+ * {@code number}, but a fractional one does not satisfy a declared
+ * {@code integer}. Two fail-closed choices, both deliberate: a member declaring
+ * no {@code type:} FAILS rather than being skipped (an unknown declared type
+ * would silently drop that member back to name-only checking), and a JSON
+ * {@code null} FAILS rather than being treated as unverifiable (no swept envelope
+ * declares a nullable member).
+ * <p>
+ * <b>Disclosed non-tightness.</b> Every swept member is {@code array} or
+ * {@code integer}, and the only {@code format} any of them carries is
+ * {@code int64} — which any deserialized Integer/Long satisfies. The format arm
+ * is therefore vacuous against today's catalog; it is written for the case it
+ * exists to catch (a value overflowing a declared {@code int32}). The TYPE
+ * comparison is what carries the mutation lock.
+ *
  * <h2>Binding table (routing coordinates only — members are derived)</h2>
  * <ul>
  *   <li>GET {@code /audit-logs} — audit-log-openapi.yaml — testAuditLog</li>
@@ -80,11 +107,11 @@ import static org.assertj.core.api.Assertions.assertThat;
  *       identity-verification-openapi.yaml — testIdentityVerification</li>
  *   <li>POST {@code /search} — search-openapi.yaml — testSearch</li>
  * </ul>
- * 9 domains / 10 endpoints swept out of the 20 contracts that declare a
- * page/list envelope on disk (ratio 9/20). GREEN is confirmed by the wave's
- * R25 run, not asserted here. The remaining 11 are FULLY partitioned across
+ * 9 domains / 10 endpoints swept out of the 19 contracts that declare a
+ * page/list envelope on disk (ratio 9/19). GREEN is confirmed by the wave's
+ * R25 run, not asserted here. The remaining 10 are FULLY partitioned across
  * the three pinned sets below: NOT_REACHABLE (1) +
- * REACHABLE_BUT_PREEXISTING_DRIFT (2) + DECLARING_NOT_IN_SCOPE (8).
+ * REACHABLE_BUT_PREEXISTING_DRIFT (1) + DECLARING_NOT_IN_SCOPE (8).
  *
  * <h2>The 21st declaring contract (2026-07-28 correction)</h2>
  * The first closure derived the universe with
@@ -146,7 +173,9 @@ import static org.assertj.core.api.Assertions.assertThat;
  * {@code ScheduledTaskDto.TriggerResponse} actually emits. The contract no
  * longer declares any {@code total*} member, so {@code scheduled-task} drops
  * out of {@link #declaringUniverseFromDisk()} entirely rather than moving to
- * another allowlist — {@link #DECLARING_CONTRACTS} is 20, not 21.
+ * another allowlist — which took {@link #DECLARING_CONTRACTS} from 21 to 20.
+ * (P3-91 later removed {@code webhook} the same way; the constant is now 19 —
+ * see Allowlist B.)
  *
  * <h2>Allowlist B — reachable; the sweep found a pre-existing
  * contract/implementation drift for the stem (registered as (P3-67)/(P3-68),
@@ -154,25 +183,6 @@ import static org.assertj.core.api.Assertions.assertThat;
  * {@link #SWEPT} because closing the drift did not add a live-HTTP binding
  * for either endpoint here)</h2>
  * <ul>
- *   <li><b>{@code GET /api/admin/webhook-deliveries}</b> — the contract
- *       declared {@code WebhookDeliveryPage} (content/totalElements/
- *       totalPages/page/size) but
- *       {@code WebhookAdminController#listDeliveries}
- *       (backend/src/main/.../webhook/WebhookAdminController.java:93) returns
- *       a bare {@code List<WebhookDto.DeliveryResponse>}; the FE client
- *       ({@code webhookClient.ts}, {@code rawFetch<WebhookDelivery[]>})
- *       already expected a bare array too. (P3-67) reconciled the contract to
- *       the code (bare array of {@code WebhookDeliverySummary}), per the SAME
- *       precedent already recorded for THIS controller/contract pair (P2-30's
- *       "reconcile the contract to the code" decision, this file's
- *       {@code WebhookAdminListStatusTest} javadoc). {@code webhook} stays in
- *       this allowlist: the SAME contract's {@code GET /webhook-endpoints}
- *       still declares an unused {@code WebhookEndpointPage} envelope against
- *       {@code WebhookAdminController#listEndpoints}'s bare
- *       {@code List<WebhookDto.EndpointResponse>} (contracts/webhook-openapi.yaml,
- *       {@code WebhookEndpointPage} schema) — same class of finding,
- *       different endpoint, discovered by this closure and NOT yet
- *       registered/fixed.</li>
  *   <li><b>{@code GET /api/v1/admin/feature-flags}</b> — the contract
  *       declared {@code FeatureFlagPage} with FIVE members including
  *       {@code totalPages}, but BOTH sides of the running system agreed on
@@ -188,9 +198,25 @@ import static org.assertj.core.api.Assertions.assertThat;
  *       deferred rather than done speculatively without a gradle run to
  *       confirm the live response.</li>
  * </ul>
- * Pinned count: {@link #REACHABLE_BUT_PREEXISTING_DRIFT}.size() == 2 (stem
- * count, not open-finding count — both stems' originally-reported drifts are
- * closed).
+ * Pinned count: {@link #REACHABLE_BUT_PREEXISTING_DRIFT}.size() == 1 (stem
+ * count, not open-finding count — the remaining stem's originally-reported
+ * drift is closed).
+ * <p>
+ * {@code webhook} was the second member of this allowlist until its P3-91
+ * closure (2026-07-29), and left the same way {@code scheduled-task} left
+ * Allowlist A. The residual this class's previous javadoc recorded as
+ * "discovered by this closure and NOT yet registered/fixed" — the SAME
+ * contract's {@code GET /webhook-endpoints} declaring an unused page envelope
+ * against {@code WebhookAdminController#listEndpoints}'s bare
+ * {@code List<WebhookDto.EndpointResponse>}
+ * (backend/src/main/.../webhook/WebhookAdminController.java:59) — was
+ * registered as (P3-91) and closed by the same reconciliation (P3-67) applied
+ * to {@code /webhook-deliveries}: the 200 is now a bare array of
+ * {@code WebhookEndpointSummary} and the envelope schema is deleted. With it
+ * went the contract's last {@code total*} member, so {@code webhook} drops out
+ * of {@link #declaringUniverseFromDisk()} entirely rather than moving to
+ * another allowlist — {@link #DECLARING_CONTRACTS} is 19, not 20. Both webhook
+ * list endpoints now declare the shape they actually emit.
  *
  * <p>Escape hatch stated in the PRD (reachable set &lt; 8 domains ⇒
  * decision-record fallback, precedent P3-41/42) does NOT apply here: the
@@ -260,7 +286,7 @@ class PageEnvelopeCatalogSweepTest {
      * by endpoint path, so that the partition below compares like with like.
      */
     static final Set<String> REACHABLE_BUT_PREEXISTING_DRIFT =
-            Set.of("webhook", "feature-flags");
+            Set.of("feature-flags");
 
     /**
      * Allowlist C — declaring contracts this wave did not sweep. Reachable in
@@ -272,7 +298,7 @@ class PageEnvelopeCatalogSweepTest {
             "payment", "report-export", "tag-categorization", "tokenized-securities");
 
     /** Disk truth: contracts/*.yaml files declaring a {@code total*} count member. */
-    static final int DECLARING_CONTRACTS = 20;
+    static final int DECLARING_CONTRACTS = 19;
 
     /**
      * The declaring universe, DERIVED FROM DISK — the Java equivalent of
@@ -314,11 +340,18 @@ class PageEnvelopeCatalogSweepTest {
     }
 
     /**
-     * One binding's contract-declared envelope: the URL the endpoint is published
-     * at and the top-level member set its 200 response schema declares. BOTH
-     * halves are read from {@code contracts/<stem>-openapi.yaml} on disk.
+     * One declared envelope member: its OpenAPI {@code type} and, where the
+     * contract states one, its {@code format}. Both come from the yaml.
      */
-    record ContractEnvelope(String url, Set<String> members) {}
+    record DeclaredMember(String type, String format) {}
+
+    /**
+     * One binding's contract-declared envelope: the URL the endpoint is published
+     * at, the top-level member set its 200 response schema declares, and each
+     * member's declared type. All THREE are read from
+     * {@code contracts/<stem>-openapi.yaml} on disk.
+     */
+    record ContractEnvelope(String url, Set<String> members, Map<String, DeclaredMember> declared) {}
 
     private static final String SCHEMA_REF_PREFIX = "#/components/schemas/";
 
@@ -373,8 +406,8 @@ class PageEnvelopeCatalogSweepTest {
                 .collect(Collectors.toCollection(TreeSet::new));
         assertThat(required).as("%s: a page envelope must declare its members", at).isNotEmpty();
 
-        Set<String> properties = asMap(descend(envelope, at, "properties"), at + ".properties")
-                .keySet().stream()
+        Map<?, ?> propertyNodes = asMap(descend(envelope, at, "properties"), at + ".properties");
+        Set<String> properties = propertyNodes.keySet().stream()
                 .map(String::valueOf)
                 .collect(Collectors.toCollection(TreeSet::new));
         // An OPTIONAL envelope member would be an escape hatch: the response could
@@ -385,7 +418,36 @@ class PageEnvelopeCatalogSweepTest {
                 .as("%s: every declared envelope member must be required", at)
                 .isEqualTo(properties);
 
-        return new ContractEnvelope(base + binding.contractPath(), required);
+        // P3-85 — the TYPE axis. Read each member's declared type (and format, where
+        // stated). Fail-closed: a member with no `type:` is NOT waved through, because
+        // "unknown declared type" would silently degrade the parity check for that
+        // member back to the member-name-only assertion this axis exists to strengthen.
+        Map<String, DeclaredMember> declared = new LinkedHashMap<>();
+        for (Map.Entry<?, ?> entry : propertyNodes.entrySet()) {
+            String member = String.valueOf(entry.getKey());
+            Map<?, ?> schema = asMap(entry.getValue(), at + ".properties." + member);
+            Object type = valueOfKey(schema, "type");
+            assertThat(type)
+                    .as("%s.properties.%s: must declare a `type:` — an envelope member whose "
+                            + "wire type the contract does not state cannot be checked against "
+                            + "the response", at, member)
+                    .isNotNull();
+            Object format = valueOfKey(schema, "format");
+            declared.put(member, new DeclaredMember(
+                    String.valueOf(type), format == null ? null : String.valueOf(format)));
+        }
+
+        return new ContractEnvelope(base + binding.contractPath(), required, declared);
+    }
+
+    /** The value of {@code key} in a parsed yaml mapping, or null when absent. */
+    private static Object valueOfKey(Map<?, ?> map, String key) {
+        for (Map.Entry<?, ?> entry : map.entrySet()) {
+            if (String.valueOf(entry.getKey()).equals(key)) {
+                return entry.getValue();
+            }
+        }
+        return null;
     }
 
     /**
@@ -464,7 +526,7 @@ class PageEnvelopeCatalogSweepTest {
         // (3) the documented counts stay pinned (a shrunk lane is a visible edit).
         assertThat(SWEPT).hasSize(9);
         assertThat(NOT_REACHABLE).hasSize(1);
-        assertThat(REACHABLE_BUT_PREEXISTING_DRIFT).hasSize(2);
+        assertThat(REACHABLE_BUT_PREEXISTING_DRIFT).hasSize(1);
         assertThat(DECLARING_NOT_IN_SCOPE).hasSize(8);
     }
 
@@ -493,9 +555,84 @@ class PageEnvelopeCatalogSweepTest {
         .then().extract().path("accessToken");
     }
 
+    private static Map<String, Object> bodyOf(Response response) {
+        return response.jsonPath().getMap("$");
+    }
+
     private static Set<String> membersOf(Response response) {
-        Map<String, Object> root = response.jsonPath().getMap("$");
-        return root.keySet();
+        return bodyOf(response).keySet();
+    }
+
+    /**
+     * P3-85 — the OpenAPI type name for an actual deserialized JSON value, or null when
+     * the value is JSON {@code null} (which carries no type of its own).
+     *
+     * <p>{@code integer} is reported for an integral number and {@code number} for a
+     * fractional one; the comparison below then applies JSON Schema's rule that a declared
+     * {@code number} also accepts an integral value, but a declared {@code integer} does
+     * NOT accept a fractional one.
+     */
+    private static String jsonTypeOf(Object value) {
+        if (value == null) {
+            return null;
+        }
+        if (value instanceof List) {
+            return "array";
+        }
+        if (value instanceof Map) {
+            return "object";
+        }
+        if (value instanceof Boolean) {
+            return "boolean";
+        }
+        if (value instanceof Integer || value instanceof Long || value instanceof BigInteger) {
+            return "integer";
+        }
+        if (value instanceof Number) {
+            return "number";
+        }
+        return "string";
+    }
+
+    /**
+     * P3-85 — asserts one member's live value against its contract-declared type.
+     *
+     * <p>Null is fail-closed rather than skipped: none of the swept envelopes declares a
+     * nullable member, so a null on the wire is a real mismatch, and treating it as
+     * "unverifiable" would hand every member a way out of this axis.
+     */
+    private static void assertMemberTypeMatchesContract(
+            String url, String member, DeclaredMember declared, Object value) {
+        String actual = jsonTypeOf(value);
+        assertThat(actual)
+                .as("%s.%s: contract declares type '%s' but the response emitted JSON null",
+                        url, member, declared.type())
+                .isNotNull();
+
+        boolean matches = declared.type().equals(actual)
+                // JSON Schema: an integral value satisfies a declared `number`.
+                || ("number".equals(declared.type()) && "integer".equals(actual));
+        assertThat(matches)
+                .as("%s.%s: contract declares type '%s' but the response emitted %s (%s)",
+                        url, member, declared.type(), actual,
+                        value.getClass().getSimpleName())
+                .isTrue();
+
+        if ("int32".equals(declared.format()) || "int64".equals(declared.format())) {
+            // Disclosed non-tightness: every swept member that carries a format declares
+            // int64, and any Integer/Long the harness deserializes fits — so this arm is
+            // currently vacuous in practice. It is written for the case the axis exists to
+            // catch (a value overflowing a declared int32) rather than left out, and the
+            // TYPE comparison above is what carries the mutation lock.
+            BigInteger n = new BigInteger(String.valueOf(value));
+            BigInteger max = "int32".equals(declared.format())
+                    ? BigInteger.valueOf(Integer.MAX_VALUE) : BigInteger.valueOf(Long.MAX_VALUE);
+            BigInteger min = "int32".equals(declared.format())
+                    ? BigInteger.valueOf(Integer.MIN_VALUE) : BigInteger.valueOf(Long.MIN_VALUE);
+            assertThat(n)
+                    .as("%s.%s: contract declares format '%s'", url, member, declared.format())
+                    .isBetween(min, max);
+        }
     }
 
     private static EnvelopeBinding binding(String id) {
@@ -505,9 +642,17 @@ class PageEnvelopeCatalogSweepTest {
     }
 
     private static void assertMatchesContract(ContractEnvelope expected, Response response) {
-        assertThat(membersOf(response))
+        Map<String, Object> body = bodyOf(response);
+        assertThat(body.keySet())
             .as("%s must emit exactly the member set its contract declares", expected.url())
             .containsExactlyInAnyOrderElementsOf(expected.members());
+
+        // P3-85 — member NAMES agreeing is not the same as member TYPES agreeing. Before
+        // this axis, flipping a declared `totalPages` from integer to string changed no
+        // member name and the sweep stayed green, so the contract could promise one wire
+        // type while the code emitted another.
+        expected.declared().forEach((member, declared) ->
+                assertMemberTypeMatchesContract(expected.url(), member, declared, body.get(member)));
     }
 
     /**

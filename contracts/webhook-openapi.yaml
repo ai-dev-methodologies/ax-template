@@ -36,11 +36,19 @@ paths:
             maximum: 100
       responses:
         '200':
-          description: Paginated list of webhook endpoints
+          description: |
+            Endpoint list — bare array, not paginated (WebhookAdminController.listEndpoints
+            returns List<WebhookDto.EndpointResponse>; there is no page envelope with
+            element/page counts on the wire). P3-91 corrected the contract to the code, the
+            same reconciliation P3-67 made for /webhook-deliveries: the page-envelope schema
+            declared here was never emitted by any code path, so a strict client generated
+            from this contract would have failed to parse every response.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/WebhookEndpointPage'
+                type: array
+                items:
+                  $ref: '#/components/schemas/WebhookEndpointSummary'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
@@ -296,22 +304,6 @@ components:
               type: string
               format: date-time
               nullable: true
-
-    WebhookEndpointPage:
-      type: object
-      properties:
-        content:
-          type: array
-          items:
-            $ref: '#/components/schemas/WebhookEndpointSummary'
-        totalElements:
-          type: integer
-        totalPages:
-          type: integer
-        page:
-          type: integer
-        size:
-          type: integer
 
     WebhookDeliverySummary:
       type: object

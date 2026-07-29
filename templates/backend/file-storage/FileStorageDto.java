@@ -1,5 +1,14 @@
-// @ax-template-meta: template_id=backend/file-storage/FileStorageDto layer=backend domain=file-storage
-// evidence: FILE-SEC-001 (storageKey excluded), FILE-SEC-002 (no internal path in response)
+/**
+ * @ax-template-meta
+ * template_id: backend/file-storage/FileStorageDto
+ * layer: backend
+ * domain: file-storage
+ * anchors_rule: api-no-entity-leak.md
+ * provenance_class: internal_design
+ * evidence:
+ *   - source_type: internal
+ *     rationale: "Record-only DTO namespace for the domain. Realises specs/file-storage-l0.yaml#FILE-SEC-001 and #FILE-SEC-002: StoredFileResponse deliberately omits storageKey/storageBucket, so the internal storage path never crosses the controller boundary."
+ */
 package com.ax.template.authblueprint.filestorage;
 
 import com.fasterxml.jackson.annotation.JsonInclude;

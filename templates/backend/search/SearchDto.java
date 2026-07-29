@@ -3,7 +3,7 @@
  * template_id: backend/search/SearchDto
  * layer: backend-domain
  * domain: search
- * anchors_rule: dto-records-immutable.md (PRACTICES-API-002)
+ * anchors_rule: lang-records-for-dtos.md
  * provenance_class: internal_design
  * evidence:
  *   - source_type: external

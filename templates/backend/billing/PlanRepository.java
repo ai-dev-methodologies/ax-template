@@ -3,6 +3,7 @@
  * template_id: backend/billing/PlanRepository
  * layer: backend-domain
  * domain: billing
+ * anchors_rule: testing-archunit-repository-shape.md
  * provenance_class: internal_design
  * evidence:
  *   - source_type: external

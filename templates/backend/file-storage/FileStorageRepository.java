@@ -1,5 +1,14 @@
-// @ax-template-meta: template_id=backend/file-storage/FileStorageRepository layer=backend domain=file-storage
-// evidence: FILE-AUTHZ-002 (ownerUserId filter), FILE-QUOTA-001 (sumSizeByOwner)
+/**
+ * @ax-template-meta
+ * template_id: backend/file-storage/FileStorageRepository
+ * layer: backend
+ * domain: file-storage
+ * anchors_rule: testing-archunit-repository-shape.md
+ * provenance_class: internal_design
+ * evidence:
+ *   - source_type: internal
+ *     rationale: "Spring Data JPA repository for StoredFile extending JpaRepository — the shape the anchored ArchUnit rule enforces. Realises specs/file-storage-l0.yaml#FILE-AUTHZ-002 (owner-scoped finders for IDOR safety) and #FILE-QUOTA-001 (sumSizeByOwner)."
+ */
 package com.ax.template.authblueprint.filestorage;
 
 import org.springframework.data.jpa.repository.JpaRepository;

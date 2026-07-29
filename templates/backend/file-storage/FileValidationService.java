@@ -1,5 +1,13 @@
-// @ax-template-meta: template_id=backend/file-storage/FileValidationService layer=backend domain=file-storage
-// evidence: FILE-UPLOAD-001 (MIME allowlist), FILE-UPLOAD-003 (filename sanitization)
+/**
+ * @ax-template-meta
+ * template_id: backend/file-storage/FileValidationService
+ * layer: backend
+ * domain: file-storage
+ * provenance_class: internal_design
+ * evidence:
+ *   - source_type: internal
+ *     rationale: "Validates a declared upload MIME type against a fixed allowlist mirroring the file-storage manifest, throwing UnsupportedFileTypeException (415) on a miss. Realises specs/file-storage-l0.yaml#FILE-UPLOAD-001 (MIME allowlist) and #FILE-UPLOAD-003 (filename sanitisation). NO anchors_rule: the catalog states the upload type/size allowlist invariant only as UPLOAD-LIMIT-001 INSIDE resumable-upload-tus-offset.md, whose subject is chunked resumable upload — which this template does not do. Anchoring there would over-claim, so this file is listed in JAVA_NO_ANCHOR_EXEMPT in evidence_guard.sh instead."
+ */
 package com.ax.template.authblueprint.filestorage;
 
 import org.springframework.stereotype.Service;

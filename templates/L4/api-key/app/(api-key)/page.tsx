@@ -25,50 +25,13 @@ import * as React from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useQuery } from '@tanstack/react-query'
 import VirtualizedTable, { type ColumnDef } from 'templates/L2/blocks/virtualized-table'
-import FilterBar from 'templates/L2/blocks/filter-bar'
-import Pagination from 'templates/L2/blocks/pagination'
-import EmptyState from 'templates/L2/blocks/empty-state'
-import ErrorBoundary from 'templates/L2/blocks/error-boundary'
-
-// ─── types ───────────────────────────────────────────────────────────────────
-
-type ApiKeyStatus = 'ACTIVE' | 'REVOKED'
-type ApiKeyScope = 'READ' | 'WRITE'
-
-/**
- * ApiKeySummary — list row shape.
- *
- * Important — anchored to R38 pii-masked-at-dto-boundary rule:
- *   - `prefix` is the first ~8 chars of the issued key (safe to display)
- *   - the PLAINTEXT secret is NOT included in this DTO and is NEVER fetched
- *     after creation. The backend only stores SHA-256(secret); recovery
- *     is impossible by design. The "create" flow surfaces the plaintext
- *     exactly once and the user must copy it then.
- */
-interface ApiKeySummary {
-  id: string
-  prefix: string
-  scope: ApiKeyScope
-  status: ApiKeyStatus
-  createdAt: string       // ISO 8601
-  lastUsedAt: string | null
-  revokedAt: string | null
-}
-
-interface ApiKeyPage {
-  content: ApiKeySummary[]
-  totalElements: number
-  totalPages: number
-  page: number
-  size: number
-}
-
-interface ApiKeyFilters {
-  status?: ApiKeyStatus | ''
-  scope?: ApiKeyScope | ''
-  page?: number
-  size?: number
-}
+import ApiKeyListView, {
+  type ApiKeySummary,
+  type ApiKeyPage,
+  type ApiKeyFilters,
+  type ApiKeyStatus,
+  type ApiKeyScope,
+} from './api-key-list-view'
 
 // ─── constants ───────────────────────────────────────────────────────────────
 
@@ -197,67 +160,23 @@ export default function ApiKeyListPage() {
   )
 
   return (
-    <ErrorBoundary>
-      <div className="space-y-4">
-        <FilterBar
-          fields={[
-            {
-              key: 'status',
-              label: 'Status',
-              type: 'select',
-              options: [
-                { label: 'All', value: '' },
-                { label: 'Active', value: 'ACTIVE' },
-                { label: 'Revoked', value: 'REVOKED' },
-              ],
-              value: filters.status ?? '',
-            },
-            {
-              key: 'scope',
-              label: 'Scope',
-              type: 'select',
-              options: [
-                { label: 'All', value: '' },
-                { label: 'Read', value: 'READ' },
-                { label: 'Write', value: 'WRITE' },
-              ],
-              value: filters.scope ?? '',
-            },
-          ]}
-          onChange={updateFilter}
-        />
-
-        {isLoading ? (
-          <div className="py-12 text-center text-sm text-muted-foreground">
-            Loading API keys…
-          </div>
-        ) : error ? (
-          <EmptyState
-            title="Failed to load API keys"
-            description={(error as Error).message}
+    <ApiKeyListView
+      data={data}
+      error={error as Error | null}
+      isLoading={isLoading}
+      filters={filters}
+      onFilterChange={updateFilter}
+      onPageChange={updatePage}
+      onCreate={() => router.push('/api-key/new')}
+      tableSlot={
+        data ? (
+          <VirtualizedTable
+            data={data.content}
+            columns={COLUMNS}
+            onRowClick={(row) => router.push(`/api-key/${row.id}`)}
           />
-        ) : !data || data.content.length === 0 ? (
-          <EmptyState
-            title="No API keys yet"
-            description="Create your first API key to integrate with the platform."
-            actionLabel="Create key"
-            onAction={() => router.push('/api-key/new')}
-          />
-        ) : (
-          <>
-            <VirtualizedTable
-              data={data.content}
-              columns={COLUMNS}
-              onRowClick={(row) => router.push(`/api-key/${row.id}`)}
-            />
-            <Pagination
-              page={data.page}
-              totalPages={data.totalPages}
-              onPageChange={updatePage}
-            />
-          </>
-        )}
-      </div>
-    </ErrorBoundary>
+        ) : null
+      }
+    />
   )
 }

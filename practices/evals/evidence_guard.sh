@@ -312,6 +312,118 @@ JAVA_NO_EVIDENCE_EXEMPT = (
     "templates/backend/integration/WebhookOutboxRepository.java",
 )
 
+# ── anchors_rule axis (BACKLOG P3-90, folded in 2026-07-29) ──────────────────
+# templates/backend/_check-anchors.sh reported 57 violations while being wired to NO gate,
+# so the count could grow unnoticed. 42 of those were the anchors axis: a shape-B block whose
+# `anchors_rule:` named a rule file that does not exist (19), or that declared no
+# `anchors_rule` at all (23). That axis lives here now — this walk already parses every
+# @ax-template-meta block, so it is a new CHECK on an existing walk, not a new guard file, and
+# it needs no run-all-guards registration or headline-count change.
+#
+# SCOPE: the axis is active only when the scanned tree carries the real catalog
+# (ROOT/practices/rules). Fixture trees under practices/evals/fixtures/template-evidence/
+# deliberately ship a minimal tree with no rules/ dir, and making a missing catalog fatal
+# would convert every one of those fixtures — including pass_clean — into a failure while
+# proving nothing about anchors. Same precedent as the spotcheck guard's live-root pinning.
+# Non-vacuity is enforced below: if the axis IS active and meta blocks were walked, at least
+# one anchor must actually have been resolved, so the axis cannot silently check nothing.
+#
+# Files legitimately carrying NO anchor. Each is a port/abstraction or a config whose
+# invariant the catalog does not (yet) state, so anchoring it to the nearest rule would be an
+# over-claim — the failure mode this axis exists to prevent. They declare the reason in an
+# `anchors_rule_absent:` field (prose; deliberately NOT `anchors_rule:`, so the machine-
+# readable fact stays "absent"). Checked in BOTH directions, like JAVA_NO_EVIDENCE_EXEMPT:
+# an exempt file that regains an anchors_rule, or that stops being a meta-block file, fails.
+JAVA_NO_ANCHOR_EXEMPT = (
+    "templates/backend/email-outbox/EmailSenderService.java",
+    "templates/backend/file-storage/FileValidationService.java",
+    "templates/backend/file-storage/MultipartConfig.java",
+    "templates/backend/import-export/ImportException.java",
+    "templates/backend/realtime/SseSubscription.java",
+    "templates/backend/scheduled-task/LockingPolicy.java",
+    "templates/backend/search/SearchBackend.java",
+    "templates/backend/search/SearchQueryParser.java",
+)
+
+RULES_DIR = ROOT / "practices" / "rules"
+ANCHORS_AXIS_ACTIVE = RULES_DIR.is_dir()
+# `anchors_rule_absent:` must not satisfy this — the key is anchored to a literal colon.
+ANCHOR_RE = re.compile(r'^anchors_rule:[ \t]*(.*)$', re.M)
+RULE_TOKEN_RE = re.compile(r'[a-z][a-z0-9-]*\.md')
+# Second live anchor FORM, found by this axis on its first run: 11 templates anchor to a spec
+# or contract ITEM (`specs/audit-log-l0.yaml#AUDIT-RECORD-001`,
+# `contracts/audit-log-openapi.yaml#listAuditLogs`, `auth-asvs-l1.yaml#ASVS-2.7.1`) rather
+# than to a rules/*.md file. _check-anchors.py scanned only for `*.md` tokens, so for these it
+# found nothing to check and passed silently — a whole anchor form outside every gate. Both
+# forms resolve here: the document must exist AND the fragment must occur in it, so a renamed
+# spec item is caught the same way a deleted rule is.
+REF_TOKEN_RE = re.compile(r'([A-Za-z0-9_./-]+\.(?:yaml|yml|json|md))#(\S+)')
+REF_SEARCH_DIRS = ("", "specs", "contracts", "blueprints")
+anchors_checked = 0
+anchor_exempt_seen = set()
+
+
+def resolve_ref_document(ref_path):
+    """A ref may be written repo-relative or bare; try the repo root then the canonical
+    artifact dirs. Returns the resolved Path or None."""
+    for d in REF_SEARCH_DIRS:
+        cand = (ROOT / d / ref_path) if d else (ROOT / ref_path)
+        if cand.is_file():
+            return cand
+        # bare filename written without its directory (e.g. `auth-asvs-l1.yaml#ASVS-2.7.1`)
+        cand = (ROOT / d / pathlib.Path(ref_path).name) if d else None
+        if cand is not None and cand.is_file():
+            return cand
+    return None
+
+
+def check_anchors_rule(rel, block_text):
+    """Resolve the meta block's anchors_rule. Returns the number of anchors actually resolved.
+    Every failure path appends to `errors` (fail-closed)."""
+    global anchors_checked
+    m = ANCHOR_RE.search(block_text)
+    exempt = rel in JAVA_NO_ANCHOR_EXEMPT
+    if exempt:
+        anchor_exempt_seen.add(rel)
+    if m is None:
+        if not exempt:
+            errors.append(f"{rel}: @ax-template-meta block declares no `anchors_rule` and is not "
+                          f"listed in JAVA_NO_ANCHOR_EXEMPT")
+        return 0
+    if exempt:
+        errors.append(f"{rel}: listed in JAVA_NO_ANCHOR_EXEMPT but DOES declare `anchors_rule` — "
+                      f"remove the stale exemption")
+    value = m.group(1).strip()
+    refs = REF_TOKEN_RE.findall(value)
+    # A rule token inside a ref (`…/foo.md#bar`) must not be counted twice.
+    consumed = " ".join(f"{p}#{frag}" for p, frag in refs)
+    rules = [r for r in RULE_TOKEN_RE.findall(value) if r not in consumed]
+    if not rules and not refs:
+        # A non-empty value naming nothing resolvable is how a dead anchor hides: the field
+        # looks populated to a human and resolves to nothing for the gate.
+        errors.append(f"{rel}: `anchors_rule: {value!r}` resolves to nothing (expected a "
+                      f"<name>.md rule or a <document>#<item> spec/contract reference)")
+        return 0
+    resolved = 0
+    for ref in rules:
+        if (RULES_DIR / ref).is_file():
+            resolved += 1
+        else:
+            errors.append(f"{rel}: anchors_rule references a rule that does not exist: {ref}")
+    for ref_path, fragment in refs:
+        doc = resolve_ref_document(ref_path)
+        if doc is None:
+            errors.append(f"{rel}: anchors_rule references a document that does not exist: "
+                          f"{ref_path}")
+            continue
+        if fragment not in doc.read_text(errors="replace"):
+            errors.append(f"{rel}: anchors_rule references {ref_path}#{fragment} but "
+                          f"{doc.relative_to(ROOT)} does not contain {fragment!r}")
+            continue
+        resolved += 1
+    anchors_checked += resolved
+    return resolved
+
 errors = []
 entries = {"frontmatter": 0, "java_meta": 0, "adr": 0}
 files = {"frontmatter": 0, "java_meta": 0, "adr": 0}
@@ -476,6 +588,10 @@ for f in sorted(TDIR.rglob("*.java")):
         continue
     files["java_meta"] += 1
     block = [re.sub(r'^\s*\*\s?', '', line) for line in m.group(1).splitlines()]
+    # P3-90 anchors axis — runs BEFORE any `continue` below, so a block that is exempt from
+    # (or fails) the evidence check is still held to its anchor.
+    if ANCHORS_AXIS_ACTIVE:
+        check_anchors_rule(rel, "\n".join(block))
     sub = evidence_subblock(block)
     # Record the sighting BEFORE either branch: `exempt_seen` answers "does this exempted
     # path still name a real meta-block file", which is true either way. Deciding it inside
@@ -509,6 +625,22 @@ for p in JAVA_NO_EVIDENCE_EXEMPT:
     if (ROOT / p).exists() and p not in exempt_seen:
         errors.append(f"{p}: stale JAVA_NO_EVIDENCE_EXEMPT entry — the file carries no "
                       f"@ax-template-meta block at all")
+
+# P3-90: the anchor exemption's other direction. An entry naming a file that is gone, or that
+# stopped carrying a meta block, is a licence to skip a check that nothing is using — the same
+# staleness the evidence exemption above closes.
+if ANCHORS_AXIS_ACTIVE:
+    for p in JAVA_NO_ANCHOR_EXEMPT:
+        if (ROOT / p).exists() and p not in anchor_exempt_seen:
+            errors.append(f"{p}: stale JAVA_NO_ANCHOR_EXEMPT entry — the file carries no "
+                          f"@ax-template-meta block at all")
+    # Non-vacuity: meta blocks were walked with the catalog present, so at least one anchor
+    # must have resolved. Zero means the block/field parse silently stopped matching — the
+    # failure this axis was folded in to end.
+    if files["java_meta"] > 0 and anchors_checked == 0:
+        errors.append(f"ZERO_ANCHORS: {files['java_meta']} @ax-template-meta block(s) were "
+                      f"walked against a present practices/rules/ but NOT ONE anchors_rule "
+                      f"resolved — the anchors axis is vacuous")
 
 # ── shape C: DECISIONS.md ADR blocks ────────────────────────────────────────
 dec = TDIR / "DECISIONS.md"

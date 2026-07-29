@@ -1,5 +1,13 @@
-// @ax-template-meta: template_id=backend/file-storage/MultipartConfig layer=backend domain=file-storage
-// evidence: FILE-UPLOAD-002 (max-file-size enforcement at Tomcat layer)
+/**
+ * @ax-template-meta
+ * template_id: backend/file-storage/MultipartConfig
+ * layer: backend
+ * domain: file-storage
+ * provenance_class: internal_design
+ * evidence:
+ *   - source_type: internal
+ *     rationale: "Spring @Configuration declaring the servlet multipart size caps (100 MB file / 105 MB request) and the standard multipart resolver. Realises specs/file-storage-l0.yaml#FILE-UPLOAD-002 (max-file-size enforced at the container layer). NO anchors_rule: same gap as FileValidationService — the nearest catalog statement of an upload size cap lives inside resumable-upload-tus-offset.md, which is about resumable chunked upload. Listed in JAVA_NO_ANCHOR_EXEMPT in evidence_guard.sh."
+ */
 package com.ax.template.authblueprint.filestorage;
 
 import org.springframework.boot.web.servlet.MultipartConfigElement;

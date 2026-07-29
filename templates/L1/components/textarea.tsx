@@ -8,10 +8,11 @@ evidence:
     upstream_id: shadcn-ui-2026-05
     section: textarea
     quote: "Displays a form textarea or a component that looks like a textarea."
-  - source_type: upstream_id
-    upstream_id: wcag-2-2
-    section: 3.3.2-labels-or-instructions
+  - source_type: external
+    citation: "WCAG 2.2 SC 3.3.2 Labels or Instructions (Level A) — full normative text, W3C Recommendation 2023-10-05"
+    url: "https://www.w3.org/TR/WCAG22/#labels-or-instructions"
     quote: "Labels or instructions are provided when content requires user input."
+    quoted_at: "2026-07-29"
 a11y_criteria:
   - "WCAG 2.2 SC 3.3.2 Labels or Instructions — always pair with <Label>"
   - "WCAG 2.2 SC 1.3.5 Identify Input Purpose"

@@ -6,8 +6,8 @@ provenance_class: external_canonical
 evidence:
   - source_type: upstream_id
     upstream_id: shadcn-ui-2026-05
-    section: utils
-    quote: "This is how you build your component library."
+    section: "What it is"
+    quote: "This is not a component library. It is how you build your component library."
 ---
 */
 

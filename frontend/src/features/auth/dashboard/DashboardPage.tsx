@@ -24,10 +24,12 @@ import {
   CardTitle,
 } from '@ax/ui';
 
+// P1-73 — linkedProviders wire values are OAuthProvider.name() (GOOGLE/NAVER/KAKAO), never
+// lower-cased provider-link objects.
 const PROVIDER_LABEL: Record<string, string> = {
-  google: 'Google',
-  kakao: 'Kakao',
-  naver: 'Naver',
+  GOOGLE: 'Google',
+  KAKAO: 'Kakao',
+  NAVER: 'Naver',
 };
 
 /**
@@ -51,7 +53,7 @@ export function DashboardPage() {
     }
   };
 
-  const isVerified = user?.verificationState === 'verified';
+  const isVerified = Boolean(user?.emailVerified);
   // Profile load failed and we have nothing to show — surface a retryable error
   // instead of an indefinite spinner. (401/403 already cleared the session.)
   const showLoadError = !user && Boolean(meError);
@@ -129,12 +131,8 @@ export function DashboardPage() {
                     <ShieldCheck aria-hidden="true" className="h-3.5 w-3.5" /> 역할
                   </dt>
                   <dd className="flex flex-wrap gap-1.5">
-                    {user.roles?.length ? (
-                      user.roles.map((role) => (
-                        <Badge key={role} tone="info">
-                          {role}
-                        </Badge>
-                      ))
+                    {user.role ? (
+                      <Badge tone="info">{user.role}</Badge>
                     ) : (
                       <span className="text-sm text-muted-foreground">없음</span>
                     )}
@@ -195,12 +193,12 @@ export function DashboardPage() {
               <CardDescription>로그인에 사용할 수 있는 외부 제공자입니다.</CardDescription>
             </CardHeader>
             <CardContent>
-              {user.providerLinks?.length ? (
+              {user.linkedProviders?.length ? (
                 <ul className="flex flex-wrap gap-2">
-                  {user.providerLinks.map((link) => (
-                    <li key={`${link.provider}-${link.connectedAt}`}>
+                  {user.linkedProviders.map((provider) => (
+                    <li key={provider}>
                       <Badge tone="accent" className="px-3 py-1 text-sm">
-                        {PROVIDER_LABEL[link.provider] ?? link.provider}
+                        {PROVIDER_LABEL[provider] ?? provider}
                       </Badge>
                     </li>
                   ))}

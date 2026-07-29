@@ -3,6 +3,7 @@
  * template_id: backend/billing/BillingProvider
  * layer: backend-domain
  * domain: billing
+ * anchors_rule: currency-amount-precision-explicit.md
  * provenance_class: internal_design
  * evidence:
  *   - source_type: upstream_id

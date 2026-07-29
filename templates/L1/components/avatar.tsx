@@ -8,10 +8,11 @@ evidence:
     upstream_id: shadcn-ui-2026-05
     section: avatar
     quote: "An image element with a fallback for representing the user."
-  - source_type: upstream_id
-    upstream_id: wcag-2-2
-    section: 1.1.1-non-text-content
-    quote: "All non-text content that is presented to the user has a text alternative that serves the equivalent purpose."
+  - source_type: external
+    citation: "WCAG 2.2 SC 1.1.1 Non-text Content (Level A) — full normative text, W3C Recommendation 2023-10-05"
+    url: "https://www.w3.org/TR/WCAG22/#non-text-content"
+    quote: "All non-text content that is presented to the user has a text alternative that serves the equivalent purpose, except for the situations listed below."
+    quoted_at: "2026-07-29"
 a11y_criteria:
   - "WCAG 2.2 SC 1.1.1 Non-text Content — AvatarImage needs alt prop"
   - "AvatarFallback text provides alt; decorative avatars get alt=''"

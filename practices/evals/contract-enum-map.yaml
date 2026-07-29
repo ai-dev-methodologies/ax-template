@@ -163,6 +163,26 @@ contract_enums:
       file: backend/src/main/java/com/ax/template/authblueprint/approvalworkflow/ApprovalActionEvaluator.java
   - kind: contract_enum
     contract: contracts/approval-workflow-openapi.yaml
+    pointer: /components/schemas/ApprovalStepResponse/properties/allowedActions/items
+    wire_only: >-
+      P3-76 step-scoped action vocabulary — the same String constants on
+      ApprovalActionEvaluator that back the request-scoped block above (deliberately not a
+      Java enum for the same R26 reason: an OPEN, additive vocabulary a fork-receiver can
+      extend without a breaking enum change in the public catalog).
+    wire_source:
+      kind: java_field_literals
+      file: backend/src/main/java/com/ax/template/authblueprint/approvalworkflow/ApprovalActionEvaluator.java
+    wire_missing: [cancel, submit, view]
+    reason: >-
+      Step scope, not an allowance for drift. allowedStepActions returns ONLY the two
+      tokens the step machine can transition to (APPROVE/REJECT): `view` is request-scoped
+      (a step is not independently visible — canView takes a request), and submit/cancel
+      act on the request as a whole via the REQUEST machine. Emitting any of the three on
+      a step would advertise an action ApprovalService has no step endpoint for. Kept
+      non-redundancy-checked against the shared producer file rather than pointed at a
+      narrower symbol, so ADDING a request-scoped constant still forces a decision here.
+  - kind: contract_enum
+    contract: contracts/approval-workflow-openapi.yaml
     pointer: /components/schemas/ApprovalInboxEntry/properties/status
     java_enum: com.ax.template.authblueprint.approvalworkflow.ApprovalStepStatus
     wire_missing: [APPROVED, REJECTED]
