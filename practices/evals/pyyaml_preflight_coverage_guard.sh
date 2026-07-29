@@ -20,8 +20,9 @@
 # installed; only the PATH order of a second interpreter hid it.
 #
 # WHAT THIS GUARD DOES (mechanical, not a hardcoded list):
-#   1. Enumerates every .sh/.py under the repo that embeds `import yaml` and has NO yq
-#      fallback  → the PyYAML-DEPENDENT set. A 14th such guard is picked up automatically.
+#   1. Enumerates every .sh/.py under the repo whose python body imports yaml (in ANY
+#      import form) and offers NO yq fallback → the PyYAML-DEPENDENT set. A newly added
+#      dependent guard is picked up automatically; nothing here is a hardcoded list.
 #   2. Computes, per checklist step, the TRANSITIVE set of scripts that step reaches
 #      (commands → referenced scripts → scripts those reference, …). This is deeper than
 #      the preflight's own cheap `evals/` path heuristic ON PURPOSE: if a dependency is
@@ -51,12 +52,18 @@
 # that non-guard steps stay unblocked.
 #
 # LIMITS (honest residuals):
-#   1. Dependency detection is textual: a line-start `import yaml` in a script that never
-#      invokes/probes yq. Comment-only lines are stripped first, so prose about yq cannot
-#      exempt a guard — but a script that carries a QUOTED yq literal in live code (this
-#      guard itself does: it defines the yq-detection pattern) reads as having a fallback
-#      and drops out of the dependent set. That is why the preflight is deliberately
-#      broader (any evals/ script): the path rule covers what the text rule can miss.
+#   1. Dependency detection is textual: a python import statement naming yaml, in a script
+#      that never invokes/probes yq. Every import FORM is parsed, not just a leading bare
+#      `yaml` — `import sys, os, glob, yaml`, `import yaml as y`, `from yaml import …` and
+#      `from yaml.x import …` all count. (The earlier prefix-anchored pattern missed the
+#      comma-list form and left vacuity_class_proof_guard.sh — a reachable hard guard that
+#      DID false-pass — out of the census.) Still unseen: dynamic imports
+#      (`__import__("yaml")`, importlib), which no text rule can follow.
+#      Comment-only lines are stripped first, so prose about yq cannot exempt a guard —
+#      but a script carrying a QUOTED yq literal in live code (this guard itself does: it
+#      defines the yq-detection pattern) reads as having a fallback and drops out of the
+#      dependent set. That is why the preflight is deliberately broader (any evals/
+#      script): the path rule covers what the text rule can miss.
 #   2. A guard invoked through an interpreter this scan cannot follow (a compiled binary,
 #      a make target) is invisible to reachability, as it is to every text-based guard here.
 #
@@ -152,8 +159,37 @@ def read(path):
 # merely mentions yq does not exempt a file (that leniency would let a guard opt out
 # of coverage with a comment).
 SCRIPT_RE = re.compile(r"[A-Za-z0-9_.-]+\.(?:sh|py)")
-IMPORT_RE = re.compile(r"^\s*(?:import yaml\b|from yaml import\b|import yaml,)", re.M)
 YQ_RE = re.compile(r"""command -v yq|\byq\s+(?:-o|e\b|eval\b|'|")|["']yq["']""")
+
+# Import detection must cover EVERY python import form, not just a leading bare `yaml`.
+# A pattern anchored on "yaml appears first" (`^\s*import yaml`) silently missed
+#     import sys, os, glob, yaml            ← vacuity_class_proof_guard.sh
+# leaving a reachable hard guard out of the dependent set — and that guard then
+# false-passed under simulated absence. Parse the statement instead of pattern-matching
+# its prefix: split an `import a, b as c, yaml` list on commas and test each name, and
+# read the module of a `from yaml[.x] import …`.
+IMPORT_STMT_RE = re.compile(r"^\s*import\s+(.+)$")
+FROM_STMT_RE = re.compile(r"^\s*from\s+([\w.]+)\s+import\b")
+
+def _is_yaml_module(name):
+    name = name.strip()
+    return name == "yaml" or name.startswith("yaml.")
+
+def imports_yaml(code):
+    for line in code.splitlines():
+        m = FROM_STMT_RE.match(line)
+        if m and _is_yaml_module(m.group(1)):
+            return True
+        m = IMPORT_STMT_RE.match(line)
+        if not m:
+            continue
+        # Strip a trailing comment, then treat the rest as the comma-separated import
+        # list; each entry may carry an `as` alias, which is not part of the module name.
+        names = m.group(1).split("#", 1)[0]
+        for entry in names.split(","):
+            if _is_yaml_module(entry.split(" as ")[0]):
+                return True
+    return False
 
 def code_only(text):
     """Drop comment-only lines — prose about yq (or about importing yaml) is not a
@@ -164,7 +200,7 @@ dep_cache = {}
 def is_dependent(path):
     if path not in dep_cache:
         code = code_only(read(path))
-        dep_cache[path] = bool(IMPORT_RE.search(code)) and not YQ_RE.search(code)
+        dep_cache[path] = imports_yaml(code) and not YQ_RE.search(code)
     return dep_cache[path]
 
 def refs(path):

@@ -19,6 +19,18 @@ while [ $# -gt 0 ]; do
     esac
 done
 
+# ── Fail closed: this guard verifies through PyYAML ──────────────────────────
+# extract_spec_ids() parses every specs/*.yaml with PyYAML. Without the parser EVERY
+# spec resolves to zero ids, so every rule's spec_ref looks unresolvable and the guard
+# reports a catalog-wide violation count (measured: "226 violation(s) found — merge
+# BLOCKED") that is pure tooling noise. Exit 1 is reserved for REAL violations; a
+# caller cannot distinguish the two, so a missing parser exits 2 ("cannot verify").
+# Pinned mechanically by practices/evals/pyyaml_preflight_coverage_guard.sh [95].
+if ! command -v python3 >/dev/null 2>&1 || ! python3 -c 'import yaml' >/dev/null 2>&1; then
+    echo "spec_ref_guard: BLOCK — cannot verify: python3 + PyYAML required (python3 -m pip install pyyaml)" >&2
+    exit 2
+fi
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 RULES_DIR="$REPO_ROOT/$CATALOG/rules"

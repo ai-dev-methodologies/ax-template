@@ -49,6 +49,10 @@
 #     atomically once the command exits.
 #   • `--resume` reads .ax-verify/last_run.jsonl and skips steps whose
 #     {step_id, head_sha} matches and were PASS. HEAD drift wipes resume.
+#     PASS is provenance-bearing: a step that produced no observed command
+#     outcome is recorded UNRUN and never skipped, and a run that ends in a
+#     ledger BLOCK discards its resume record entirely rather than publishing
+#     one a later --resume could consume. Pinned by resume_provenance_guard [96].
 #
 # Side effect: writes an audit log line to .ax-verify/runs.jsonl with
 #   {ts, head_sha, exit, advisory_fail_count, hard_fail_count}
@@ -359,6 +363,34 @@ emit_resume() {
     mv -f "$RESUME_LOG.tmp.$$" "$RESUME_LOG"
 }
 
+# ── 3b. Step verdict — PASS requires PROVENANCE, not merely absent failure ───
+# A step may be recorded PASS only if at least one of its commands actually
+# produced an OBSERVED outcome in RESULTS_FILE. "HARD_FAIL did not increase" is
+# not evidence of success: if the plan or the ledger vanishes mid-run (the P0-30
+# TMPDIR-wipe shape) the command loop reads nothing, no failure can be counted,
+# and the step would be certified PASS — a certification `--resume` then honours,
+# skipping the command that never ran. That is resume laundering: a run this
+# script correctly BLOCKS can seed a green resume on the next invocation.
+# UNRUN is deliberately a distinct, non-PASS status: the resume preloader keeps
+# only status == "PASS", so an UNRUN step is always re-executed.
+# Echoes nothing; returns 1 = FAIL, 2 = UNRUN, 0 = PASS.
+emit_step_verdict() {
+    local sid="$1" hard_before="$2" recorded
+    if [ "$HARD_FAIL" -gt "$hard_before" ]; then
+        emit_resume "$sid" "FAIL"
+        return 1
+    fi
+    recorded=$(awk -F'\t' -v s="$sid" '$1==s { c++ } END { print c+0 }' "$RESULTS_FILE" 2>/dev/null || echo 0)
+    if [ "${recorded:-0}" -eq 0 ]; then
+        echo "  UNRUN — step [$sid] recorded NO command outcome (plan or ledger lost mid-run)." >&2
+        echo "          Recording UNRUN, not PASS: an unobserved step must never be resume-skipped." >&2
+        emit_resume "$sid" "UNRUN"
+        return 2
+    fi
+    emit_resume "$sid" "PASS"
+    return 0
+}
+
 # ── 4. Watchdog wrapper: run command with timeout, line-buffered streaming ──
 # We background the command (so its stdout/stderr stay attached to OUR fds —
 # stream live), then background a watchdog that SIGTERMs on timeout and SIGKILL
@@ -436,6 +468,11 @@ inject_gradle_plain_console() {
 HARD_FAIL=0
 ADVISORY_FAIL=0
 SKIP_RESUME_COUNT=0
+# Initialised HERE, never inherited. `SHORT_CIRCUITED="${SHORT_CIRCUITED:-0}"` at the
+# accounting check would have honoured an EXPORTED SHORT_CIRCUITED=1 from the caller's
+# environment, which suppresses the "every planned step has an outcome" check — an
+# env-var bypass of a fail-closed gate. The value is set only by the fail-fast break below.
+SHORT_CIRCUITED=0
 
 # Iterate by step. For each step:
 #   1. If --resume and step is in resume cache, SKIP and emit PASS.
@@ -534,17 +571,13 @@ for sid in $STEP_ORDER; do
         # Subtract any previously-counted advisory fails for prior steps to avoid double-count.
         ADVISORY_FAIL=$(awk -F'\t' '$3=="WARN" { c++ } END { print c+0 }' "$RESULTS_FILE")
 
-        # Determine PASS/FAIL of step.
-        if [ "$HARD_FAIL" -gt "$STEP_HARD_FAIL_BEFORE" ]; then
-            emit_resume "$sid" "FAIL"
-            if [ -s "$PLAYBOOK_DIR/$sid.txt" ]; then
-                echo ""
-                echo "  ▼ fix_playbook for step [$sid]:"
-                sed 's/^/      /' "$PLAYBOOK_DIR/$sid.txt"
-                echo ""
-            fi
-        else
-            emit_resume "$sid" "PASS"
+        # Determine PASS/FAIL/UNRUN of step (PASS requires an observed outcome).
+        emit_step_verdict "$sid" "$STEP_HARD_FAIL_BEFORE"
+        if [ $? -eq 1 ] && [ -s "$PLAYBOOK_DIR/$sid.txt" ]; then
+            echo ""
+            echo "  ▼ fix_playbook for step [$sid]:"
+            sed 's/^/      /' "$PLAYBOOK_DIR/$sid.txt"
+            echo ""
         fi
     else
         # ── Sequential path: run each command with watchdog ──────────────────
@@ -593,11 +626,7 @@ for sid in $STEP_ORDER; do
             fi
         done < "$PLAN_FILE"
 
-        if [ "$HARD_FAIL" -gt "$STEP_HARD_FAIL_BEFORE" ]; then
-            emit_resume "$sid" "FAIL"
-        else
-            emit_resume "$sid" "PASS"
-        fi
+        emit_step_verdict "$sid" "$STEP_HARD_FAIL_BEFORE"
     fi
 
     rm -f "$COLLAPSED_PLAN"
@@ -624,7 +653,6 @@ case "${AX_FAKE_LEDGER_LOSS:-}" in
 esac
 
 LEDGER_BROKEN=0
-SHORT_CIRCUITED="${SHORT_CIRCUITED:-0}"
 # ── 6b. Accounting integrity — FAIL CLOSED ──────────────────────────────────
 # A run may claim green ONLY if its own result ledger is intact. On 2026-07-29 a
 # guard recursively deleted TMPDIR mid-run (it rmtree'd the PARENT of its shim dir),
@@ -708,8 +736,22 @@ if [ -f "$_AX_LEDGER" ]; then
     fi
 fi
 
-# Finalize resume log atomically.
-mv -f "$RESUME_NEW" "$RESUME_LOG"
+# Finalize resume log atomically — but ONLY for a run whose accounting is intact.
+# A run that ends in a ledger BLOCK must leave NO usable resume record. Its step
+# outcomes are UNKNOWN by definition (the summary counters were derived from the very
+# file that is missing/incomplete), so certifying ANY of its steps would let the next
+# `--resume` skip work this run never observed — laundering a blocked run green.
+# emit_resume publishes incrementally, so suppressing this final mv is NOT enough:
+# the partial record is already on disk and must be actively discarded.
+# Discarding (rather than restoring a pre-run record) is the conservative choice: the
+# incremental publishes already overwrote it, and a re-run from scratch is always sound.
+if [ "${LEDGER_BROKEN:-0}" -ne 0 ]; then
+    rm -f "$RESUME_LOG" "$RESUME_LOG.tmp.$$"
+    echo "  resume record DISCARDED — this run's outcomes are unknown, so no step may be" >&2
+    echo "  resume-skipped later. The next run re-verifies the full checklist." >&2
+else
+    mv -f "$RESUME_NEW" "$RESUME_LOG"
+fi
 
 if [ "$JSON_OUTPUT" -eq 1 ]; then
     tail -1 "$AUDIT_LOG"

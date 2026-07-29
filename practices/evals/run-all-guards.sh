@@ -1626,6 +1626,19 @@ if [ "$INCLUDE_FIXTURES" -eq 1 ]; then
         bash "$SCRIPT_DIR/pyyaml_preflight_coverage_guard.sh" --repo-root "$SCRIPT_DIR/fixtures/pyyaml-preflight-coverage/fail_open_guard"
 fi
 
+echo "[96] resume_provenance_guard.sh (a BLOCKED R25 run may not launder itself green. P0-30 made an incomplete result ledger exit 2, but the step verdict was still 'no failure ⇒ PASS' and verdicts publish incrementally — so a step whose commands never executed was written to .ax-verify/last_run.jsonl as PASS, and the next --resume skipped it and exited 0 with full_run=true, which the recency guard accepts. Runs the REAL verify-completion.sh in a throwaway sandbox against a two-step harness (step 1 wipes the run's own temp dir, step 2 is \`false\`) and asserts the resume run cannot claim green, that a clean run's --resume still works, and that SHORT_CIRCUITED cannot be inherited from the environment. Live exits 0.)"
+run_guard "resume_provenance/live" 0 \
+    bash "$SCRIPT_DIR/resume_provenance_guard.sh"
+if [ "$INCLUDE_FIXTURES" -eq 1 ]; then
+    run_guard "resume_provenance/fixture_pass_fixed" 0 \
+        bash "$SCRIPT_DIR/resume_provenance_guard.sh" --fixture-root "$SCRIPT_DIR/fixtures/resume-provenance/pass_fixed"
+    # Non-vacuity: the same assertions against a verify-completion.sh copy with BOTH
+    # fix layers neutered must FAIL. A guard that passes on the unfixed script proves
+    # nothing — this entry is what makes the live PASS above meaningful.
+    run_guard "resume_provenance/fixture_fail_unfixed" 1 \
+        bash "$SCRIPT_DIR/resume_provenance_guard.sh" --fixture-root "$SCRIPT_DIR/fixtures/resume-provenance/fail_unfixed"
+fi
+
 # ── Summary ──────────────────────────────────────────────────────────────────
 echo ""
 echo "=== Results ==="

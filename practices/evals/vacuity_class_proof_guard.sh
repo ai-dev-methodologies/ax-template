@@ -52,6 +52,20 @@ while [ $# -gt 0 ]; do
     esac
 done
 
+# ── Fail closed: LIVE mode enumerates the declared contracts through PyYAML ──
+# Without the parser the enumerator below produces ZERO rows, which the "no item declares
+# a contract" branch used to report as a PASS — the guard exited 0 having proved nothing,
+# for exactly the population it exists to police. Exit 2 = "cannot verify"; NEVER 0.
+# PARSE-ONLY mode (--report) is exempt on purpose: it reads a canned mutations.xml with
+# ElementTree and never touches yaml, which is what lets the offline fixtures run anywhere.
+# Pinned by practices/evals/pyyaml_preflight_coverage_guard.sh [95].
+if [ -z "$REPORT" ]; then
+    if ! command -v python3 >/dev/null 2>&1 || ! python3 -c 'import yaml' >/dev/null 2>&1; then
+        echo "vacuity_class_proof_guard: BLOCK — cannot verify: python3 + PyYAML required (python3 -m pip install pyyaml)" >&2
+        exit 2
+    fi
+fi
+
 # ── vacuity_class → allowed kill_mutator set (METHODOLOGY consistency table) ────────────
 mutator_allowed_for_class() {
     local vclass="$1" mutator="$2"
@@ -147,6 +161,16 @@ for r in rows:
     print(r)
 PY
 )"
+ENUM_RC=$?
+
+# An enumerator that FAILED produces the same empty output as a tree with no declared
+# contracts. Treating "no output" as "nothing to prove" is how this guard reported PASS
+# under a missing PyYAML. Silence is only evidence when the enumerator succeeded.
+if [ "$ENUM_RC" -ne 0 ]; then
+    echo "vacuity_class_proof_guard: BLOCK — cannot verify: the spec enumerator exited $ENUM_RC," \
+         "so its empty result proves nothing (a missing PyYAML is the usual cause). Not a PASS." >&2
+    exit 2
+fi
 
 if [ -z "$ITEMS" ]; then
     echo "vacuity_class_proof_guard: PASS — no spec item declares a vacuity_class contract (nothing to prove)"

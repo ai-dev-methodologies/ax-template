@@ -36,6 +36,16 @@ while [ $# -gt 0 ]; do
     esac
 done
 
+# ── Fail closed: this guard verifies through PyYAML ──────────────────────────
+# The trio scan parses the allowlist + every spec with PyYAML. Without the parser the
+# python body dies on ImportError and the guard exits 1 — indistinguishable from a REAL
+# trio violation (and from its own ZERO_SCAN block just below). Exit 2 = "cannot verify".
+# Pinned by practices/evals/pyyaml_preflight_coverage_guard.sh [95].
+if ! command -v python3 >/dev/null 2>&1 || ! python3 -c 'import yaml' >/dev/null 2>&1; then
+    echo "trio_integrity_guard: BLOCK — cannot verify: python3 + PyYAML required (python3 -m pip install pyyaml)" >&2
+    exit 2
+fi
+
 ALLOWLIST="$REPO_ROOT/trio_integrity_allowlist.yaml"
 if [ ! -f "$ALLOWLIST" ]; then
     ALLOWLIST="$REPO_ROOT/practices/evals/trio_integrity_allowlist.yaml"

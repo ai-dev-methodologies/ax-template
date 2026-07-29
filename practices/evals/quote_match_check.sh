@@ -6,10 +6,21 @@
 # means either the rule was rewritten without updating the quote, or the snapshot has
 # moved on and the rule's anchoring is now stale.
 #
-# Advisory only — never exits ≠ 0. Sentinel CI runs it with continue-on-error.
+# Advisory only: FINDINGS never exit ≠ 0 (sentinel CI runs it with continue-on-error).
+# The single exception is "cannot verify" — see the fail-closed preflight below.
 set -uo pipefail
 
 cd "$(dirname "$0")/.."
+
+# ── Fail closed: this probe reads every rule's evidence through PyYAML ───────
+# Advisory means a FINDING does not block; it does not mean a broken toolchain may be
+# reported as "no drift". Without the parser the python body dies on ImportError and the
+# script exited 0 having compared nothing — a clean bill of health it never earned.
+# Exit 2 = "cannot verify", distinct from both 0 (clean) and any future finding code.
+if ! command -v python3 >/dev/null 2>&1 || ! python3 -c 'import yaml' >/dev/null 2>&1; then
+    echo "quote_match_check: BLOCK — cannot verify: python3 + PyYAML required (python3 -m pip install pyyaml)" >&2
+    exit 2
+fi
 
 python3 - <<'PY'
 import pathlib, re, sys, yaml

@@ -476,3 +476,19 @@ items:
     fixture_arg: '--repo-root'
     anchor: 'p.returncode != 2'
     neuter: 'False'
+
+  # ── resume_provenance/fail_unfixed: blocked-run resume laundering [96] ──
+  # fixture: neuter-mode `ab` — a copy of the LIVE verify-completion.sh with both fix
+  #          layers removed, i.e. the pre-fix P0-30 script. Its blocked run certifies the
+  #          step whose command never executed and the next --resume exits 0 → exit 1.
+  # anchor:  the single verdict that turns "this run laundered itself green" into a
+  #          finding (the resume run claimed green, or the blocked run certified an
+  #          unobserved step — two witnesses of one defect).
+  # neuter:  condition-constant false → laundering is never recognised; the clean-resume
+  #          and SHORT_CIRCUITED assertions still hold on this fixture → exit 0.
+  - id: resume_provenance/fail_unfixed
+    guard: practices/evals/resume_provenance_guard.sh
+    fixture: practices/evals/fixtures/resume-provenance/fail_unfixed
+    fixture_arg: '--fixture-root'
+    anchor: '[ "$rc2" -eq 0 ] || [ "$certified" -eq 1 ]'
+    neuter: 'false'

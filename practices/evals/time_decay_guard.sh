@@ -18,6 +18,16 @@ while [ $# -gt 0 ]; do
     esac
 done
 
+# ── Fail closed: this guard verifies through PyYAML ──────────────────────────
+# The freshness check parses upstream/_MANIFEST.yaml with PyYAML. Without the parser the
+# python body dies on ImportError and the guard exits 1 — the same code it uses for a
+# REAL staleness violation, so a caller cannot tell a tooling failure from a finding.
+# Exit 2 = "cannot verify". Pinned by practices/evals/pyyaml_preflight_coverage_guard.sh [95].
+if ! command -v python3 >/dev/null 2>&1 || ! python3 -c 'import yaml' >/dev/null 2>&1; then
+    echo "time_decay_guard: BLOCK — cannot verify: python3 + PyYAML required (python3 -m pip install pyyaml)" >&2
+    exit 2
+fi
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 CATALOG_DIR="$REPO_ROOT/$CATALOG"
