@@ -71,10 +71,15 @@
 #   • A step may be recorded PASS only when EVERY planned non-advisory command of
 #     that step actually executed with an acceptable outcome (layer D). Otherwise
 #     it is UNRUN, which `--resume` never skips.
-#   • A CHECKLIST STEP WITH NO COMMANDS IS A MALFORMED CONTRACT, not a pass. It would
-#     emit no plan row, disappear from STEP_ORDER, and thus be invisible to the very
-#     accounting checks below — so a full run could publish green with that step never
-#     verified. Selected steps are required to be non-empty at parse time (exit 2).
+#   • A MALFORMED CHECKLIST STEP IS A CONTRACT ERROR, not a pass. Two families, both of
+#     which certify that nothing happened: a step that cannot be RUN (`commands: []`, or
+#     command text that is blank/whitespace/comment-only — `bash -c '# off'` exits 0 and
+#     is recorded as an EXECUTED PASS), and a step that cannot be IDENTIFIED (blank id,
+#     non-slug id, duplicate id — STEP_ORDER is iterated unquoted, so a blank id produces
+#     ZERO iterations and nothing of that step runs). Selected steps must be a unique slug
+#     id + at least one command that actually runs something, enforced at parse time
+#     (exit 2), and backstopped structurally after execution: every DECLARED step must
+#     have emitted at least one plan row (the plan cannot be its own witness).
 #   • RESUME-SKIP is `resumed`, not `executed`: it is publishable only because the
 #     record it consumed was itself published by a run at the SAME head_sha that
 #     executed the step. By induction every PASS at head H roots in an execution
@@ -82,8 +87,15 @@
 #     auditable; it is deliberately NOT a gate (see the preloader comment).
 #
 # Side effect: writes an audit log line to .ax-verify/runs.jsonl with
-#   {ts, head_sha, exit, advisory_fail_count, hard_fail_count}
-# so that completion_checklist_recency_guard.sh can audit recency.
+#   {ts, head_sha, exit, pass, warn_advisory, hard_fail, skip, full_run,
+#    tree_fingerprint, tree_clean}
+# so that completion_checklist_recency_guard.sh can audit recency AND provenance.
+# tree_fingerprint/tree_clean exist because head_sha alone does not identify the code that
+# was verified: R25 runs on dirty trees, so one head covers arbitrarily many trees. PUSH
+# eligibility therefore requires evidence produced from the CLEAN tree of the pushed commit
+# (tree_clean=true) — an uncommitted fix that makes the run pass, then stashed, no longer
+# certifies the commit that ships. LOCAL iteration is untouched: dirty-tree runs stay
+# perfectly usable, including for --resume.
 #
 # Iron Law: this script is the SOLE source of truth for "is the task done".
 # Do NOT bypass with --skip flags. There is no opt-out.
@@ -240,7 +252,33 @@ print(h.hexdigest())
 PYEOF
 }
 CURRENT_TREE_FP="$(compute_tree_fingerprint 2>/dev/null)"
-[ -n "$CURRENT_TREE_FP" ] || CURRENT_TREE_FP="unknown"
+if [ -z "$CURRENT_TREE_FP" ]; then
+    # The helper failed unexpectedly (it prints "nogit" for the KNOWN non-git case, so an
+    # empty result is not that). Fail closed rather than silently degrade to head-only
+    # binding: a per-run unique value matches no stored record, so nothing is resume-skipped
+    # and this run's own records are unusable later — we could not verify what tree ran.
+    CURRENT_TREE_FP="unverifiable-$$-$(date -u +%s)"
+    echo "verify-completion: WARN: could not fingerprint the working tree — resume is disabled" \
+         "for this run (records can be bound only to a tree we can identify)." >&2
+fi
+
+# ── Was this run performed on the COMMITTED tree of head_sha? ────────────────
+# The fingerprint above says WHICH tree ran; this says whether that tree is the one a
+# reader of head_sha would get. They answer different questions, and the second is what
+# PUSH evidence needs: a push ships a COMMIT, so evidence gathered from a working tree
+# that differs from that commit is evidence about code nobody will receive. The reviewer's
+# path needs no --resume at all — R25 passes because of an uncommitted fix, the fix is
+# stashed, and the untouched audit line still certifies the commit.
+# Recorded (never enforced here): a dirty-tree run remains fully usable for local
+# iteration and for --resume; only the push gate reads this field.
+# HONEST LIMIT: git-ignored paths are excluded, because git cannot pin them and the run
+# genuinely depends on some of them (node_modules/, build/). "Clean" therefore means
+# "identical to the commit in every path git tracks or would track".
+CURRENT_TREE_CLEAN=false
+if git -C "$REPO_ROOT" rev-parse --verify HEAD >/dev/null 2>&1 \
+    && [ -z "$(git -C "$REPO_ROOT" status --porcelain -uall 2>/dev/null)" ]; then
+    CURRENT_TREE_CLEAN=true
+fi
 
 # ── 1. Parse the checklist into a flat command plan via python3 ───────────────
 # Output schema (one line per command, tab-separated):
@@ -249,17 +287,21 @@ PLAN_FILE=$(mktemp)
 RESULTS_FILE=$(mktemp)
 PLAYBOOK_DIR=$(mktemp -d)
 RESUME_TMP=$(mktemp)
+# The logical steps the checklist DEMANDED for this run (<index>\t<id>), written by the
+# emitter beside the plan. Independent of the plan so "a step vanished" is detectable.
+DECLARED_STEPS="$PLAN_FILE.steps"
 cleanup() {
     # RESUME_NEW is defined later (line ~226); guard with :- so an early-exit
-    # trap before it is set does not trip `set -u`. The .failfast sidecar is
-    # written next to PLAN_FILE by the python emitter — remove it here too.
-    rm -f "$PLAN_FILE" "$PLAN_FILE.failfast" "$RESULTS_FILE" "$RESUME_TMP" "${RESUME_NEW:-}"
+    # trap before it is set does not trip `set -u`. The .failfast/.steps sidecars are
+    # written next to PLAN_FILE by the python emitter — remove them here too.
+    rm -f "$PLAN_FILE" "$PLAN_FILE.failfast" "$DECLARED_STEPS" "$RESULTS_FILE" \
+        "$RESUME_TMP" "${RESUME_NEW:-}"
     rm -rf "$PLAYBOOK_DIR"
 }
 trap cleanup EXIT
 
 python3 - "$CHECKLIST" "$STEP_FILTER" "$PLAN_FILE" "$PLAYBOOK_DIR" <<'PYEOF'
-import sys, pathlib
+import sys, pathlib, re
 
 try:
     import yaml
@@ -284,32 +326,101 @@ defaults = doc.get("defaults") or {}
 default_wd = defaults.get("working_directory", ".")
 default_timeout = int(defaults.get("timeout_seconds", 900))
 
+# ── The malformed-step contract (parse-time BLOCK, exit 3) ───────────────────
+# A step that cannot be RUN and a step that cannot be IDENTIFIED are both invisible to
+# the accounting below, and each has its own way of certifying that nothing happened:
+#
+#   commands: []          — emits no plan row, so the step vanishes from STEP_ORDER, and
+#                           every downstream accounting check iterates STEP_ORDER. A full
+#                           run with one other (green) step publishes full_run=true while
+#                           a required step of the contract was never verified.
+#   command: "# disabled" — `bash -c '# disabled'` exits 0. The runner observes an exit
+#   command: "   "          code, records origin=executed, and the step is a genuine PASS
+#                           by every provenance rule we have. Nothing ran.
+#   id: "" / id: absent   — STEP_ORDER is iterated with `for sid in $STEP_ORDER`, which
+#                           word-splits: a blank id yields ZERO shell iterations, so none
+#                           of the step's commands execute, and the counters stay green.
+#   id: "a b" / "a*b"     — same iteration, but worse: word-splitting and globbing make
+#                           the id match other steps' rows or none at all.
+#   duplicate id          — STEP_ORDER dedupes by id, so two logical steps merge into one
+#                           verdict and one accounting row.
+#   commands: ["x"]       — a non-mapping entry has no `command:` key at all.
+#
+# All of them are contract errors, not results, so they BLOCK at parse time (exit 3) with
+# the offending step named. Only SELECTED steps are checked: --step filtering `continue`s
+# first, so a backend-only partial run is not blocked by a malformed step elsewhere.
+# Structurally backstopped after execution by the declared-step check in the runner (a
+# declared step that emitted no plan row, or that has no usable id, blocks there too).
+SLUG_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*\Z")
+
+
+def command_runs_nothing(text):
+    """True when the shell would execute NOTHING: blank, whitespace, or only comments."""
+    for line in text.splitlines():
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#"):
+            continue
+        return False
+    return True
+
+
+def malformed_reason(step, sid, seen_ids):
+    """None when the step is a well-formed contract; else a one-line human reason."""
+    if not isinstance(sid, str) or not sid.strip():
+        return ("declares no usable id (`id:` is empty, absent, or not a string). A step "
+                "without an id cannot be iterated, so none of its commands would run")
+    if not SLUG_RE.match(sid):
+        return (f"id {sid!r} is not a slug — ids are iterated unquoted, so whitespace and "
+                f"glob characters silently corrupt step accounting. Use [A-Za-z0-9._-]")
+    if sid in seen_ids:
+        return (f"id {sid!r} is declared more than once — duplicate ids merge into a single "
+                f"verdict, so one of the two logical steps is never accounted for")
+    commands = step.get("commands") or []
+    if not commands:
+        return ("declares no commands (`commands:` is empty or absent). A step with nothing "
+                "to run cannot be verified, and it would disappear from the plan silently")
+    for pos, entry in enumerate(commands, 1):
+        if not isinstance(entry, dict):
+            return (f"command #{pos} is not a mapping (got {type(entry).__name__}) — expected "
+                    f"`- command: <shell>`")
+        text = entry.get("command")
+        if not isinstance(text, str):
+            return (f"command #{pos} has no `command:` string (got {type(text).__name__})")
+        if command_runs_nothing(text):
+            shape = "blank" if not text.strip() else "comment-only"
+            return (f"command #{pos} is {shape} ({text.strip()[:48]!r}) — `bash -c` exits 0 "
+                    f"without running anything, so it would be recorded as an EXECUTED PASS")
+    return None
+
+
 lines = []
 fail_fast_sids = []
+selected_steps = []
+seen_ids = set()
 playbook_out = pathlib.Path(playbook_dir)
-for step in doc.get("checklist") or []:
+for step_index, step in enumerate(doc.get("checklist") or [], 1):
+    if not isinstance(step, dict):
+        print(f"verify-completion: R25 BLOCK: checklist entry #{step_index} is not a mapping "
+              f"(got {type(step).__name__}); expected a step with `id:` and `commands:`.",
+              file=sys.stderr)
+        sys.exit(3)
     sid = step.get("id", "")
     if step_filter and sid != step_filter:
         continue
+    problem = malformed_reason(step, sid, seen_ids)
+    if problem:
+        named = sid if (isinstance(sid, str) and sid.strip()) else "<no id>"
+        print(f"verify-completion: R25 BLOCK: checklist step #{step_index} '{named}' {problem}.",
+              file=sys.stderr)
+        sys.exit(3)
+    seen_ids.add(sid)
+    selected_steps.append((step_index, sid))
     if step.get("fail_fast", False):
         fail_fast_sids.append(sid)
     title = step.get("title", sid)
     step_timeout = int(step.get("timeout_seconds", default_timeout))
     (playbook_out / f"{sid}.txt").write_text(step.get("fix_playbook", ""))
-    # A SELECTED step with zero commands is a malformed contract, not a pass. It emits no
-    # plan row, so it vanishes from STEP_ORDER — and every downstream accounting check
-    # iterates STEP_ORDER, so the step is never accounted for by anything. A full run with
-    # one other (green) step would satisfy the non-empty-plan check and publish
-    # full_run=true while a required step of the checklist was never verified.
-    # Exit 3 (distinct from the parse errors above) so the caller can name this cause.
-    # Only SELECTED steps are checked: --step filtering already `continue`d above, so a
-    # backend-only partial run is not blocked by an empty step it was never going to run.
     step_commands = step.get("commands") or []
-    if not step_commands:
-        print(f"verify-completion: R25 BLOCK: checklist step '{sid}' declares no commands "
-              f"(`commands:` is empty or absent). A step with nothing to run cannot be "
-              f"verified, and it would disappear from the plan silently.", file=sys.stderr)
-        sys.exit(3)
     for cmd_entry in step_commands:
         cmd = cmd_entry.get("command", "")
         wd = cmd_entry.get("working_directory", default_wd)
@@ -325,14 +436,24 @@ pathlib.Path(plan_path).write_text("\n".join(lines) + ("\n" if lines else ""))
 # Sidecar: step ids marked `fail_fast: true` — a HARD_FAIL in one of these short-circuits
 # the remaining steps (so a structural pre-gate FAIL does not still pay the ~18-min per-domain suite).
 pathlib.Path(plan_path + ".failfast").write_text("\n".join(fail_fast_sids) + ("\n" if fail_fast_sids else ""))
+# Sidecar: the LOGICAL steps this run selected, as <declaration_index>\t<id>. The plan is a
+# flat list of COMMANDS, so a step that emitted no row is simply absent from it — and every
+# accounting check derives its step set FROM the plan, which is what let a vanished step ride
+# through unverified. This manifest is the independent record of what the contract demanded,
+# so the runner can assert plan ⊇ declared instead of taking the plan's word for it. The
+# index is carried because a blank id is exactly one of the shapes being detected.
+pathlib.Path(plan_path + ".steps").write_text(
+    "".join(f"{idx}\t{sid}\n" for idx, sid in selected_steps))
 PYEOF
 
 PLAN_EXIT=$?
 if [ "$PLAN_EXIT" -eq 3 ]; then
-    echo "verify-completion: R25 BLOCK: the checklist is malformed — a step selected for this run" \
-         "declares no commands (named above). Such a step contributes no plan row, so it is absent" \
-         "from the executed plan AND from every accounting check, and the run would report green" \
-         "with that step never verified. Give the step a command, or delete the step." >&2
+    echo "verify-completion: R25 BLOCK: the checklist is MALFORMED — the offending step is named" \
+         "above. A step selected for this run must be identifiable (a unique slug id) and must" \
+         "actually run something. A step that emits no plan row disappears from the executed plan" \
+         "AND from every accounting check; a step whose command text is blank or comment-only" \
+         "exits 0 without running anything and is recorded as an EXECUTED PASS. Either way the run" \
+         "would report green with that step never verified. Fix the step, or delete it." >&2
     exit 2
 fi
 if [ "$PLAN_EXIT" -ne 0 ]; then
@@ -923,6 +1044,41 @@ if [ -n "$_ax_unrecorded" ] && [ "$SHORT_CIRCUITED" -eq 0 ]; then
     LEDGER_BROKEN=1
 fi
 
+# ── 6c. Structural step accounting — DECLARED ⊆ EMITTED ─────────────────────
+# The check above answers "did every step IN THE PLAN produce an outcome" — it derives its
+# step set from the plan, so a step that never reached the plan is not merely unchecked, it
+# is unseen. Two shapes exploit exactly that:
+#   • `commands: []` — the emitter produces no row, the step is absent from STEP_ORDER, and
+#     the run publishes green with a required step never verified.
+#   • a blank/whitespace id — rows exist, but `for sid in $STEP_ORDER` word-splits them away,
+#     so the step gets ZERO shell iterations and no command of it ever runs.
+# Both are BLOCKed at parse time; this is the structural backstop that does not depend on the
+# parser's own opinion: the declared-step manifest is compared against the plan the runner
+# actually executed. An unreadable manifest is itself fail-closed — we cannot tell what the
+# contract demanded, and "cannot tell" never buys an exemption.
+_ax_declared_broken=""
+if [ ! -r "$DECLARED_STEPS" ]; then
+    _ax_declared_broken=" (the declared-step manifest was lost mid-run)"
+else
+    while IFS=$'\t' read -r _ax_idx _ax_did; do
+        [ -n "$_ax_idx" ] || continue
+        if [ -z "$_ax_did" ]; then
+            _ax_declared_broken="$_ax_declared_broken step#$_ax_idx(no-usable-id)"
+            continue
+        fi
+        awk -F'\t' -v s="$_ax_did" '$1==s { found=1 } END { exit !found }' "$PLAN_FILE" 2>/dev/null \
+            && continue
+        _ax_declared_broken="$_ax_declared_broken $_ax_did(emitted-no-command)"
+    done < "$DECLARED_STEPS"
+fi
+if [ -n "$_ax_declared_broken" ] && [ "$SHORT_CIRCUITED" -eq 0 ]; then
+    echo "verify-completion: R25 BLOCK: checklist step(s) selected for this run never entered the" \
+         "executed plan:$_ax_declared_broken — a declared step that emits no command, or that has" \
+         "no usable id, is invisible to every accounting check, so a green verdict would certify" \
+         "work that was never even scheduled." >&2
+    LEDGER_BROKEN=1
+fi
+
 # ── 7. Summary ──────────────────────────────────────────────────────────────
 echo ""
 echo "=== verify-completion.sh — Summary ==="
@@ -958,8 +1114,12 @@ FULL_RUN=true
 # Atomic append: write to tmp + sed concat is overkill — line-buffered >> is
 # atomic for writes under PIPE_BUF (4096 on linux/macOS) and our line is < 200
 # bytes. Append is safe.
-printf '{"ts":"%s","head_sha":"%s","exit":%d,"pass":%d,"warn_advisory":%d,"hard_fail":%d,"skip":%d,"full_run":%s}\n' \
+# tree_fingerprint / tree_clean make the line say WHICH TREE was verified, not just at which
+# head. Without them the audit line is satisfied by any tree at that head — including one whose
+# uncommitted fix has since been stashed — and the push gate cannot tell the difference.
+printf '{"ts":"%s","head_sha":"%s","exit":%d,"pass":%d,"warn_advisory":%d,"hard_fail":%d,"skip":%d,"full_run":%s,"tree_fingerprint":"%s","tree_clean":%s}\n' \
     "$TS" "$CURRENT_HEAD" "$EXIT_CODE" "$PASS_COUNT" "$ADVISORY_FAIL" "$HARD_FAIL" "$SKIP_COUNT" "$FULL_RUN" \
+    "$CURRENT_TREE_FP" "$CURRENT_TREE_CLEAN" \
     >> "$AUDIT_LOG"
 
 # ── ax-ledger capture — every verify run leaves a per-project usage trace (progress / violation),

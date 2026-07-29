@@ -44,8 +44,12 @@
 #       its own, and it holds even where (C) does not apply.
 #   (E) tree binding — a resume record is consumable only by the WORKING TREE that produced
 #       it, not merely by the same head_sha. See THE THIRD DEFECT below.
-#   (F) non-empty step contract — a SELECTED checklist step with zero commands is a parse-
-#       time BLOCK. See THE FOURTH DEFECT below.
+#   (F) well-formed step contract — a SELECTED checklist step that cannot be RUN or cannot be
+#       IDENTIFIED is a parse-time BLOCK. See THE FOURTH DEFECT below.
+#   (G) declared ⊆ emitted — after execution, every step the checklist DECLARED for this run
+#       must have emitted at least one plan row and have a usable id. This is the structural
+#       backstop for (F): every other accounting check derives its step set FROM the plan, so
+#       a step that never reached the plan is not merely unchecked, it is unseen.
 #
 # THE THIRD DEFECT — resume evidence was bound to HEAD, not to the tree that ran (2026-07-29):
 #   R25 is routinely invoked on a dirty tree, so one head_sha covers arbitrarily many trees.
@@ -60,13 +64,27 @@
 #   `npm run lint` never invoked, {"exit":0,...,"full_run":true} published at that head.
 #   Post-fix the same path exits 1 with the record refused out loud and the lint re-run.
 #
-# THE FOURTH DEFECT — a step with no commands disappeared from verification (2026-07-29):
+# THE FOURTH DEFECT — a MALFORMED step certifies that nothing happened (2026-07-29, extended):
 #   The plan is a flat list of COMMANDS, so a step declaring `commands: []` emitted no row,
 #   never entered STEP_ORDER, and was therefore invisible to every downstream accounting
 #   check (all of which iterate STEP_ORDER). The non-empty-plan check was satisfied by any
 #   other step. Measured on the pre-fix script with a two-step checklist (one empty, one
 #   green): step_order=['green'], exit 0, "PASS — all steps green" — a required step of the
-#   contract was silently dropped. Post-fix the parse BLOCKS (exit 2) naming the step.
+#   contract was silently dropped.
+#   Cross-family review then proved the same certification through three more shapes, and
+#   only the first was closed by the non-empty-commands check:
+#     commands: [{command: "# temporarily disabled"}]  → `bash -c` exits 0, the runner
+#       observes an exit code, and the row is recorded origin=executed: a genuine PASS by
+#       every provenance rule in this file, with nothing run. (probe: shell exit 0)
+#     commands: [{command: "   "}]                     → identical shape. (probe: shell exit 0)
+#     id: "" (or absent/whitespace)                    → STEP_ORDER is iterated with
+#       `for sid in $STEP_ORDER`, which word-splits: the step gets ZERO shell iterations, so
+#       none of its commands run at all and the counters stay green. (probe: 0 iterations)
+#   Post-fix each shape BLOCKs: (F) rejects all of them at parse time by name, and (G) is the
+#   structural backstop for the two that make the step VANISH (empty commands ⇒ no plan row,
+#   blank id ⇒ nothing iterable). The inert-command shapes are (F)-only by construction: they
+#   DO emit a plan row and DO execute, so no structural check can see them — that asymmetry is
+#   asserted, not glossed over, in the mutation matrix below.
 #
 # ALSO PINNED: SHORT_CIRCUITED must be initialised internally, never inherited. It gates
 # the "every planned step has an outcome" accounting check, so an exported SHORT_CIRCUITED=1
@@ -85,8 +103,12 @@
 #       command and exits 1. Both layers are kept: (B) refuses to certify anything from a
 #       run whose accounting is unknown, (A) fixes the verdict rule itself and so does not
 #       depend on the accounting check's fail_fast exemption staying correct.
-#   (E) and (F) each carry their own single-layer matrix: with the layer neutered in a copy
-#   of the live script its harness must REPRODUCE the defect, and the live script must hold.
+#   (E) carries its own single-layer matrix: with the layer neutered in a copy of the live
+#   script its harness must REPRODUCE the defect, and the live script must hold. (F)/(G) carry
+#   a per-shape matrix instead, because their coverage genuinely differs by shape: F+G
+#   neutered must reproduce ALL four shapes; F alone must reproduce exactly the two inert-
+#   command shapes and still BLOCK the two vanishing ones (that is what proves G load-bearing);
+#   G alone must block all four (F catches them earlier).
 #   The (E) harness needs a real git working tree (that is what a tree fingerprint is
 #   computed from), so its sandbox is `git init`ed and committed; the other harnesses stay
 #   non-git, where the fingerprint degrades to a constant and resume behaves exactly as
@@ -155,7 +177,7 @@ if [ -n "$FIXTURE_ROOT" ]; then
         echo "resume_provenance_guard: fixture is missing its neuter-mode file: $FIXTURE_ROOT/neuter-mode" >&2; exit 2; }
     SUBJECT_MODE="$(tr -d ' \t\n' < "$FIXTURE_ROOT/neuter-mode")"
     case "$SUBJECT_MODE" in
-        none|a|b|ab|c|d|cd|e|f) ;;
+        none|a|b|ab|c|d|cd|e|f|g|fg) ;;
         *) echo "resume_provenance_guard: unknown neuter-mode '$SUBJECT_MODE' in $FIXTURE_ROOT" >&2; exit 2 ;;
     esac
 fi
@@ -184,28 +206,33 @@ NEUTER_D_ANCHOR='elif [ "$req_planned" -gt 0 ] && [ "$req_executed" -lt "$req_pl
 NEUTER_D_VALUE='elif false; then'
 # Layer (E): the resume preloader stops comparing the record's tree fingerprint with the
 # tree in front of it — i.e. back to "same head_sha is good enough". Layer (F): the parser
-# stops rejecting a selected step that declares no commands, so the step silently vanishes.
+# stops rejecting malformed steps, so a step that cannot run (or cannot be identified) is
+# admitted. Layer (G): the runner stops asserting that every DECLARED step emitted a plan
+# row with a usable id, so a vanished step is unseen by all accounting.
 NEUTER_E_ANCHOR='if rec_fp != tree_fp:'
 NEUTER_E_VALUE='if False:'
-NEUTER_F_ANCHOR='if not step_commands:'
+NEUTER_F_ANCHOR='if problem:'
 NEUTER_F_VALUE='if False:'
+NEUTER_G_ANCHOR='if [ -n "$_ax_declared_broken" ] && [ "$SHORT_CIRCUITED" -eq 0 ]; then'
+NEUTER_G_VALUE='if false; then'
 
-# make_vc <dest> <subset of abcdef | none> — write a (possibly neutered) verify-completion.sh.
+# make_vc <dest> <subset of abcdefg | none> — write a (possibly neutered) verify-completion.sh.
 make_vc() {
     local dest="$1" mode="$2"
     python3 - "$REAL_VC" "$dest" "$mode" \
         "$NEUTER_A_ANCHOR" "$NEUTER_A_VALUE" "$NEUTER_B_ANCHOR" "$NEUTER_B_VALUE" \
         "$NEUTER_C_ANCHOR" "$NEUTER_C_VALUE" "$NEUTER_D_ANCHOR" "$NEUTER_D_VALUE" \
-        "$NEUTER_E_ANCHOR" "$NEUTER_E_VALUE" "$NEUTER_F_ANCHOR" "$NEUTER_F_VALUE" <<'PY'
+        "$NEUTER_E_ANCHOR" "$NEUTER_E_VALUE" "$NEUTER_F_ANCHOR" "$NEUTER_F_VALUE" \
+        "$NEUTER_G_ANCHOR" "$NEUTER_G_VALUE" <<'PY'
 import sys
 src, dest, mode = sys.argv[1:4]
-pairs = sys.argv[4:16]
+pairs = sys.argv[4:18]
 text = open(src, encoding="utf-8").read()
 # The mode is a SET of layer letters, not a substring to search. "none" must select
 # nothing — and it literally contains 'e'/'n'/'o', so `letter in mode` would silently
 # neuter layer (e) on the unmutated subject and make the live assertion self-defeating.
 selected = set() if mode in ("", "none") else set(mode)
-layers = zip("abcdef", pairs[0::2], pairs[1::2])
+layers = zip("abcdefg", pairs[0::2], pairs[1::2])
 for want, anchor, value in layers:
     if want not in selected:
         continue
@@ -318,10 +345,15 @@ checklist:
       - command: '"'"'grep -q pass gate.txt'"'"'
         expected_exit: 0'
 
-# The empty-step harness (layer F). A required step declaring NO commands beside a green one:
-# pre-fix the empty step emitted no plan row, never entered STEP_ORDER, and the run published
-# green with it unverified.
-EMPTY_STEP_CHECKLIST='version: 1
+# The malformed-step harness (layers F + G). Each shape is a REQUIRED step that certifies
+# nothing happened, beside a genuinely green step so the run has a real executed row.
+# `malformed-cmd-ran` is the ground truth: it exists if and only if the malformed step's
+# command actually ran. Two shapes (empty commands / non-mapping entry) have no command that
+# could create it, which is precisely their defect.
+malformed_checklist() {
+    case "$1" in
+      emptycommands) cat <<'YAML'
+version: 1
 defaults:
   working_directory: "."
   timeout_seconds: 20
@@ -332,8 +364,84 @@ checklist:
   - id: green
     title: "trivially green step"
     commands:
-      - command: '"'"'true'"'"'
-        expected_exit: 0'
+      - command: 'true'
+        expected_exit: 0
+YAML
+      ;;
+      commentonly) cat <<'YAML'
+version: 1
+defaults:
+  working_directory: "."
+  timeout_seconds: 20
+checklist:
+  - id: required-but-inert
+    title: "a required step whose command is a comment — bash -c exits 0"
+    commands:
+      - command: '# temporarily disabled'
+        expected_exit: 0
+  - id: green
+    title: "trivially green step"
+    commands:
+      - command: 'true'
+        expected_exit: 0
+YAML
+      ;;
+      whitespaceonly) cat <<'YAML'
+version: 1
+defaults:
+  working_directory: "."
+  timeout_seconds: 20
+checklist:
+  - id: required-but-blank
+    title: "a required step whose command is whitespace — bash -c exits 0"
+    commands:
+      - command: '   '
+        expected_exit: 0
+  - id: green
+    title: "trivially green step"
+    commands:
+      - command: 'true'
+        expected_exit: 0
+YAML
+      ;;
+      blankid) cat <<'YAML'
+version: 1
+defaults:
+  working_directory: "."
+  timeout_seconds: 20
+checklist:
+  - id: ""
+    title: "a required step with no id — STEP_ORDER word-splits it into zero iterations"
+    commands:
+      - command: 'touch malformed-cmd-ran'
+        expected_exit: 0
+  - id: green
+    title: "trivially green step"
+    commands:
+      - command: 'true'
+        expected_exit: 0
+YAML
+      ;;
+      notmapping) cat <<'YAML'
+version: 1
+defaults:
+  working_directory: "."
+  timeout_seconds: 20
+checklist:
+  - id: required-but-scalar
+    title: "a required step whose command entry is a bare string, not a mapping"
+    commands:
+      - 'touch malformed-cmd-ran'
+  - id: green
+    title: "trivially green step"
+    commands:
+      - command: 'true'
+        expected_exit: 0
+YAML
+      ;;
+      *) echo "malformed_checklist: unknown shape: $1" >&2; return 2 ;;
+    esac
+}
 
 WD_ADVISORY_CHECKLIST='version: 1
 defaults:
@@ -453,22 +561,22 @@ tree_launders() {
     [ "$trc2" -eq 0 ] && [ "$tskip" -eq 1 ]
 }
 
-# ── The empty-step harness (layer F) ─────────────────────────────────────────
-# A required step with `commands: []` beside a green one. Returns 0 = LAUNDERED (the run
-# published green while that step never appeared in the executed plan), 1 = held.
-# Sets EW_DESC to a one-line witness.
+# ── The malformed-step harness (layers F + G) ────────────────────────────────
+# Runs ONE malformed shape beside a green step. Returns 0 = LAUNDERED (the run published a
+# green verdict although that step ran nothing), 1 = held. Sets EW_DESC to a one-line witness.
+# The verdict is a single expression on purpose: one detection, one axis (see the note under
+# assertion 5) so fixture_kill_proof [87] can prove each fixture non-vacuous by neutering it.
 EW_DESC=""
-empty_step_launders() {
-    local vc="$1" tag="$2"
-    local sb="$WORK/emptystep-$tag"
-    build_sandbox "$sb" "$vc" "$EMPTY_STEP_CHECKLIST"
+malformed_step_launders() {
+    local vc="$1" tag="$2" shape="$3"
+    local sb="$WORK/malformed-$shape-$tag"
+    build_sandbox "$sb" "$vc" "$(malformed_checklist "$shape")"
     VC_ENV=""
     vc_run "$sb" "$sb/run.log"; local erc=$?
-    local eseen=0
-    grep -q '^── \[required-but-empty\]' "$sb/run.log" 2>/dev/null && eseen=1
-    EW_DESC="exit=$erc empty_step_in_executed_plan=$eseen"
-    # Laundered ⟺ a green verdict was published AND the empty step never entered the plan.
-    [ "$erc" -eq 0 ] && [ "$eseen" -eq 0 ]
+    local mran=0
+    [ -f "$sb/repo/malformed-cmd-ran" ] && mran=1
+    EW_DESC="shape=$shape exit=$erc malformed_step_command_ever_ran=$mran"
+    [ "$erc" -eq 0 ] && [ "$mran" -eq 0 ]
 }
 
 echo "── [resume provenance] laundering harness: step 1 wipes the run's temp dir, step 2 is \`false\`"
@@ -594,21 +702,28 @@ if [ "$TS_RC1" -ne 0 ] || [ "$TS_RC2" -ne 0 ] || [ "${TS_SKIPS:-0}" -lt 1 ]; the
               "record from a DIFFERENT tree, not refuse every record."
 fi
 
-# ── Assertion 8: a selected step with no commands is a BLOCK, not a silent drop ──
-echo "── [empty step] harness: a required step declaring \`commands: []\` beside a green step"
-empty_step_launders "$VC_SUBJECT" subject; EMPTY_LAUNDERED=$?
-echo "  subject          : $EW_DESC"
-if [ "$EMPTY_LAUNDERED" -eq 0 ]; then
-    violation "a checklist step with zero commands vanished from the plan and the run still" \
-              "published green. A step that emits no command row is absent from STEP_ORDER and" \
-              "therefore from every accounting check — the contract was not verified."
-fi
+# ── Assertion 8: a malformed step is a BLOCK, never a certification ──────────
+# Four shapes, each of which used to publish green with the step having run nothing. The
+# fifth (a non-mapping command entry) is asserted too: it has no `command:` key at all.
+echo "── [malformed step] harness: a required step that cannot be run, or cannot be identified"
+MALFORMED_SHAPES="emptycommands commentonly whitespaceonly blankid notmapping"
+for shape in $MALFORMED_SHAPES; do
+    malformed_step_launders "$VC_SUBJECT" subject "$shape"; SHAPE_LAUNDERED=$?
+    echo "  subject          : $EW_DESC"
+    if [ "$SHAPE_LAUNDERED" -eq 0 ]; then
+        violation "malformed step shape '$shape' published a GREEN verdict although the step" \
+                  "ran nothing. A step that emits no command row is absent from STEP_ORDER and" \
+                  "therefore from every accounting check; a step whose command text is inert" \
+                  "records an EXECUTED PASS for a shell that did nothing; a step with no usable" \
+                  "id gets zero iterations. None of them verified the contract."
+    fi
+done
 
-# ── Assertion 9: the empty-step BLOCK must respect --step selection ──────────
-# Only steps SELECTED for the run need to be non-empty; a partial run that never selected the
-# empty step must still work, or the fix would break every backend-only invocation.
-SB_EMPTY_SEL="$WORK/emptystep-selection"
-build_sandbox "$SB_EMPTY_SEL" "$VC_SUBJECT" "$EMPTY_STEP_CHECKLIST"
+# ── Assertion 9: the malformed-step BLOCK must respect --step selection ──────
+# Only steps SELECTED for the run are held to the contract; a partial run that never selected
+# the malformed step must still work, or the fix would break every backend-only invocation.
+SB_EMPTY_SEL="$WORK/malformed-selection"
+build_sandbox "$SB_EMPTY_SEL" "$VC_SUBJECT" "$(malformed_checklist emptycommands)"
 VC_ENV=""
 vc_run "$SB_EMPTY_SEL" "$SB_EMPTY_SEL/run.log" --step green; SEL_RC=$?
 echo "  --step green     : exit $SEL_RC (want 0 — the empty step was not selected)"
@@ -673,10 +788,10 @@ if [ -z "$FIXTURE_ROOT" ]; then
         fi
     done
 
-    # Layers (E) and (F) are each a single load-bearing check, so their matrix is one row
-    # apiece: neutered ⇒ the harness must REPRODUCE the defect, otherwise the assertion above
-    # would pass on the unfixed script and prove nothing.
-    echo "── [mutation matrix] tree binding (E) and non-empty step contract (F)"
+    # Layer (E) is a single load-bearing check, so its matrix is one row: neutered ⇒ the
+    # harness must REPRODUCE the defect, otherwise assertion 6 would pass on the unfixed
+    # script and prove nothing.
+    echo "── [mutation matrix] tree binding (E)"
     VC_MUT_E="$WORK/vc-e.sh"
     if make_vc "$VC_MUT_E" "e"; then
         tree_launders "$VC_MUT_E" e; E_LAUNDERED=$?
@@ -691,19 +806,46 @@ if [ -z "$FIXTURE_ROOT" ]; then
                   "verify-completion.sh, so this guard's mutation proof is stale."
     fi
 
-    VC_MUT_F="$WORK/vc-f.sh"
-    if make_vc "$VC_MUT_F" "f"; then
-        empty_step_launders "$VC_MUT_F" f; F_LAUNDERED=$?
-        echo "  F neutered   (must REPRODUCE the defect): $EW_DESC"
-        if [ "$F_LAUNDERED" -ne 0 ]; then
-            violation "with the empty-step check neutered the harness did NOT reproduce the" \
-                      "silently-dropped step. Assertion 8 therefore proves nothing — it would" \
-                      "pass on the unfixed script too. Fix the harness, not the guard."
+    # (F) parse-time contract vs (G) structural declared ⊆ emitted. Their coverage differs by
+    # shape, and the matrix asserts exactly that rather than a flat "both are needed":
+    #   fg  — every shape must REPRODUCE (else assertion 8 proves nothing)
+    #   f   — only the INERT-COMMAND shapes may reproduce; the VANISHING shapes must still be
+    #         blocked, which is what makes (G) load-bearing rather than decorative
+    #   g   — nothing may reproduce: (F) rejects all four earlier, at parse time
+    # `notmapping` is deliberately absent from the matrix: with (F) neutered the emitter hits
+    # the missing `command:` key and the run dies as a parse error, so that shape blocks either
+    # way and cannot witness a layer. It is asserted (assertion 8), never used as proof.
+    echo "── [mutation matrix] malformed-step contract: F = parse-time, G = declared ⊆ emitted"
+    for mode in fg f g; do
+        VC_MUT="$WORK/vc-$mode.sh"
+        if ! make_vc "$VC_MUT" "$mode"; then
+            violation "could not neuter layer(s) '$mode' — the anchor no longer appears exactly" \
+                      "once in verify-completion.sh, so this guard's mutation proof is stale."
+            continue
         fi
-    else
-        violation "could not neuter layer 'f' — the anchor no longer appears exactly once in" \
-                  "verify-completion.sh, so this guard's mutation proof is stale."
-    fi
+        for shape in emptycommands commentonly whitespaceonly blankid; do
+            case "$mode:$shape" in
+                fg:*)                          want_launder=0 ;;
+                f:commentonly|f:whitespaceonly) want_launder=0 ;;
+                *)                             want_launder=1 ;;
+            esac
+            malformed_step_launders "$VC_MUT" "$mode" "$shape"; MUT_LAUNDERED=$?
+            if [ "$want_launder" -eq 0 ]; then
+                echo "  $mode neutered (must REPRODUCE): $EW_DESC"
+            else
+                echo "  $mode neutered (must still BLOCK): $EW_DESC"
+            fi
+            if [ "$want_launder" -eq 0 ] && [ "$MUT_LAUNDERED" -ne 0 ]; then
+                violation "with layer(s) '$mode' neutered the '$shape' shape did NOT reproduce" \
+                          "the defect. Assertion 8 therefore proves nothing for it — it would" \
+                          "pass on the unfixed script too. Fix the harness, not the guard."
+            fi
+            if [ "$want_launder" -eq 1 ] && [ "$MUT_LAUNDERED" -eq 0 ]; then
+                violation "with layer(s) '$mode' neutered the '$shape' shape laundered a green" \
+                          "verdict — the remaining layer does not hold the contract on its own."
+            fi
+        done
+    done
 fi
 
 echo ""
@@ -711,5 +853,5 @@ if [ "$VIOLATIONS" -gt 0 ]; then
     echo "resume_provenance_guard: FAIL — $VIOLATIONS violation(s): a blocked R25 run can seed a false-green resume" >&2
     exit 1
 fi
-echo "resume_provenance_guard: PASS — an unobserved step is never certified, a command whose working directory is absent blocks instead of skipping, every required command must actually execute before a step is publishable, a resume record is consumable only by the tree that produced it, a selected step with no commands BLOCKS the parse, a blocked run publishes no resume record, SHORT_CIRCUITED is not inheritable, advisory stays advisory, and legitimate resume still works"
+echo "resume_provenance_guard: PASS — an unobserved step is never certified, a command whose working directory is absent blocks instead of skipping, every required command must actually execute before a step is publishable, a resume record is consumable only by the tree that produced it, a malformed step (no commands / inert command text / no usable id / duplicate id / non-mapping entry) BLOCKS the parse and every declared step must have emitted a plan row, a blocked run publishes no resume record, SHORT_CIRCUITED is not inheritable, advisory stays advisory, and legitimate resume still works"
 exit 0

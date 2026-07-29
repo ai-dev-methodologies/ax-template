@@ -13,6 +13,27 @@
 #   4. has full_run == true (a --step partial run writes full_run=false and
 #      must NOT satisfy the completion contract — closes the dogfood-confirmed
 #      P2 where a single trivial step was indistinguishable from a full PASS)
+#   5. identifies the TREE it verified (tree_fingerprint present and not a
+#      degraded placeholder), and
+#   6. that tree was CLEAN — i.e. it was the committed tree of head_sha.
+#
+# Why 5+6 (cross-family review P1, 2026-07-29 — this needs no --resume at all):
+#   head_sha does not identify the code that was verified. R25 is routinely run on a
+#   dirty tree, so one head covers arbitrarily many trees, and a push ships the COMMIT:
+#     1. committed HEAD H fails frontend lint
+#     2. an UNCOMMITTED fix makes a full R25 run pass  → {head_sha:H, exit:0, full_run:true}
+#     3. the fix is stashed/reverted — nothing re-runs, the audit line is untouched
+#     4. `git push` H → this guard used to accept that line
+#   The pushed tree was never verified; the verified tree was never pushed. Requiring the
+#   evidence to come from the clean tree of the pushed sha closes it, because a clean tree
+#   at sha S IS the tree of S.
+#   Scope, deliberately: only PUSH eligibility tightens. Dirty-tree runs remain fully
+#   usable locally and for `--resume` (verify-completion binds those by fingerprint), so
+#   the iteration loop is unchanged — what changes is that shipping requires re-running
+#   the contract once the work is committed.
+#   HONEST LIMIT: git-ignored paths (node_modules/, build/) are outside git's model and
+#   cannot be pinned by any of this; "clean" means identical to the commit in every path
+#   git tracks or would track.
 #
 # Rule of construction (R25 brief): "verify-completion.sh 실행 안 한 채로 commit
 # 하면 trip" — so this guard is what backstops pre-commit / pre-push hook
@@ -206,7 +227,56 @@ if latest.get("full_run") is not True:
         f'verify-completion.sh` with no --step filter.'
     )
 
+# 6. The evidence must identify the TREE it verified. A line without a usable
+#    fingerprint predates this binding, or came from a run that could not tell what it
+#    was looking at ("nogit" = no git working tree, "unverifiable-*" = the fingerprint
+#    helper failed). Fail closed: re-running the contract is always available.
+tree_fp = latest.get("tree_fingerprint")
+tree_fp_usable = (isinstance(tree_fp, str) and bool(tree_fp)
+                  and tree_fp != "nogit" and not tree_fp.startswith("unverifiable-"))
+if not tree_fp_usable:
+    emit_fail(
+        "AUDIT_TREE_UNIDENTIFIED",
+        f'latest audit line does not identify the working tree it verified '
+        f'(tree_fingerprint={tree_fp!r}). head_sha alone is satisfied by ANY tree at that '
+        f'commit, so it cannot show that the code being pushed is the code that passed. '
+        f'Re-run `bash practices/scripts/verify-completion.sh` at the commit you are pushing.'
+    )
+
+# 7. That tree must have been the COMMITTED tree of head_sha. This is the push-evidence
+#    rule: a commit is what ships, so evidence gathered from a working tree that differs
+#    from the commit is evidence about code the receiver will never get.
+if latest.get("tree_clean") is not True:
+    hint = ""
+    try:
+        dirty = subprocess.check_output(
+            ["git", "-C", str(root), "status", "--porcelain", "-uall"],
+            stderr=subprocess.DEVNULL,
+        ).decode().splitlines()
+        if dirty:
+            shown = "\n    ".join(dirty[:10])
+            more = f"\n    … and {len(dirty) - 10} more" if len(dirty) > 10 else ""
+            hint = f"\n  Currently uncommitted/untracked here:\n    {shown}{more}"
+    except Exception:
+        pass
+    emit_fail(
+        "AUDIT_DIRTY_TREE_EVIDENCE",
+        f'the latest verify-completion.sh run was performed on a DIRTY working tree '
+        f'(tree_clean={latest.get("tree_clean")!r}), so it certifies a tree that differs '
+        f'from the commit being pushed — an uncommitted change that makes the run pass does '
+        f'not travel with the push. Commit (or stash, or .gitignore) everything, then re-run '
+        f'`bash practices/scripts/verify-completion.sh` at the commit you are pushing. '
+        f'Local iteration is unaffected: only push eligibility requires a clean tree.{hint}'
+    )
+
 # All conditions satisfied.
-print(f'{{"signal":"completion_checklist.recency_pass","head_sha":"{expected_head[:12]}","ts":"{ts}"}}')
+# Defensive slice: check 6 guarantees tree_fp is a usable string here, so this cannot be a
+# second detection path. It is written this way so that neutering check 6 (fixture_kill_proof
+# [87] does exactly that) fails the fixture through check 6's ABSENCE, not through a
+# TypeError raised by this success line — an incidental crash would make the kill-proof
+# report the fixture as vacuous while actually hiding the real coverage question.
+fp_short = tree_fp[:12] if isinstance(tree_fp, str) else "unknown"
+print(f'{{"signal":"completion_checklist.recency_pass","head_sha":"{expected_head[:12]}",'
+      f'"tree":"clean","tree_fingerprint":"{fp_short}","ts":"{ts}"}}')
 sys.exit(0)
 PYEOF

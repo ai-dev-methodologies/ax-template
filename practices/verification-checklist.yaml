@@ -461,9 +461,9 @@ checklist:
          editing the assertion violates spec_ref_guard.
       5. Re-run the single domain task first, then re-run this whole step.
 
-  # ── 3. Hard guards (91 mechanical guards under run-all-guards.sh) ───────────
+  # ── 3. Hard guards (94 live mechanical guards under run-all-guards.sh) ──────
   - id: hard-guards
-    title: "91 mechanical hard guards (run-all-guards.sh --include-fixtures)"
+    title: "94 live mechanical hard guards (run-all-guards.sh --include-fixtures)"
     parallel: false
     commands:
       - command: "bash practices/evals/run-all-guards.sh --include-fixtures"

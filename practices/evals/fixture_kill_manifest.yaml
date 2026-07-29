@@ -111,6 +111,34 @@ items:
     anchor: 'latest.get("full_run") is not True'
     neuter: 'False'
 
+  # ── completion_checklist_recency/fail_audit_log_dirty_tree: push-evidence gate ─
+  # fixture: runs.jsonl latest line is green on every pre-existing axis (head match,
+  #          exit=0, hard_fail=0, full_run=true, tree_fingerprint present) but carries
+  #          tree_clean=false — evidence produced on a dirty tree, which certifies a
+  #          tree that differs from the commit being pushed → exit 1.
+  # anchor:  the tree_clean check condition (check #7 in the guard).
+  # neuter:  condition-constant False → dirty-tree evidence accepted again → exit 0.
+  - id: completion_checklist_recency/fail_audit_log_dirty_tree
+    guard: practices/evals/completion_checklist_recency_guard.sh
+    fixture: practices/evals/fixtures/completion_checklist_recency/fail_audit_log_dirty_tree
+    fixture_arg: '--root'
+    anchor: 'latest.get("tree_clean") is not True'
+    neuter: 'False'
+
+  # ── completion_checklist_recency/fail_audit_log_no_tree_fingerprint ───────────
+  # fixture: runs.jsonl latest line is green on every other axis (including
+  #          tree_clean=true) but omits tree_fingerprint entirely — the shape of every
+  #          line written before the tree binding existed, and of a run whose
+  #          fingerprint degraded (nogit / unverifiable-*) → exit 1.
+  # anchor:  the fingerprint-usability check condition (check #6 in the guard).
+  # neuter:  condition-constant False → unidentified trees accepted again → exit 0.
+  - id: completion_checklist_recency/fail_audit_log_no_tree_fingerprint
+    guard: practices/evals/completion_checklist_recency_guard.sh
+    fixture: practices/evals/fixtures/completion_checklist_recency/fail_audit_log_no_tree_fingerprint
+    fixture_arg: '--root'
+    anchor: 'not tree_fp_usable'
+    neuter: 'False'
+
   # ── evidence_guard/fail_missing_caveat: P2-20 internal_design caveat check ────
   # fixture: an internal_design rule carrying a source_type:external evidence entry
   #          that omits `anchors: generic_principle_only` → evidence_guard exit 1.
@@ -527,17 +555,34 @@ items:
     neuter: 'false'
 
   # ── resume_provenance/fail_unfixed_emptystep: silently-dropped checklist step [96] ──
-  # fixture: neuter-mode `f` — a copy of the LIVE verify-completion.sh that no longer rejects
-  #          a SELECTED step declaring `commands: []`. Such a step emits no plan row, never
+  # fixture: neuter-mode `fg` — a copy of the LIVE verify-completion.sh that no longer rejects
+  #          a SELECTED step declaring `commands: []` (F) AND no longer asserts that every
+  #          DECLARED step emitted a plan row (G). Such a step emits no plan row, never
   #          enters STEP_ORDER, and is therefore invisible to every accounting check, so the
   #          run publishes green with a required step never verified → exit 1.
-  # anchor:  the single verdict that turns "a green verdict was published although the step
-  #          never entered the executed plan" into a finding.
+  # anchor:  the single verdict that turns "a green verdict was published although the
+  #          malformed step ran nothing" into a finding.
   # neuter:  condition-constant false → the dropped step is never recognised; the --step
   #          selection (no over-blocking) assertion still holds on this fixture → exit 0.
   - id: resume_provenance/fail_unfixed_emptystep
     guard: practices/evals/resume_provenance_guard.sh
     fixture: practices/evals/fixtures/resume-provenance/fail_unfixed_emptystep
     fixture_arg: '--fixture-root'
-    anchor: '[ "$erc" -eq 0 ] && [ "$eseen" -eq 0 ]'
+    anchor: '[ "$erc" -eq 0 ] && [ "$mran" -eq 0 ]'
+    neuter: 'false'
+
+  # ── resume_provenance/fail_unfixed_inertcommand: comment-only command PASS [96] ──
+  # fixture: neuter-mode `f` — the parse-time malformed-step contract removed, structural
+  #          layer G left INTACT. A step whose command is `# temporarily disabled` (or pure
+  #          whitespace) emits a plan row and executes: `bash -c` exits 0, so the runner
+  #          records origin=executed and the step is a genuine PASS with nothing run. No
+  #          structural check can see it — which is why F alone must hold here → exit 1.
+  # anchor:  same single verdict (shared with the emptystep fixture by construction: one
+  #          detection axis for the whole malformed-step family).
+  # neuter:  condition-constant false → an inert command is never recognised → exit 0.
+  - id: resume_provenance/fail_unfixed_inertcommand
+    guard: practices/evals/resume_provenance_guard.sh
+    fixture: practices/evals/fixtures/resume-provenance/fail_unfixed_inertcommand
+    fixture_arg: '--fixture-root'
+    anchor: '[ "$erc" -eq 0 ] && [ "$mran" -eq 0 ]'
     neuter: 'false'
