@@ -607,9 +607,54 @@ for sid in $STEP_ORDER; do
         echo ""
         echo "  ⛔ fail-fast: step [$sid] FAILED — short-circuiting the remaining steps"
         echo "     (a fail_fast pre-gate failed; the heavy downstream steps are skipped — fix + re-run)."
+        SHORT_CIRCUITED=1
         break
     fi
 done
+
+# Fault injection for the check below (same spirit as AX_PREFLIGHT_FAKE_MISSING):
+#   AX_FAKE_LEDGER_LOSS=missing  — the ledger disappears entirely mid-run
+#   AX_FAKE_LEDGER_LOSS=partial  — the ledger survives but an earlier step's records are gone
+# Both reproduce the 2026-07-29 TMPDIR-wipe shape without needing a destructive guard.
+case "${AX_FAKE_LEDGER_LOSS:-}" in
+    missing) rm -f "$RESULTS_FILE" ;;
+    partial) _ax_first="$(awk -F'\t' 'NR==1 { print $1 }' "$RESULTS_FILE" 2>/dev/null)"
+             [ -n "$_ax_first" ] && awk -F'\t' -v s="$_ax_first" '$1!=s' "$RESULTS_FILE" > "$RESULTS_FILE.tmp" \
+                 && mv "$RESULTS_FILE.tmp" "$RESULTS_FILE" ;;
+esac
+
+LEDGER_BROKEN=0
+SHORT_CIRCUITED="${SHORT_CIRCUITED:-0}"
+# ── 6b. Accounting integrity — FAIL CLOSED ──────────────────────────────────
+# A run may claim green ONLY if its own result ledger is intact. On 2026-07-29 a
+# guard recursively deleted TMPDIR mid-run (it rmtree'd the PARENT of its shim dir),
+# destroying RESULTS_FILE. Every step after that point recorded nothing, so the
+# summary counted 0 failures and printed "PASS — all steps green" while three whole
+# steps went unaccounted. A failure in those steps would have been invisible.
+# Silence is not success: an unreadable or incomplete ledger BLOCKS (exit 2), it does
+# not degrade into a PASS.
+if [ ! -r "$RESULTS_FILE" ]; then
+    echo "verify-completion: R25 BLOCK: result ledger is missing or unreadable ($RESULTS_FILE)." \
+         "Step outcomes were not recorded, so a PASS cannot be claimed. This usually means" \
+         "something deleted the temp file mid-run." >&2
+    LEDGER_BROKEN=1
+fi
+_ax_unrecorded=""
+while IFS= read -r _ax_sid; do
+    [ -n "$_ax_sid" ] || continue
+    awk -F'\t' -v s="$_ax_sid" '$1==s { found=1 } END { exit !found }' "$RESULTS_FILE" \
+        || _ax_unrecorded="$_ax_unrecorded $_ax_sid"
+done <<EOF_STEPS
+$STEP_ORDER
+EOF_STEPS
+# A fail_fast short-circuit legitimately leaves the remaining steps unrun and therefore
+# unrecorded — that is the designed behaviour, not a corrupted ledger. Only a run that
+# went the distance may be held to "every planned step has an outcome".
+if [ -n "$_ax_unrecorded" ] && [ "$SHORT_CIRCUITED" -eq 0 ]; then
+    echo "verify-completion: R25 BLOCK: no recorded outcome for step(s):$_ax_unrecorded" \
+         "— the result ledger is incomplete, so a PASS cannot be claimed." >&2
+    LEDGER_BROKEN=1
+fi
 
 # ── 7. Summary ──────────────────────────────────────────────────────────────
 echo ""
@@ -628,6 +673,11 @@ echo "  SKIP         : $SKIP_COUNT"
 TS="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 EXIT_CODE=0
 [ "$HARD_FAIL" -gt 0 ] && EXIT_CODE=1
+# A broken result ledger outranks the counters: they were derived from the very file
+# that is missing/incomplete, so they cannot be trusted. Exit 2 (BLOCK) — but only
+# AFTER the audit line is written, because fail_fast_blocking_audit_guard enforces
+# that no blocking path may skip the audit trail.
+[ "${LEDGER_BROKEN:-0}" -ne 0 ] && EXIT_CODE=2
 
 # full_run distinguishes a whole-checklist run from a --step partial run. The
 # recency guard accepts ONLY full_run=true — otherwise a single trivial step
@@ -663,6 +713,19 @@ mv -f "$RESUME_NEW" "$RESUME_LOG"
 
 if [ "$JSON_OUTPUT" -eq 1 ]; then
     tail -1 "$AUDIT_LOG"
+fi
+
+# Ledger integrity outranks the counters below: HARD_FAIL/PASS_COUNT are derived by
+# grepping the very file that is missing or incomplete, so a 0 there means "unknown",
+# not "clean". Placed AFTER the audit write above so the blocking path still leaves a
+# trail (fail_fast_blocking_audit_guard enforces that no blocking path skips the audit).
+if [ "${LEDGER_BROKEN:-0}" -ne 0 ]; then
+    echo ""
+    echo "verify-completion: BLOCKED — the result ledger was missing or incomplete;"
+    echo "step outcomes are UNKNOWN, so this run cannot claim green."
+    echo "Iron Law: task is NOT done. Re-run R25. If it recurs, something is deleting"
+    echo "the temp ledger mid-run (see P0-30)."
+    exit 2
 fi
 
 if [ "$HARD_FAIL" -gt 0 ]; then

@@ -253,7 +253,8 @@ if not full_blocked:
 # PyYAML-dependent guard must ALSO fail closed on its own: exit 2 ("cannot verify"), never
 # 0, and never an "all pass"-shaped message it did not earn. Simulated deterministically
 # with a PYTHONPATH shim whose yaml.py raises ImportError (no install, no network).
-shim = os.path.join(tempfile.mkdtemp(prefix="ax-noyaml-"), "")
+shim_dir = tempfile.mkdtemp(prefix="ax-noyaml-")
+shim = os.path.join(shim_dir, "")
 with open(os.path.join(shim, "yaml.py"), "w") as fh:
     fh.write('raise ImportError("simulated: PyYAML unavailable")\n')
 
@@ -313,7 +314,13 @@ print(f"  fail-closed probes      : {probed} guard(s) executed under simulated P
 for rel, reason in exempted:
     print(f"    probe-exempt: {rel} — {reason}")
     print(f"                  (asserted statically instead: fail-closed preflight present)")
-shutil.rmtree(os.path.dirname(shim.rstrip(os.sep)), ignore_errors=True)
+# DESTRUCTIVE-BUG FIX (2026-07-29): this previously read
+#     shutil.rmtree(os.path.dirname(shim.rstrip(os.sep)), ...)
+# `shim` IS the mkdtemp directory (with a trailing separator), so dirname() resolved
+# to its PARENT — i.e. TMPDIR itself — and the guard recursively deleted the whole
+# system temp directory. That wiped the RESULTS_FILE of the very verify-completion.sh
+# run executing this guard. Remove the shim directory we created, nothing above it.
+shutil.rmtree(shim_dir, ignore_errors=True)
 
 if violations:
     print("", file=sys.stderr)
