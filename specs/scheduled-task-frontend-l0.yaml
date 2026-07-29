@@ -1,0 +1,195 @@
+# specs/scheduled-task-frontend-l0.yaml
+# Page Compliance Spec — scheduled-task domain, full_trio mode.
+#
+# BACKLOG P2-47. Authored 2026-07-30 so the trio allowlist can stop lying: the allowlist
+# entry read `backend_only` ("no frontend UI in scope") while the spec, the L4 README and
+# the disk all said full-trio, which made trio_integrity_guard SKIP this domain's
+# frontend trio entirely. Flipping the entry required this file to exist.
+#
+# Every item's backend_operation_id resolves to contracts/scheduled-task-openapi.yaml.
+# Every item's backend_spec_ref resolves to an id in specs/scheduled-task-l0.yaml.
+# static_source_ref is [] for all items (full_trio: FORBIDDEN to be non-empty).
+#
+# SCOPE DISCIPLINE: every item describes behaviour already on disk in
+# templates/L4/scheduled-task/app/ and binds to a mechanism that already resolves (a
+# practices/evals guard or an evidence-anchored practices/rules entry). The render
+# assertions named in test_method live in
+# frontend/tests/scheduled-task-history-view.vitest.tsx (P2-42 pass 1).
+
+domain: scheduled-task
+domain_mode: full_trio
+backend_spec_ref: specs/scheduled-task-l0.yaml
+frontend_required: true
+
+items:
+  - id: SCHED-FE-001
+    verification:
+      mechanism: guard
+      ref: trio_integrity_guard.sh
+    requirement: >
+      The admin task-list route
+      (templates/L4/scheduled-task/app/(admin)/scheduled-tasks/page.tsx) binds the
+      listScheduledTasks operation declared for it in contracts/scheduled-task-ui.yaml,
+      and that operation must resolve against contracts/scheduled-task-openapi.yaml — a
+      route may not bind an operation the backend contract does not publish.
+    backend_operation_id: listScheduledTasks
+    backend_spec_ref: SCHED-REGISTER-001
+    static_source_ref: []
+    test_method: "practices/evals/trio_integrity_guard.sh (route operationId resolution)"
+    verification_type: negative
+    policy_ref: "blueprints/scheduled-task-ui-manifest.yaml#routes"
+    coverage_threshold: 1.0
+    backend_only_marker: false
+
+  - id: SCHED-FE-002
+    verification:
+      mechanism: guard
+      ref: trio_integrity_guard.sh
+    requirement: >
+      The per-task history route
+      (templates/L4/scheduled-task/app/(admin)/scheduled-tasks/[id]/page.tsx) binds the
+      getTaskHistory operation declared for it in contracts/scheduled-task-ui.yaml,
+      resolving against contracts/scheduled-task-openapi.yaml. This is the UI leg of the
+      JobHistory record written for every execution, success or failure.
+    backend_operation_id: getTaskHistory
+    backend_spec_ref: SCHED-EXECUTE-001
+    static_source_ref: []
+    test_method: "practices/evals/trio_integrity_guard.sh (route operationId resolution)"
+    verification_type: negative
+    policy_ref: "blueprints/scheduled-task-ui-manifest.yaml#routes"
+    coverage_threshold: 1.0
+    backend_only_marker: false
+    notes: >
+      DRIFT CLOSED 2026-07-30: the page's template frontmatter used to declare
+      `backend_operation_id: getScheduledTaskHistory`, which is not an operationId in
+      contracts/scheduled-task-openapi.yaml — the published operation is `getTaskHistory`.
+      The frontmatter now reads getTaskHistory, matching this item and
+      contracts/scheduled-task-ui.yaml. RESIDUAL (unenforced, deliberately stated): no
+      guard parses L4 page frontmatter against the contracts, so only the -ui.yaml route
+      binding is mechanically resolved by trio_integrity_guard; the frontmatter agreeing
+      is currently a reviewed fact, not a gated one.
+
+  - id: SCHED-FE-003
+    verification:
+      mechanism: guard
+      ref: l4_presentational_view_guard.sh
+    requirement: >
+      The history route keeps both useQuery calls (task + history) on page.tsx and passes
+      resolved data plus callbacks to scheduled-task-history-view.tsx, which imports no
+      data-fetching hook; the page MUST import that view, so the render layer cannot be
+      re-inlined while the view file rots unimported. Ledgered in
+      practices/evals/l4_presentational_view_ledger.yaml as (scheduled-task, history).
+    backend_operation_id: getTaskHistory
+    backend_spec_ref: SCHED-EXECUTE-001
+    static_source_ref: []
+    test_method: "practices/evals/l4_presentational_view_guard.sh + frontend/tests/scheduled-task-history-view.vitest.tsx"
+    verification_type: negative
+    policy_ref: "blueprints/scheduled-task-ui-manifest.yaml#render_boundary"
+    coverage_threshold: 1.0
+    backend_only_marker: false
+
+  - id: SCHED-FE-004
+    verification:
+      mechanism: guard
+      ref: l4_role_default_failclosed_guard.sh
+    requirement: >
+      Both admin routes derive the caller's role from useCallerRole()
+      (templates/L0/fork-receiver-kit/use-caller-id) and render an access-required
+      EmptyState instead of the surface when the role is not admin. A role flag may not
+      be a literal `true`, nor derived from any source other than the canonical hook.
+    backend_operation_id: triggerScheduledTask
+    backend_spec_ref: SCHED-EXECUTE-001
+    static_source_ref: []
+    test_method: "practices/evals/l4_role_default_failclosed_guard.sh (static + dynamic pass)"
+    verification_type: negative
+    policy_ref: "blueprints/scheduled-task-ui-manifest.yaml#rbac"
+    coverage_threshold: 1.0
+    backend_only_marker: false
+    notes: >
+      HONEST CAVEAT: specs/scheduled-task-l0.yaml carries no dedicated authorization
+      item (its families are REGISTER / LOCK / EXECUTE / IDEMPOTENT / RETENTION), so the
+      backend_spec_ref is the execution item whose admin surface this gate protects
+      rather than an exact authz counterpart.
+
+  - id: SCHED-FE-005
+    verification:
+      mechanism: rule
+      ref: destructive-action-confirm-with-side-effects
+    requirement: >
+      Manual "Trigger" asks for an explicit confirmation before invoking
+      triggerScheduledTask, because running a cron job out of cycle mutates downstream
+      state. When the backend reports that the run was NOT executed because the
+      distributed lock was already held, the UI states that outcome explicitly instead of
+      presenting the click as a successful run.
+    backend_operation_id: triggerScheduledTask
+    backend_spec_ref: SCHED-LOCK-001
+    static_source_ref: []
+    test_method: "practices/rules/destructive-action-confirm-with-side-effects.md (review against (admin)/scheduled-tasks/page.tsx trigger flow)"
+    verification_type: both
+    policy_ref: "blueprints/scheduled-task-ui-manifest.yaml#destructive_actions"
+    coverage_threshold: 1.0
+    backend_only_marker: false
+
+  - id: SCHED-FE-006
+    verification:
+      mechanism: rule
+      ref: stored-server-error-sanitize-at-render-layer
+    requirement: >
+      A JobHistory errorMessage supplied by the server passes through
+      sanitizeStoredError (templates/L0/fork-receiver-kit/parse-error) before it is
+      rendered, so a stack-trace fragment or an embedded identifier is not screen-shared
+      raw during incident review.
+    backend_operation_id: getTaskHistory
+    backend_spec_ref: SCHED-EXECUTE-001
+    static_source_ref: []
+    test_method: "frontend/tests/scheduled-task-history-view.vitest.tsx (a stored error message is rendered in its sanitized form)"
+    verification_type: unit_test
+    policy_ref: "blueprints/scheduled-task-ui-manifest.yaml#error_handling"
+    coverage_threshold: 1.0
+    backend_only_marker: false
+
+  - id: SCHED-FE-007
+    verification:
+      mechanism: rule
+      ref: background-poll-must-show-refresh-state
+    requirement: >
+      The history surface polls every 10 seconds (continuing while the tab is
+      backgrounded) AND exposes a manual Refresh control alongside a visible
+      updated-at stamp, so an operator can tell a fresh view from a stalled one.
+    backend_operation_id: getTaskHistory
+    backend_spec_ref: SCHED-EXECUTE-001
+    static_source_ref: []
+    test_method: "frontend/tests/scheduled-task-history-view.vitest.tsx (clicking Refresh invokes the refetch callback)"
+    verification_type: unit_test
+    policy_ref: "blueprints/scheduled-task-ui-manifest.yaml#freshness"
+    coverage_threshold: 1.0
+    backend_only_marker: false
+
+  - id: SCHED-FE-008
+    verification:
+      mechanism: rule
+      ref: optimistic-update-snapshot-rollback
+    requirement: >
+      Enable / Disable on a task row calls enableScheduledTask / disableScheduledTask and
+      flips that row's status in the cache optimistically — cancel in-flight queries,
+      snapshot the cached list, apply the new status, restore the snapshot if the mutation
+      fails, invalidate on settle. A refused toggle therefore cannot leave the operator
+      looking at a state the server never accepted. Disabling affects subsequent cycles
+      only; an execution already in flight is not interrupted.
+    backend_operation_id: enableScheduledTask
+    backend_spec_ref: SCHED-REGISTER-001
+    static_source_ref: []
+    test_method: "practices/rules/optimistic-update-snapshot-rollback.md (review against (admin)/scheduled-tasks/page.tsx buildToggleMutation onMutate/onError/onSettled)"
+    verification_type: positive
+    policy_ref: "blueprints/scheduled-task-ui-manifest.yaml#destructive_actions"
+    coverage_threshold: 1.0
+    backend_only_marker: false
+    notes: >
+      Authored 2026-07-30 once POST /{id}/enable and /{id}/disable were published in
+      contracts/scheduled-task-openapi.yaml. The UI and the controller
+      (ScheduledTaskController:114,120) always had this behaviour; the contract omitted
+      the two operations, so this item could not honestly name an operationId before now.
+      HONEST CAVEAT: specs/scheduled-task-l0.yaml has no lifecycle item for the
+      ENABLED/DISABLED transition itself (its families are REGISTER / LOCK / EXECUTE /
+      IDEMPOTENT / RETENTION), so backend_spec_ref points at the registration item that
+      owns the task record.

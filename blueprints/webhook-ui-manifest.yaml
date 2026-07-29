@@ -1,0 +1,108 @@
+template_id: webhook-ui-blueprint
+family: scaffold
+status: draft
+confidence: high
+stack:
+  frontend: next.js
+  contract: webhook-openapi
+  repo_shape: single-repo
+
+# Policy manifest for the L4 webhook admin vertical (BACKLOG P2-47). Each top-level key
+# below is an anchor targeted by a policy_ref in specs/webhook-frontend-l0.yaml and is
+# resolved by practices/evals/spec_policy_ref_guard.sh.
+
+# ─── Routes ──────────────────────────────────────────────────────────────────
+routes:
+  surfaces:
+    - path: "/(admin)/webhooks"
+      purpose: "endpoint registry — register / inspect / deactivate"
+      backend_operation_id: listWebhookEndpoints
+      spec_item: WEBHOOK-FE-001
+    - path: "/(admin)/webhooks/deliveries"
+      purpose: "delivery monitor — status filter + replay of terminal failures"
+      backend_operation_id: listWebhookDeliveries
+      spec_item: WEBHOOK-FE-002
+  binding_rule: >
+    Every route declares a backend_operation_id that resolves against
+    contracts/webhook-openapi.yaml. A route bound to an unpublished operation is a
+    contract lie and is blocked by trio_integrity_guard.
+
+# ─── Render boundary ─────────────────────────────────────────────────────────
+render_boundary:
+  strategy: page_owns_data_view_is_pure
+  page: "templates/L4/webhook/app/(admin)/webhooks/page.tsx"
+  view: "templates/L4/webhook/app/(admin)/webhooks/webhook-endpoints-view.tsx"
+  view_forbidden_imports:
+    - "@tanstack/react-query"
+    - "swr"
+  rationale: >
+    A view free of data-fetching hooks is renderable from a vitest that imports it
+    directly, without a QueryClientProvider and without aliasing a bare npm specifier
+    for a module living under templates/. Interaction concerns with no data dependency
+    (the confirm dialog, the clipboard copy, the beforeunload guard) stay in the view.
+  ledger: "practices/evals/l4_presentational_view_ledger.yaml (webhook, endpoints)"
+  spec_item: WEBHOOK-FE-003
+
+# ─── RBAC UI enforcement ─────────────────────────────────────────────────────
+rbac:
+  endpoints:
+    required_role: [ADMIN]
+    unauthorized_action: render_access_denied_notice
+  deliveries:
+    required_role: [ADMIN]
+    unauthorized_action: render_access_denied_notice
+  role_source: "useCallerRole() — templates/L0/fork-receiver-kit/use-caller-id"
+  forbidden_role_derivation:
+    - "const hasAdminRole = true            # fail-OPEN literal"
+    - "const isAdmin = userType === 'admin' # non-canonical source"
+  spec_item: WEBHOOK-FE-004
+
+# ─── One-time secret reveal ──────────────────────────────────────────────────
+secret_reveal:
+  returned_by: registerWebhookEndpoint
+  returned_on_list: false
+  panel_behavior: copy_then_acknowledge
+  unload_guard: beforeunload_while_unacknowledged
+  field_rendering: "read-only input with an explicit label; never re-derived from a list response"
+  spec_item: WEBHOOK-FE-005
+
+# ─── Destructive actions ─────────────────────────────────────────────────────
+destructive_actions:
+  deactivate_endpoint:
+    confirm_required: true
+    confirm_names_target: true          # aria-label carries the endpoint url
+    on_decline: no_mutation
+  replay_delivery:
+    allowed_on: terminal_failure_only
+    rationale: >
+      A non-terminal delivery is still owned by the retry scheduler; replaying it would
+      double-send.
+  spec_item: WEBHOOK-FE-006
+
+# ─── Freshness ───────────────────────────────────────────────────────────────
+freshness:
+  poll_interval_ms: 10000
+  poll_in_background: true
+  manual_refresh: required
+  staleness_indicator: "aria-live 'Updated <time>' stamp bound to dataUpdatedAt"
+  rationale: >
+    A polling incident dashboard without a refresh control and a visible updated-at
+    cannot be distinguished from a frozen one by the operator reading it.
+  spec_item: WEBHOOK-FE-007
+
+# ─── Error handling ──────────────────────────────────────────────────────────
+error_handling:
+  list_failure: "EmptyState titled 'Failed to load endpoints' / 'Failed to load deliveries'"
+  mutation_failure: "inline dismissible banner with role='alert', separate per mutation"
+  boundary: "ErrorBoundary wraps the rendered surface"
+
+# ─── Accessibility ───────────────────────────────────────────────────────────
+a11y:
+  buttons:
+    - "Row actions carry an aria-label naming their target (url or delivery id)"
+    - "In-flight mutations set aria-busy and aria-disabled rather than removing the control"
+  live_regions:
+    - "The updated-at stamp is aria-live='polite'"
+    - "Failure banners use role='alert'"
+  inputs:
+    - "The signing-secret field is a labelled read-only input"

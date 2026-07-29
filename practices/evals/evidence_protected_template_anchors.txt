@@ -49,11 +49,40 @@
 # checked the formatter twice, exited 0, and currency-input — the anchor this whole gate
 # exists for — became free to fabricate. So the ledger is now read as a SET: duplicates are
 # rejected, min_entries counts unique identities, and each `# require:` directive below
-# names an identity that MUST be present regardless of how many rows the file has. The same
-# two identities are additionally pinned as LIVE_REQUIRED_PROTECTED_IDENTITIES inside
+# names an identity that MUST be present regardless of how many rows the file has. Every
+# required identity is additionally pinned as LIVE_REQUIRED_PROTECTED_IDENTITIES inside
 # evidence_quote_spotcheck_guard.sh, so dropping one takes two coordinated edits.
+#
+# BACKLOG P2-51 (2026-07-30) — ALL 18 ROWS ARE NOW EXACT-REQUIRED, not just the original two.
+# Until now the other sixteen (the 2026-07-29 ratchet) were held by CARDINALITY ONLY: replace
+# any one of them with a different file's anchor and the row count stays 18, so min_entries,
+# the guard-pinned floor and the two pins were all still satisfied — the displaced anchor left
+# the fatal set in silence and its quote became free to fabricate, which is precisely the
+# round-3 bypass restarted from a different row. Cardinality detects only SHRINKAGE; identity
+# detects SUBSTITUTION. There is no row here for which substitution is legitimate: the file is
+# an enumeration of anchors that were each individually verified against the committed
+# snapshot body, so the honest way to remove one is to ratchet the floor down deliberately in
+# BOTH places (which the FLOOR / REQUIRED_IDENTITY_MISSING checks force to be explicit), never
+# to swap it out for another row. Adding a NEW verified anchor means: append the row, add its
+# `# require:`, add the tuple to the guard, and raise min_entries + LIVE_MIN_PROTECTED_ENTRIES.
 # require: templates/L1/components/currency-input.tsx::stripe-billing-2026-05
 # require: templates/L1/components/currency-formatter.tsx::stripe-billing-2026-05
+# require: templates/L1/components/checkbox.tsx::wcag-2-2
+# require: templates/L1/components/currency-formatter.tsx::next-intl-2026-05
+# require: templates/L1/components/locale-switcher.tsx::next-intl-2026-05
+# require: templates/L1/components/markdown-renderer.tsx::remark-2026-05
+# require: templates/L1/components/relative-time.tsx::next-intl-2026-05
+# require: templates/L1/components/rich-text-editor.tsx::tiptap-2026-05
+# require: templates/L1/components/skeleton.tsx::wcag-22-techniques-2026-05
+# require: templates/L1/components/sonner.tsx::wcag-22-techniques-2026-05
+# require: templates/L1/lib/utils.ts::shadcn-ui-2026-05
+# require: templates/L2/blocks/error-boundary.tsx::react-19-error-boundary
+# require: templates/L2/blocks/locale-provider.tsx::next-intl-2026-05
+# require: templates/L2/blocks/notification-list.tsx::tanstack-virtual-2026-05
+# require: templates/L2/blocks/offline-banner.tsx::mdn-navigator-online-2026-05
+# require: templates/L2/blocks/translation-boundary.tsx::next-intl-2026-05
+# require: templates/L2/blocks/translation-boundary.tsx::react-19-error-boundary
+# require: templates/L2/blocks/virtualized-table.tsx::tanstack-virtual-2026-05
 #
 # min_entries — the protected set MAY NOT BE REDUCED below this count. The guard
 # additionally pins LIVE_MIN_PROTECTED_ENTRIES=18 in evidence_quote_spotcheck_guard.sh for

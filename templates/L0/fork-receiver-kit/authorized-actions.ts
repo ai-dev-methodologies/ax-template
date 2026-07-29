@@ -51,6 +51,9 @@ export type ApprovalStepStatus = 'PENDING' | 'APPROVED' | 'REJECTED'
 
 export type ApprovalAction = 'view' | 'submit' | 'cancel' | 'approve' | 'reject'
 
+/** The two actions a single step can grant. Subset of {@link ApprovalAction}. */
+export type ApprovalStepAction = 'approve' | 'reject'
+
 export interface AuthorizedActionsStep {
   orderIndex: number
   approverUserId: string
@@ -118,12 +121,23 @@ const ACTION_ORDER: ApprovalAction[] = ['approve', 'cancel', 'reject', 'submit',
  * fallback may withhold an action the BE would allow, never offer one it would refuse.
  * In practice unreachable — an approval request cannot be created with a blank approver.
  *
- * <p>NOT identical to `use-caller-id.sameUser`, which trims: that is a general-purpose UI
- * identity helper with its own tested contract, while this one mirrors an enforcement
- * predicate. Deliberately duplicated rather than imported so this module stays a pure,
+ * <h3>Jurisdiction (P3-98)</h3>
+ * This is the comparator for every AUTHORIZATION-ADJACENT comparison in the
+ * approval-workflow surface — anything that gates a mutation (a submit button, an action
+ * panel) or renders a backend verdict as fact ("cannot self-approve"). It is EXPORTED for
+ * exactly that: an L4 page that needs such a comparison MUST import this one rather than
+ * reach for `use-caller-id.sameUser`.
+ *
+ * <p>`use-caller-id.sameUser` trims, and that is deliberate: it is a general-purpose
+ * DISPLAY/UI identity helper with its own tested contract (a "you" chip, an "you are the
+ * actor" label), where normalizing a fork-receiver's padded session id is a kindness with
+ * no authorization consequence. It is NOT an authorization comparator and must not be used
+ * as one — a trimming compare on an authz path offers or withholds an action the backend
+ * decides with `String.equals`, which is the divergence class P3-76/P3-98 closed.
+ * Deliberately duplicated here rather than imported so this module stays a pure,
  * dependency-free L0 leaf a fork-receiver can lift alone.
  */
-function sameId(a: string | null | undefined, b: string | null | undefined): boolean {
+export function sameId(a: string | null | undefined, b: string | null | undefined): boolean {
   const na = a ?? ''
   const nb = b ?? ''
   if (na === '' || nb === '') return false
@@ -229,6 +243,58 @@ export function deriveActionableStepFor(
     return step
   }
   return null
+}
+
+/**
+ * Whether THIS step grants THIS action to the caller — the per-BUTTON decision (P2-53).
+ *
+ * <h3>Why {@link actionableStepFor} is not enough</h3>
+ * That function answers *which* step is the caller's, and it returns a step when EITHER
+ * token is granted. A panel that renders both an Approve and a Reject button off that one
+ * answer therefore flattens the server's per-action granularity: a backend that granted
+ * only `reject` on the step (an approver whose policy allows halting a chain but not
+ * advancing it, or any narrower future policy) still got both buttons. Authorization is
+ * still enforced server-side, so this was never an authz hole — but it silently discards
+ * the granularity P2-38b/P3-76 went to the trouble of emitting. Gate each button on its
+ * own token.
+ *
+ * <h3>Server-first, same presence rule</h3>
+ * Presence is decided across the whole step list, exactly as in {@link actionableStepFor}:
+ * a backend at or after P3-76 emits the field on EVERY step, so one step carrying it means
+ * the server has spoken and an empty sibling is a real "no", not a missing answer.
+ */
+export function stepGrants(
+  request: AuthorizedActionsRequest,
+  step: AuthorizedActionsStep,
+  callerId: string | null | undefined,
+  action: ApprovalStepAction,
+): boolean {
+  if (request.steps.some((s) => Array.isArray(s.allowedActions))) {
+    // Set membership, not Array.includes — ax/no-array-includes-in-loop (callers gate
+    // several buttons off this in one render pass).
+    return new Set(step.allowedActions ?? []).has(action)
+  }
+  return deriveStepGrants(request, step, callerId, action)
+}
+
+/**
+ * Local derivation of {@link stepGrants} — the documented fallback for a fork-receiver
+ * backend that predates P3-76. Mirrors the approve/reject branch of
+ * {@link deriveAuthorizedActions} step for step, so the fallback grants a token exactly
+ * when that function would have added it. Exported so the parity test can hold it against
+ * the server's per-step answer.
+ */
+export function deriveStepGrants(
+  request: AuthorizedActionsRequest,
+  step: AuthorizedActionsStep,
+  callerId: string | null | undefined,
+  action: ApprovalStepAction,
+): boolean {
+  if (!isActionable(request)) return false
+  if (!sameId(step.approverUserId, callerId)) return false
+  if (!isNextActionableStep(request, step)) return false
+  const target: ApprovalStepStatus = action === 'approve' ? 'APPROVED' : 'REJECTED'
+  return STEP_TRANSITIONS[step.status].includes(target)
 }
 
 /**

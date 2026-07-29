@@ -82,6 +82,75 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
 
+  /scheduled-tasks/{id}/enable:
+    post:
+      operationId: enableScheduledTask
+      summary: Enable a scheduled task (admin)
+      tags: [scheduled-tasks-admin]
+      description: |
+        Moves the task to ENABLED so the scheduler will run it on its cron expression.
+        Returns the task in its NEW state — ScheduledTaskController.enable (line 114)
+        returns ScheduledTaskDto.TaskResponse.from(service.enable(id)), the same record
+        type getScheduledTask returns, hence the same response schema.
+        Audited: @Audited(action = "ENABLE", resourceType = "scheduled_task").
+        Published 2026-07-30 (P2-47 follow-up): the admin UI has always called this
+        endpoint and the controller has always implemented it, but the contract did not
+        declare it — under-declaration, not a phantom endpoint.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: The task in its new (ENABLED) state
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScheduledTaskDetail'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /scheduled-tasks/{id}/disable:
+    post:
+      operationId: disableScheduledTask
+      summary: Disable a scheduled task (admin)
+      tags: [scheduled-tasks-admin]
+      description: |
+        Moves the task to DISABLED so the scheduler will skip it. An execution already
+        in flight is NOT interrupted — disabling only affects subsequent cycles.
+        Returns the task in its NEW state — ScheduledTaskController.disable (line 120)
+        returns ScheduledTaskDto.TaskResponse.from(service.disable(id)), the same record
+        type getScheduledTask returns, hence the same response schema.
+        Audited: @Audited(action = "DISABLE", resourceType = "scheduled_task").
+        Published 2026-07-30 (P2-47 follow-up), same under-declaration as enable above.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: The task in its new (DISABLED) state
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScheduledTaskDetail'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
   /scheduled-tasks/{id}/trigger:
     post:
       operationId: triggerScheduledTask
@@ -177,19 +246,28 @@ components:
           type: string
           format: date-time
 
+    # Serialization of ScheduledTaskDto.TaskResponse (id, name, cronExpression, status,
+    # handlerBean, lastRunAt, createdAt, updatedAt) — the ONE record returned by all three
+    # single-task operations: getScheduledTask, enableScheduledTask, disableScheduledTask.
+    #
+    # CORRECTED 2026-07-30 (P2-47 follow-up). This schema previously declared lockHolder
+    # and lockedAt and omitted handlerBean. Those two fields live on the TaskLock entity
+    # (TaskLock.java:48,67) and on no response DTO — nothing on the wire has ever carried
+    # them, and no consumer in the tree reads them from a response. The drift mattered the
+    # moment enable/disable were published: binding two more operations to a schema
+    # describing fields their handler cannot emit would have tripled one lie instead of
+    # fixing it. handlerBean is nullable (@Column(name="handler_bean", length=255), no
+    # nullable=false); updatedAt is required (@Column(nullable=false)).
     ScheduledTaskDetail:
       allOf:
         - $ref: '#/components/schemas/ScheduledTaskSummary'
         - type: object
+          required: [updatedAt]
           properties:
-            lockHolder:
+            handlerBean:
               type: string
               nullable: true
-              description: Node ID currently holding the lock (null if unlocked)
-            lockedAt:
-              type: string
-              format: date-time
-              nullable: true
+              description: Spring bean name of the task's executor (null if unassigned)
             updatedAt:
               type: string
               format: date-time

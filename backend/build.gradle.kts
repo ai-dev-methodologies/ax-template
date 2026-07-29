@@ -526,6 +526,13 @@ tasks.register<Test>("testAsvs") {
     useJUnitPlatform {
         includeTags("ASVS")
     }
+    // BACKLOG P2-49 — explicit, opt-in pass-through for the auth-me golden
+    // REGENERATION command (AuthMeGoldenContractParityTest), identical to the
+    // wiring testCommonAdvice carries for P2-36's validation-errors golden.
+    // Absent the flag nothing is forwarded, so the regeneration test stays
+    // disabled and the assertion path can never write the fixture it compares
+    // against.
+    System.getProperty("golden.regenerate")?.let { systemProperty("golden.regenerate", it) }
 }
 
 tasks.register<Test>("testPractices") {

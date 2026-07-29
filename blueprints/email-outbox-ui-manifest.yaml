@@ -1,0 +1,126 @@
+template_id: email-outbox-ui-blueprint
+family: scaffold
+status: draft
+confidence: high
+stack:
+  frontend: next.js
+  contract: email-outbox-openapi
+  repo_shape: single-repo
+
+# Policy manifest for the L4 email-outbox admin vertical (BACKLOG P2-47). Each top-level
+# key below is an anchor targeted by a policy_ref in
+# specs/email-outbox-frontend-l0.yaml and is resolved by
+# practices/evals/spec_policy_ref_guard.sh.
+
+# ─── Routes ──────────────────────────────────────────────────────────────────
+routes:
+  surfaces:
+    - path: "/(admin)/email-outbox"
+      purpose: "outbox monitor — status filter, per-row retry / delete"
+      backend_operation_id: listEmailOutbox
+      spec_item: EMAIL-FE-001
+  binding_rule: >
+    The route declares a backend_operation_id that resolves against
+    contracts/email-outbox-openapi.yaml. previewEmailTemplate and getEmailOutboxEntry are
+    published by that contract but have no UI surface yet; no route claims them, because
+    a declared-but-unshipped route is the same lie in the other direction.
+
+# ─── Render boundary ─────────────────────────────────────────────────────────
+render_boundary:
+  strategy: page_owns_data_view_is_pure
+  page: "templates/L4/email-outbox/app/(admin)/email-outbox/page.tsx"
+  view: "templates/L4/email-outbox/app/(admin)/email-outbox/email-outbox-view.tsx"
+  view_forbidden_imports:
+    - "@tanstack/react-query"
+    - "swr"
+  rationale: >
+    Every mutation trigger reaches the view as a callback prop, so the whole
+    resolved-data → JSX path (list, per-row affordances, status filter, inline error
+    banners, empty state) renders in a vitest without a QueryClientProvider. The
+    confirmation dialogs stay in the view: they are interaction concerns with no data
+    dependency.
+  ledger: "practices/evals/l4_presentational_view_ledger.yaml (email-outbox, admin-monitor)"
+  spec_item: EMAIL-FE-002
+
+# ─── RBAC UI enforcement ─────────────────────────────────────────────────────
+rbac:
+  outbox_monitor:
+    required_role: [ADMIN]
+    unauthorized_action: render_access_denied_notice
+  role_source: "useCallerRole() — templates/L0/fork-receiver-kit/use-caller-id"
+  backend_counterpart: >
+    Every outbox admin endpoint requires ROLE_ADMIN and answers 403 otherwise
+    (specs/email-outbox-l0.yaml#EMAIL-ADMIN-001). The UI gate is a usability mirror of
+    that check, never a substitute for it.
+  forbidden_role_derivation:
+    - "const hasAdminRole = true            # fail-OPEN literal"
+    - "const isAdmin = userType === 'admin' # non-canonical source"
+  spec_item: EMAIL-FE-003
+
+# ─── Destructive actions ─────────────────────────────────────────────────────
+destructive_actions:
+  retry_entry:
+    confirm_required: true
+    classification: destructive_by_side_effect
+    rationale: "A retry sends a real message to a real recipient."
+    offered_when: entry_is_still_resendable
+    terminal_state_behavior: >
+      A SENT row renders a labelled terminal marker instead of a live Retry control, so a
+      delivered message cannot be re-sent from the console.
+  delete_entry:
+    confirm_required: true
+    on_decline: no_mutation
+  spec_item: EMAIL-FE-004
+
+# ─── Optimistic updates ──────────────────────────────────────────────────────
+optimistic_updates:
+  delete_entry:
+    sequence: [cancel_in_flight_queries, snapshot_cached_page, remove_row, rollback_on_error, invalidate_on_settle]
+    rationale: >
+      Without the snapshot restore, a failed delete leaves the operator looking at a list
+      the row silently disappeared from — the UI would be asserting a deletion the server
+      refused.
+  retry_entry:
+    strategy: pending_flag_only
+    rationale: "A retry changes status server-side; the row is not removed, so no snapshot is needed."
+  spec_item: EMAIL-FE-007
+
+# ─── Freshness ───────────────────────────────────────────────────────────────
+freshness:
+  poll_interval_ms: 10000
+  poll_in_background: true
+  manual_refresh: required
+  staleness_indicator: "aria-live 'Updated <time>' stamp bound to dataUpdatedAt"
+  rationale: >
+    A queue that has stopped draining and a view that has stopped updating look identical
+    without a visible updated-at plus an explicit refresh.
+  spec_item: EMAIL-FE-008
+
+# ─── Error handling ──────────────────────────────────────────────────────────
+error_handling:
+  stored_error_rendering: sanitize_before_render
+  sanitizer: "sanitizeStoredError — templates/L0/fork-receiver-kit/parse-error, injected as a prop"
+  rationale: >
+    lastError is provider-supplied text that can carry the recipient address or a
+    stack-trace fragment; the admin console renders the sanitized form only.
+  list_failure: "EmptyState titled 'Failed to load outbox'"
+  mutation_failure: "inline dismissible banner with role='alert', separate for retry and delete"
+  boundary: "ErrorBoundary wraps the rendered surface"
+  spec_item: EMAIL-FE-006
+
+# ─── Accessibility ───────────────────────────────────────────────────────────
+a11y:
+  in_flight_mutations:
+    strategy: aria_busy_and_aria_disabled
+    forbidden: remove_control_from_dom
+    scope: per_row                      # pending state is keyed by row id, never global
+    rationale: >
+      A control that disappears mid-mutation shifts the row under the cursor and
+      announces nothing; aria-busy keeps the element addressable and the state audible.
+  buttons:
+    - "Row actions carry an aria-label naming their target row"
+    - "The unavailable-retry affordance is labelled with WHY it is unavailable"
+  live_regions:
+    - "The updated-at stamp is aria-live='polite'"
+    - "Failure banners use role='alert'"
+  spec_item: EMAIL-FE-005

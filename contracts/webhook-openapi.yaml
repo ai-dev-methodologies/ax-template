@@ -17,23 +17,13 @@ paths:
       operationId: listWebhookEndpoints
       summary: List webhook endpoints (admin)
       tags: [webhook-admin]
-      parameters:
-        - name: active
-          in: query
-          schema:
-            type: boolean
-          description: When set, filters by active flag (true | false). Unset returns all.
-        - name: page
-          in: query
-          schema:
-            type: integer
-            default: 0
-        - name: size
-          in: query
-          schema:
-            type: integer
-            default: 20
-            maximum: 100
+      # No query parameters — WebhookAdminController.listEndpoints() (line 59) takes
+      # NONE and returns every endpoint. P3-92 deleted the three fictional ones
+      # (active / page / size) this operation used to declare: unlike
+      # /webhook-deliveries — where P3-67 KEPT the parameters because
+      # listDeliveries actually binds them — nothing here ever read them, so a
+      # client generated from this contract would have sent filters the server
+      # silently ignored (page/size) or that changed nothing (active).
       responses:
         '200':
           description: |

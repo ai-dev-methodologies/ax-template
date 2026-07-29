@@ -113,6 +113,25 @@ export function normalizeUserId(raw: string | null | undefined): string {
  * sameUser — string-equality compare that treats blank ids as never matching.
  * Catches the "two anonymous callers look equal" pitfall — useful for
  * polymorphic ownership checks where a missing id MUST NOT match anything.
+ *
+ * <h2>Jurisdiction: DISPLAY only — NOT an authorization comparator (P3-98)</h2>
+ * This helper TRIMS (via {@link normalizeUserId}), and its vitest contract pins that on
+ * purpose: it exists to label identity for a human — a "you" chip on a timeline row, a
+ * "you are the actor" marker in a feed — where normalizing a fork-receiver session hook's
+ * padded id is a kindness with no authorization consequence.
+ *
+ * Backends do not trim. Every id comparison the reference workloads ENFORCE is a bare
+ * {@code String.equals} (e.g. `ApprovalActionGuards.isAssignedApprover` / `isRequester`,
+ * `ApprovalService.validateApprovers`'s self-approve check). So using this helper on an
+ * authorization path — anything that gates a mutation, or renders a backend verdict as
+ * fact — offers or withholds an action the server decides differently. That is the
+ * client/server identity divergence class P3-76 closed inside
+ * `authorized-actions.ts` and P3-98 closed one layer up, in the L4 pages.
+ *
+ * For those comparisons import the exact mirror instead:
+ * {@code import { sameId } from './authorized-actions'}. Whether `ALICE` is `alice`, or
+ * ` bob ` is `bob`, is the identity provider's answer to give; a fork-receiver whose
+ * backend really does normalize should change BOTH sides, not fold on the client only.
  */
 export function sameUser(
   a: string | null | undefined,

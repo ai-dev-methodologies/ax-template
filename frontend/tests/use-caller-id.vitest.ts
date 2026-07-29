@@ -90,8 +90,20 @@ describe('normalizeUserId — trim + null-safe coercion', () => {
   })
 })
 
+// P3-98 — JURISDICTION OF THIS CONTRACT. sameUser is a DISPLAY/UI identity helper, NOT an
+// authorization comparator. The trim asserted below is deliberate and stays: it exists so a
+// "you" chip or a "you are the actor" label still lights up for a fork-receiver session
+// hook that returns a padded id, which has no authorization consequence.
+//
+// It must NOT be read as "the catalog folds identity for authorization". Any comparison
+// that gates a mutation or renders a backend verdict as fact uses the EXACT mirror
+// `sameId` exported from templates/L0/fork-receiver-kit/authorized-actions.ts (bare
+// equality, matching ApprovalActionGuards / ApprovalService.validateApprovers). The exact
+// leg is pinned by frontend/tests/authz-action-parity.vitest.ts (mixed-case / padded
+// golden rows) and, for the L4 pages that consume it, by
+// frontend/tests/approval-detail-view.vitest.tsx.
 describe('sameUser — blank ids never match (polymorphic-ownership pitfall)', () => {
-  it('matches equal, whitespace-trimmed ids', async () => {
+  it('matches equal, whitespace-trimmed ids — display jurisdiction, see the note above', async () => {
     const { sameUser } = await freshImport()
     expect(sameUser('user-1', 'user-1')).toBe(true)
     expect(sameUser(' user-1 ', 'user-1')).toBe(true)

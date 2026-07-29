@@ -1,0 +1,101 @@
+# contracts/webhook-ui.yaml
+# UI contract for the webhook domain (BACKLOG P2-47).
+# Defines the routes, components and data bindings of the L4 webhook admin vertical
+# that ships in templates/L4/webhook/app/. Every route below exists on disk and every
+# backend_operation_id resolves against contracts/webhook-openapi.yaml — enforced by
+# practices/evals/trio_integrity_guard.sh once this domain is full_trio in the
+# trio allowlist.
+
+domain: webhook
+domain_mode: full_trio
+backend_contract_ref: contracts/webhook-openapi.yaml
+spec_ref: specs/webhook-frontend-l0.yaml
+
+routes:
+  - path: "/(admin)/webhooks"
+    component: WebhookEndpointsPage
+    source: "templates/L4/webhook/app/(admin)/webhooks/page.tsx"
+    backend_operation_id: listWebhookEndpoints
+    spec_items: [WEBHOOK-FE-001, WEBHOOK-FE-003, WEBHOOK-FE-004, WEBHOOK-FE-005, WEBHOOK-FE-006]
+    description: >
+      Admin endpoint registry. Lists registered endpoints with url / active state /
+      event filter, registers a new endpoint (the signing secret is returned once and
+      surfaced through a copy-then-acknowledge panel), and deactivates an endpoint
+      behind an explicit confirmation. ROLE_ADMIN only.
+
+  - path: "/(admin)/webhooks/deliveries"
+    component: WebhookDeliveriesPage
+    source: "templates/L4/webhook/app/(admin)/webhooks/deliveries/page.tsx"
+    backend_operation_id: listWebhookDeliveries
+    spec_items: [WEBHOOK-FE-002, WEBHOOK-FE-004, WEBHOOK-FE-007]
+    description: >
+      Delivery monitor for incident response. Lists recent delivery attempts filtered
+      by status, polls every 10 seconds, and offers replay for rows that have reached a
+      terminal failure. ROLE_ADMIN only.
+
+components:
+  WebhookEndpointsPage:
+    owns_data: true                     # useQuery / useMutation live here (WEBHOOK-FE-003)
+    renders_view: WebhookEndpointsView
+    imports_l2:
+      - empty-state                     # zero-endpoint and load-failure sub-states
+    state:
+      data: "useQuery(['webhook-endpoints']) → GET /api/admin/webhook-endpoints"
+      register: "useMutation(POST /api/admin/webhook-endpoints) → EndpointWithSecret"
+      delete: "useMutation(DELETE /api/admin/webhook-endpoints/{id})"
+      role: "useCallerRole() — admin gate rendered before the view (WEBHOOK-FE-004)"
+
+  WebhookEndpointsView:
+    presentational: true                # no data-fetching hook (WEBHOOK-FE-003)
+    source: "templates/L4/webhook/app/(admin)/webhooks/webhook-endpoints-view.tsx"
+    render_test: "frontend/tests/webhook-endpoints-view.vitest.tsx"
+    imports_l2:
+      - empty-state
+      - error-boundary
+    props:
+      data: "EndpointResponse[] | undefined"
+      revealedEndpoint: "EndpointWithSecret | null — drives the one-time secret panel"
+      onSubmitRegister: "callback — page owns the mutation"
+      onDelete: "callback — invoked only after the confirmation is accepted"
+
+  WebhookDeliveriesPage:
+    owns_data: true
+    imports_l2:
+      - empty-state
+      - error-boundary
+    state:
+      data: "useQuery(['webhook-deliveries', status]) with refetchInterval 10s"
+      replay: "useMutation(POST /api/admin/webhook-deliveries/{id}/replay)"
+      freshness: "dataUpdatedAt rendered in an aria-live stamp + manual Refresh (WEBHOOK-FE-007)"
+
+data_flows:
+  endpoints_list:
+    trigger: "Route load"
+    request: "GET /api/admin/webhook-endpoints"
+    response: "EndpointResponse[] { id, url, active, eventFilter, createdAt, updatedAt }"
+    binding: "one row per element; empty array → EmptyState"
+    note: "The signing secret is absent from this response by design (WEBHOOK-FE-005)."
+
+  endpoint_register:
+    trigger: "Register form submit"
+    request: "POST /api/admin/webhook-endpoints { url, eventFilter }"
+    response: "EndpointWithSecret — EndpointResponse plus the one-time signingSecret"
+    post_submit: "reveal panel holds the secret until acknowledged; beforeunload guard armed"
+
+  endpoint_deactivate:
+    trigger: "Per-row Delete, after the confirmation is accepted"
+    request: "DELETE /api/admin/webhook-endpoints/{id}"
+    response: "204 No Content"
+    binding: "list invalidated on settle"
+
+  deliveries_list:
+    trigger: "Route load, 10s poll, or manual Refresh"
+    request: "GET /api/admin/webhook-deliveries?status=..."
+    response: "DeliveryResponse[] { id, endpointId, eventType, status, attemptCount, nextAttemptAt, lastResponseCode, lastAttemptAt, lastError, createdAt }"
+    binding: "status column + replay affordance on terminally failed rows only"
+
+  delivery_replay:
+    trigger: "Replay on a terminally failed row"
+    request: "POST /api/admin/webhook-deliveries/{id}/replay"
+    response: "202 Accepted — a NEW delivery row is enqueued (WEBHOOK-DEAD-LETTER-002)"
+    binding: "list invalidated; the original terminal row remains for trail integrity"

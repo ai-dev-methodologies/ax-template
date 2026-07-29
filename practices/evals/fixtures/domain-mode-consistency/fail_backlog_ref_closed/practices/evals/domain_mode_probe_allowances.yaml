@@ -1,0 +1,14 @@
+# domain_mode_probe_allowances.yaml — FIXTURE-ONLY ref-liveness subjects.
+#
+# The guard's real DIVERGENCE_ALLOWLIST is empty today (P2-47 closed the last three), so
+# without a subject the backlog_ref check would have nothing to run on and this fixture
+# would pass while proving nothing. This file supplies the subject the same way
+# domain_mode_floors.yaml supplies a floor: on disk, because fixture_kill_proof_guard [87]
+# can only invoke `<guard> --root <fixture>` and cannot pass a value.
+#
+# It is REFUSED on the catalog tree, and it can only ADD subjects to be checked — no field
+# here suppresses, relaxes or excuses anything.
+probe_allowances:
+  - name: fixture-known-gap
+    klass: known_gap
+    backlog_ref: P2-47

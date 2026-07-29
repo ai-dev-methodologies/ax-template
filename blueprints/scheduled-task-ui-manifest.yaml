@@ -1,0 +1,121 @@
+template_id: scheduled-task-ui-blueprint
+family: scaffold
+status: draft
+confidence: high
+stack:
+  frontend: next.js
+  contract: scheduled-task-openapi
+  repo_shape: single-repo
+
+# Policy manifest for the L4 scheduled-task admin vertical (BACKLOG P2-47). Each
+# top-level key below is an anchor targeted by a policy_ref in
+# specs/scheduled-task-frontend-l0.yaml and is resolved by
+# practices/evals/spec_policy_ref_guard.sh.
+
+# ─── Routes ──────────────────────────────────────────────────────────────────
+routes:
+  surfaces:
+    - path: "/(admin)/scheduled-tasks"
+      purpose: "task list — cron + state, enable/disable, manual trigger"
+      backend_operation_id: listScheduledTasks
+      spec_item: SCHED-FE-001
+    - path: "/(admin)/scheduled-tasks/[id]"
+      purpose: "per-task execution history with polling"
+      backend_operation_id: getTaskHistory
+      spec_item: SCHED-FE-002
+  binding_rule: >
+    Every route declares a backend_operation_id that resolves against
+    contracts/scheduled-task-openapi.yaml, and the operations a route calls beyond its
+    primary GET are listed as secondary_operations on that route (the
+    contracts/file-storage-ui.yaml convention). As of 2026-07-30 the list route's
+    secondary operations — enableScheduledTask, disableScheduledTask,
+    triggerScheduledTask — are all published: enable/disable were added to the OpenAPI
+    contract that day, closing an under-declaration in which the controller implemented
+    and the UI called two operations the contract never declared.
+  enforcement_scope: >
+    trio_integrity_guard resolves the primary backend_operation_id of every route.
+    secondary_operations is documentation, not a gated field — no guard resolves it
+    today, so it is a reviewed claim. Stated rather than implied, because a reader would
+    otherwise assume the whole route block is machine-checked.
+
+# ─── Render boundary ─────────────────────────────────────────────────────────
+render_boundary:
+  strategy: page_owns_data_view_is_pure
+  page: "templates/L4/scheduled-task/app/(admin)/scheduled-tasks/[id]/page.tsx"
+  view: "templates/L4/scheduled-task/app/(admin)/scheduled-tasks/[id]/scheduled-task-history-view.tsx"
+  view_forbidden_imports:
+    - "@tanstack/react-query"
+    - "swr"
+  rationale: >
+    Both useQuery calls and the role gate stay on the page; the view receives the
+    resolved task + history and a refetch callback, which makes the whole render path
+    (including the not-found and empty-history branches) unit-testable without a
+    QueryClientProvider.
+  ledger: "practices/evals/l4_presentational_view_ledger.yaml (scheduled-task, history)"
+  spec_item: SCHED-FE-003
+
+# ─── RBAC UI enforcement ─────────────────────────────────────────────────────
+rbac:
+  task_list:
+    required_role: [ADMIN]
+    unauthorized_action: render_access_denied_notice
+  task_history:
+    required_role: [ADMIN]
+    unauthorized_action: render_access_denied_notice
+  role_source: "useCallerRole() — templates/L0/fork-receiver-kit/use-caller-id"
+  forbidden_role_derivation:
+    - "const hasAdminRole = true            # fail-OPEN literal"
+    - "const isAdmin = currentUser.role === 'ADMIN'  # non-canonical source"
+  spec_item: SCHED-FE-004
+
+# ─── Destructive actions ─────────────────────────────────────────────────────
+destructive_actions:
+  manual_trigger:
+    confirm_required: true
+    classification: destructive_by_side_effect
+    rationale: >
+      Running a cron job out of cycle mutates downstream state and can collide with an
+      execution another instance already holds the distributed lock for.
+    not_executed_outcome: >
+      A response reporting that the run was skipped because the lock was held MUST be
+      surfaced as an explicit not-run outcome; presenting it as a successful run would
+      tell the operator the job ran when it did not.
+  toggle:
+    confirm_required: false
+    rationale: "Disabling is reversible and does not interrupt an in-flight run."
+    operations: [enableScheduledTask, disableScheduledTask]
+    optimistic_update:
+      sequence: [cancel_in_flight_queries, snapshot_cached_list, flip_row_status, rollback_on_error, invalidate_on_settle]
+      rationale: >
+        The row's status is the only thing the operator has to confirm the toggle landed;
+        flipping it without a rollback would assert a state the server may have refused.
+    spec_item: SCHED-FE-008
+  spec_item: SCHED-FE-005
+
+# ─── Freshness ───────────────────────────────────────────────────────────────
+freshness:
+  poll_interval_ms: 10000
+  poll_in_background: true
+  manual_refresh: required
+  staleness_indicator: "visible updated-at stamp bound to the history query's dataUpdatedAt"
+  spec_item: SCHED-FE-007
+
+# ─── Error handling ──────────────────────────────────────────────────────────
+error_handling:
+  stored_error_rendering: sanitize_before_render
+  sanitizer: "sanitizeStoredError — templates/L0/fork-receiver-kit/parse-error"
+  rationale: >
+    A JobHistory errorMessage is server-supplied text that routinely carries stack-trace
+    fragments and identifiers; rendering it raw exposes it to whoever is screen-sharing
+    the incident review.
+  load_failure: "EmptyState describing the failure; 'Not found' when the task does not resolve"
+  boundary: "ErrorBoundary wraps the rendered surface"
+  spec_item: SCHED-FE-006
+
+# ─── Accessibility ───────────────────────────────────────────────────────────
+a11y:
+  buttons:
+    - "Row actions name their target task"
+    - "In-flight mutations set aria-busy and aria-disabled rather than removing the control"
+  status:
+    - "Execution outcome is conveyed by text, not colour alone"

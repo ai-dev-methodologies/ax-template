@@ -3,11 +3,14 @@
  * template_id: backend/scheduled-task/LockingPolicy
  * layer: backend-domain
  * domain: scheduled-task
- * anchors_rule_absent: distributed-lock port; the catalog states no lock invariant. NOTE also that
- *   DbRowLockingPolicy.tryAcquire is findById -> check -> save (read-then-write), not the
- *   SELECT ... FOR UPDATE SKIP LOCKED this block used to claim, so anchoring it to
- *   shared-counter-claim-must-be-atomic would have made the template violate its own anchor.
- *   Enumerated in JAVA_NO_ANCHOR_EXEMPT in practices/evals/evidence_guard.sh.
+ * anchors_rule_absent: distributed-lock port; the catalog states no lock invariant. The SECOND
+ *   reason recorded here — that DbRowLockingPolicy.tryAcquire was findById -> check -> save
+ *   (read-then-write), so anchoring it to shared-counter-claim-must-be-atomic would have made the
+ *   template violate its own anchor — no longer holds: BACKLOG P2-48 replaced that read with a
+ *   pessimistic SELECT ... FOR UPDATE (ScheduledTaskRepository.findByIdForUpdate), so the claim
+ *   and the code now agree. The exemption stands on the first reason ALONE, and re-anchoring is
+ *   now a live option rather than a self-violation. Enumerated in JAVA_NO_ANCHOR_EXEMPT in
+ *   practices/evals/evidence_guard.sh.
  * provenance_class: internal_design
  * evidence:
  *   - source_type: external
@@ -19,7 +22,9 @@
  * usage: |
  *   Replace 'com.example.app' with your base package.
  *   LockingPolicy is the interface for distributed lock acquisition and release.
- *   DbRowLockingPolicy implements it using SELECT FOR UPDATE SKIP LOCKED on the scheduled_tasks table.
+ *   DbRowLockingPolicy implements it by loading the scheduled_tasks row under a pessimistic
+ *   SELECT ... FOR UPDATE row lock (ScheduledTaskRepository.findByIdForUpdate), so the
+ *   free-or-stale test and the claiming write cannot interleave with another node's.
  *   Stale locks (lockedAt + TTL < now) are forcibly reclaimed (SCHED-LOCK-002).
  *   Use MockLockingPolicy in unit tests to control lock behavior.
  */
@@ -38,12 +43,20 @@ import java.util.UUID;
 /**
  * Distributed lock abstraction for scheduled task execution.
  *
- * <p>Implementations must guarantee that only one node at a time holds the lock
- * for a given task, using an atomic operation (e.g., SELECT FOR UPDATE SKIP LOCKED).
+ * <p>Implementations must guarantee that only one node at a time holds the lock for a
+ * given task. The free-or-stale TEST and the claiming WRITE must be one indivisible
+ * step — a plain read, test, then save lets two nodes pass the same test on the same
+ * row and both believe they hold the lock. {@link DbRowLockingPolicy} gets that from a
+ * pessimistic row lock ({@code SELECT ... FOR UPDATE}); a conditional single-statement
+ * {@code UPDATE … WHERE <still-free>} whose affected-row count decides the winner is
+ * equally valid. ({@code SKIP LOCKED} is NOT the tool here: it makes a locked row look
+ * absent to the loser instead of making it wait and re-read, and H2 does not support it.)
  *
  * <p>Contract:
  * <ul>
- *   <li>{@link #tryAcquire}: returns true if lock acquired; false if already held.
+ *   <li>{@link #tryAcquire}: returns true if lock acquired; false if already held. A lost
+ *       race MUST be reported by returning false, never by throwing — callers treat an
+ *       exception as a failed job, not as a skipped one.
  *   <li>{@link #release}: releases the lock; safe to call even if not held.
  *   <li>Stale locks (held by crashed nodes) are reclaimed after {@code lock_ttl_seconds}.
  * </ul>
@@ -72,8 +85,12 @@ public interface LockingPolicy {
     /**
      * DB-row based distributed lock using pessimistic locking on the scheduled_tasks table.
      *
-     * <p>Acquire: finds the task row, checks if lock is free or stale (TTL expired),
-     * then atomically sets lockHolder + lockedAt.
+     * <p>Acquire: loads the task row with {@code SELECT ... FOR UPDATE}
+     * ({@link ScheduledTaskRepository#findByIdForUpdate}), checks whether the lock is free
+     * or stale (TTL expired), then sets lockHolder + lockedAt. Holding the row lock across
+     * that pair is what makes the acquire atomic: a second node's acquire BLOCKS on the lock
+     * and, once granted, re-reads the winner's committed lockedAt — no longer stale — and
+     * returns false.
      *
      * <p>Stale lock reclaim: if lockedAt + TTL &lt; now, the lock is considered stale
      * (held by a crashed node) and may be forcibly reclaimed (SCHED-LOCK-002).
@@ -96,7 +113,9 @@ public interface LockingPolicy {
         @Override
         @Transactional
         public boolean tryAcquire(UUID taskId, String lockHolder) {
-            return taskRepository.findById(taskId).map(task -> {
+            // FOR UPDATE, not findById: the row lock must span the isLockHeld() test and the
+            // acquireLock() write below, or two nodes both pass the test and both "win".
+            return taskRepository.findByIdForUpdate(taskId).map(task -> {
                 // Check if lock is free or stale
                 if (isLockHeld(task)) {
                     log.debug("Lock held by {} — skipping taskId={}", task.getLockHolder(), taskId);

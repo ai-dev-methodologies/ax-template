@@ -1,0 +1,4 @@
+# No presentational split in this fixture — the aria-busy leg passes on the page
+# itself, isolating the dataUpdatedAt leg as the single failing check.
+min_entries: 0
+entries: []

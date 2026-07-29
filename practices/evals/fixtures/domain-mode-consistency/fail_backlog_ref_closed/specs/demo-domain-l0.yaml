@@ -1,0 +1,4 @@
+# fixture spec — only the key this guard reads matters.
+id: demo-domain-l0
+domain_mode: backend_only
+items: []

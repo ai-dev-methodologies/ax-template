@@ -84,15 +84,20 @@ async function rejectStep(
  * Audience matrix:
  *   - Requester (DRAFT)         → Submit + Cancel buttons
  *   - Requester (SUBMITTED+)    → Cancel button only
- *   - Approver at current step  → Approve + Reject + comment box
+ *   - Approver at current step  → comment box + whichever of Approve / Reject
+ *                                 that step's own allowedActions grants (P2-53)
  *   - Approver at later step    → Read-only (see "waiting on step N")
  *   - Approver at past step     → Read-only with their own decision shown
  *
  * Sequential ordering UI enforcement (mirrors the backend state machine):
  *   - describeChain(req, callerId) returns { kind: 'actionable', step } only
- *     when the next non-APPROVED step is PENDING and its approver matches
- *     the caller (sameUser-normalized). The Approve / Reject panel renders
- *     only when chain.kind === 'actionable'.
+ *     when the next non-APPROVED step is PENDING and that step is the one
+ *     actionableStepFor() resolves for the caller — server-first from the
+ *     step's own allowedActions, falling back to an EXACT id compare
+ *     (P3-98: sameId, mirroring the backend's String.equals — never the
+ *     trimming display helper). The action panel renders only when
+ *     chain.kind === 'actionable', and each button inside it consults its
+ *     own token.
  *
  * Self-approval guard (R31 iter1+2 dogfood VIOLATION proof):
  *   - The timeline tags any step whose approver === requester as

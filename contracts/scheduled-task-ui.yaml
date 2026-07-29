@@ -1,0 +1,109 @@
+# contracts/scheduled-task-ui.yaml
+# UI contract for the scheduled-task domain (BACKLOG P2-47).
+# Defines the routes, components and data bindings of the L4 scheduled-task admin
+# vertical that ships in templates/L4/scheduled-task/app/. Every route exists on disk and
+# every backend_operation_id resolves against contracts/scheduled-task-openapi.yaml —
+# enforced by practices/evals/trio_integrity_guard.sh once this domain is full_trio in
+# the trio allowlist.
+
+domain: scheduled-task
+domain_mode: full_trio
+backend_contract_ref: contracts/scheduled-task-openapi.yaml
+spec_ref: specs/scheduled-task-frontend-l0.yaml
+
+routes:
+  - path: "/(admin)/scheduled-tasks"
+    component: ScheduledTaskListPage
+    source: "templates/L4/scheduled-task/app/(admin)/scheduled-tasks/page.tsx"
+    backend_operation_id: listScheduledTasks
+    secondary_operations:                 # same key as contracts/file-storage-ui.yaml
+      - enableScheduledTask
+      - disableScheduledTask
+      - triggerScheduledTask
+    spec_items: [SCHED-FE-001, SCHED-FE-004, SCHED-FE-005, SCHED-FE-008]
+    description: >
+      Admin task list. Shows each registered task with its cron expression and
+      enabled/disabled state, offers enable/disable, and offers a manual out-of-cycle
+      Trigger behind an explicit confirmation. ROLE_ADMIN only.
+
+  - path: "/(admin)/scheduled-tasks/[id]"
+    component: ScheduledTaskHistoryPage
+    source: "templates/L4/scheduled-task/app/(admin)/scheduled-tasks/[id]/page.tsx"
+    backend_operation_id: getTaskHistory
+    spec_items: [SCHED-FE-002, SCHED-FE-003, SCHED-FE-004, SCHED-FE-006, SCHED-FE-007]
+    description: >
+      Per-task execution history. Polls every 10 seconds, offers a manual Refresh, and
+      renders each JobHistory row's outcome with its errorMessage passed through
+      sanitizeStoredError. ROLE_ADMIN only.
+
+components:
+  ScheduledTaskListPage:
+    owns_data: true
+    imports_l2:
+      - empty-state
+      - error-boundary
+    state:
+      data: "useQuery(['scheduled-tasks']) → GET /api/admin/scheduled-tasks"
+      toggle: "useMutation per direction (enable / disable) with optimistic status flip"
+      trigger: "useMutation(POST /api/admin/scheduled-tasks/{id}/trigger) behind confirm"
+      role: "useCallerRole() — admin gate rendered before the surface (SCHED-FE-004)"
+
+  ScheduledTaskHistoryPage:
+    owns_data: true                     # both useQuery calls live here (SCHED-FE-003)
+    renders_view: ScheduledTaskHistoryView
+    state:
+      task: "useQuery(['scheduled-task', id]) → GET /api/admin/scheduled-tasks/{id}"
+      history: "useQuery(['scheduled-task-history', id]) with refetchInterval 10s"
+      role: "useCallerRole() — admin gate rendered before the view"
+
+  ScheduledTaskHistoryView:
+    presentational: true                # no data-fetching hook (SCHED-FE-003)
+    source: "templates/L4/scheduled-task/app/(admin)/scheduled-tasks/[id]/scheduled-task-history-view.tsx"
+    render_test: "frontend/tests/scheduled-task-history-view.vitest.tsx"
+    imports_l2:
+      - empty-state
+      - error-boundary
+    imports_l0:
+      - "fork-receiver-kit/parse-error (sanitizeStoredError)"
+    props:
+      task: "TaskResponse | undefined — undefined + not loading renders 'Not found'"
+      history: "JobHistoryResponse[] | undefined — empty renders the no-history EmptyState"
+      onRefetchHistory: "callback — page owns the refetch"
+
+data_flows:
+  task_list:
+    trigger: "Route load"
+    request: "GET /api/admin/scheduled-tasks"
+    response: "TaskResponse[] { id, name, cronExpression, status, lastRun }"
+    binding: "one row per task; status drives the enable/disable affordance"
+
+  manual_trigger:
+    trigger: "Trigger, after the confirmation is accepted"
+    request: "POST /api/admin/scheduled-tasks/{id}/trigger"
+    response: "TriggerResponse { executed, outcome, reason }"
+    binding: >
+      executed=false (lock already held, SCHED-LOCK-001) is surfaced as an explicit
+      not-run outcome, never as a successful run.
+
+  task_toggle:
+    trigger: "Enable / Disable on a task row"
+    request: >
+      POST /api/admin/scheduled-tasks/{id}/enable (enableScheduledTask) ·
+      POST /api/admin/scheduled-tasks/{id}/disable (disableScheduledTask)
+    response: >
+      ScheduledTaskDetail — the task in its NEW state (both handlers return
+      ScheduledTaskDto.TaskResponse, the same record getScheduledTask returns)
+    binding: >
+      Optimistic status flip on the cached row, reconciled from the response on settle
+      (SCHED-FE-008). Disabling does not interrupt an execution already in flight.
+    published: >
+      Both operations were added to contracts/scheduled-task-openapi.yaml on 2026-07-30
+      (P2-47 follow-up). Before that the contract omitted them while the controller
+      implemented them and this UI called them — under-declaration, now closed, which is
+      why this flow no longer needs the unpublished_ui_calls record it used to carry.
+
+  task_history:
+    trigger: "Route load, 10s poll, or manual Refresh"
+    request: "GET /api/admin/scheduled-tasks/{id}/history"
+    response: "JobHistoryResponse[] { id, outcome, startedAt, finishedAt, errorMessage }"
+    binding: "errorMessage rendered through sanitizeStoredError (SCHED-FE-006)"

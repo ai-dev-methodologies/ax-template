@@ -12,9 +12,20 @@ package com.ax.template.authblueprint.scheduledtask;
  * </ul>
  *
  * <p>The default {@link DatabaseAdvisoryLock} implementation uses an
- * INSERT-or-stale-UPDATE row pattern (portable across H2 + Postgres). Production
- * deployments can swap to Redis Redlock / Zookeeper / Shedlock by replacing the
- * {@code LockingPolicy} bean — no domain code change required.
+ * INSERT-or-stale-UPDATE row pattern (portable across H2 + Postgres), made atomic
+ * by the lock table's PRIMARY KEY on the first acquire and by a pessimistic
+ * {@code SELECT ... FOR UPDATE} row lock on a stale takeover — see that class for
+ * the per-branch argument. Production deployments can swap to Redis Redlock /
+ * Zookeeper / Shedlock by replacing the {@code LockingPolicy} bean — no domain
+ * code change required.
+ *
+ * <p><b>Implementors:</b> {@link #tryAcquire} MUST decide by an atomic operation and
+ * MUST report a lost race by RETURNING {@code false}, not by throwing. The acquire
+ * call in {@code ScheduledTaskService#executeWithLock} sits OUTSIDE that method's
+ * try/catch, so a throwing loser propagates out uncaught: the scheduler loop logs it
+ * at ERROR as a failed tick and a manual admin trigger surfaces it as a 5xx — both
+ * alarming on a task that was merely skipped, and neither producing the
+ * {@link JobHistory} row an actual failure would leave.
  */
 public interface LockingPolicy {
 

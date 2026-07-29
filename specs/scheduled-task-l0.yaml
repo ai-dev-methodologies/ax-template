@@ -28,8 +28,12 @@ items:
     notes: >
       Test (positive): LockingPolicy.tryAcquire() returns true → taskExecutor.execute() called once.
       Test (negative): LockingPolicy.tryAcquire() returns false → taskExecutor.execute() never called.
-      Implementation: LockingPolicy.tryAcquire(taskId, lockHolder) uses a DB row with SELECT FOR UPDATE SKIP LOCKED
-      (or equivalent); returns false if lock is held. Lock is released in finally block.
+      Implementation: LockingPolicy.tryAcquire(taskName, lockHolder) claims a DB row atomically —
+      the free-or-stale test and the claiming write must be indivisible (a pessimistic
+      SELECT ... FOR UPDATE row lock, or a conditional single-statement UPDATE whose affected-row
+      count decides the winner, or a unique-constraint INSERT). NOT "SKIP LOCKED", which the
+      reference workload's H2 does not support and which would make a held row look absent to the
+      loser. Returns false — never throws — if the lock is held. Lock is released in a finally block.
       This prevents duplicate execution in multi-node deployments (SCHED-LOCK-001).
     policy_ref: "blueprints/scheduled-task-manifest.yaml#lock"
 

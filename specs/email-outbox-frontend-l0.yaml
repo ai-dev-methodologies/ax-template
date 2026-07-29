@@ -1,0 +1,171 @@
+# specs/email-outbox-frontend-l0.yaml
+# Page Compliance Spec — email-outbox domain, full_trio mode.
+#
+# BACKLOG P2-47. Authored 2026-07-30 so the trio allowlist can stop lying: the allowlist
+# entry read `backend_only` ("no frontend UI in scope") while the spec, the L4 README and
+# the disk all said full-trio, which made trio_integrity_guard SKIP this domain's
+# frontend trio entirely. Flipping the entry required this file to exist.
+#
+# Every item's backend_operation_id resolves to contracts/email-outbox-openapi.yaml.
+# Every item's backend_spec_ref resolves to an id in specs/email-outbox-l0.yaml.
+# static_source_ref is [] for all items (full_trio: FORBIDDEN to be non-empty).
+#
+# SCOPE DISCIPLINE: the shipped surface is ONE admin route, so this spec describes one
+# admin route. Every item binds to a mechanism that already resolves (a practices/evals
+# guard or an evidence-anchored practices/rules entry); the render assertions named in
+# test_method live in frontend/tests/email-outbox-view.vitest.tsx (P2-28 conversion).
+
+domain: email-outbox
+domain_mode: full_trio
+backend_spec_ref: specs/email-outbox-l0.yaml
+frontend_required: true
+
+items:
+  - id: EMAIL-FE-001
+    verification:
+      mechanism: guard
+      ref: trio_integrity_guard.sh
+    requirement: >
+      The admin outbox monitor
+      (templates/L4/email-outbox/app/(admin)/email-outbox/page.tsx) binds the
+      listEmailOutbox operation declared for it in contracts/email-outbox-ui.yaml, and
+      that operation must resolve against contracts/email-outbox-openapi.yaml — a route
+      may not bind an operation the backend contract does not publish.
+    backend_operation_id: listEmailOutbox
+    backend_spec_ref: EMAIL-ADMIN-001
+    static_source_ref: []
+    test_method: "practices/evals/trio_integrity_guard.sh (route operationId resolution)"
+    verification_type: negative
+    policy_ref: "blueprints/email-outbox-ui-manifest.yaml#routes"
+    coverage_threshold: 1.0
+    backend_only_marker: false
+
+  - id: EMAIL-FE-002
+    verification:
+      mechanism: guard
+      ref: l4_presentational_view_guard.sh
+    requirement: >
+      The route keeps every data-fetching call (useQuery / useMutation / useQueryClient)
+      on page.tsx and passes resolved data plus callbacks to email-outbox-view.tsx, which
+      imports no data-fetching hook; the page MUST import that view, so the render layer
+      cannot be re-inlined while the view file rots unimported. Ledgered in
+      practices/evals/l4_presentational_view_ledger.yaml as (email-outbox, admin-monitor).
+    backend_operation_id: listEmailOutbox
+    backend_spec_ref: EMAIL-ADMIN-001
+    static_source_ref: []
+    test_method: "practices/evals/l4_presentational_view_guard.sh + frontend/tests/email-outbox-view.vitest.tsx"
+    verification_type: negative
+    policy_ref: "blueprints/email-outbox-ui-manifest.yaml#render_boundary"
+    coverage_threshold: 1.0
+    backend_only_marker: false
+
+  - id: EMAIL-FE-003
+    verification:
+      mechanism: guard
+      ref: l4_role_default_failclosed_guard.sh
+    requirement: >
+      The route derives the caller's role from useCallerRole()
+      (templates/L0/fork-receiver-kit/use-caller-id) and renders an "Admin access
+      required" EmptyState instead of the surface when the role is not admin, matching
+      the backend's ROLE_ADMIN requirement on every outbox admin endpoint. A role flag
+      may not be a literal `true`, nor derived from any source other than the canonical
+      hook.
+    backend_operation_id: listEmailOutbox
+    backend_spec_ref: EMAIL-ADMIN-001
+    static_source_ref: []
+    test_method: "practices/evals/l4_role_default_failclosed_guard.sh (static + dynamic pass)"
+    verification_type: negative
+    policy_ref: "blueprints/email-outbox-ui-manifest.yaml#rbac"
+    coverage_threshold: 1.0
+    backend_only_marker: false
+
+  - id: EMAIL-FE-004
+    verification:
+      mechanism: rule
+      ref: destructive-action-confirm-with-side-effects
+    requirement: >
+      Per-row Retry and Delete each ask for an explicit confirmation before invoking
+      their mutation; declining performs no mutation at all. Retry is offered only for a
+      row that is still re-sendable — a row already SENT renders a terminal "sent" marker
+      with a disabled, explicitly labelled affordance instead of a live Retry button, so
+      an operator cannot re-send a delivered message.
+    backend_operation_id: retryEmailOutboxEntry
+    backend_spec_ref: EMAIL-RETRY-001
+    static_source_ref: []
+    test_method: "frontend/tests/email-outbox-view.vitest.tsx (confirm accepted → onRetry called with the row id; declined → not called; a SENT row shows 'sent' instead of a Retry button)"
+    verification_type: both
+    policy_ref: "blueprints/email-outbox-ui-manifest.yaml#destructive_actions"
+    coverage_threshold: 1.0
+    backend_only_marker: false
+
+  - id: EMAIL-FE-005
+    verification:
+      mechanism: rule
+      ref: mutation-in-flight-uses-aria-busy
+    requirement: >
+      While a per-row Retry or Delete is in flight, that row's control sets aria-busy and
+      aria-disabled rather than being removed from the DOM, so the pending state is
+      announced and the row does not shift under the operator's cursor. Pending state is
+      tracked per row id, so one row's mutation never marks another row busy.
+    backend_operation_id: cancelEmailOutboxEntry
+    backend_spec_ref: EMAIL-ADMIN-001
+    static_source_ref: []
+    test_method: "practices/rules/mutation-in-flight-uses-aria-busy.md (review against (admin)/email-outbox/page.tsx pendingRetryIds / pendingDeleteIds and the aria-busy bindings they drive in email-outbox-view.tsx)"
+    verification_type: positive
+    policy_ref: "blueprints/email-outbox-ui-manifest.yaml#a11y"
+    coverage_threshold: 1.0
+    backend_only_marker: false
+
+  - id: EMAIL-FE-006
+    verification:
+      mechanism: rule
+      ref: stored-server-error-sanitize-at-render-layer
+    requirement: >
+      A row's stored lastError (the server-supplied failure text that drove the entry to
+      RETRY or DLQ) passes through sanitizeStoredError before it is rendered, so
+      provider responses carrying recipient addresses or stack-trace fragments are not
+      displayed raw in the admin console.
+    backend_operation_id: listEmailOutbox
+    backend_spec_ref: EMAIL-SEND-002
+    static_source_ref: []
+    test_method: "frontend/tests/email-outbox-view.vitest.tsx (rows render with sanitized stored errors)"
+    verification_type: unit_test
+    policy_ref: "blueprints/email-outbox-ui-manifest.yaml#error_handling"
+    coverage_threshold: 1.0
+    backend_only_marker: false
+
+  - id: EMAIL-FE-007
+    verification:
+      mechanism: rule
+      ref: optimistic-update-snapshot-rollback
+    requirement: >
+      The delete mutation cancels in-flight queries, snapshots the current cached page,
+      removes the row optimistically, and restores the snapshot if the mutation fails —
+      so a failed delete cannot leave the operator looking at a row that silently
+      vanished.
+    backend_operation_id: cancelEmailOutboxEntry
+    backend_spec_ref: EMAIL-ADMIN-001
+    static_source_ref: []
+    test_method: "practices/rules/optimistic-update-snapshot-rollback.md (review against (admin)/email-outbox/page.tsx delete mutation onMutate/onError)"
+    verification_type: positive
+    policy_ref: "blueprints/email-outbox-ui-manifest.yaml#optimistic_updates"
+    coverage_threshold: 1.0
+    backend_only_marker: false
+
+  - id: EMAIL-FE-008
+    verification:
+      mechanism: rule
+      ref: incident-dashboard-background-poll-plus-refresh
+    requirement: >
+      The monitor polls every 10 seconds (continuing while the tab is backgrounded) AND
+      offers a manual Refresh control next to an aria-live "Updated <time>" stamp, so a
+      queue that has stopped draining is distinguishable from a view that has stopped
+      updating.
+    backend_operation_id: listEmailOutbox
+    backend_spec_ref: EMAIL-SEND-001
+    static_source_ref: []
+    test_method: "practices/rules/incident-dashboard-background-poll-plus-refresh.md (review against (admin)/email-outbox/page.tsx refetchInterval + view Refresh control)"
+    verification_type: positive
+    policy_ref: "blueprints/email-outbox-ui-manifest.yaml#freshness"
+    coverage_threshold: 1.0
+    backend_only_marker: false

@@ -1,0 +1,4 @@
+# No entries: this page is UNCONVERTED, so single-file semantics apply — the page
+# itself must carry the aria-busy JSX attribute. It carries only a comment.
+min_entries: 0
+entries: []

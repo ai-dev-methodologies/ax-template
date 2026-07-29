@@ -1,6 +1,8 @@
 /// <reference types="@testing-library/jest-dom/vitest" />
 import { describe, it, expect, vi } from 'vitest'
 import { render, screen, fireEvent, within } from '@testing-library/react'
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import ApprovalDetailView, {
   type ApprovalRequest,
 } from '../../templates/L4/approval-workflow/app/(approvals)/[id]/approval-detail-view'
@@ -133,5 +135,147 @@ describe('ApprovalDetailView — pure render of a request detail + timeline (P2-
     render(<ApprovalDetailView {...baseProps({ request: { ...ACTIONABLE_REQUEST, title: 'A totally different title' } })} />)
     expect(screen.getByRole('heading', { name: 'A totally different title' })).toBeInTheDocument()
     expect(screen.queryByText('New laptop for engineering')).not.toBeInTheDocument()
+  })
+})
+
+// ─── P2-53 — per-BUTTON server granularity ───────────────────────────────────────────────
+//
+// The server emits allowedActions PER STEP (P3-76). actionableStepFor answers *which* step
+// is the caller's and returns it when EITHER token is granted, so a panel that renders both
+// buttons off that single answer flattens the granularity: a step granting only `reject`
+// still offered Approve. Each button must consult its own token.
+//
+// MUTATION (RED-on-revert): in approval-detail-view.tsx, replace the two `stepGrants(...)`
+// calls with one either-token value (e.g. `const mayApproveStep = actionableStep !== null`
+// and the same for mayRejectStep) — the two absence assertions below go RED.
+
+function withStepActions(allowedActions: string[]): ApprovalRequest {
+  return {
+    ...ACTIONABLE_REQUEST,
+    steps: [{ ...ACTIONABLE_REQUEST.steps[0], allowedActions }],
+  }
+}
+
+describe('ApprovalDetailView — each action button gates on its OWN server token (P2-53)', () => {
+  it('server grants only approve → Approve rendered, Reject ABSENT', () => {
+    render(<ApprovalDetailView {...baseProps({ request: withStepActions(['approve']) })} />)
+    expect(screen.getByText(/YOUR TURN/)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Approve' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Reject' })).not.toBeInTheDocument()
+  })
+
+  it('server grants only reject → Reject rendered, Approve ABSENT', () => {
+    render(<ApprovalDetailView {...baseProps({ request: withStepActions(['reject']) })} />)
+    // The panel headline must not promise an approval it will not offer.
+    expect(screen.getByText(/YOUR TURN — this request is waiting on your decision/)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Reject' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Approve' })).not.toBeInTheDocument()
+  })
+
+  it('server grants both → both rendered (the granular check is not vacuously hiding buttons)', () => {
+    render(
+      <ApprovalDetailView {...baseProps({ request: withStepActions(['approve', 'reject']) })} />,
+    )
+    expect(screen.getByRole('button', { name: 'Approve' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Reject' })).toBeInTheDocument()
+  })
+
+  it('server grants neither on the caller-assigned step → no action buttons at all', () => {
+    render(<ApprovalDetailView {...baseProps({ request: withStepActions([]) })} />)
+    expect(screen.queryByRole('button', { name: 'Approve' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Reject' })).not.toBeInTheDocument()
+  })
+
+  it('no step-scoped allowedActions at all (pre-P3-76 backend) → derivation still grants both', () => {
+    // ACTIONABLE_REQUEST carries no allowedActions on its step, so stepGrants falls back to
+    // local derivation, which mirrors deriveAuthorizedActions: a PENDING first step assigned
+    // to the caller on a SUBMITTED request grants approve AND reject.
+    render(<ApprovalDetailView {...baseProps()} />)
+    expect(screen.getByRole('button', { name: 'Approve' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Reject' })).toBeInTheDocument()
+  })
+
+  it('the outcome prose advertises only the granted action', () => {
+    const { unmount } = render(
+      <ApprovalDetailView {...baseProps({ request: withStepActions(['reject']) })} />,
+    )
+    expect(screen.getByText(/Reject → ends the chain/)).toBeInTheDocument()
+    expect(screen.queryByText(/Approve →/)).not.toBeInTheDocument()
+    unmount()
+
+    render(<ApprovalDetailView {...baseProps({ request: withStepActions(['approve']) })} />)
+    expect(screen.getByText(/Approve →/)).toBeInTheDocument()
+    expect(screen.queryByText(/Reject → ends the chain/)).not.toBeInTheDocument()
+  })
+})
+
+// ─── P3-98 — identity-comparator jurisdiction in the L4 authz paths ──────────────────────
+//
+// use-caller-id.sameUser TRIMS (its own vitest contract pins that) and is a DISPLAY helper.
+// The backend's self-approve guard is exact — ApprovalService.validateApprovers uses
+// `id.equals(requesterUserId)`. So every comparison in an L4 page that gates a mutation or
+// renders that verdict as fact must use the exact `sameId` mirror exported from
+// authorized-actions, or the UI claims a padded id is a self-approval when the server does
+// not.
+
+describe('ApprovalDetailView — the self-approval badge uses the EXACT comparator (P3-98)', () => {
+  const paddedRequesterAsApprover: ApprovalRequest = {
+    ...ACTIONABLE_REQUEST,
+    requesterUserId: 'alice',
+    steps: [
+      // Padded relative to requesterUserId: NOT a self-approval to the backend.
+      { id: 'step_1', orderIndex: 0, approverUserId: ' alice ', status: 'PENDING', actedByUserId: null, actedAt: null, comment: null },
+    ],
+  }
+
+  it('a padded requester id is NOT flagged as a self-approval attempt', () => {
+    // MUTATION (RED-on-revert): switch either sameId leg back to sameUser in
+    // approval-detail-view.tsx's StepTimeline and this assertion goes RED.
+    render(
+      <ApprovalDetailView
+        {...baseProps({ request: paddedRequesterAsApprover, callerId: 'carol' })}
+      />,
+    )
+    expect(screen.queryByText('requester (cannot self-approve)')).not.toBeInTheDocument()
+  })
+
+  it('NON-VACUITY: the exactly-equal requester id IS flagged', () => {
+    const exact: ApprovalRequest = {
+      ...paddedRequesterAsApprover,
+      steps: [{ ...paddedRequesterAsApprover.steps[0], approverUserId: 'alice' }],
+    }
+    render(<ApprovalDetailView {...baseProps({ request: exact, callerId: 'carol' })} />)
+    expect(screen.getByText('requester (cannot self-approve)')).toBeInTheDocument()
+  })
+})
+
+// The new-request form is a page (useMutation + useRouter + next/navigation), not a
+// ledgered presentational view, so its submit gate has no render surface here. This is the
+// executable lock on its comparator choice — the same "the scan IS the test" posture as
+// frontend/tests/auth-shape-lock.vitest.ts, which exists because templates/L4 is outside
+// every tsc glob (P2-23).
+describe('approval-workflow new-request form — submit gate uses the exact comparator (P3-98)', () => {
+  const NEW_FORM = resolve(
+    __dirname,
+    '../../templates/L4/approval-workflow/app/(approvals)/new/page.tsx',
+  )
+  const source = readFileSync(NEW_FORM, 'utf8')
+  // Match only real call sites: `sameUser(` / `sameId(`. A mention inside the P3-98
+  // rationale comments (which name both helpers on purpose) has no open paren.
+  const sameUserCalls = source.match(/\bsameUser\(/g) ?? []
+  const sameIdCalls = source.match(/\bsameId\(/g) ?? []
+
+  it('imports sameId from authorized-actions and never calls sameUser', () => {
+    expect(source).toMatch(
+      /import\s*\{\s*sameId\s*\}\s*from\s*'templates\/L0\/fork-receiver-kit\/authorized-actions'/,
+    )
+    // MUTATION (RED-on-revert): restore `sameUser(a, callerId)` in the selfApprovalAt
+    // findIndex (or the per-row isSelf) and this goes RED.
+    expect(sameUserCalls).toHaveLength(0)
+  })
+
+  it('NON-VACUITY: the exact comparator is actually CALLED, not merely imported', () => {
+    // Both the submit gate (selfApprovalAt) and the per-row red border must use it.
+    expect(sameIdCalls.length).toBeGreaterThanOrEqual(2)
   })
 })

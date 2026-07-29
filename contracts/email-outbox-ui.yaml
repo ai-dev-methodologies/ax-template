@@ -1,0 +1,80 @@
+# contracts/email-outbox-ui.yaml
+# UI contract for the email-outbox domain (BACKLOG P2-47).
+# Defines the route, components and data bindings of the L4 email-outbox admin vertical
+# that ships in templates/L4/email-outbox/app/. The route exists on disk and its
+# backend_operation_id resolves against contracts/email-outbox-openapi.yaml — enforced by
+# practices/evals/trio_integrity_guard.sh once this domain is full_trio in the trio
+# allowlist.
+
+domain: email-outbox
+domain_mode: full_trio
+backend_contract_ref: contracts/email-outbox-openapi.yaml
+spec_ref: specs/email-outbox-frontend-l0.yaml
+
+routes:
+  - path: "/(admin)/email-outbox"
+    component: EmailOutboxPage
+    source: "templates/L4/email-outbox/app/(admin)/email-outbox/page.tsx"
+    backend_operation_id: listEmailOutbox
+    spec_items: [EMAIL-FE-001, EMAIL-FE-002, EMAIL-FE-003, EMAIL-FE-004, EMAIL-FE-005, EMAIL-FE-006, EMAIL-FE-007, EMAIL-FE-008]
+    description: >
+      Admin outbox monitor. Lists queued / retrying / sent / dead-lettered entries with a
+      status filter, polls every 10 seconds, and offers per-row Retry and Delete behind
+      explicit confirmations. ROLE_ADMIN only.
+
+components:
+  EmailOutboxPage:
+    owns_data: true                     # useQuery / useMutation live here (EMAIL-FE-002)
+    renders_view: EmailOutboxView
+    imports_l2:
+      - empty-state                     # admin-gate notice
+      - error-boundary
+    imports_l0:
+      - "fork-receiver-kit/use-caller-id (useCallerId, useCallerRole)"
+      - "fork-receiver-kit/parse-error (parseError, sanitizeStoredError)"
+    state:
+      data: "useQuery(['email-outbox', status]) with refetchInterval 10s"
+      retry: "useMutation(POST /api/admin/email-outbox/{id}/retry), pending tracked per row id"
+      delete: "useMutation(DELETE /api/admin/email-outbox/{id}) with optimistic removal + snapshot rollback"
+      role: "useCallerRole() — admin gate rendered before the view (EMAIL-FE-003)"
+
+  EmailOutboxView:
+    presentational: true                # no data-fetching hook (EMAIL-FE-002)
+    source: "templates/L4/email-outbox/app/(admin)/email-outbox/email-outbox-view.tsx"
+    render_test: "frontend/tests/email-outbox-view.vitest.tsx"
+    imports_l2:
+      - empty-state
+    props:
+      data: "OutboxPage | undefined — zero rows renders the EmptyState branch"
+      statusFilter: "OutboxStatus | '' — '' means unfiltered"
+      onRetry: "callback — invoked only after the confirmation is accepted"
+      onDelete: "callback — invoked only after the confirmation is accepted"
+      pendingRetryIds: "Set<string> — drives per-row aria-busy (EMAIL-FE-005)"
+      pendingDeleteIds: "Set<string> — drives per-row aria-busy (EMAIL-FE-005)"
+      sanitizeStoredError: "injected sanitizer applied to lastError before render (EMAIL-FE-006)"
+      onRefetch: "callback behind the manual Refresh control (EMAIL-FE-008)"
+
+data_flows:
+  outbox_list:
+    trigger: "Route load, status-filter change, 10s poll, or manual Refresh"
+    request: "GET /api/admin/email-outbox?status=..."
+    response: "OutboxPage { content[], page, size, totalElements, totalPages } — each row { id, recipient, templateCode, subject, status, retryCount, nextAttemptAt, lastError, createdAt, sentAt }"
+    binding: >
+      one row per entry; status drives which affordances render; lastError is passed
+      through sanitizeStoredError before display.
+
+  outbox_retry:
+    trigger: "Per-row Retry, after the confirmation is accepted"
+    request: "POST /api/admin/email-outbox/{id}/retry"
+    response: "OutboxResponse — the re-queued entry"
+    binding: >
+      offered only for a re-sendable row; a SENT row renders a terminal marker instead
+      (EMAIL-FE-004). The list is invalidated on settle.
+
+  outbox_delete:
+    trigger: "Per-row Delete, after the confirmation is accepted"
+    request: "DELETE /api/admin/email-outbox/{id}"
+    response: "204 No Content"
+    binding: >
+      row removed optimistically from the cached page; the snapshot is restored if the
+      mutation fails (EMAIL-FE-007).

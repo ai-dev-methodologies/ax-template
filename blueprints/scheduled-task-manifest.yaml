@@ -37,7 +37,9 @@ register:
 
 # ─── distributed lock ─────────────────────────────────────────────────────────
 lock:
-  strategy: db-row-lock   # pessimistic SELECT FOR UPDATE SKIP LOCKED on task_locks table
+  # Atomic claim on the task_locks row: PK-arbitrated INSERT on first acquire, pessimistic
+  # SELECT ... FOR UPDATE across the staleness-test/takeover pair. NOT "SKIP LOCKED" (P2-48).
+  strategy: db-row-lock
   lock_ttl_seconds: 300   # stale locks (crashed node) expire after 5 minutes
   lock_ttl_config: "${ax.scheduler.lock-ttl-seconds:300}"
   behavior_on_held: skip   # do not queue or retry; next cron cycle will attempt

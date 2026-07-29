@@ -14,8 +14,10 @@ evidence:
       not resolve for a module living in templates/L4/... (see
       frontend/tests/audit-log-redaction-render.vitest.tsx's own note on the same class of gap).
       describeChain/findUpstreamApprovedComments/findDuplicateApprovers/StepTimeline are pure
-      derivations over the resolved request (only sameUser from use-caller-id and
-      isRequester/can/actionableStepFor from authorized-actions, both zero-external-dep per their
+      derivations over the resolved request (sameUser from use-caller-id — display only, the
+      timeline's 'you' chip — and isRequester/can/actionableStepFor/stepGrants/sameId from
+      authorized-actions, which own every authorization-adjacent comparison here per P3-98;
+      both modules zero-external-dep per their
       own frontmatter) and move here unmodified — same class as tag-library-view's buildTree /
       comment-thread-view's buildTree. Approve/reject are threaded in as Promise-returning
       callbacks so this view can clear its own comment draft only on success, without lifting
@@ -30,6 +32,8 @@ import { sameUser } from 'templates/L0/fork-receiver-kit/use-caller-id'
 import {
   can,
   actionableStepFor,
+  stepGrants,
+  sameId,
   isRequester as callerIsRequester,
 } from 'templates/L0/fork-receiver-kit/authorized-actions'
 
@@ -46,6 +50,14 @@ export interface ApprovalStep {
   actedByUserId: string | null
   actedAt: string | null
   comment: string | null
+  /**
+   * P3-76 — the server's own per-step answer (`approve` / `reject`). Present on any backend
+   * at or after that change; absent on an older fork-receiver backend, where
+   * authorized-actions derives locally instead. Declared here because P2-53 gates each
+   * action button on its own token: without the field on this type the step-scoped
+   * server-first branch was unreachable through the view's own data shape.
+   */
+  allowedActions?: string[] | null
 }
 
 export interface ApprovalRequest {
@@ -143,9 +155,17 @@ function StepTimeline({ steps, callerId, requesterUserId, duplicates, chainKind 
     <ol className="space-y-2">
       {sorted.map((step, idx) => {
         const isCurrent = idx === firstPendingIndex
+        // Display label only — the "you" chip. sameUser trims, which is a kindness for a
+        // fork-receiver session hook with padded ids and has no authorization consequence.
         const isCaller = sameUser(step.approverUserId, callerId)
+        // P3-98 — this badge asserts a BACKEND verdict as fact ("cannot self-approve",
+        // ApprovalService.validateApprovers :297 `id.equals(requesterUserId)`), so BOTH
+        // legs compare with the exact sameId mirror, never the trimming display helper
+        // above: a padded id is NOT a self-approval to the server, so it must not be
+        // flagged as one here.
         const isSelfApprovalAttempt =
-          sameUser(step.approverUserId, requesterUserId) && !isCaller
+          sameId(step.approverUserId, requesterUserId) &&
+          !sameId(step.approverUserId, callerId)
 
         return (
           <li
@@ -329,9 +349,16 @@ export default function ApprovalDetailView({
   const maySubmit = can(data, callerId, 'submit')
   const mayCancel = can(data, callerId, 'cancel')
   const actionableStep = chain.kind === 'actionable' ? chain.step : null
+  // P2-53 — per-BUTTON tokens, not one "this step is yours" answer. actionableStepFor
+  // returns the step when EITHER token is granted, so rendering both buttons off it
+  // flattened the granularity the server emits per step.
+  const mayApproveStep =
+    actionableStep !== null && stepGrants(data, actionableStep, callerId, 'approve')
+  const mayRejectStep =
+    actionableStep !== null && stepGrants(data, actionableStep, callerId, 'reject')
 
   const handleApprove = () => {
-    if (!actionableStep) return
+    if (!actionableStep || !mayApproveStep) return
     // Reset the draft only on success — on failure the error surfaces via
     // approveErrorMessage and the operator's comment stays so they can retry.
     onApprove(actionableStep.id, comment).then(
@@ -341,7 +368,7 @@ export default function ApprovalDetailView({
   }
 
   const handleReject = () => {
-    if (!actionableStep) return
+    if (!actionableStep || !mayRejectStep) return
     const ok = window.confirm(
       `Reject this request? The chain will end and the requester will be notified with your comment:\n\n${comment}`,
     )
@@ -555,7 +582,10 @@ export default function ApprovalDetailView({
         {actionableStep && (
           <section className="space-y-2 rounded border-2 border-amber-400 bg-amber-50/50 p-3">
             <p className="text-sm font-medium text-amber-900">
-              YOUR TURN — this request is waiting on your approval at step{' '}
+              {/* P2-53 — "approval" only when this step actually grants approve; a
+                  reject-only step is waiting on a decision, not an approval. */}
+              YOUR TURN — this request is waiting on your{' '}
+              {mayApproveStep ? 'approval' : 'decision'} at step{' '}
               {actionableStep.orderIndex + 1} of {chain.totalSteps}.
             </p>
             {upstreamApproved.length > 0 && (
@@ -574,18 +604,23 @@ export default function ApprovalDetailView({
               </div>
             )}
             <p className="text-xs text-amber-900/80">
-              {chain.currentIndex + 1 < chain.totalSteps ? (
-                <>
-                  Approve → notifies step {chain.currentIndex + 2}{' '}
-                  (<span className="font-mono">
-                    {data.steps.find((s) => s.orderIndex === actionableStep.orderIndex + 1)?.approverUserId}
-                  </span>) ·{' '}
-                </>
-              ) : (
-                <>Approve → completes the chain · </>
+              {mayApproveStep &&
+                (chain.currentIndex + 1 < chain.totalSteps ? (
+                  <>
+                    Approve → notifies step {chain.currentIndex + 2}{' '}
+                    (<span className="font-mono">
+                      {data.steps.find((s) => s.orderIndex === actionableStep.orderIndex + 1)?.approverUserId}
+                    </span>) ·{' '}
+                  </>
+                ) : (
+                  <>Approve → completes the chain · </>
+                ))}
+              {mayRejectStep && (
+                <>Reject → ends the chain and notifies the requester. </>
               )}
-              Reject → ends the chain and notifies the requester. Both actions are recorded
-              in the audit trail and cannot be undone from this UI.
+              {/* P2-53 — the outcome prose describes only the actions this step actually
+                  grants; a step granting one token must not advertise the other. */}
+              Recorded in the audit trail and cannot be undone from this UI.
             </p>
             <textarea
               className="w-full rounded border px-2 py-1 text-sm"
@@ -604,27 +639,31 @@ export default function ApprovalDetailView({
               </div>
             )}
             <div className="flex flex-wrap gap-2">
-              <button
-                type="button"
-                className="rounded bg-green-600 px-3 py-1.5 text-sm text-white hover:bg-green-700 disabled:opacity-50"
-                disabled={approvePending || rejectPending}
-                onClick={handleApprove}
-              >
-                Approve
-              </button>
-              <button
-                type="button"
-                className="rounded bg-red-600 px-3 py-1.5 text-sm text-white hover:bg-red-700 disabled:opacity-50"
-                disabled={approvePending || rejectPending || comment.trim().length === 0}
-                onClick={handleReject}
-                title={
-                  comment.trim().length === 0
-                    ? 'Add a reason in the comment box before rejecting.'
-                    : undefined
-                }
-              >
-                Reject
-              </button>
+              {mayApproveStep && (
+                <button
+                  type="button"
+                  className="rounded bg-green-600 px-3 py-1.5 text-sm text-white hover:bg-green-700 disabled:opacity-50"
+                  disabled={approvePending || rejectPending}
+                  onClick={handleApprove}
+                >
+                  Approve
+                </button>
+              )}
+              {mayRejectStep && (
+                <button
+                  type="button"
+                  className="rounded bg-red-600 px-3 py-1.5 text-sm text-white hover:bg-red-700 disabled:opacity-50"
+                  disabled={approvePending || rejectPending || comment.trim().length === 0}
+                  onClick={handleReject}
+                  title={
+                    comment.trim().length === 0
+                      ? 'Add a reason in the comment box before rejecting.'
+                      : undefined
+                  }
+                >
+                  Reject
+                </button>
+              )}
             </div>
           </section>
         )}

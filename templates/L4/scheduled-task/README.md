@@ -13,7 +13,8 @@ landed R7).
 ## Overview
 
 A backend-only scheduling domain: register cron tasks, acquire a per-task distributed
-lock (DB-row `SELECT FOR UPDATE SKIP LOCKED`), execute on the holding node, record
+lock (DB row claimed atomically — `SELECT ... FOR UPDATE`, not `SKIP LOCKED`; see step 3),
+execute on the holding node, record
 every run in `JobHistory`, and expire stale locks after a configurable TTL so crashed
 nodes self-heal.
 
@@ -60,9 +61,15 @@ Spec Trio anchors:
    }
    ```
 
-3. **Pick a locking strategy** (either is spec-compliant):
-   - **DB row + `SELECT FOR UPDATE SKIP LOCKED`** — simplest; recommended for ≤ 5 nodes.
-     Schema: `scheduled_task_lock(task_id PK, locked_at, lock_holder)`.
+3. **Pick a locking strategy** (either is spec-compliant). Whichever you pick, the
+   free-or-stale TEST and the claiming WRITE must be one indivisible step, and a lost race
+   must RETURN false rather than throw:
+   - **DB row + `SELECT ... FOR UPDATE`** — simplest; recommended for ≤ 5 nodes.
+     Schema: `scheduled_task_lock(task_id PK, locked_at, lock_holder)`. Take the row lock on
+     the read (`findByIdForUpdate`) so a racer blocks and then re-reads the winner's row;
+     a plain `findById` + save is a read-then-write race that lets both nodes acquire
+     (BACKLOG P2-48). Do NOT reach for `SKIP LOCKED` here: it makes a held row look ABSENT
+     to the loser rather than making it wait, and H2 does not support it.
    - **ShedLock + JDBC backend** — battle-tested library wrapping the same pattern.
      See `blueprints/scheduled-task-manifest.yaml#lock` for advisory provider list.
 
@@ -82,7 +89,7 @@ Spec Trio anchors:
 | Spec ID | Requirement | Implementation hint |
 |---|---|---|
 | SCHED-REGISTER-001 | UUID + cron + REGISTERED status | `ScheduledTaskService.register()` factory + JPA save |
-| SCHED-LOCK-001 | Acquire-or-skip distributed lock | `LockingPolicy.tryAcquire(taskId, holder)` + `SELECT FOR UPDATE SKIP LOCKED` |
+| SCHED-LOCK-001 | Acquire-or-skip distributed lock | `LockingPolicy.tryAcquire(taskId, holder)` + `findByIdForUpdate` (`SELECT ... FOR UPDATE`) |
 | SCHED-LOCK-002 | TTL stale-lock recovery | `lockedAt + lock_ttl_seconds < now()` → reacquire allowed |
 | SCHED-EXECUTE-001 | JobHistory append on every run | `JobHistory.start(...)` + `markSuccess()` / `markFailure(msg)` in `finally` |
 | SCHED-IDEMPOTENT-001 | Concurrent manual trigger safe | `triggerManual()` routes through `executeWithLock()` |

@@ -8,15 +8,35 @@
  *   does not define (its ids are ASVS-V<n>.<n>.<n>) AND a requirement — ASVS 4.0 2.7.1 is
  *   Out-of-Band Verifier — that has nothing to do with a bearer-token filter. It went
  *   unnoticed because _check-anchors.py only looked for *.md tokens and so checked
- *   nothing here. Repointed to the catalog rule this filter actually embodies. The
- *   evidence block below still carries the same mis-scoped ASVS 2.7.1 citation; that is
- *   evidence CONTENT, outside this axis, and is reported to the backlog rather than
- *   rewritten to a section that has not been verified against the ASVS source.
+ *   nothing here. Repointed to the catalog rule this filter actually embodies.
+ *   BACKLOG P3-94 (2026-07-30) closes the second half — the evidence CONTENT. The
+ *   mis-scoped ASVS 2.7.1 citation is replaced by an in-repo-verifiable anchor
+ *   (specs/auth-asvs-l1.yaml + the ASVS-tagged tests that bind it), NOT by another
+ *   ASVS section quoted from memory. Scope, stated honestly — this repo's ASVS spec pins
+ *   NO per-request token-validation requirement, its V3 Session Management items being
+ *   V3.1.1/V3.2.1/V3.3.1/V3.4.1-4/V3.7.1 (token-in-URL, rotation on auth, logout,
+ *   cookie attributes, re-auth), none of which is about validating a bearer token on
+ *   each request. So the ASVS attribution is made only for what the spec really does
+ *   pin — the fail-secure outcome — and the signature/expiry/claims MECHANICS stay
+ *   anchored to the Spring Security reference already cited below, which is their
+ *   actual source. Over-claiming an ASVS § for the mechanics is the defect P3-94 is.
  * provenance_class: external_canonical
  * evidence:
- *   - source_type: external
- *     citation: "OWASP ASVS 4.0 §2.7.1 — Out-of-Band Verifier Requirements"
- *     url: "https://owasp.org/www-project-application-security-verification-standard/"
+ *   - source_type: internal
+ *     rationale: "ASVS attribution re-anchored to this repo's canonical ASVS record,
+ *       specs/auth-asvs-l1.yaml (version 4.0.3), which pins the two items this filter's
+ *       control flow actually realises — verbatim from the spec: ASVS-V4.1.5 'Verify that
+ *       access controls fail securely.' (notes 'API test: Deny by default') is the invalid-token
+ *       branch, which answers 401 and does NOT continue the chain; ASVS-V4.1.1 'Verify
+ *       that the application enforces access control rules on a trusted service layer.'
+ *       is why the decision is made here, server-side, rather than trusted from the
+ *       client. Both are bound to executable checks in the reference workload:
+ *       AuthMeAsvsTest#asvs_V4_1_5_accessControlFailsSecurely (@Tag ASVS-V4.1.5) sends
+ *       'Authorization: Bearer tampered.token.value' and asserts 401 — literally this
+ *       filter's JwtException branch — and #asvs_V4_1_1_accessControlOnTrustedLayer
+ *       (@Tag ASVS-V4.1.1) sends no header and asserts 401, which is the pass-through
+ *       branch plus the downstream .authenticated() deny. NOT claimed: that ASVS
+ *       prescribes JWT signature/expiry/claim validation — see anchors_note."
  *   - source_type: external
  *     citation: "Spring Security Reference — JWT Authentication"
  *     url: "https://docs.spring.io/spring-security/reference/servlet/oauth2/resource-server/jwt.html"
@@ -71,8 +91,12 @@ import java.util.UUID;
  *       rules ({@code .authenticated()}) will return 401 if the endpoint requires auth
  * </ul>
  *
- * <p>ASVS 2.7.1 requirement: tokens must be validated for signature, expiry,
- * and required claims. Failed validation must return 401, not 200.
+ * <p>Signature, expiry and required-claim validation is {@link JwtDecoder}'s contract
+ * (Spring Security Reference — JWT Authentication, cited above); this filter's own
+ * invariant is the OUTCOME: failed validation must return 401, never 200. That outcome
+ * is the repo's ASVS-V4.1.5 item ("Verify that access controls fail securely.",
+ * specs/auth-asvs-l1.yaml), asserted by
+ * {@code AuthMeAsvsTest#asvs_V4_1_5_accessControlFailsSecurely}.
  */
 @Component
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
@@ -108,7 +132,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             chain.doFilter(request, response);
 
         } catch (JwtException ex) {
-            // ASVS 2.7.1: invalid JWT MUST return 401, not silently continue
+            // ASVS-V4.1.5 (fail securely): invalid JWT MUST return 401, not silently continue
             log.warn("JWT validation failure [{}]: {}", request.getRequestURI(), ex.getMessage());
             writeUnauthorized(request, response, ex.getMessage());
         }

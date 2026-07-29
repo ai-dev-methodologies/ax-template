@@ -9,6 +9,7 @@ import io.restassured.RestAssured;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
@@ -55,6 +56,21 @@ import static org.assertj.core.api.Assertions.assertThat;
  * again diverges from this same golden on the FE leg; (2) renaming/adding/removing a field on
  * {@link UserProfileResponse} changes the emitted tree and trips
  * {@link #authMeResponse_serializesFieldWiseEqualToTheCommittedGolden()} here.
+ *
+ * <h2>Regeneration (BACKLOG P2-49)</h2>
+ * Both assertion methods above are READ-ONLY: they never write the file they compare against.
+ * Regeneration is a SEPARATE, EXPLICIT manual command:
+ * <pre>
+ *   cd backend &amp;&amp; ./gradlew testAsvs -Dgolden.regenerate=true \
+ *       --tests '*AuthMeGoldenContractParityTest*'
+ * </pre>
+ * (see {@link #regenerateGolden_manualCommandOnly()}, disabled unless that system property is
+ * set — note gradle needs {@code systemProperty} pass-through, which {@code build.gradle.kts}
+ * wires for {@code testAsvs} exactly as it does for {@code testCommonAdvice} and P2-36's
+ * validation-errors golden.) Output is byte-stable: the same normalization the assertion path
+ * applies runs first, so the non-deterministic DB-generated {@code userId} is replaced by the
+ * fixed placeholder before serialization and two consecutive regenerations produce identical
+ * bytes.
  *
  * <p>Tagged into the existing {@code testAsvs} task (the auth-domain per-domain task, already
  * registered in {@code verification-checklist.yaml}) rather than a new gradle registration —
@@ -108,8 +124,12 @@ class AuthMeGoldenContractParityTest {
         return jwtTokenService.generateAccessToken(saved.getId().toString(), saved.getEmail(), "MEMBER");
     }
 
-    @Test
-    void authMeResponse_serializesFieldWiseEqualToTheCommittedGolden() throws IOException {
+    /**
+     * Seeds, performs the real round-trip, and normalizes the one non-deterministic member.
+     * Shared by the assertion path and the P2-49 regeneration path so the committed file is
+     * provably what regeneration emits — not a hand-maintained approximation of it.
+     */
+    private ObjectNode emittedNormalizedTree() throws IOException {
         String token = seedUserAndLinkedProviderThenIssueToken();
 
         String body = given().header("Authorization", "Bearer " + token)
@@ -121,6 +141,12 @@ class AuthMeGoldenContractParityTest {
         // userId is DB-generated and non-deterministic; normalize to the golden's fixed
         // placeholder before the whole-tree compare (every other field is asserted as-emitted).
         actual.put("userId", GOLDEN_USER_ID);
+        return actual;
+    }
+
+    @Test
+    void authMeResponse_serializesFieldWiseEqualToTheCommittedGolden() throws IOException {
+        ObjectNode actual = emittedNormalizedTree();
 
         assertThat(actual)
                 .as("GET /api/auth/me must match the FE-shared golden field-for-field — a "
@@ -153,5 +179,18 @@ class AuthMeGoldenContractParityTest {
         assertThat(actual.get("linkedProviders").get(0).isString())
                 .as("linkedProviders must be a flat array of provider-name strings, not objects")
                 .isTrue();
+    }
+
+    /**
+     * BACKLOG P2-49 — MANUAL regeneration only, never part of an assertion run. Disabled unless
+     * {@code -Dgolden.regenerate=true} is passed explicitly (see class javadoc).
+     */
+    @Test
+    @EnabledIfSystemProperty(named = "golden.regenerate", matches = "true")
+    void regenerateGolden_manualCommandOnly() throws IOException {
+        Files.writeString(goldenPath(),
+                MAPPER.writerWithDefaultPrettyPrinter().writeValueAsString(emittedNormalizedTree())
+                        + "\n");
+        System.out.println("[golden.regenerate] rewrote " + goldenPath().normalize());
     }
 }

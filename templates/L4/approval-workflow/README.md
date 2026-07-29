@@ -43,7 +43,7 @@ Audience matrix (mirrors the backend state machine):
 
 UI-layer anchoring of R38 generic rules:
 
-- **caller-authentication-only-no-userid-param**: `useCallerId()` is the single source of truth; sameUser-normalized comparisons across new-form duplicate-check, self-approval check, and detail action gating.
+- **caller-authentication-only-no-userid-param**: `useCallerId()` is the single source of truth for identity. Comparator jurisdiction (P3-98): every AUTHORIZATION-adjacent comparison — the new-form duplicate-approver and self-approve submit gates, the detail page's action gating, and the timeline's "cannot self-approve" badge — uses the **exact** `sameId` mirror exported from `templates/L0/fork-receiver-kit/authorized-actions.ts`, matching the backend's bare `String.equals` (`ApprovalActionGuards`, `ApprovalService.validateApprovers`). `use-caller-id.sameUser` **trims** and is a display-only helper; its remaining use here is the timeline's "you" chip. A trimming compare on an authz path withholds or offers an action the server decides differently.
 - **admin-cannot-rewrite-user-content**: payload becomes locked on submit; even admin role cannot rewrite the original document the requester filed (Korean enterprise audit posture).
 - **http-delete-idempotency-rfc9110**: cancel + discard operations treat 204 on absent target as success.
 - **pii-masked-at-dto-boundary**: no PII at the UI layer — caller-id is the only identity comparison key.

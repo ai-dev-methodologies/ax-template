@@ -21,14 +21,14 @@ domains:
   audit-log: full_trio      # SP17: append-only log entries, async export, VirtualizedTable for >10k rows
   notification: full_trio    # SP16: inbox/settings/detail vertical + bell + list + item L2 blocks
   file-storage: full_trio    # SP18: upload/list/download/delete + presigned URL + L4 vertical
-  email-outbox: backend_only      # SP19: transactional outbox, retry/DLQ, admin API; no frontend UI
-  scheduled-task: backend_only    # SP19: distributed-lock cron jobs, job history; no frontend UI
+  email-outbox: full_trio         # SP19 backend (transactional outbox, retry/DLQ, admin API) + R51 admin Next.js monitor (templates/L4/email-outbox/app/); frontend trio authored 2026-07-30 per P2-47
+  scheduled-task: full_trio       # SP19 backend (distributed-lock cron jobs, job history) + R49 admin Next.js surface (task list + per-task history); frontend trio authored 2026-07-30 per P2-47
   search: full_trio             # SP26: full-text search + typeahead + Cmd+K palette + charts L2
   feature-flags: full_trio      # SP28: runtime feature toggles, admin CRUD, FeatureGate + FeatureFlagToggle L2
   billing: full_trio            # SP30: subscription lifecycle, plan management, invoice listing, billing event history
   data-subject-rights: full_trio    # IMW6 FMW: GDPR DSR self-service console (access/rectify/erase/restrict/portability + SLA tracking)
   identity-verification: backend_only  # SP31: KISA 본인인증 callback storage (CI/DI tokens); no frontend UI in scope
-  webhook: backend_only         # SP45 R9: outbound webhook-emit + HMAC-SHA256 signing + idempotent retries + dead-letter + circuit-breaker; no frontend UI in scope
+  webhook: full_trio            # SP45 R9 backend (webhook-emit + HMAC-SHA256 signing + idempotent retries + dead-letter + circuit-breaker) + R48 admin Next.js surface (endpoint registry + delivery monitor); frontend trio authored 2026-07-30 per P2-47
   multi-tenant: backend_only    # R93: cross-cutting tenancy enforcement runtime; no first-class UI (every L4's tenant_model cites specs/multi-tenant-l0.yaml)
   i18n-policy: backend_only     # cross-cutting Spring i18n CONFIG + policy (LocaleResolver/MessageSource/UTC-Instant/formatting); no first-class UI
   realtime-policy: backend_only # cross-cutting SSE channel policy + runtime (SseEmitter registry/audience-fan-out/backpressure/Last-Event-ID/3 metrics); no first-class UI

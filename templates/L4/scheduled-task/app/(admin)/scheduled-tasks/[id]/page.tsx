@@ -4,7 +4,7 @@ template_id: L4/scheduled-task/app/(admin)/scheduled-tasks/[id]/page
 layer: L4
 domain: scheduled-task
 domain_mode: full_trio
-backend_operation_id: getScheduledTaskHistory
+backend_operation_id: getTaskHistory
 evidence:
   - source_type: internal
     rationale: "L4 scheduled-task vertical — per-task execution history with 10s background poll. errorMessage from JobHistory passes through sanitizeStoredError (R48 lesson) so server-supplied stack-trace fragments are not screen-shared raw during incident review."

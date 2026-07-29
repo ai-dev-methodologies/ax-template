@@ -22,7 +22,11 @@ import * as React from 'react'
 import { useRouter } from 'next/navigation'
 import { useMutation } from '@tanstack/react-query'
 import ErrorBoundary from 'templates/L2/blocks/error-boundary'
-import { useCallerId, sameUser } from 'templates/L0/fork-receiver-kit/use-caller-id'
+import { useCallerId } from 'templates/L0/fork-receiver-kit/use-caller-id'
+// P3-98 — the self-approve check below GATES SUBMIT, so it compares with the exact,
+// BE-authoritative mirror from authorized-actions, not use-caller-id's trimming display
+// helper. See that module's sameId jurisdiction note.
+import { sameId } from 'templates/L0/fork-receiver-kit/authorized-actions'
 import { parseError } from 'templates/L0/fork-receiver-kit/parse-error'
 
 // ─── types ───────────────────────────────────────────────────────────────────
@@ -93,7 +97,11 @@ export default function NewApprovalRequestPage() {
   // ─── client-side validation (defense-in-depth) ──────────────────────────────
 
   const approvers = approverInputs.map((s) => s.trim()).filter((s) => s.length > 0)
-  const selfApprovalAt = approvers.findIndex((a) => sameUser(a, callerId))
+  // P3-98 — exact compare. ApprovalService.validateApprovers (:297) rejects self-approval
+  // with `id.equals(requesterUserId)`; a trimming compare here BLOCKED a submit the server
+  // would have accepted (padded session id vs. bare approver id) — the same client/server
+  // identity divergence class P3-76 closed one layer down in authorized-actions.
+  const selfApprovalAt = approvers.findIndex((a) => sameId(a, callerId))
   const seen = new Set<string>()
   let duplicateAt = -1
   for (let i = 0; i < approvers.length; i++) {
@@ -265,11 +273,17 @@ export default function NewApprovalRequestPage() {
             </p>
             <ul className="space-y-1">
               {approverInputs.map((val, idx) => {
-                // R43 iter4 (P1-iter3-N3 / P2-iter3-N4): use the shared
-                // sameUser() normalization so a fork-receiver's session
-                // hook with whitespace / case quirks does not silently
-                // skip the per-row red border while still blocking submit.
-                const isSelf = sameUser(val, callerId) && val.trim().length > 0
+                // R43 iter4 (P1-iter3-N3 / P2-iter3-N4): the per-row red border must agree
+                // with the submit gate above, so it uses the SAME comparator. P3-98
+                // replaced the trimming display helper with the exact sameId mirror on
+                // both (use-caller-id's own header states that jurisdiction): the earlier
+                // rationale ("normalize so a padded session id still lights the row") was
+                // backwards — the server does not treat a padded id as self-approval, so
+                // neither the border nor the submit block may claim it does. `val.trim()`
+                // is what this form will actually SEND (every row is trimmed before POST,
+                // see `approvers` above), so this is the identical comparison the gate
+                // makes: the trim normalizes the PAYLOAD, never the identity compare.
+                const isSelf = sameId(val.trim(), callerId) && val.trim().length > 0
                 const isDup = idx === duplicateAt
                 return (
                   <li key={idx} className="flex items-center gap-2">

@@ -1,0 +1,30 @@
+# floor_breach_manifest.yaml — self-proof fixture for fixture_kill_proof_guard.sh [87]
+#
+# PURPOSE: prove that the registry-integrity stage (BACKLOG P2-50) BLOCKS a manifest whose
+# unique item count has fallen BELOW its own declared `min_items` floor — i.e. that the
+# floor is enforced and not merely documented.
+#
+# The single item is valid and PASSes its mutation, so the exit 1 can only come from the
+# floor comparison. `min_items: 2` with one item is the smallest honest expression of
+# "items were deleted": the live registry's own floor (57) is pinned inside the guard as
+# LIVE_MIN_ITEMS and cannot be exercised from a fixture without editing the live manifest,
+# which is why this fixture proves the SHRUNK branch with a miniature of the same shape.
+#
+# The two live-only branches (a missing `min_items` declaration, and a declaration lowered
+# below LIVE_MIN_ITEMS) are reachable only on this guard's own default manifest — by design,
+# since that is the thing being ratcheted — so they are covered by recorded mutation
+# evidence against an out-of-tree copy rather than by a fixture. Stated here rather than
+# left as an implied gap.
+#
+# → fixture_kill_proof_guard.sh must exit 1 (BLOCK) when given this manifest, reporting
+#   REGISTRY_SHRUNK.
+
+min_items: 2
+
+items:
+  - id: self_proof/floor_breached_by_deletion
+    guard: practices/evals/private_boundary_guard.sh
+    fixture: practices/evals/fixtures/private-boundary/fail_marker
+    fixture_arg: '--repo-root'
+    anchor: 'report_violation "1:marker" "$pattern" "$hit"'
+    neuter: 'true  # neutered: layer 1 marker reporting disabled'

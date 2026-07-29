@@ -1,0 +1,162 @@
+# specs/webhook-frontend-l0.yaml
+# Page Compliance Spec — webhook domain, full_trio mode.
+#
+# BACKLOG P2-47. Authored 2026-07-30 so the trio allowlist can stop lying: the
+# allowlist entry read `backend_only` ("no frontend UI in scope") while the spec, the
+# L4 README and the disk all said full-trio, which made trio_integrity_guard SKIP this
+# domain's frontend trio entirely. Flipping the entry required this file to exist.
+#
+# Every item's backend_operation_id resolves to contracts/webhook-openapi.yaml.
+# Every item's backend_spec_ref resolves to an id in specs/webhook-l0.yaml.
+# static_source_ref is [] for all items (full_trio: FORBIDDEN to be non-empty).
+#
+# SCOPE DISCIPLINE (why there are 7 items and not 20): every item below describes
+# behaviour that is ALREADY on disk in templates/L4/webhook/app/ and is bound to a
+# verification mechanism that ALREADY resolves — a guard in practices/evals/ or an
+# evidence-anchored rule in practices/rules/. No aspirational item was written to pad
+# the count; the shipped surface is two admin routes, so the spec describes two admin
+# routes. The render assertions named in test_method live in
+# frontend/tests/webhook-endpoints-view.vitest.tsx (P2-42 pass 2).
+
+domain: webhook
+domain_mode: full_trio
+backend_spec_ref: specs/webhook-l0.yaml
+frontend_required: true
+
+items:
+  - id: WEBHOOK-FE-001
+    verification:
+      mechanism: guard
+      ref: trio_integrity_guard.sh
+    requirement: >
+      The admin endpoints route (templates/L4/webhook/app/(admin)/webhooks/page.tsx)
+      binds the listWebhookEndpoints operation declared for it in
+      contracts/webhook-ui.yaml, and that operation must resolve against
+      contracts/webhook-openapi.yaml — a route may not bind an operation the backend
+      contract does not publish.
+    backend_operation_id: listWebhookEndpoints
+    backend_spec_ref: WEBHOOK-EMIT-001
+    static_source_ref: []
+    test_method: "practices/evals/trio_integrity_guard.sh (route operationId resolution)"
+    verification_type: negative
+    policy_ref: "blueprints/webhook-ui-manifest.yaml#routes"
+    coverage_threshold: 1.0
+    backend_only_marker: false
+
+  - id: WEBHOOK-FE-002
+    verification:
+      mechanism: guard
+      ref: trio_integrity_guard.sh
+    requirement: >
+      The delivery-monitor route
+      (templates/L4/webhook/app/(admin)/webhooks/deliveries/page.tsx) binds the
+      listWebhookDeliveries operation declared for it in contracts/webhook-ui.yaml,
+      resolving against contracts/webhook-openapi.yaml. This route is the UI leg of the
+      dead-letter surface: FAILED_PERMANENT rows are inspected here rather than deleted.
+    backend_operation_id: listWebhookDeliveries
+    backend_spec_ref: WEBHOOK-DEAD-LETTER-001
+    static_source_ref: []
+    test_method: "practices/evals/trio_integrity_guard.sh (route operationId resolution)"
+    verification_type: negative
+    policy_ref: "blueprints/webhook-ui-manifest.yaml#routes"
+    coverage_threshold: 1.0
+    backend_only_marker: false
+
+  - id: WEBHOOK-FE-003
+    verification:
+      mechanism: guard
+      ref: l4_presentational_view_guard.sh
+    requirement: >
+      The endpoints route keeps every data-fetching call (useQuery / useMutation /
+      useQueryClient) on page.tsx and passes resolved data plus callbacks to
+      webhook-endpoints-view.tsx, which imports no data-fetching hook; the page MUST
+      import that view, so the render layer cannot be silently re-inlined while the
+      view file rots unimported. Ledgered in
+      practices/evals/l4_presentational_view_ledger.yaml as (webhook, endpoints).
+    backend_operation_id: listWebhookEndpoints
+    backend_spec_ref: WEBHOOK-EMIT-001
+    static_source_ref: []
+    test_method: "practices/evals/l4_presentational_view_guard.sh + frontend/tests/webhook-endpoints-view.vitest.tsx"
+    verification_type: negative
+    policy_ref: "blueprints/webhook-ui-manifest.yaml#render_boundary"
+    coverage_threshold: 1.0
+    backend_only_marker: false
+
+  - id: WEBHOOK-FE-004
+    verification:
+      mechanism: guard
+      ref: l4_role_default_failclosed_guard.sh
+    requirement: >
+      Both admin routes derive the caller's role from useCallerRole()
+      (templates/L0/fork-receiver-kit/use-caller-id) and render an "Admin access
+      required" EmptyState instead of the surface when the role is not admin. A role
+      flag may not be a literal `true`, nor derived from any source other than the
+      canonical hook — the fail-OPEN default is what this gate blocks.
+    backend_operation_id: replayWebhookDelivery
+    backend_spec_ref: WEBHOOK-DEAD-LETTER-002
+    static_source_ref: []
+    test_method: "practices/evals/l4_role_default_failclosed_guard.sh (static + dynamic pass)"
+    verification_type: negative
+    policy_ref: "blueprints/webhook-ui-manifest.yaml#rbac"
+    coverage_threshold: 1.0
+    backend_only_marker: false
+
+  - id: WEBHOOK-FE-005
+    verification:
+      mechanism: rule
+      ref: secret-shown-once-uses-beforeunload-guard
+    requirement: >
+      The signing secret returned once by registerWebhookEndpoint is rendered only
+      while the reveal panel holds it (revealedEndpoint non-null), behind a copy-then-
+      acknowledge flow that installs a beforeunload guard while the secret is still
+      unacknowledged. The secret is never re-rendered from a later list response, since
+      listWebhookEndpoints does not return it.
+    backend_operation_id: registerWebhookEndpoint
+    backend_spec_ref: WEBHOOK-EMIT-001
+    static_source_ref: []
+    test_method: "frontend/tests/webhook-endpoints-view.vitest.tsx (reveal panel absent when revealedEndpoint is null; present with the secret when set)"
+    verification_type: unit_test
+    policy_ref: "blueprints/webhook-ui-manifest.yaml#secret_reveal"
+    coverage_threshold: 1.0
+    backend_only_marker: false
+
+  - id: WEBHOOK-FE-006
+    verification:
+      mechanism: rule
+      ref: destructive-action-confirm-with-side-effects
+    requirement: >
+      Per-row endpoint deletion asks for an explicit confirmation before invoking the
+      delete callback; declining the confirmation performs no mutation at all. The
+      button carries an endpoint-identifying aria-label so the confirmation target is
+      unambiguous to a screen-reader user.
+    backend_operation_id: deactivateWebhookEndpoint
+    backend_spec_ref: WEBHOOK-EMIT-001
+    static_source_ref: []
+    test_method: "frontend/tests/webhook-endpoints-view.vitest.tsx (confirm accepted → onDelete called with the row id; confirm declined → onDelete NOT called)"
+    verification_type: both
+    policy_ref: "blueprints/webhook-ui-manifest.yaml#destructive_actions"
+    coverage_threshold: 1.0
+    backend_only_marker: false
+    notes: >
+      HONEST CAVEAT: specs/webhook-l0.yaml has no dedicated item for endpoint
+      deactivation (its EMIT family covers registration and emission), so the
+      backend_spec_ref above is the endpoint-lifecycle item rather than an exact
+      counterpart. The frontend obligation is nonetheless real and tested.
+
+  - id: WEBHOOK-FE-007
+    verification:
+      mechanism: rule
+      ref: incident-dashboard-background-poll-plus-refresh
+    requirement: >
+      The delivery monitor both polls in the background (10s refetchInterval, continued
+      while the tab is backgrounded) AND offers a manual Refresh control next to an
+      aria-live "Updated <time>" stamp, so an on-call operator can distinguish fresh
+      data from a stalled view rather than inferring it.
+    backend_operation_id: listWebhookDeliveries
+    backend_spec_ref: WEBHOOK-DEAD-LETTER-001
+    static_source_ref: []
+    test_method: "practices/rules/incident-dashboard-background-poll-plus-refresh.md (review against deliveries/page.tsx)"
+    verification_type: positive
+    policy_ref: "blueprints/webhook-ui-manifest.yaml#freshness"
+    coverage_threshold: 1.0
+    backend_only_marker: false

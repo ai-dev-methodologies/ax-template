@@ -217,13 +217,45 @@ LIVE_MIN_PROTECTED_ENTRIES = 18
 # scanned. Mirrored by `# require:` directives in the ledger itself, so dropping a protected
 # identity takes two coordinated edits — the same posture as min_entries.
 # LIVE_REQUIRED_PROTECTED_IDENTITIES MAY NOT BE REDUCED.
+#
+# BACKLOG P2-51 (2026-07-30): 2 → 18, i.e. EVERY protected row is now exact-required. Round-3
+# pinned only the two anchors the gate was born for, so the other sixteen (the 2026-07-29
+# ratchet) were protected by CARDINALITY ALONE: substitute any one of them for a different
+# file's anchor, leave the row count at 18, and both min_entries and the guard-pinned floor
+# were still satisfied — the displaced anchor left the fatal set silently while the gate
+# reported green, which is the round-3 bypass with a different starting row. Cardinality can
+# only detect shrinkage; identity detects SUBSTITUTION, and a ledger whose whole purpose is
+# "these specific anchors are verified" has no row for which substitution is legitimate.
 LIVE_REQUIRED_PROTECTED_IDENTITIES = frozenset({
     # The anchor P2-40 found FABRICATED — the RED-on-revert subject of this whole gate.
     ("templates/L1/components/currency-input.tsx", "stripe-billing-2026-05"),
     # Positive control — an already-correct anchor, so the gate is proven to pass for an
     # honest citation and not merely to fail for a dishonest one.
     ("templates/L1/components/currency-formatter.tsx", "stripe-billing-2026-05"),
+    # ── P2-51: the 2026-07-29 ratchet's sixteen, promoted from cardinality-only to exact ──
+    ("templates/L1/components/checkbox.tsx", "wcag-2-2"),
+    ("templates/L1/components/currency-formatter.tsx", "next-intl-2026-05"),
+    ("templates/L1/components/locale-switcher.tsx", "next-intl-2026-05"),
+    ("templates/L1/components/markdown-renderer.tsx", "remark-2026-05"),
+    ("templates/L1/components/relative-time.tsx", "next-intl-2026-05"),
+    ("templates/L1/components/rich-text-editor.tsx", "tiptap-2026-05"),
+    ("templates/L1/components/skeleton.tsx", "wcag-22-techniques-2026-05"),
+    ("templates/L1/components/sonner.tsx", "wcag-22-techniques-2026-05"),
+    ("templates/L1/lib/utils.ts", "shadcn-ui-2026-05"),
+    ("templates/L2/blocks/error-boundary.tsx", "react-19-error-boundary"),
+    ("templates/L2/blocks/locale-provider.tsx", "next-intl-2026-05"),
+    ("templates/L2/blocks/notification-list.tsx", "tanstack-virtual-2026-05"),
+    ("templates/L2/blocks/offline-banner.tsx", "mdn-navigator-online-2026-05"),
+    ("templates/L2/blocks/translation-boundary.tsx", "next-intl-2026-05"),
+    ("templates/L2/blocks/translation-boundary.tsx", "react-19-error-boundary"),
+    ("templates/L2/blocks/virtualized-table.tsx", "tanstack-virtual-2026-05"),
 })
+# Consistency invariant for the two-number/two-place duplication: every pinned identity is
+# also a protected row, so the pinned set can never exceed the floor. A pin count above
+# LIVE_MIN_PROTECTED_ENTRIES would mean the floor permits a ledger that the pins reject —
+# an unsatisfiable gate, which is a maintenance defect and not a stricter gate.
+assert len(LIVE_REQUIRED_PROTECTED_IDENTITIES) <= LIVE_MIN_PROTECTED_ENTRIES, (
+    "LIVE_REQUIRED_PROTECTED_IDENTITIES exceeds LIVE_MIN_PROTECTED_ENTRIES")
 
 # A protected quote must carry substance. `quote: 0` is closed by the isinstance check, but
 # `quote: "a"` is a genuine non-empty string that is still a substring of essentially every

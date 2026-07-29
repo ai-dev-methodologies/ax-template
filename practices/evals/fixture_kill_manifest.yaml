@@ -12,6 +12,26 @@
 # neuter rules:
 #   - a minimal source change that disables only the targeted detection
 #   - must cause the exit to flip from 1 to 0 on the paired fixture
+#
+# IDENTITY, NOT ROW COUNT (2026-07-30, BACKLOG P2-50)
+#   The registry may not SHRINK and may not be padded. Two properties are enforced by
+#   fixture_kill_proof_guard.sh before any mutation runs:
+#     - `min_items` below — the floor the unique item count may not fall below. The guard
+#       pins the same number as LIVE_MIN_ITEMS for its OWN default manifest, so lowering
+#       the gate takes two coordinated edits instead of one silent deletion (the
+#       evidence_protected_template_anchors.txt `min_entries` ratchet, same posture).
+#     - duplicate rejection — a repeated `id`, or a repeated (guard, fixture) pair under a
+#       fresh id, is a BLOCK. A count is not an identity: without this, deleting the item
+#       that actually matters and duplicating a cheap already-proven one keeps the floor
+#       satisfied while the proof it stood for is gone.
+#   Registering a SECOND anchor against an already-registered (guard, fixture) pair is
+#   therefore a reviewed edit to the guard, not a manifest-only change. No such item exists
+#   today (57 items / 57 distinct pairs), and the restriction is what makes the floor mean
+#   something.
+
+# min_items — the unique item count MAY NOT BE REDUCED below this number. Measured from
+# disk on 2026-07-30: 57 items, 57 distinct ids, 57 distinct (guard, fixture) pairs.
+min_items: 62
 
 items:
 
@@ -933,3 +953,44 @@ items:
 #   defect in the fixture: the fixture DOES reproduce the failure under run-all's own
 #   invocation, where it is registered and asserted at exit 1. Closing it means teaching
 #   this manifest boolean-flag arguments, which is a change to [87] and out of scope here.
+
+  - id: domain_mode_consistency/fail_backlog_ref_closed
+    guard: practices/evals/domain_mode_consistency_guard.sh
+    fixture: practices/evals/fixtures/domain-mode-consistency/fail_backlog_ref_closed
+    fixture_arg: '--root'
+    anchor: 'klass == "known_gap" and any(states or [])'
+    neuter: 'False'
+
+  - id: domain_mode_consistency/fail_backlog_ref_missing
+    guard: practices/evals/domain_mode_consistency_guard.sh
+    fixture: practices/evals/fixtures/domain-mode-consistency/fail_backlog_ref_missing
+    fixture_arg: '--root'
+    anchor: 'states is None'
+    neuter: 'False'
+
+  - id: background_poll_refresh_state/fail_comment_only
+    guard: practices/evals/background_poll_refresh_state_guard.sh
+    fixture: practices/evals/fixtures/background-poll-refresh-state/fail_comment_only
+    fixture_arg: '--root'
+    fixture_arg2: '--ledger'
+    fixture2: practices/evals/fixtures/background-poll-refresh-state/fail_comment_only/ledger.yaml
+    anchor: '[ -z "$paired_view" ] || ! has_code_token "$paired_view" "$ARIA_BUSY_ATTR_RE"'
+    neuter: 'false'
+
+  - id: background_poll_refresh_state/fail_unledgered_comment_only
+    guard: practices/evals/background_poll_refresh_state_guard.sh
+    fixture: practices/evals/fixtures/background-poll-refresh-state/fail_unledgered_comment_only
+    fixture_arg: '--root'
+    fixture_arg2: '--ledger'
+    fixture2: practices/evals/fixtures/background-poll-refresh-state/fail_unledgered_comment_only/ledger.yaml
+    anchor: 'has_code_token "$f" "$ARIA_BUSY_ATTR_RE"'
+    neuter: 'true'
+
+  - id: background_poll_refresh_state/fail_no_data_updated_at
+    guard: practices/evals/background_poll_refresh_state_guard.sh
+    fixture: practices/evals/fixtures/background-poll-refresh-state/fail_no_data_updated_at
+    fixture_arg: '--root'
+    fixture_arg2: '--ledger'
+    fixture2: practices/evals/fixtures/background-poll-refresh-state/fail_no_data_updated_at/ledger.yaml
+    anchor: "! has_code_token \"$f\" 'dataUpdatedAt'"
+    neuter: 'false'

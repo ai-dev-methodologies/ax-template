@@ -1,0 +1,33 @@
+# dup_id_manifest.yaml — self-proof fixture for fixture_kill_proof_guard.sh [87]
+#
+# PURPOSE: prove that the registry-integrity stage (BACKLOG P2-50) BLOCKS a manifest in
+# which two items share one `id`.
+#
+# The id is the report identity: `PASS [<id>] non-vacuous` is the only thing a reader gets
+# back, so two rows sharing an id make the verdict ambiguous about which registration was
+# actually proven — and let a real registration be replaced by a decoy that reports under
+# the same name.
+#
+# BOTH items here are individually VALID and would each PASS the mutation (they are the
+# nonvacuous_manifest item, twice). That is deliberate: the BLOCK must come from the
+# duplicate check itself, not from a mutation failure, so this fixture stays specific to
+# the branch under test. The two rows differ in `fixture` so the DUPLICATE_PROOF check
+# (exercised separately by dup_fixture_manifest.yaml) is not what fires here.
+#
+# → fixture_kill_proof_guard.sh must exit 1 (BLOCK) when given this manifest, reporting
+#   DUPLICATE_ID, before any guard is executed.
+
+items:
+  - id: self_proof/duplicated_identity
+    guard: practices/evals/private_boundary_guard.sh
+    fixture: practices/evals/fixtures/private-boundary/fail_marker
+    fixture_arg: '--repo-root'
+    anchor: 'report_violation "1:marker" "$pattern" "$hit"'
+    neuter: 'true  # neutered: layer 1 marker reporting disabled'
+
+  - id: self_proof/duplicated_identity
+    guard: practices/evals/private_boundary_guard.sh
+    fixture: practices/evals/fixtures/private-boundary/fail_secret
+    fixture_arg: '--repo-root'
+    anchor: "SECRET_A='-----BEGIN [A-Z ]*PRIVATE KEY-----'"
+    neuter: "SECRET_A='NEUTER_NOMATCH_XXXXXXXX'"

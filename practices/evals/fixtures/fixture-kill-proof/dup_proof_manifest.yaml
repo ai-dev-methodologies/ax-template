@@ -1,0 +1,32 @@
+# dup_proof_manifest.yaml — self-proof fixture for fixture_kill_proof_guard.sh [87]
+#
+# PURPOSE: prove that the registry-integrity stage (BACKLOG P2-50) BLOCKS a manifest in
+# which one (guard, fixture) pair is registered twice under DIFFERENT ids.
+#
+# WHY THIS IS THE ATTACK AND NOT A NIT: a min_items floor counts rows. So the way to shrink
+# the registry while keeping the floor satisfied is to delete the item that matters and
+# re-add an already-proven pair under a fresh id — the count is unchanged, every remaining
+# row still PASSes, and the proof that was deleted stays gone. This is the same
+# "a count is not an identity" hole the protected-anchor ledger was hardened against
+# (min_entries: 2 satisfied by duplicating the clean row after deleting the risky one).
+#
+# Both items are individually valid and would each PASS the mutation, and their ids DIFFER,
+# so neither a mutation failure nor DUPLICATE_ID can be what produces the BLOCK.
+#
+# → fixture_kill_proof_guard.sh must exit 1 (BLOCK) when given this manifest, reporting
+#   DUPLICATE_PROOF, before any guard is executed.
+
+items:
+  - id: self_proof/original_registration
+    guard: practices/evals/private_boundary_guard.sh
+    fixture: practices/evals/fixtures/private-boundary/fail_marker
+    fixture_arg: '--repo-root'
+    anchor: 'report_violation "1:marker" "$pattern" "$hit"'
+    neuter: 'true  # neutered: layer 1 marker reporting disabled'
+
+  - id: self_proof/padding_registration_under_fresh_id
+    guard: practices/evals/private_boundary_guard.sh
+    fixture: practices/evals/fixtures/private-boundary/fail_marker
+    fixture_arg: '--repo-root'
+    anchor: 'report_violation "1:marker" "$pattern" "$hit"'
+    neuter: 'true  # neutered: layer 1 marker reporting disabled'

@@ -35,6 +35,37 @@
 #   message text). Omit both for single-input guards — unset by default,
 #   zero behavior change for every item that predates this field pair.
 #
+#   OPTIONAL top-level key:
+#     min_items: <N>   — the floor the UNIQUE item count may not fall below.
+#
+# REGISTRY INTEGRITY (2026-07-30, BACKLOG P2-50)
+#   Three structural checks run BEFORE any mutation, because a registry that has been
+#   shrunk or padded reports a green "all items non-vacuous" about the wrong set:
+#     1. duplicate `id`            → BLOCK. The id is the report identity; two rows sharing
+#                                    one make the PASS line ambiguous about which was proven.
+#     2. duplicate (guard,fixture) → BLOCK. A COUNT IS NOT AN IDENTITY. Deleting the item
+#                                    that matters and re-adding a cheap already-proven pair
+#                                    under a fresh id keeps any floor satisfied while the
+#                                    proof it stood for is gone — the attack the protected-
+#                                    anchor ledger was hardened against. Consequence,
+#                                    stated rather than hidden: registering a SECOND anchor
+#                                    against an already-registered pair (defence in depth on
+#                                    one fixture) becomes a reviewed edit to this guard. No
+#                                    such item exists today; the restriction is what makes
+#                                    the floor mean anything.
+#     3. min_items floor           → BLOCK when the unique count is below the manifest's
+#                                    declared `min_items`, and — for THIS guard's own default
+#                                    manifest — when that declaration itself is missing or
+#                                    below the pinned LIVE_MIN_ITEMS. The number is
+#                                    deliberately duplicated (manifest declares, guard pins)
+#                                    so emptying the gate takes two coordinated edits instead
+#                                    of one silent deletion. Same ratchet as
+#                                    evidence_protected_template_anchors.txt's min_entries /
+#                                    LIVE_MIN_PROTECTED_ENTRIES pair.
+#   An override manifest (--manifest) that declares no min_items is unconstrained by the
+#   floor — that is what the one-item self-proof mini-manifests are, and forcing a floor on
+#   them would only be a floor of zero. They are still duplicate-checked.
+#
 # SELF-PROOF
 #   fixtures/fixture-kill-proof/ に two mini-manifests:
 #     vacuous_manifest.yaml   — 항목 1개, neuter가 flip 안 됨 → meta-gate exit 1
@@ -73,7 +104,9 @@
 #   bash practices/evals/fixture_kill_proof_guard.sh --manifest PATH
 #       OVERRIDE: 지정된 manifest 사용 (자기 비공허성 fixture 테스트용).
 #
-# EXIT: 0 = all items non-vacuous. 1 = vacuous item(s) found (BLOCK). 2 = usage/tooling error.
+# EXIT: 0 = all items non-vacuous. 1 = vacuous item(s) found, or the registry itself failed
+#       integrity (duplicate id / duplicate (guard,fixture) / min_items floor) — BLOCK.
+#       2 = usage/tooling error.
 
 set -u
 
@@ -103,14 +136,91 @@ command -v python3 >/dev/null 2>&1 || {
 # reproduce a failure (e.g. private_boundary_guard's --repo-root + --commit-msg-file).
 # Existing single-input items simply leave these two fields unset; behavior for
 # them is unchanged (see invocation sites below, gated on fixture_arg2 non-empty).
-ITEMS="$(python3 - "$MANIFEST" <<'PY'
-import sys, yaml
+ITEMS="$(python3 - "$MANIFEST" "$DEFAULT_MANIFEST" <<'PY'
+import os, sys, yaml
 manifest_path = sys.argv[1]
+default_manifest = sys.argv[2]
 try:
     doc = yaml.safe_load(open(manifest_path, encoding='utf-8'))
 except Exception as e:
     print(f"PARSE_ERROR: {e}", file=sys.stderr); sys.exit(2)
 items = doc.get('items') or []
+
+# ── registry integrity (BACKLOG P2-50) ───────────────────────────────────────
+# Runs before any row is emitted: a shrunk or padded registry would otherwise report a
+# green verdict about a set that is not the one the gate was earned on. Exit 3 is the
+# structural-violation channel; the caller maps it to BLOCK (exit 1), distinct from the
+# exit 2 tooling channel above.
+#
+# LIVE_MIN_ITEMS is the guard-pinned half of the floor and applies to THIS guard's own
+# default manifest — identified by realpath, so naming the same file via --manifest does
+# not opt out of it. MAY NOT BE REDUCED: lowering it without also lowering the manifest's
+# `min_items` directive (or vice-versa) leaves the other half BLOCKING, which is the point.
+# 2026-07-30: set to the measured disk truth at introduction, 57.
+LIVE_MIN_ITEMS = 62
+
+structural = []
+
+
+def _same_file(a, b):
+    try:
+        return os.path.samefile(a, b)
+    except OSError:
+        return os.path.realpath(a) == os.path.realpath(b)
+
+
+is_default_manifest = _same_file(manifest_path, default_manifest)
+
+seen_ids = {}
+seen_pairs = {}
+for idx, it in enumerate(items):
+    item_id = str(it.get('id', '?'))
+    pair = (str(it.get('guard', '')), str(it.get('fixture', '')))
+    if item_id in seen_ids:
+        structural.append(
+            f"DUPLICATE_ID — id {item_id!r} appears at item #{seen_ids[item_id] + 1} and "
+            f"#{idx + 1}. The id is the report identity; a repeat makes the PASS line "
+            f"ambiguous about which registration was proven")
+    else:
+        seen_ids[item_id] = idx
+    if pair in seen_pairs:
+        structural.append(
+            f"DUPLICATE_PROOF — (guard, fixture) pair {pair[0]} :: {pair[1]} is registered "
+            f"twice (items #{seen_pairs[pair] + 1} and #{idx + 1}, ids "
+            f"{items[seen_pairs[pair]].get('id')!r} / {item_id!r}). A count is not an "
+            f"identity: re-adding an already-proven pair under a fresh id satisfies the "
+            f"min_items floor while the deleted proof stays gone")
+    else:
+        seen_pairs[pair] = idx
+
+unique_count = len(seen_pairs)
+declared_min = doc.get('min_items')
+if declared_min is not None:
+    try:
+        declared_min = int(declared_min)
+    except (TypeError, ValueError):
+        structural.append(f"MIN_ITEMS_NOT_A_NUMBER — min_items: {doc.get('min_items')!r}")
+        declared_min = None
+if is_default_manifest and declared_min is None:
+    structural.append(
+        "NO_MIN_ITEMS — the live manifest must declare `min_items: N` (the unique item "
+        "count that may not be reduced). Without it the registry can shrink silently")
+if declared_min is not None and unique_count < declared_min:
+    structural.append(
+        f"REGISTRY_SHRUNK — {unique_count} unique (guard, fixture) item(s) < declared "
+        f"min_items={declared_min}. Items were removed; a smaller registry proves less "
+        f"while still printing PASS")
+if is_default_manifest and declared_min is not None and declared_min < LIVE_MIN_ITEMS:
+    structural.append(
+        f"MIN_ITEMS_FLOOR — declared min_items={declared_min} is below the guard-pinned "
+        f"floor {LIVE_MIN_ITEMS} (LIVE_MIN_ITEMS may not be reduced). Lowering the gate "
+        f"takes two coordinated edits, and only one of them has been made")
+
+if structural:
+    for msg in structural:
+        print(f"fixture_kill_proof_guard: BLOCK — {msg}", file=sys.stderr)
+    sys.exit(3)
+
 for it in items:
     fields = [
         str(it.get('id', '?')),
@@ -127,7 +237,13 @@ PY
 )"
 
 parse_rc=$?
-if [ "$parse_rc" -ne 0 ]; then
+if [ "$parse_rc" -eq 3 ]; then
+    # registry integrity violation (duplicate id / duplicate proof / min_items floor).
+    # Reported above by the parser; a BLOCK, not a tooling error.
+    echo "" >&2
+    echo "fixture_kill_proof_guard: FAIL — manifest registry integrity violated ($MANIFEST)." >&2
+    exit 1
+elif [ "$parse_rc" -ne 0 ]; then
     echo "fixture_kill_proof_guard: failed to parse manifest: $MANIFEST" >&2; exit 2
 fi
 
@@ -363,5 +479,14 @@ if [ "$FAIL" -ne 0 ]; then
     exit 1
 fi
 
-echo "fixture_kill_proof_guard: PASS — $PROVEN item(s) all non-vacuous (every fail fixture is killed by its targeted neuter)"
+# Print the floor alongside the proven count. A ratchet that is never displayed is a ratchet
+# nobody notices moving; the census guards in this suite print their floors for the same
+# reason. Display only — the enforcing comparison already happened in the parser above.
+DECLARED_MIN="$(python3 - "$MANIFEST" <<'PY' 2>/dev/null
+import sys, yaml
+doc = yaml.safe_load(open(sys.argv[1], encoding='utf-8')) or {}
+print(doc.get('min_items', 'none'))
+PY
+)"
+echo "fixture_kill_proof_guard: PASS — $PROVEN item(s) all non-vacuous (every fail fixture is killed by its targeted neuter) [min_items floor: ${DECLARED_MIN:-none}]"
 exit 0

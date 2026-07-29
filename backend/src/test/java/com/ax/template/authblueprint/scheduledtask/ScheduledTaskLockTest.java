@@ -107,9 +107,10 @@ class ScheduledTaskLockTest {
         properties.setLockTtlSeconds(300);
 
         TaskLock staleLock = new TaskLock("digest-job", "previous-instance-Z", t0);
-        when(lockRepo.findByTaskName("digest-job")).thenReturn(Optional.of(staleLock));
+        when(lockRepo.findByTaskNameForUpdate("digest-job")).thenReturn(Optional.of(staleLock));
 
-        DatabaseAdvisoryLock dbLock = new DatabaseAdvisoryLock(lockRepo, fixedNow, properties);
+        DatabaseAdvisoryLock dbLock = new DatabaseAdvisoryLock(
+            lockRepo, new com.ax.template.authblueprint.common.IdempotentInsert(), fixedNow, properties);
 
         boolean acquired = dbLock.tryAcquire("digest-job", "new-instance-A");
 
@@ -141,9 +142,10 @@ class ScheduledTaskLockTest {
         properties.setLockTtlSeconds(300);
 
         TaskLock freshLock = new TaskLock("digest-job", "previous-instance-Z", t0);
-        when(lockRepo.findByTaskName("digest-job")).thenReturn(Optional.of(freshLock));
+        when(lockRepo.findByTaskNameForUpdate("digest-job")).thenReturn(Optional.of(freshLock));
 
-        DatabaseAdvisoryLock dbLock = new DatabaseAdvisoryLock(lockRepo, fixedNow, properties);
+        DatabaseAdvisoryLock dbLock = new DatabaseAdvisoryLock(
+            lockRepo, new com.ax.template.authblueprint.common.IdempotentInsert(), fixedNow, properties);
 
         boolean acquired = dbLock.tryAcquire("digest-job", "new-instance-A");
 

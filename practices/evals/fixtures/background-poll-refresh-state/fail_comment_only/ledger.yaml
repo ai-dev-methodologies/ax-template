@@ -1,0 +1,9 @@
+# Minimal stand-in for practices/evals/l4_presentational_view_ledger.yaml.
+# Only the (page, view) mapping matters to background_poll_refresh_state_guard.
+min_entries: 1
+entries:
+  - domain: demo
+    surface: list
+    page: "templates/L4/demo/app/(demo)/page.tsx"
+    view: "templates/L4/demo/app/(demo)/demo-view.tsx"
+    note: "R82b [41] fixture pair."
