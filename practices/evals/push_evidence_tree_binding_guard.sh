@@ -186,6 +186,13 @@ build_repo() {
     cp "$subject/completion_checklist_recency_guard.sh" "$sb/repo/practices/evals/"
     [ -f "$REPO_ROOT/practices/scripts/_collapse_plan.py" ] && \
         cp "$REPO_ROOT/practices/scripts/_collapse_plan.py" "$sb/repo/practices/scripts/"
+    # P1-X layer 3 (2026-07-30): verify-completion.sh SOURCES the shared release-anchor helper
+    # to record anchor_sha in the audit line, and the recency guard authenticates that value
+    # against the sha git hands the hook. The sandbox must therefore carry the helper too, or
+    # every run here records anchor_sha="unavailable" and every push is refused for the wrong
+    # reason. Copied VERBATIM (never neutered): it is plumbing for the scenario, not a subject.
+    mkdir -p "$sb/repo/practices/scripts/lib"
+    cp "$REPO_ROOT/practices/scripts/lib/release_anchor.sh" "$sb/repo/practices/scripts/lib/"
     cp "$REAL_HOOK" "$REAL_HOOK_LIB" "$sb/repo/.githooks/"
     chmod +x "$sb/repo/.githooks/pre-push"
     printf '%s\n' "$CHECKLIST" > "$sb/repo/practices/verification-checklist.yaml"

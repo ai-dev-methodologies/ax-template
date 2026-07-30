@@ -454,6 +454,14 @@ PY
     fi
 
     # ── (4) neutered guard on fixture → expect exit 0 (flipped) ─────────────
+    # The neutered copy runs from a BARE TEMP PATH, so any helper a guard sources by
+    # repo-relative path (practices/scripts/lib/release_anchor.sh, added 2026-07-30 for the
+    # P1-X/P1-Y anchor authentication) cannot resolve from there. Naming it explicitly keeps
+    # this harness measuring what it is supposed to measure — whether the ANCHOR LOGIC is
+    # load-bearing — instead of reporting "neuter broke the guard" for a missing dependency.
+    # The guards consult this variable ONLY when their committed helper path is absent, so it
+    # is inert on every real tree and cannot substitute a weakened helper into a live run.
+    export AX_RELEASE_ANCHOR_LIB="$REPO_ROOT/practices/scripts/lib/release_anchor.sh"
     if [ -n "$fixture_arg" ]; then
         if [ -n "$fixture_arg2" ]; then
             bash "$TMP_GUARD" "$fixture_arg" "$FIXTURE_PATH" "$fixture_arg2" "$FIXTURE2_PATH" >/dev/null 2>&1

@@ -139,6 +139,18 @@
 #       root / BASELINE_MUTATED / ALLOWLIST_GREW) — deliberately distinct from 1 and 2 so "the
 #       ratchet was rolled back across releases" is never readable as "a body diverged" or "a shape
 #       is wrong".
+#       · 5 ANCHOR AUTHENTICITY (round 3, TD-2026-07-30-P1-anchor-authenticity) — the anchor itself
+#         could not be trusted, as opposed to a ratchet having been rolled back:
+#           ANCHOR_NOT_ANCESTOR          the resolved anchor is not an ancestor of HEAD
+#           ANCHOR_BOOTSTRAP_IMPLAUSIBLE a path "absent at the anchor" that HAS history there
+#           ANCHOR_PATH_NOT_REGULAR      an anchor-critical path is a symlink (mode 120000) at the
+#                                        anchor — the anchor side reads GIT OBJECTS while the self
+#                                        side reads the FILESYSTEM, and a link makes them disagree
+#           ANCHOR_MALFORMED             an anchor payload of the wrong TYPE or unparseable; never
+#                                        a silent skip, never conflated with "absent"
+#           ANCHOR_DIFF_UNAVAILABLE      `git diff` against the anchor failed on a live root
+#         (SELF_PATH_NOT_REGULAR — the working-tree half of the symlink check — is exit 2, because
+#         it is an ordinary structural defect of the tree being scanned and runs on EVERY root.)
 #
 # Usage:
 #   bash practices/evals/manifest_snapshot_integrity_guard.sh
@@ -179,14 +191,72 @@ command -v python3 >/dev/null 2>&1 || {
 # AHEAD of it) → HEAD (weaker; detached/fork-fresh only) → unavailable (WARN + skip). Gated on
 # LIVE_ROOT exactly like the LIVE_MIN_* floors: FIXTURE ROOTS NEVER ANCHOR, since a fixture
 # isolates one failure mode and has no release history of its own.
+#
+# ROUND 3 (P1-X/P1-Y, TD-2026-07-30-P1-anchor-authenticity): resolution moved into the SINGLE
+# helper practices/scripts/lib/release_anchor.sh, shared with evidence_quote_spotcheck_guard and
+# with verify-completion.sh's audit writer, so the sha the runner RECORDS is the sha this guard
+# RATCHETS AGAINST. Three new blocking codes, fully documented in the helper:
+#   · ANCHOR_NOT_ANCESTOR          — refs/remotes/origin/main is an ORDINARY LOCAL REF; aiming it
+#                                    at a synthetic commit whose tree merely DROPS the anchored
+#                                    paths turns every "absent at the anchor ⇒ bootstrap skip"
+#                                    below into a bypass. The anchor must be an ancestor of HEAD.
+#   · ANCHOR_BOOTSTRAP_IMPLAUSIBLE — a file that HAS HISTORY IN THIS REPO can never legitimately
+#                                    be "absent in the previous release".
+#   · ANCHOR_PATH_NOT_REGULAR / SELF_PATH_NOT_REGULAR — the anchor side reads GIT OBJECTS and the
+#                                    self side reads the FILESYSTEM. A symlinked ledger makes
+#                                    `git show` return a scalar STRING (the target pathname) while
+#                                    this process parses the real YAML — and every prefix/chunk
+#                                    layer below used to be nested under `isinstance(prior_doc,
+#                                    dict)` with no blocking else, so the whole append-only ratchet
+#                                    retired itself in silence. Both sides must be regular files.
+# SELF_PATH_NOT_REGULAR runs on EVERY root (live and fixture): it inspects the tree in front of it
+# rather than a release history, which makes it the fixture-provable half of P1-Y.
+ANCHOR_AUTH_EXIT=5     # distinct from 1 (findings) / 2 (structural) / 4 (ratchet violation)
+# shellcheck source=practices/scripts/lib/release_anchor.sh
+# RELOCATED-COPY AFFORDANCE, deliberately narrow: fixture_kill_proof_guard [87] proves fixture
+# non-vacuity by running a MUTATED COPY of this file from a bare temp path, where the
+# repo-relative helper does not exist. AX_RELEASE_ANCHOR_LIB names it for that case ONLY — the
+# override is consulted exclusively when the COMMITTED path is absent, so on any real tree the
+# committed helper always wins and the variable is inert. It therefore cannot be used to
+# substitute a weakened helper into a live run. A helper that resolves nowhere is EXIT 2, never
+# a silent skip: without it neither the symlink check nor the anchor authentication runs.
+AX_ANCHOR_LIB="$SELF_REPO_ROOT/practices/scripts/lib/release_anchor.sh"
+[ -f "$AX_ANCHOR_LIB" ] || AX_ANCHOR_LIB="${AX_RELEASE_ANCHOR_LIB:-$AX_ANCHOR_LIB}"
+if [ ! -f "$AX_ANCHOR_LIB" ]; then
+    echo "manifest_snapshot_integrity_guard: RELEASE_ANCHOR_LIB_MISSING — practices/scripts/lib/release_anchor.sh not" >&2
+    echo "  found under $SELF_REPO_ROOT. It carries the anchor resolution, the symlink (P1-Y)" >&2
+    echo "  checks and the ancestry/bootstrap authentication (P1-X); without it this guard cannot" >&2
+    echo "  run its ratchet at all, so it BLOCKS rather than degrading silently." >&2
+    exit 2
+fi
+. "$AX_ANCHOR_LIB"
+
+# Anchor-critical paths. The guard file itself lives in the REAL repo; the ledger, allowlist and
+# manifests are read from the SCANNED root (a fixture ships its own copies).
+ANCHOR_SELF_REL="practices/evals/manifest_snapshot_integrity_guard.sh"
+ANCHOR_ROOT_RELS=(
+    "practices/upstream/_FETCH-RECEIPTS.yaml"
+    "practices/evals/manifest_snapshot_integrity_allowlist.yaml"
+    "practices/upstream/_MANIFEST.yaml"
+    "practices-react/upstream/_MANIFEST.yaml"
+)
+
+ax_anchor_worktree_paths_regular "$SELF_REPO_ROOT" "manifest_snapshot_integrity_guard" \
+    "$ANCHOR_SELF_REL" || exit 2
+ax_anchor_worktree_paths_regular "$RESOLVED_ROOT" "manifest_snapshot_integrity_guard" \
+    "${ANCHOR_ROOT_RELS[@]}" || exit 2
+
 GIT_ANCHOR=""
 GIT_ANCHOR_KIND="unavailable"
-if [ "$LIVE_ROOT" = "1" ] && command -v git >/dev/null 2>&1 \
-   && git -C "$SELF_REPO_ROOT" rev-parse --git-dir >/dev/null 2>&1; then
-    if git -C "$SELF_REPO_ROOT" rev-parse --verify --quiet origin/main >/dev/null 2>&1; then
-        GIT_ANCHOR="origin/main"; GIT_ANCHOR_KIND="origin/main"
-    elif git -C "$SELF_REPO_ROOT" rev-parse --verify --quiet HEAD >/dev/null 2>&1; then
-        GIT_ANCHOR="HEAD"; GIT_ANCHOR_KIND="HEAD"
+if [ "$LIVE_ROOT" = "1" ]; then
+    ax_anchor_resolve "$SELF_REPO_ROOT"
+    GIT_ANCHOR="$AX_ANCHOR_REF"
+    GIT_ANCHOR_KIND="$AX_ANCHOR_KIND"
+    if [ -n "$GIT_ANCHOR" ]; then
+        ax_anchor_check_ancestry "$SELF_REPO_ROOT" "manifest_snapshot_integrity_guard" \
+            || exit "$ANCHOR_AUTH_EXIT"
+        ax_anchor_release_paths_regular "$SELF_REPO_ROOT" "manifest_snapshot_integrity_guard" \
+            "$ANCHOR_SELF_REL" "${ANCHOR_ROOT_RELS[@]}" || exit "$ANCHOR_AUTH_EXIT"
     fi
 fi
 
@@ -253,6 +323,17 @@ def anchor_warn(msg):
     print(f"manifest_snapshot_integrity_guard: WARN {msg}", file=sys.stderr)
 
 
+# ROUND 3 (P1-X/P1-Y): authenticity of the ANCHOR ITSELF, as opposed to a ratchet VIOLATION.
+# Shares the shell preamble's exit 5 so "the anchor could not be trusted" is never readable as
+# "a ratchet was rolled back" (4), "a body diverged" (1) or "a shape is wrong" (2).
+ANCHOR_AUTH_EXIT = 5
+
+
+def die_anchor_auth(code, msg):
+    print(f"manifest_snapshot_integrity_guard: {code} — {msg}", file=sys.stderr)
+    sys.exit(ANCHOR_AUTH_EXIT)
+
+
 def anchor_blob(rel):
     """Bytes of `rel` as of the release anchor, or None when that path did not exist there."""
     proc = subprocess.run(["git", "-C", git_root, "show", f"{anchor}:{rel}"],
@@ -260,14 +341,31 @@ def anchor_blob(rel):
     return proc.stdout if proc.returncode == 0 else None
 
 
-def anchor_yaml(rel, what):
-    """Parsed YAML of `rel` at the anchor, or None when absent/unparseable (bootstrap)."""
+ANCHOR_ABSENT = object()   # sentinel: the path did not exist at the anchor (≠ "unparseable")
+
+
+def anchor_yaml(rel, what, strict=False):
+    """Parsed YAML of `rel` at the anchor.
+
+    Returns ANCHOR_ABSENT when the path did not exist there, and the parsed document otherwise.
+    ROUND 3 (P1-Y layer 2): absence and unparseability used to COLLAPSE into the same `None`,
+    so an anchor blob that does not parse degraded into "first-release bootstrap → skip". A
+    symlinked ledger reaches exactly that state — `git show` returns the target PATHNAME, which
+    is a YAML scalar, not a mapping — so the collapse was a silent retirement of the ratchet.
+    With strict=True an unparseable anchor blob is ANCHOR_MALFORMED and BLOCKS."""
     raw = anchor_blob(rel)
     if raw is None:
-        return None
+        return ANCHOR_ABSENT
     try:
         return yaml.safe_load(raw.decode("utf-8", errors="replace"))
     except Exception as exc:
+        if strict:
+            die_anchor_auth("ANCHOR_MALFORMED",
+                            f"{what} at {anchor_kind} ({rel}) does not parse ({exc}). An anchor "
+                            "payload that is not readable is NOT a bootstrap: 'absent' and "
+                            "'unreadable' are different states, and collapsing them let an "
+                            "unreadable anchor silently retire the ratchet that depends on it. "
+                            "Re-anchor onto a release whose copy parses, or restore it")
         anchor_warn(f"ANCHOR_UNPARSEABLE — {what} at {anchor_kind} does not parse ({exc}); the "
                     "ratchet that depends on it is SKIPPED. Git history is immutable to the "
                     "working tree, so this state cannot be manufactured by the edit under review")
@@ -325,6 +423,15 @@ for catalog in CATALOGS:
                            "stops at")
         manifest_seen.add(key)
         spath = os.path.join(root, catalog, "upstream", sid + ".snapshot.md")
+        # ROUND 3 (P1-Y layer 1, extended to the bodies themselves): every read below follows
+        # symlinks (open/isfile use stat), while the anchor side reads git blobs. A symlinked
+        # BODY is therefore the same laundering channel as a symlinked ledger — this process
+        # checksums the target, the next release's `git show` sees a pathname. lstat, not stat.
+        if os.path.islink(spath):
+            die_structural(f"SELF_PATH_NOT_REGULAR — {catalog}/upstream/{sid}.snapshot.md is a "
+                           "SYMLINK. Snapshot bodies are compared against git blobs across "
+                           "releases; a link makes the filesystem side and the git-object side "
+                           "read different bytes by construction. Replace it with the file")
         if not os.path.isfile(spath):
             # No committed body — out of scope by construction (there is nothing to checksum).
             # Reported in the summary so the population is visible, never silently dropped.
@@ -360,6 +467,20 @@ changed_keys = set()
 if anchored:
     changed_paths = anchor_changed_paths()
     if changed_paths is None:
+        # ROUND 3 (P1-Y layer 2 sweep): was WARN+SKIP on every root. Change-driven scope IS the
+        # layer that makes an edited-but-unreceipted body fatal, so on a LIVE root a failure to
+        # compute it is a silent retirement, not a degradation — and a `git diff` against a
+        # resolved anchor only fails when the anchor is not what it claims to be. Fixture roots
+        # never anchor at all, so the advisory there is unreachable rather than lenient.
+        if live_root:
+            die_anchor_auth("ANCHOR_DIFF_UNAVAILABLE",
+                            f"`git diff --name-only {anchor_kind}` failed on the live tree, so "
+                            "the change-driven chain scope cannot be computed. That scope is what "
+                            "forces an id whose snapshot body differs from the released one "
+                            "through the full file←body←receipt chain; skipping it would leave a "
+                            "refresh-without-receipt unlooked-at. Verify the anchor resolves "
+                            "(`git rev-parse origin/main`) and the objects are present "
+                            "(`git fetch origin`), then re-run")
         anchor_warn("ANCHOR_DIFF_UNAVAILABLE — `git diff` against "
                     f"{anchor_kind} failed; change-driven chain scope SKIPPED (the assembly-row "
                     "population is still verified)")
@@ -480,14 +601,28 @@ else:
     # baseline — fail-closed, since an override that redefines the frozen universe is the same
     # bypass by another route.
     if anchored:
-        prior_allow = anchor_yaml(ALLOWLIST_REL.replace(os.sep, "/"), "allowlist")
-        if prior_allow is None:
+        prior_allow = anchor_yaml(ALLOWLIST_REL.replace(os.sep, "/"), "allowlist", strict=True)
+        if prior_allow is ANCHOR_ABSENT:
+            # Reachable only for a genuinely new path: the shell preamble has already required
+            # (ANCHOR_BOOTSTRAP_IMPLAUSIBLE, exit 5) that the anchor's own history never carried
+            # this file, and (ANCHOR_NOT_ANCESTOR) that the anchor descends into HEAD.
             anchor_warn(f"ANCHOR_ALLOWLIST_ABSENT — {ALLOWLIST_REL} does not exist at "
                         f"{anchor_kind}; nothing to ratchet against (first-release bootstrap). "
                         "Baseline-freeze and shrink-only checks SKIPPED for this run")
         elif not isinstance(prior_allow, dict):
-            anchor_warn(f"ANCHOR_ALLOWLIST_SHAPE — {ALLOWLIST_REL} at {anchor_kind} is not a "
-                        "mapping; baseline-freeze and shrink-only checks SKIPPED")
+            # ROUND 3 (P1-Y layer 2): was WARN+SKIP. `git show <anchor>:<allowlist>` on a
+            # SYMLINKED allowlist returns the target PATHNAME — a YAML scalar string, not a
+            # mapping — and this branch then retired the baseline-freeze and shrink-only ratchets
+            # without failing anything. An anchor payload of the wrong TYPE is malformed, never a
+            # bootstrap.
+            die_anchor_auth("ANCHOR_MALFORMED",
+                            f"{ALLOWLIST_REL} at {anchor_kind} parses to "
+                            f"{type(prior_allow).__name__}, not a mapping. The baseline-freeze and "
+                            "shrink-only ratchets are defined over that mapping, so a wrong-type "
+                            "anchor payload silently retires them — which is why this is fatal "
+                            "rather than advisory. A scalar here is the signature of a SYMLINKED "
+                            "allowlist: git hands the anchor side the link's target pathname while "
+                            "this process reads the real file through the link")
         else:
             prior_baseline = set()
             prior_baseline_ok = isinstance(prior_allow.get("baseline_universe"), list)
@@ -498,8 +633,17 @@ else:
                 else:
                     prior_baseline_ok = False
             if not prior_baseline_ok or not prior_baseline:
-                anchor_warn(f"ANCHOR_BASELINE_MALFORMED — the {anchor_kind} allowlist declares no "
-                            "well-formed baseline_universe; baseline-freeze check SKIPPED")
+                # ROUND 3 (P1-Y layer 2): was WARN+SKIP. The anchor's allowlist is a mapping we
+                # got here, so a missing/ill-formed baseline_universe is not a bootstrap — it is
+                # a released allowlist that cannot serve as the frozen reference, and skipping
+                # leaves the freeze unenforced for exactly the release that needs it.
+                die_anchor_auth("ANCHOR_BASELINE_MALFORMED",
+                                f"the {anchor_kind} copy of {ALLOWLIST_REL} declares no "
+                                "well-formed baseline_universe (expected a list of "
+                                "'catalog::id' strings). The wave-start census is the FROZEN "
+                                "reference the in-tree baseline is compared against; without it "
+                                "the freeze check has nothing to compare and would silently pass. "
+                                "Re-anchor onto a release that carries the census, or restore it")
             elif prior_baseline != baseline:
                 added = sorted(baseline - prior_baseline)
                 dropped = sorted(prior_baseline - baseline)
@@ -708,6 +852,10 @@ if receipts_raw and cur_chunks is None:
 if anchored:
     prior_raw = anchor_blob(RECEIPTS_REL)
     if prior_raw is None:
+        # Reachable only for a genuinely new path (ROUND 3): the shell preamble has already
+        # required ANCHOR_BOOTSTRAP_IMPLAUSIBLE-freedom (the anchor's own history never carried
+        # this file) and ANCHOR_NOT_ANCESTOR-freedom (the anchor descends into HEAD), so a forged
+        # refs/remotes/origin/main aimed at a tree that merely DROPS the ledger cannot land here.
         anchor_warn(f"ANCHOR_RECEIPTS_ABSENT — {RECEIPTS_REL} does not exist at {anchor_kind}; "
                     "nothing to ratchet against (first-release bootstrap). Append-only check "
                     "SKIPPED")
@@ -718,108 +866,130 @@ if anchored:
                    "the ledger is append-only")
     else:
         prior_text = prior_raw.decode("utf-8", errors="replace")
+        # ── ROUND 3 (P1-Y layer 2): FAIL-CLOSED ANCHOR PARSE ──────────────────────────
+        # Both of the following used to be silent skips, and TOGETHER they were the whole
+        # append-only ratchet's off switch:
+        #   · an unparseable anchor blob WARNed and set prior_doc = None;
+        #   · everything below was nested under `if isinstance(prior_doc, dict)` WITH NO ELSE,
+        #     so a non-mapping payload skipped the by-id, prefix and byte-chunk layers in silence.
+        # `git show <anchor>:_FETCH-RECEIPTS.yaml` on a SYMLINKED ledger returns the target
+        # PATHNAME — which YAML parses cleanly as a STRING — so the reviewer reached the second
+        # branch with an intact-looking anchor and no error anywhere. An anchor payload that is
+        # not the expected TYPE is ANCHOR_MALFORMED and blocks.
         try:
             prior_doc = yaml.safe_load(prior_text) or {}
         except Exception as exc:
-            prior_doc = None
-            anchor_warn(f"ANCHOR_UNPARSEABLE — {RECEIPTS_REL} at {anchor_kind} does not parse "
-                        f"({exc}); append-only check SKIPPED")
-        if isinstance(prior_doc, dict):
-            prior_rows = prior_doc.get("receipts") or []
-            cur_by_id = {}
-            for row in cur_rows:
-                if isinstance(row, dict) and row.get("id") is not None:
-                    cur_by_id[row["id"]] = row
-            mutated = []
-            for prow in prior_rows:
-                if not isinstance(prow, dict):
-                    continue
-                prid = prow.get("id")
-                if prid not in cur_by_id:
-                    mutated.append(f"{prid!r}: released row DELETED")
-                elif cur_by_id[prid] != prow:
-                    changed = sorted(
-                        k for k in set(prow) | set(cur_by_id[prid])
-                        if prow.get(k) != cur_by_id[prid].get(k))
-                    mutated.append(f"{prid!r}: field(s) {', '.join(changed)} REWRITTEN")
-            if mutated:
+            die_anchor_auth("ANCHOR_MALFORMED",
+                            f"{RECEIPTS_REL} at {anchor_kind} does not parse ({exc}). The "
+                            "append-only ratchet (by-id identity, row-order prefix, byte-chunk "
+                            "prefix) is defined over that document; an unreadable anchor retires "
+                            "all three at once, so this is fatal rather than advisory. Re-anchor "
+                            "onto a release whose ledger parses, or restore it")
+        if not isinstance(prior_doc, dict):
+            die_anchor_auth("ANCHOR_MALFORMED",
+                            f"{RECEIPTS_REL} at {anchor_kind} parses to "
+                            f"{type(prior_doc).__name__}, not a mapping. A scalar here is the "
+                            "signature of a SYMLINKED ledger: git hands the anchor side the "
+                            "link's target PATHNAME while this process reads the real YAML "
+                            "through the link — the anchor side reads GIT OBJECTS, the self side "
+                            "reads the FILESYSTEM, and every place those disagree is a laundering "
+                            "channel. The append-only ratchet is defined over the mapping, so a "
+                            "wrong-type payload silently retires it")
+        prior_rows = prior_doc.get("receipts") or []
+        cur_by_id = {}
+        for row in cur_rows:
+            if isinstance(row, dict) and row.get("id") is not None:
+                cur_by_id[row["id"]] = row
+        mutated = []
+        for prow in prior_rows:
+            if not isinstance(prow, dict):
+                continue
+            prid = prow.get("id")
+            if prid not in cur_by_id:
+                mutated.append(f"{prid!r}: released row DELETED")
+            elif cur_by_id[prid] != prow:
+                changed = sorted(
+                    k for k in set(prow) | set(cur_by_id[prid])
+                    if prow.get(k) != cur_by_id[prid].get(k))
+                mutated.append(f"{prid!r}: field(s) {', '.join(changed)} REWRITTEN")
+        if mutated:
+            die_anchor("RECEIPT_LEDGER_MUTATED",
+                       f"{len(mutated)} row(s) of {RECEIPTS_REL} differ from {anchor_kind}: "
+                       + "; ".join(mutated[:8])
+                       + (" …" if len(mutated) > 8 else "")
+                       + ". A receipt records what a fetch produced; rewriting one is how a "
+                         "doctored body gets a matching `body_sha256` and closes domain (c) "
+                         "on manufactured provenance. The ledger is APPEND-ONLY: a repeat "
+                         "refresh appends a new assembly row (the chain binds to the latest), "
+                         "it never edits the old one")
+        # ── P1-B layer 3: PREFIX (ORDER) identity over the PARSED row-id sequence ──
+        # Layers 1-2 are keyed by id and therefore order-blind, while the chain's verdict
+        # binds to the LAST assembly row for an identity. Swapping two intact rows changes
+        # the verdict without changing any row, so the sequence itself is ratcheted: the
+        # anchor's row-id sequence must be an EXACT PREFIX of the current one.
+        prior_id_seq = [r.get("id") for r in prior_rows
+                        if isinstance(r, dict) and r.get("id") is not None]
+        cur_id_seq = [r.get("id") for r in cur_rows
+                      if isinstance(r, dict) and r.get("id") is not None]
+        head = cur_id_seq[:len(prior_id_seq)]
+        if head != prior_id_seq:
+            first = next((i for i in range(max(len(head), len(prior_id_seq)))
+                          if head[i:i + 1] != prior_id_seq[i:i + 1]), 0)
+            die_anchor("RECEIPT_LEDGER_MUTATED",
+                       f"the {anchor_kind} row order is not a PREFIX of the current "
+                       f"{RECEIPTS_REL}: at position {first} the released ledger has "
+                       f"{prior_id_seq[first:first + 1] or ['<end>']} and this tree has "
+                       f"{head[first:first + 1] or ['<end>']} "
+                       f"({len(prior_id_seq)} released row(s), {len(cur_id_seq)} now). An "
+                       "append-only ledger is a SEQUENCE, not a set: the chain binds to the "
+                       "LAST assembly row for an identity, so REORDERING two intact rows "
+                       "silently rolls a released refresh back to an earlier body while every "
+                       "by-id comparison still reports 'unchanged'. Only SUFFIX APPENDS are "
+                       "legal — insertion before the end, reordering and removal are not")
+        prior_chunks = receipt_chunks(prior_text)
+        if prior_chunks is None or cur_chunks is None:
+            if live_root:
+                # P1-B: on a live root an unchunkable ledger is BLOCKING, not an advisory
+                # downgrade. The current-side case is already dead (RECEIPTS_SELF_UNCHUNKABLE
+                # above); this is the belt-and-braces for an ANCHOR committed before that
+                # check existed, i.e. exactly the state the reviewer's indent-the-list
+                # laundering would have created one release earlier.
                 die_anchor("RECEIPT_LEDGER_MUTATED",
-                           f"{len(mutated)} row(s) of {RECEIPTS_REL} differ from {anchor_kind}: "
-                           + "; ".join(mutated[:8])
-                           + (" …" if len(mutated) > 8 else "")
-                           + ". A receipt records what a fetch produced; rewriting one is how a "
-                             "doctored body gets a matching `body_sha256` and closes domain (c) "
-                             "on manufactured provenance. The ledger is APPEND-ONLY: a repeat "
-                             "refresh appends a new assembly row (the chain binds to the latest), "
-                             "it never edits the old one")
-            # ── P1-B layer 3: PREFIX (ORDER) identity over the PARSED row-id sequence ──
-            # Layers 1-2 are keyed by id and therefore order-blind, while the chain's verdict
-            # binds to the LAST assembly row for an identity. Swapping two intact rows changes
-            # the verdict without changing any row, so the sequence itself is ratcheted: the
-            # anchor's row-id sequence must be an EXACT PREFIX of the current one.
-            prior_id_seq = [r.get("id") for r in prior_rows
-                            if isinstance(r, dict) and r.get("id") is not None]
-            cur_id_seq = [r.get("id") for r in cur_rows
-                          if isinstance(r, dict) and r.get("id") is not None]
-            head = cur_id_seq[:len(prior_id_seq)]
-            if head != prior_id_seq:
-                first = next((i for i in range(max(len(head), len(prior_id_seq)))
-                              if head[i:i + 1] != prior_id_seq[i:i + 1]), 0)
+                           f"ANCHOR_RECEIPTS_UNCHUNKABLE — {RECEIPTS_REL} does not chunk into "
+                           "column-0 `- id: <id>` list items at "
+                           f"{anchor_kind if prior_chunks is None else 'the working tree'}, so "
+                           "the byte-identity and prefix-by-bytes layers cannot run. That is a "
+                           "SILENT RETIREMENT of the ratchet, which is why it is fatal here "
+                           "rather than advisory: an indent-the-list reformat is semantically "
+                           "identical YAML and passes every value-level check. Re-anchor onto "
+                           "a release whose ledger chunks, or restore the shape")
+            anchor_warn("ANCHOR_RECEIPTS_UNCHUNKABLE — the ledger's list items are not "
+                        "column-0 `- id: <id>` entries on one or both sides, so the "
+                        "byte-identity layer is inapplicable; parsed-row identity still "
+                        "applies (an edit that changes no parsed value is not detected). "
+                        "Advisory on FIXTURE roots only — blocking on the live tree")
+        else:
+            def trim(chunk):
+                return re.sub(r"\s+$", "", chunk)
+            byte_mutated = [rid for rid, txt in prior_chunks.items()
+                            if trim(cur_chunks.get(rid, "")) != trim(txt)]
+            if byte_mutated:
                 die_anchor("RECEIPT_LEDGER_MUTATED",
-                           f"the {anchor_kind} row order is not a PREFIX of the current "
-                           f"{RECEIPTS_REL}: at position {first} the released ledger has "
-                           f"{prior_id_seq[first:first + 1] or ['<end>']} and this tree has "
-                           f"{head[first:first + 1] or ['<end>']} "
-                           f"({len(prior_id_seq)} released row(s), {len(cur_id_seq)} now). An "
-                           "append-only ledger is a SEQUENCE, not a set: the chain binds to the "
-                           "LAST assembly row for an identity, so REORDERING two intact rows "
-                           "silently rolls a released refresh back to an earlier body while every "
-                           "by-id comparison still reports 'unchanged'. Only SUFFIX APPENDS are "
-                           "legal — insertion before the end, reordering and removal are not")
-            prior_chunks = receipt_chunks(prior_text)
-            if prior_chunks is None or cur_chunks is None:
-                if live_root:
-                    # P1-B: on a live root an unchunkable ledger is BLOCKING, not an advisory
-                    # downgrade. The current-side case is already dead (RECEIPTS_SELF_UNCHUNKABLE
-                    # above); this is the belt-and-braces for an ANCHOR committed before that
-                    # check existed, i.e. exactly the state the reviewer's indent-the-list
-                    # laundering would have created one release earlier.
-                    die_anchor("RECEIPT_LEDGER_MUTATED",
-                               f"ANCHOR_RECEIPTS_UNCHUNKABLE — {RECEIPTS_REL} does not chunk into "
-                               "column-0 `- id: <id>` list items at "
-                               f"{anchor_kind if prior_chunks is None else 'the working tree'}, so "
-                               "the byte-identity and prefix-by-bytes layers cannot run. That is a "
-                               "SILENT RETIREMENT of the ratchet, which is why it is fatal here "
-                               "rather than advisory: an indent-the-list reformat is semantically "
-                               "identical YAML and passes every value-level check. Re-anchor onto "
-                               "a release whose ledger chunks, or restore the shape")
-                anchor_warn("ANCHOR_RECEIPTS_UNCHUNKABLE — the ledger's list items are not "
-                            "column-0 `- id: <id>` entries on one or both sides, so the "
-                            "byte-identity layer is inapplicable; parsed-row identity still "
-                            "applies (an edit that changes no parsed value is not detected). "
-                            "Advisory on FIXTURE roots only — blocking on the live tree")
-            else:
-                def trim(chunk):
-                    return re.sub(r"\s+$", "", chunk)
-                byte_mutated = [rid for rid, txt in prior_chunks.items()
-                                if trim(cur_chunks.get(rid, "")) != trim(txt)]
-                if byte_mutated:
-                    die_anchor("RECEIPT_LEDGER_MUTATED",
-                               f"{len(byte_mutated)} released row(s) of {RECEIPTS_REL} are not "
-                               "byte-identical to " + anchor_kind + ": "
-                               + ", ".join(map(repr, sorted(byte_mutated)[:8]))
-                               + (" …" if len(byte_mutated) > 8 else "")
-                               + ". Only appends are legal")
-                # PREFIX identity over the BYTE-CHUNK sequence — the same order ratchet applied
-                # in the byte domain, so a reorder that somehow parsed into an identical row-id
-                # sequence still cannot pass.
-                prior_chunk_seq = list(prior_chunks.keys())
-                cur_chunk_seq = list(cur_chunks.keys())
-                if cur_chunk_seq[:len(prior_chunk_seq)] != prior_chunk_seq:
-                    die_anchor("RECEIPT_LEDGER_MUTATED",
-                               f"the {anchor_kind} BYTE-CHUNK order is not a PREFIX of the current "
-                               f"{RECEIPTS_REL} ({len(prior_chunk_seq)} released chunk(s), "
-                               f"{len(cur_chunk_seq)} now). Only suffix appends are legal")
+                           f"{len(byte_mutated)} released row(s) of {RECEIPTS_REL} are not "
+                           "byte-identical to " + anchor_kind + ": "
+                           + ", ".join(map(repr, sorted(byte_mutated)[:8]))
+                           + (" …" if len(byte_mutated) > 8 else "")
+                           + ". Only appends are legal")
+            # PREFIX identity over the BYTE-CHUNK sequence — the same order ratchet applied
+            # in the byte domain, so a reorder that somehow parsed into an identical row-id
+            # sequence still cannot pass.
+            prior_chunk_seq = list(prior_chunks.keys())
+            cur_chunk_seq = list(cur_chunks.keys())
+            if cur_chunk_seq[:len(prior_chunk_seq)] != prior_chunk_seq:
+                die_anchor("RECEIPT_LEDGER_MUTATED",
+                           f"the {anchor_kind} BYTE-CHUNK order is not a PREFIX of the current "
+                           f"{RECEIPTS_REL} ({len(prior_chunk_seq)} released chunk(s), "
+                           f"{len(cur_chunk_seq)} now). Only suffix appends are legal")
 
 # ── (b)+(c) BODY and RECEIPT domains: assembly-row ids UNION anchor-changed ids ────────
 # `touched` (the assembly-row population) keeps its meaning for the LIVE_MIN_TOUCHED floor;

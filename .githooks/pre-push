@@ -12,6 +12,14 @@
 #      push still ships work, so it still requires a fresh verify-completion.sh
 #      PASS at the pushed sha). A DELETE-ONLY push (every ref is a deletion)
 #      ships no work and skips both stages.
+#      For a push that advances the ANCHOR BRANCH (remote ref refs/heads/main) this
+#      stage ALSO authenticates the release anchor: git hands the hook the remote
+#      sha from the remote's own advertisement — the one copy a local
+#      `git update-ref` cannot rewrite — and the audit's recorded anchor_sha must
+#      equal it. Without that, pointing refs/remotes/origin/main at a synthetic
+#      commit whose tree merely DROPS the ratcheting files makes every ratchet take
+#      its first-release bootstrap skip and R25 passes on a downgrade
+#      (TD-2026-07-30-P1-anchor-authenticity, P1-X layer 3).
 #   2. Binary regression suite (testPractices + testAsvs + testCrud) — runs when
 #      ANY pushed ref's diff touches backend/, practices/, or the seed spec.
 #      Fail-closed: if a ref's diff base cannot be resolved or `git diff` itself
@@ -54,8 +62,21 @@ while read -r _local_ref local_sha _remote_ref remote_sha; do
     # R25 — 49th hard guard, per pushed ref: the audit must be fresh for the
     # EXACT sha being shipped. Verifying the checkout's HEAD instead would let
     # `git push origin feature` (while on main) ride on main's audit.
+    # P1-X layer 3 (2026-07-30, TD-2026-07-30-P1-anchor-authenticity): git hands this hook the
+    # remote sha from the REMOTE'S OWN ADVERTISEMENT — the only copy in the pipeline that a local
+    # `git update-ref` cannot rewrite. The ratcheting guards resolve "the previous release" from
+    # refs/remotes/origin/main, an ordinary local ref; aiming it at a synthetic commit that merely
+    # DROPS the ratcheting files makes every ratchet bootstrap-skip and R25 pass on a downgrade.
+    # So for a push that advances the ANCHOR BRANCH we require the audit's recorded anchor_sha to
+    # equal what the remote actually has. Round-2 used remote_sha only to pick the regression
+    # diff base; this is what turns it into an authentication.
+    ANCHOR_ARGS=()
+    if anchor_expect="$(pp_anchor_expect_sha "$_remote_ref" "$remote_sha")"; then
+        ANCHOR_ARGS=(--expect-anchor-sha "$anchor_expect")
+        echo "[practices] R25 — anchor binding: remote advertises ${anchor_expect:0:12} for $_remote_ref"
+    fi
     echo "[practices] R25 — completion checklist recency check for ${local_sha:0:12}"
-    if ! bash practices/evals/completion_checklist_recency_guard.sh --expect-sha "$local_sha"; then
+    if ! bash practices/evals/completion_checklist_recency_guard.sh --expect-sha "$local_sha" "${ANCHOR_ARGS[@]+"${ANCHOR_ARGS[@]}"}"; then
         echo "[practices] ✗ completion_checklist_recency_guard FAILED for ${local_sha:0:12} — push BLOCKED"
         echo "[practices] Run the completion contract at the pushed commit:"
         echo "[practices]   git checkout ${local_sha:0:12} && bash practices/scripts/verify-completion.sh"

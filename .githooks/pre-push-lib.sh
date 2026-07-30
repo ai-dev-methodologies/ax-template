@@ -26,6 +26,30 @@ _AX_PRE_PUSH_LIB=1
 
 PP_ZERO_SHA="0000000000000000000000000000000000000000"
 PP_REGRESSION_SCOPE='^(backend/|practices/|specs/spring-practices-l0\.yaml)'
+# The REMOTE-side ref whose advertised sha is the release anchor the ratcheting guards measure
+# against. Kept in lockstep with AX_ANCHOR_REMOTE_REF in practices/scripts/lib/release_anchor.sh.
+PP_ANCHOR_REMOTE_REF="refs/heads/main"
+
+# pp_anchor_expect_sha <remote_ref> <remote_sha>
+#   P1-X layer 3 (2026-07-30) — the ref is not the tree. The ratcheting guards resolve "the
+#   previous release" from refs/remotes/origin/main, which is an ORDINARY LOCAL REF that
+#   `git update-ref` can aim at a synthetic commit lacking the ratcheting files (every ratchet
+#   then bootstrap-skips and R25 passes on a downgrade). Git hands THIS hook the remote sha from
+#   the remote's own advertisement, so it is the one authoritative copy in the whole pipeline.
+#   Prints that sha when this ref IS the anchor branch and the remote already has it; prints
+#   NOTHING (and returns 1) otherwise:
+#     · a different ref (feature branch) does not advance origin/main, so there is nothing to
+#       authenticate — the check fires on the push that actually publishes the release;
+#     · a ZERO remote sha means the remote does not have this branch yet, so it advertises no
+#       release to bind to.
+#   Pure: reads its arguments only.
+pp_anchor_expect_sha() {
+    local remote_ref="$1" remote_sha="$2"
+    [[ "$remote_ref" == "$PP_ANCHOR_REMOTE_REF" ]] || return 1
+    [[ -n "$remote_sha" && "$remote_sha" != "$PP_ZERO_SHA" ]] || return 1
+    printf '%s' "$remote_sha"
+    return 0
+}
 
 # pp_effective_push_specs <stdin-content>
 #   Scenario 10 — empty-stdin manual fallback. Git feeds the hook

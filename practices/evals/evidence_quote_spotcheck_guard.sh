@@ -233,6 +233,34 @@
 #       would have meant keeping the laundering path open for the sake of a state that can no
 #       longer occur going forward.
 #
+# ANCHOR AUTHENTICITY — WHICH COMMIT THE ANCHOR IS, AND HOW ITS BYTES ARE READ (round 3)
+# --------------------------------------------------------------------------------------
+# (P1-X / P1-Y, cross-family reviewer ROUND 3, 2026-07-30; TD-2026-07-30-P1-anchor-authenticity.)
+#
+# Rounds 1-2 hardened WHAT the anchor says. Round 3 attacked WHICH COMMIT it is, and HOW ITS BYTES
+# ARE READ — both still fully in the attacker's hands. Full rationale lives in the shared helper
+# practices/scripts/lib/release_anchor.sh; the codes it can raise here, all EXIT 8:
+#   ANCHOR_NOT_ANCESTOR          — `refs/remotes/origin/main` is an ORDINARY LOCAL REF. Aim it
+#                                  (via `git update-ref`) at a synthetic commit whose tree merely
+#                                  DROPS this file and state (ii) above — "absent at the anchor ⇒
+#                                  bootstrap skip" — becomes reachable after all. The anchor must
+#                                  now be an ancestor of HEAD.
+#   ANCHOR_BOOTSTRAP_IMPLAUSIBLE — plainly: A FILE THAT HAS HISTORY IN THIS REPO CAN NEVER
+#                                  LEGITIMATELY BE "ABSENT IN THE PREVIOUS RELEASE". State (ii) is
+#                                  honored only when the anchor's own history never carried the path.
+#   ANCHOR_PATH_NOT_REGULAR      — an anchor-critical path is a SYMLINK (git mode 120000) at the
+#                                  anchor. The anchor side reads GIT OBJECTS and the self side
+#                                  reads the FILESYSTEM, so a link makes them read different bytes
+#                                  by construction — and the link's target PATHNAME can itself be
+#                                  spelled as parseable-but-weakened python, which is exactly what
+#                                  the self-parse check (exit 6) would then be reading past.
+#   SELF_PATH_NOT_REGULAR        — the same check on the WORKING TREE (lstat, and on every path
+#                                  component, so a symlinked DIRECTORY cannot launder a regular
+#                                  leaf). EXIT 2, not 8: it is an ordinary structural defect of the
+#                                  tree in front of us, it runs on EVERY root including fixtures,
+#                                  and it is therefore the one half of this P1 a FIXTURE can prove
+#                                  (fixtures/evidence-quote-spotcheck/fail_protected_ledger_symlink).
+#
 # Usage:
 #   bash practices/evals/evidence_quote_spotcheck_guard.sh
 #   bash practices/evals/evidence_quote_spotcheck_guard.sh --strict
@@ -285,14 +313,67 @@ LIVE_ROOT=0; [ -n "$RESOLVED_ROOT" ] && [ "$RESOLVED_ROOT" = "$SELF_REPO_ROOT" ]
 # anchor checks print a loud WARN and are skipped. FIXTURE ROOTS NEVER ANCHOR: the whole block
 # is gated on LIVE_ROOT, exactly like the LIVE_MIN_* floors, because a fixture exists to
 # isolate one failure mode and has no release history of its own.
+#
+# ROUND 3 (P1-X/P1-Y, TD-2026-07-30-P1-anchor-authenticity): resolution moved into the SINGLE
+# helper practices/scripts/lib/release_anchor.sh, shared with manifest_snapshot_integrity_guard
+# and with verify-completion.sh's audit writer, so the sha the runner RECORDS and the sha this
+# guard RATCHETS AGAINST are the same object by construction (that identity is what the pre-push
+# authentication in layer (3) checks). Three new blocking codes, all documented in the helper:
+#   · ANCHOR_NOT_ANCESTOR          — the anchor must be an ancestor of HEAD. refs/remotes/... is
+#                                    an ordinary local ref; `git update-ref` can aim it at a
+#                                    synthetic commit that merely LACKS this file, turning the
+#                                    bootstrap skip below into a bypass.
+#   · ANCHOR_BOOTSTRAP_IMPLAUSIBLE — a file that HAS HISTORY IN THIS REPO can never legitimately
+#                                    be "absent in the previous release". Absence is honored only
+#                                    when the anchor's own history never contained the path.
+#   · ANCHOR_PATH_NOT_REGULAR / SELF_PATH_NOT_REGULAR — the anchor side reads GIT OBJECTS and the
+#                                    self side reads the FILESYSTEM; a symlink makes them read
+#                                    different bytes on purpose. Both sides must be regular files.
+# The self-side (SELF_PATH_NOT_REGULAR) check runs on EVERY root, live or fixture, because it
+# inspects the tree in front of it rather than a release history — so it is the one half of P1-Y
+# a fixture can prove. Exit 8 for anchor-side authenticity, distinct from 4/5/6/7; exit 2 for the
+# self-side, which is an ordinary structural defect of the tree being scanned.
+ANCHOR_AUTH_EXIT=8
+# shellcheck source=practices/scripts/lib/release_anchor.sh
+# RELOCATED-COPY AFFORDANCE, deliberately narrow: fixture_kill_proof_guard [87] proves fixture
+# non-vacuity by running a MUTATED COPY of this file from a bare temp path, where the
+# repo-relative helper does not exist. AX_RELEASE_ANCHOR_LIB names it for that case ONLY — the
+# override is consulted exclusively when the COMMITTED path is absent, so on any real tree the
+# committed helper always wins and the variable is inert. It therefore cannot be used to
+# substitute a weakened helper into a live run. A helper that resolves nowhere is EXIT 2, never
+# a silent skip: without it neither the symlink check nor the anchor authentication runs.
+AX_ANCHOR_LIB="$SELF_REPO_ROOT/practices/scripts/lib/release_anchor.sh"
+[ -f "$AX_ANCHOR_LIB" ] || AX_ANCHOR_LIB="${AX_RELEASE_ANCHOR_LIB:-$AX_ANCHOR_LIB}"
+if [ ! -f "$AX_ANCHOR_LIB" ]; then
+    echo "evidence_quote_spotcheck_guard: RELEASE_ANCHOR_LIB_MISSING — practices/scripts/lib/release_anchor.sh not" >&2
+    echo "  found under $SELF_REPO_ROOT. It carries the anchor resolution, the symlink (P1-Y)" >&2
+    echo "  checks and the ancestry/bootstrap authentication (P1-X); without it this guard cannot" >&2
+    echo "  run its ratchet at all, so it BLOCKS rather than degrading silently." >&2
+    exit 2
+fi
+. "$AX_ANCHOR_LIB"
+
+# Anchor-critical paths. GUARD SELF is resolved against the REAL repo (it is this file), the
+# protected-anchor ledger against the SCANNED root (a fixture ships its own).
+ANCHOR_SELF_REL="practices/evals/evidence_quote_spotcheck_guard.sh"
+ANCHOR_LEDGER_REL="practices/evals/evidence_protected_template_anchors.txt"
+
+ax_anchor_worktree_paths_regular "$SELF_REPO_ROOT" "evidence_quote_spotcheck_guard" \
+    "$ANCHOR_SELF_REL" || exit 2
+ax_anchor_worktree_paths_regular "${RESOLVED_ROOT:-$REPO_ROOT}" "evidence_quote_spotcheck_guard" \
+    "$ANCHOR_LEDGER_REL" || exit 2
+
 GIT_ANCHOR=""
 GIT_ANCHOR_KIND="unavailable"
-if [ "$LIVE_ROOT" = "1" ] && command -v git >/dev/null 2>&1 \
-   && git -C "$SELF_REPO_ROOT" rev-parse --git-dir >/dev/null 2>&1; then
-    if git -C "$SELF_REPO_ROOT" rev-parse --verify --quiet origin/main >/dev/null 2>&1; then
-        GIT_ANCHOR="origin/main"; GIT_ANCHOR_KIND="origin/main"
-    elif git -C "$SELF_REPO_ROOT" rev-parse --verify --quiet HEAD >/dev/null 2>&1; then
-        GIT_ANCHOR="HEAD"; GIT_ANCHOR_KIND="HEAD"
+if [ "$LIVE_ROOT" = "1" ]; then
+    ax_anchor_resolve "$SELF_REPO_ROOT"
+    GIT_ANCHOR="$AX_ANCHOR_REF"
+    GIT_ANCHOR_KIND="$AX_ANCHOR_KIND"
+    if [ -n "$GIT_ANCHOR" ]; then
+        ax_anchor_check_ancestry "$SELF_REPO_ROOT" "evidence_quote_spotcheck_guard" \
+            || exit "$ANCHOR_AUTH_EXIT"
+        ax_anchor_release_paths_regular "$SELF_REPO_ROOT" "evidence_quote_spotcheck_guard" \
+            "$ANCHOR_SELF_REL" "$ANCHOR_LEDGER_REL" || exit "$ANCHOR_AUTH_EXIT"
     fi
 fi
 
@@ -605,7 +686,12 @@ if live_root:
         if prior_src is None:
             print(f"evidence_quote_spotcheck_guard: WARN ANCHOR_GUARD_ABSENT — {GUARD_SELF_REL} "
                   f"does not exist at {anchor_kind}; nothing to ratchet against (first-release "
-                  "bootstrap). Skipped.", file=sys.stderr)
+                  "bootstrap). Skipped. This skip is REACHABLE ONLY for a genuinely new path: "
+                  "the shell preamble has already required (ANCHOR_BOOTSTRAP_IMPLAUSIBLE, exit 8) "
+                  "that the anchor's own history never contained it, and (ANCHOR_NOT_ANCESTOR) "
+                  "that the anchor is an ancestor of HEAD — so a forged refs/remotes/origin/main "
+                  "aimed at a tree that merely DROPS this file cannot land here.",
+                  file=sys.stderr)
         else:
             prior_floor, prior_ids, perr = parse_pins(
                 prior_src.decode("utf-8", errors="replace"))

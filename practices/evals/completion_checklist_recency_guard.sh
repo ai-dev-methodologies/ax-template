@@ -18,7 +18,21 @@
 #   6. that tree was CLEAN at BOTH endpoints — i.e. it was the committed tree of
 #      head_sha when the run started AND when its last step finished, and
 #   7. it was the SAME tree throughout (tree_stable, with the two endpoints
-#      recorded so this guard verifies start == end instead of trusting a flag).
+#      recorded so this guard verifies start == end instead of trusting a flag), and
+#   8. it ratcheted against the RELEASE THE REMOTE ACTUALLY HAS — anchor_sha must equal the
+#      sha git hands the pre-push hook for the ref being pushed (--expect-anchor-sha).
+#
+# Why 8 (cross-family review P1-X, 2026-07-30 — the ref is not the tree):
+#   Two guards in an R25 run ratchet against "the previous release", which they resolve from
+#   refs/remotes/origin/main. THAT IS AN ORDINARY LOCAL REF. `git update-ref` aims it at a
+#   synthetic commit whose tree merely DROPS the ratcheting files; both ratchets then take
+#   their "first-release bootstrap" skip and R25 passes on a downgrade. Checks 5-7 cannot see
+#   it — a ref is not part of the working tree, so no fingerprint covers it. The pre-push hook
+#   is the one place holding an authoritative answer (git reads the remote's advertisement, not
+#   a local ref), so it passes that sha here and the recorded anchor_sha must equal it.
+#   HONEST LIMIT: the binding is supplied only for the push whose REMOTE ref is the anchor's
+#   branch (refs/heads/main). A feature-branch push does not advance origin/main and supplies
+#   nothing, so check 8 is a no-op there by design.
 #
 # Why 7 (cross-family review P1, 2026-07-29 — the run is not an instant):
 #   head/fingerprint/cleanliness used to be captured ONCE before the first step, and the
@@ -61,6 +75,11 @@
 #       audit must match SHA instead of the checkout's HEAD — used by the
 #       pre-push hook to verify the EXACT sha being pushed (a non-checked-out
 #       branch push must not ride on the current branch's audit)
+#   bash practices/evals/completion_checklist_recency_guard.sh --expect-anchor-sha SHA
+#       the audit's recorded anchor_sha must equal SHA — the sha git hands the pre-push hook
+#       for the ref being pushed, taken from the REMOTE's advertisement. Passed by the hook
+#       only for the anchor branch (refs/heads/main); a ZERO sha (new remote branch) is a
+#       no-op. Fixtures supply it via .ax-verify/expected_anchor.txt.
 #   bash practices/evals/completion_checklist_recency_guard.sh --fixtures
 #   bash practices/evals/completion_checklist_recency_guard.sh --root DIR
 
@@ -72,6 +91,7 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 FIXTURES_MODE=0
 ROOT_OVERRIDE=""
 EXPECT_SHA=""
+EXPECT_ANCHOR_SHA=""
 
 while [ $# -gt 0 ]; do
     case "$1" in
@@ -80,6 +100,8 @@ while [ $# -gt 0 ]; do
         --root=*) ROOT_OVERRIDE="${1#--root=}"; shift ;;
         --expect-sha) EXPECT_SHA="$2"; shift 2 ;;
         --expect-sha=*) EXPECT_SHA="${1#--expect-sha=}"; shift ;;
+        --expect-anchor-sha) EXPECT_ANCHOR_SHA="$2"; shift 2 ;;
+        --expect-anchor-sha=*) EXPECT_ANCHOR_SHA="${1#--expect-anchor-sha=}"; shift ;;
         *) echo "completion_checklist_recency_guard: unknown arg: $1" >&2; exit 2 ;;
     esac
 done
@@ -130,7 +152,7 @@ if [ ! -d "$SCAN_ROOT" ]; then
     exit 2
 fi
 
-python3 - "$SCAN_ROOT" "$EXPECT_SHA" <<'PYEOF'
+python3 - "$SCAN_ROOT" "$EXPECT_SHA" "$EXPECT_ANCHOR_SHA" <<'PYEOF'
 import sys
 import pathlib
 import json
@@ -142,8 +164,17 @@ warnings.filterwarnings("ignore", category=DeprecationWarning)
 
 root = pathlib.Path(sys.argv[1])
 expect_sha_arg = sys.argv[2] if len(sys.argv) > 2 else ""
+expect_anchor_arg = sys.argv[3] if len(sys.argv) > 3 else ""
+ZERO_SHA = "0" * 40
 audit_log = root / ".ax-verify" / "runs.jsonl"
 expected_head_file = root / ".ax-verify" / "expected_head.txt"
+# Fixture seam for check 9, mirroring expected_head.txt: a fixture that drops this file is
+# asserting "the remote advertises THIS sha for the ref being pushed", which is what the
+# pre-push hook supplies on a real push. Without it, check 9 is a no-op — so the pre-existing
+# fixtures are untouched and the new ones are the only ones that exercise the anchor binding.
+expected_anchor_file = root / ".ax-verify" / "expected_anchor.txt"
+if expected_anchor_file.is_file():
+    expect_anchor_arg = expected_anchor_file.read_text().strip()
 
 ts = datetime.datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
 
@@ -325,6 +356,56 @@ if not tree_settled:
         f'commit you are pushing and leave the tree alone until it finishes. (Missing fields '
         f'mean the line came from a producer that did not sample across the run — re-run.)'
     )
+
+# 9. The run must have ratcheted against the RELEASE THE REMOTE ACTUALLY HAS.
+#    (P1-X layer 3, cross-family review ROUND 3, 2026-07-30 — the ref is not the tree.)
+#    Two guards in an R25 run ratchet against "the previous release", resolved from
+#    refs/remotes/origin/main. That is an ORDINARY LOCAL REF: `git update-ref` aims it anywhere,
+#    including at a synthetic commit whose tree merely DROPS the ratcheting files — at which
+#    point every ratchet takes its "first-release bootstrap" skip and R25 passes on a downgrade.
+#    Checks 5-8 above cannot see it, because a ref is not part of the working tree and the
+#    fingerprint only hashes the tree.
+#    The pre-push hook is the one place with an AUTHORITATIVE answer: git hands it the remote sha
+#    from the remote's own advertisement, not from any local ref. So the hook passes that sha
+#    here and the recorded anchor_sha must EQUAL it.
+#    Fail-closed on a MISSING field: a line without anchor_sha came from a producer that did not
+#    record which release it measured against, which is precisely the state the attack wants.
+#    LEGITIMATE EXCEPTION, and it is stated in the failure text: the remote moved between the R25
+#    run and the push (someone else pushed). The honest resolution is `git fetch` + re-run R25 —
+#    the ratchet was measured against a release that is no longer the one being extended.
+#    SCOPE, disclosed: the hook only supplies this for a push whose REMOTE ref is the anchor's
+#    branch (refs/heads/main). Pushing a feature branch supplies nothing and this check is a
+#    no-op there — correct, because origin/main is not what that push advances, and the check
+#    fires on the push that actually publishes the release.
+if expect_anchor_arg and expect_anchor_arg != ZERO_SHA:
+    recorded_anchor = latest.get("anchor_sha")
+    if not isinstance(recorded_anchor, str) or not recorded_anchor:
+        emit_fail(
+            "AUDIT_ANCHOR_UNBOUND",
+            f'the latest audit line does not record which release the ratcheting guards measured '
+            f'against (anchor_sha={recorded_anchor!r}). The remote advertises '
+            f'{expect_anchor_arg[:12]} for this ref, and there is nothing to compare it to. '
+            f'refs/remotes/origin/main is an ordinary local ref that `git update-ref` can aim at '
+            f'a synthetic commit lacking the ratcheting files, which turns every ratchet into a '
+            f'bootstrap skip — so an unrecorded anchor is refused rather than assumed honest. '
+            f'Re-run `bash practices/scripts/verify-completion.sh` at the commit you are pushing.'
+        )
+    if recorded_anchor != expect_anchor_arg:
+        emit_fail(
+            "AUDIT_ANCHOR_FORGED",
+            f'the latest R25 run ratcheted against anchor_sha={recorded_anchor[:12]} '
+            f'(kind={latest.get("anchor_kind")!r}), but the REMOTE advertises '
+            f'{expect_anchor_arg[:12]} for the ref being pushed. git took that second value from '
+            f'the remote itself, so it is authoritative; the first came from a local ref that '
+            f'anything can rewrite.\n'
+            f'  · If refs/remotes/origin/main was pointed somewhere else during the run, this is '
+            f'the forgery this check exists for: the guards ratcheted against a commit the remote '
+            f'does not have.\n'
+            f'  · If the remote simply MOVED since your run (someone else pushed), that is the '
+            f'legitimate case and the honest resolution is the same: `git fetch origin` and '
+            f're-run `bash practices/scripts/verify-completion.sh`. The ratchet was measured '
+            f'against a release that is no longer the one you are extending.'
+        )
 
 # All conditions satisfied.
 # Defensive slice: check 6 guarantees tree_fp is a usable string here, so this cannot be a

@@ -91,7 +91,14 @@
 # Side effect: writes an audit log line to .ax-verify/runs.jsonl with
 #   {ts, head_sha, exit, pass, warn_advisory, hard_fail, skip, full_run,
 #    tree_fingerprint, tree_clean, head_sha_end, tree_fingerprint_end, tree_clean_end,
-#    tree_stable, tree_samples}
+#    tree_stable, tree_samples, anchor_sha, anchor_kind}
+#
+# anchor_sha/anchor_kind record WHICH RELEASE the ratcheting guards measured against. They are
+# resolved by practices/scripts/lib/release_anchor.sh — the same helper the guards source — and
+# the pre-push hook requires anchor_sha to equal the sha the REMOTE advertises for the ref being
+# pushed. Without that binding, `git update-ref refs/remotes/origin/main <synthetic>` (an
+# ordinary local ref write, invisible to the tree fingerprint) makes every ratchet bootstrap-skip
+# and R25 pass. See TD-2026-07-30-P1-anchor-authenticity.
 # so that completion_checklist_recency_guard.sh can audit recency AND provenance.
 # tree_fingerprint/tree_clean exist because head_sha alone does not identify the code that
 # was verified: R25 runs on dirty trees, so one head covers arbitrarily many trees. PUSH
@@ -181,6 +188,26 @@ fi
 mkdir -p "$AUDIT_DIR"
 
 CURRENT_HEAD="$(git -C "$REPO_ROOT" rev-parse HEAD 2>/dev/null || echo "unknown")"
+
+# ── Which RELEASE did the ratcheting guards measure against? (P1-X layer 3) ──
+# (cross-family reviewer ROUND 3, 2026-07-30; TD-2026-07-30-P1-anchor-authenticity.)
+# Two guards in this run ratchet against "the previous release", which they resolve from
+# refs/remotes/origin/main. THAT IS AN ORDINARY LOCAL REF — `git update-ref` can aim it at a
+# synthetic commit whose tree merely DROPS the ratcheting files, at which point every ratchet
+# takes its first-release bootstrap skip and R25 passes. The tree fingerprint above cannot see
+# it: a ref is not part of the working tree.
+# So the audit line RECORDS the anchor the guards used, resolved by the SAME helper they source
+# (practices/scripts/lib/release_anchor.sh) so runner and guards cannot disagree, and the
+# pre-push hook — which git hands the AUTHORITATIVE remote sha, taken from the remote's own
+# advertisement rather than from any local ref — requires the two to be EQUAL. A forged ref
+# therefore produces an audit line bound to a commit the remote does not have, and the push is
+# refused. Layers (1) ancestry and (2) bootstrap-plausibility live in the guards themselves;
+# this is the layer that holds even if both were bypassed.
+# shellcheck source=practices/scripts/lib/release_anchor.sh
+. "$SCRIPT_DIR/lib/release_anchor.sh"
+ax_anchor_resolve "$REPO_ROOT"
+ANCHOR_SHA="${AX_ANCHOR_SHA:-unavailable}"
+ANCHOR_KIND="${AX_ANCHOR_KIND:-unavailable}"
 
 # ── Working-tree fingerprint — what a resume record is actually bound to ─────
 # head_sha alone does NOT identify the code that ran. R25 is routinely invoked on a DIRTY
@@ -1333,10 +1360,16 @@ FULL_RUN=true
 # cleanliness measured after the last step, plus whether every sample taken across the run
 # agreed with the start. A consumer that only reads the start values is trusting a measurement
 # taken before any step ran (a real full run here is ~37 minutes wide).
-printf '{"ts":"%s","head_sha":"%s","exit":%d,"pass":%d,"warn_advisory":%d,"hard_fail":%d,"skip":%d,"full_run":%s,"tree_fingerprint":"%s","tree_clean":%s,"head_sha_end":"%s","tree_fingerprint_end":"%s","tree_clean_end":%s,"tree_stable":%s,"tree_samples":%d}\n' \
+# anchor_sha / anchor_kind say WHICH RELEASE the ratcheting guards in this run measured against
+# (P1-X layer 3, ROUND 3). The tree fields above pin the CODE; these pin the REFERENCE POINT,
+# which lives in a mutable local ref and is otherwise invisible to every consumer. The pre-push
+# hook compares anchor_sha against the sha the REMOTE advertises for the ref being pushed, so a
+# forged refs/remotes/origin/main is unpushable regardless of what the guards concluded.
+printf '{"ts":"%s","head_sha":"%s","exit":%d,"pass":%d,"warn_advisory":%d,"hard_fail":%d,"skip":%d,"full_run":%s,"tree_fingerprint":"%s","tree_clean":%s,"head_sha_end":"%s","tree_fingerprint_end":"%s","tree_clean_end":%s,"tree_stable":%s,"tree_samples":%d,"anchor_sha":"%s","anchor_kind":"%s"}\n' \
     "$TS" "$CURRENT_HEAD" "$EXIT_CODE" "$PASS_COUNT" "$ADVISORY_FAIL" "$HARD_FAIL" "$SKIP_COUNT" "$FULL_RUN" \
     "$START_TREE_FP" "$START_TREE_CLEAN" \
     "$END_HEAD" "$END_TREE_FP" "$END_TREE_CLEAN" "$TREE_STABLE" "$TREE_SAMPLES" \
+    "$ANCHOR_SHA" "$ANCHOR_KIND" \
     >> "$AUDIT_LOG"
 
 # ── ax-ledger capture — every verify run leaves a per-project usage trace (progress / violation),

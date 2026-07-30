@@ -768,3 +768,151 @@ the trigger event, do not relitigate.
      itself blocking — the ledger is machine-owned, its format is ours to keep chunkable, so the
      generation-N indent laundering also dies at its own gate.
 - Commits: (this commit — PRD-final-4 wave, P1-seal round-2)
+
+## TD-2026-07-30-(P1-anchor-authenticity) — the anchor itself is authenticated: it must be an ancestor, it must be a regular file, and the push must agree with the remote
+- Status: ACCEPT
+- Date: 2026-07-30
+- Maintainer: PRD-final-4 wave, P1-seal round-3 lane
+- Evidence: two round-3 cross-family reproductions, both attacking the ROUND-2 FIX itself. Every
+  claim below was reproduced in throwaway clones under the session scratchpad; the working tree
+  was verified byte-identical afterwards.
+- Rationale: rounds 1-2 hardened WHAT the anchor says (its constants must parse, its ledger must
+  chunk, its sequences must be prefixes). Round 3 attacked WHICH COMMIT the anchor IS, and HOW ITS
+  BYTES ARE READ. Both were still fully in the attacker's hands.
+
+  **P1-X — the local anchor ref is attacker-mutable, so bootstrap state (ii) is reachable after
+  all.** Round 2 explicitly kept "this file is ABSENT at the anchor ⇒ first-release bootstrap ⇒
+  skip" on the reasoning that "git history is not attacker-creatable". That reasoning was wrong,
+  because the guards never verified WHICH history they were reading. `refs/remotes/origin/main` is
+  an ORDINARY LOCAL REF and `git update-ref` writes it. Reproduction, verbatim: commit the
+  malicious downgrade as M; build FAKE = M's tree MINUS the two anchor paths, parented on the REAL
+  origin/main; `git update-ref refs/remotes/origin/main FAKE`; run the guards. Both ratchets found
+  their own file absent, took the bootstrap skip and exited 0 — measured: with an honest anchor the
+  coherent five-surface 64→63 downgrade exits 4 MONOTONIC_FLOOR_REGRESSION, with FAKE it exits 0.
+  The audit line could not help: it fingerprints the working TREE, and a ref is not part of the
+  tree. Pre-push received the authoritative remote sha but used it only to pick a regression diff
+  base.
+  THREE INDEPENDENT LAYERS, all landed:
+  1. **ANCESTRY — ANCHOR_NOT_ANCESTOR** (evidence exit 8 / manifest exit 5). The resolved anchor
+     must satisfy `git merge-base --is-ancestor <anchor> HEAD`. FAKE is parented on REAL and is
+     therefore not an ancestor of M. RED: exit 8 / exit 5, this layer fires FIRST on the reviewer's
+     exact reproduction. The legitimate exception — a branch that has genuinely diverged from
+     origin/main — BLOCKS with the remedy printed (`git fetch origin && git rebase origin/main`),
+     because a release that does not descend from the release it claims to ratchet against has not
+     been ratcheted at all.
+  2. **BOOTSTRAP IS NOT FILE-ABSENCE ALONE — ANCHOR_BOOTSTRAP_IMPLAUSIBLE.** Stated plainly in
+     both guard headers: A FILE THAT HAS HISTORY IN THIS REPO CAN NEVER LEGITIMATELY BE "ABSENT IN
+     THE PREVIOUS RELEASE". Absence is honored only when `git rev-list -1 <anchor> -- <path>` is
+     EMPTY, plus a redundant probe from the other end (the last HEAD-reachable commit touching the
+     path must not be an ancestor of the anchor). RED, with layer 1 deliberately SATISFIED (the
+     downgrade re-parented onto FAKE so the anchor IS an ancestor): both guards still block —
+     evidence exit 8, manifest exit 5, naming FAKE as the commit that "touched" the path by
+     deleting it. So layer 2 kills the reproduction independently of layer 1.
+     DELIBERATE DEVIATION FROM THE BRIEF, stated: the brief's literal predicate ("`rev-list -1
+     HEAD~1 -- <path>` non-empty ⇒ manufactured") BLOCKS A LEGITIMATE CASE — a ratcheting file
+     added one or two commits ago, while origin/main still predates it, has real HEAD~1 history and
+     an honest absence at the anchor. The shipped predicate asks whether the ANCHOR's history had
+     the file, which is the false-positive-free form of the same idea.
+  3. **AUDIT-BOUND ANCHOR + PRE-PUSH AUTHENTICATION — AUDIT_ANCHOR_UNBOUND / AUDIT_ANCHOR_FORGED.**
+     `verify-completion.sh` now records `anchor_sha`/`anchor_kind` in the audit line, resolved by
+     the SAME helper the guards source, so runner and guards cannot disagree. `.githooks/pre-push`
+     passes the sha GIT HANDS IT for the ref being pushed — taken from the remote's own
+     advertisement, the one copy no local `git update-ref` can rewrite — and
+     `completion_checklist_recency_guard.sh` requires the recorded value to EQUAL it. A missing
+     field is refused, not assumed honest. This layer holds even if 1 and 2 were both bypassed, and
+     it also closes the "delete the tracking ref so the anchor falls back to HEAD" variant for
+     free: HEAD's sha is never the remote's current tip on a push that ships work.
+     RED: fixtures `fail_anchor_forged` (recorded FAKE, remote advertises REAL) and
+     `fail_anchor_unbound` (no anchor_sha at all) exit 1; `pass_anchor_bound` exits 0; the
+     PRE-round-3 recency guard exits 0 on `fail_anchor_forged`, so the fixtures are non-vacuous.
+     Hook wiring measured against the real `.githooks/pre-push`: `--expect-anchor-sha` IS passed
+     for `refs/heads/main`, is NOT passed for a feature ref or a ZERO remote sha, and a delete-only
+     push still skips the stage entirely. Legitimate exception, printed in the failure text: the
+     remote MOVED since the run — `git fetch` + re-run R25, which is the honest resolution because
+     the ratchet was measured against a release that is no longer being extended.
+
+  **P1-Y — symlink representation laundering. THE CLASS, stated once because it generalizes: THE
+  ANCHOR SIDE READS GIT OBJECTS AND THE SELF SIDE READS THE FILESYSTEM, AND ANY PLACE THOSE TWO
+  DISAGREE IS A LAUNDERING CHANNEL.** `open()`/`os.path.isfile` follow symlinks; `git show` /
+  `git ls-tree` return the LINK BLOB, which is just the target pathname. So a path replaced by a
+  symlink is read as real content by the generation that ships it and as an attacker-chosen
+  pathname by the generation that anchors on it.
+  Reproduction A (measured): at generation N replace the evidence guard with a symlink whose TARGET
+  PATHNAME is itself valid, weakened python. Path components may contain any byte but `/` and NUL,
+  so the `/` inside a quoted identity doubles as a directory separator and the pathname
+  `LIVE_MIN_PROTECTED_ENTRIES=0;LIVE_REQUIRED_PROTECTED_IDENTITIES={("templates/L1/components/currency-input.tsx","stripe-billing-2026-05")}`
+  both parses as python AND resolves on disk. Round-2 at gen-N: exit 0 (bash and the self-parse
+  check follow the link and see the real 64/64). Round-2 at gen-N+1 with that commit as anchor:
+  `anchor ratchet OK — floor 0 → 63, pin set 1 → 63 (superset)`, exit 0 — the 64→63 downgrade
+  ships. (Worth recording: a SINGLE-COMPONENT target as literally sketched in the brief does not
+  complete the bypass — it yields floor 0 but a pin set that is not a subset, so round-2 exits 5.
+  The multi-component form above is what actually works.)
+  Reproduction B (measured): make `_FETCH-RECEIPTS.yaml` a symlink at generation N (round-2: exit
+  0). At N+1 `git show <anchor>:…` returns a scalar STRING, and every append-only layer was nested
+  under `if isinstance(prior_doc, dict)` with NO blocking else — so rewriting a released row's
+  provenance field exits 4 RECEIPT_LEDGER_MUTATED against an honest anchor and exits 0 against the
+  symlink anchor. The entire ratchet retired itself in silence.
+  REPAIRS:
+  1. **MODE CHECK ON BOTH SIDES.** `ANCHOR_PATH_NOT_REGULAR` — `git ls-tree <anchor> -- <path>`
+     mode must be 100644/100755 (120000 blocks). `SELF_PATH_NOT_REGULAR` — lstat (`[ -L ]`, not
+     stat) on the leaf AND on every path component below the base, so a symlinked DIRECTORY cannot
+     launder a regular leaf either. Applied to: both guard files, the protected-anchor ledger,
+     `_FETCH-RECEIPTS.yaml`, both `_MANIFEST.yaml` files, the allowlist, and (in python, via
+     `os.path.islink`) every `*.snapshot.md` body. RED: repro A gen-N → exit 2, gen-N+1 → exit 8;
+     repro B gen-N → exit 2, gen-N+1 → exit 5.
+  2. **TYPE-CHECK ANCHOR PARSE RESULTS — ANCHOR_MALFORMED (blocking), never a silent skip.** The
+     `isinstance(prior_doc, dict)` nesting is gone (the block is dedented under two preceding
+     fail-closed checks). RED for the belt-and-braces path, with the mode check deliberately
+     satisfied (an anchor whose ledger is a REGULAR FILE containing a YAML scalar): round-2 exit 0,
+     round-3 exit 5 ANCHOR_MALFORMED.
+     SWEEP OF THE SAME SHAPE, every instance found and closed, all previously WARN+skip:
+     · receipts anchor unparseable → ANCHOR_MALFORMED (was: WARN, then the isinstance nesting)
+     · receipts anchor not a mapping → ANCHOR_MALFORMED (was: silent skip via the nesting)
+     · allowlist anchor unparseable → ANCHOR_MALFORMED (was: collapsed into "absent ⇒ bootstrap")
+     · allowlist anchor not a mapping (`ANCHOR_ALLOWLIST_SHAPE`) → ANCHOR_MALFORMED
+     · allowlist anchor with no well-formed `baseline_universe` (`ANCHOR_BASELINE_MALFORMED`) →
+       blocking; the freeze reference cannot be absent for the release that needs it
+     · `git diff` against the anchor failing (`ANCHOR_DIFF_UNAVAILABLE`) → blocking on a LIVE root;
+       change-driven scope is the layer that makes an edited-but-unreceipted body fatal
+     `anchor_yaml` now returns a distinct `ANCHOR_ABSENT` sentinel, so "absent" and "unreadable"
+     can never be collapsed again.
+- Alternatives considered:
+  · *Three copies of the anchor resolver (status quo).* Rejected: layer 3 requires the runner's
+    recorded sha and the guards' resolved sha to be the SAME object. One helper
+    (`practices/scripts/lib/release_anchor.sh`) makes that true by construction rather than by
+    convention. The two end-to-end harnesses [97][98] now ship the helper into their sandboxes.
+  · *Skip layer 3 when `anchor_kind != "origin/main"`.* Rejected — that is the bypass: delete the
+    tracking ref, fall back to HEAD, self-compare, ship. Plain equality against the remote's sha
+    covers the fallback case for free and needs no extra rule.
+  · *Resolve symlinks and compare targets instead of refusing them.* Rejected: it keeps the
+    asymmetry alive (git would still compare the link blob) and buys nothing — no anchor-critical
+    path has a legitimate reason to be a link.
+  · *Treat symlinked anchor paths as advisory.* Rejected for the round-2 reason: an advisory that
+    silently retires a ratchet is the payload, not a degradation.
+- Residuals, stated rather than papered over:
+  · Layer 3 binds only the push whose REMOTE ref is the anchor branch (`refs/heads/main`). A
+    feature-branch push does not advance origin/main and supplies nothing to authenticate. Correct
+    by design, but it means the authentication fires at publish time, not at every push.
+  · `ANCHOR_PATH_NOT_REGULAR`, `ANCHOR_NOT_ANCESTOR`, `ANCHOR_BOOTSTRAP_IMPLAUSIBLE` and
+    `ANCHOR_MALFORMED` are anchor-bound and therefore live-root only — NOT fixture-coverable.
+    Their evidence is the RED reproductions above. Only the self-side
+    (`SELF_PATH_NOT_REGULAR`) is fixture-provable, and it now is:
+    `manifest-snapshot-integrity/fail_receipts_symlink` and
+    `evidence-quote-spotcheck/fail_protected_ledger_symlink`, both byte-copies of their PASS
+    siblings differing only by the link, both exit 2, both exit 0 under the pre-round-3 guards.
+    Exit 2 (structural), so the [87] exit-1 kill-proof floor stays at 64.
+  · The pre-push hook remains opt-in per clone (`install-hooks.sh`). Layer 3 is only as strong as
+    that installation — unchanged from every other push-time gate here, and stated so nobody reads
+    "unpushable" as stronger than it is.
+  · Symlink checking is lstat-based on the paths this repo names. A fork-receiver that adds new
+    anchor-critical paths must add them to the two lists in the guards' shell preambles; nothing
+    discovers them automatically.
+  · The shared helper is a NEW dependency of both guards. It is resolved from the committed
+    repo-relative path and, when (and only when) that path is absent, from `AX_RELEASE_ANCHOR_LIB`
+    — an affordance for `fixture_kill_proof_guard` [87], which proves fixture non-vacuity by
+    running a MUTATED COPY of each guard from a bare temp path. Because the override is consulted
+    only on the absence of the committed file, it is inert on every real tree (verified: a bogus
+    override on the live repo still exits 0) and cannot substitute a weakened helper into a live
+    run. A helper that resolves nowhere is `RELEASE_ANCHOR_LIB_MISSING`, exit 2 — fail-closed,
+    because without it neither the symlink check nor the anchor authentication runs at all.
+- Commits: (this commit — PRD-final-4 wave, P1-seal round-3)
