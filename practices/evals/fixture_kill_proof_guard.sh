@@ -156,8 +156,17 @@ items = doc.get('items') or []
 # default manifest — identified by realpath, so naming the same file via --manifest does
 # not opt out of it. MAY NOT BE REDUCED: lowering it without also lowering the manifest's
 # `min_items` directive (or vice-versa) leaves the other half BLOCKING, which is the point.
-# 2026-07-30: set to the measured disk truth at introduction, 57.
-LIVE_MIN_ITEMS = 62
+# The VALUE below is the only authoritative statement of this floor in this file (BACKLOG
+# P3-104): earlier revisions restated a number in prose ("the measured disk truth at
+# introduction, 57") which then rotted independently of the constant it described, so the file
+# simultaneously claimed 57 and enforced 62 — a doc-vs-disk lie inside the gate whose whole job
+# is to reject those. Prose now refers to the CONSTANT, never to a literal, and the constant is
+# re-measured from disk whenever items are appended.
+# 2026-07-30 (PRD-final-4 W5b): 62 → 64. Two kill-proofs were appended for the new
+# manifest_snapshot_integrity_guard (fail_diverged + fail_stale_allowlist), so the floor moves
+# to the new disk truth in the same commit — otherwise the two new proofs would be removable
+# without breaching the registry floor, which is exactly the shrink [87] exists to reject.
+LIVE_MIN_ITEMS = 64
 
 structural = []
 

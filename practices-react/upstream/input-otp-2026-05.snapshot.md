@@ -1,11 +1,11 @@
----
-snapshot_id: input-otp-2026-05
-source: "https://input-otp.rodz.dev/"
-fetched_at: "2026-05-18T00:00:00Z"
-via: WebFetch
-bytes: 1390
-sha: "c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4"
-tier: 3
+# input-otp — Frozen Snapshot + InputOTP Tagline Refresh
+
+**Source URL(s):** https://input-otp.rodz.dev/ (original 2026-05 fetch, preserved below; refetched 2026-07-30)
+**HTTP status:** 200
+**Fetched at:** 2026-07-30T00:51:30Z
+**Extractor invocation:** `practices/scripts/snapshot-extract.sh https://input-otp.rodz.dev/`
+**Body SHA-256 (below the `---` divider, header excluded):** aa7d7296927bec2170d68344fe2cd87c9777b720856f30d9c98563e8ae68d6a4
+
 ---
 
 # input-otp API — Frozen Snapshot 2026-05
@@ -80,3 +80,11 @@ into any slot automatically fills all slots.
 import { REGEXP_ONLY_DIGITS } from 'input-otp'
 // Equivalent to: /^\d+$/
 ```
+
+## InputOTP (2026-07 refresh)
+
+Source: https://input-otp.rodz.dev/ (curl+snapshot-extract.sh, 2026-07-30 — the live tagline uses "passcode", not
+"password"; requoted accordingly)
+
+Stop wasting time building OTP inputs. One-time passcode input for React. Unstyled, accessible, and copy-paste friendly
+out of the box.

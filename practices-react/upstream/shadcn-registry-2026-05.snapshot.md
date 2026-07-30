@@ -1,13 +1,11 @@
----
-snapshot_id: shadcn-registry-2026-05
-source: "https://ui.shadcn.com/docs/components/accordion"
-fetched_at: "2026-05-18T00:00:00Z"
-version_observed: "shadcn-ui@2026-05"
-via: WebFetch
-sha: "f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9"
-purpose: drift-detection
-updated_at: "2026-05-18T00:00:00Z"
-update_reason: "SP14: extended from 32 to 39 components (+7 P0 primitives)"
+# shadcn/ui Registry — Frozen 39-Component Index + sonner Refresh
+
+**Source URL(s):** https://ui.shadcn.com/docs/components/accordion (original 2026-05 fetch, preserved below); https://ui.shadcn.com/docs/components/sonner (2026-07-30 refresh)
+**HTTP status:** 200 (both URLs)
+**Fetched at:** 2026-07-30T00:51:30Z
+**Extractor invocation:** `practices/scripts/snapshot-extract.sh https://ui.shadcn.com/docs/components/sonner`
+**Body SHA-256 (below the `---` divider, header excluded):** 491d495de216242c3e33b8fce238c72fe08544bd3252380a367485f7a823dc95
+
 ---
 
 # shadcn/ui Registry — Frozen 39-Component Index (2026-05)
@@ -74,3 +72,11 @@ These components cover all L2 feature block composition needs identified in §4.
 `templates/L1/_check-shadcn-drift.sh` runs during SP5+ and compares installed files against this snapshot.
 Any component present in the snapshot but missing from `templates/L1/components/` triggers a warning.
 `time_decay_guard.sh` fails if this file is older than 90 days from the current date.
+
+## sonner
+
+Source: https://ui.shadcn.com/docs/components/sonner (curl+snapshot-extract.sh, 2026-07-30 — shadcn/ui migrated its default toast
+primitive from the deprecated `toast` component to `sonner`; this registry's "Toast" row (#29)
+now resolves to the sonner page)
+
+A succinct message that is displayed temporarily.

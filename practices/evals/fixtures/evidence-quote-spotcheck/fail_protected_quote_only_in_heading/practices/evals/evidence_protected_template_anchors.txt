@@ -1,0 +1,15 @@
+# PRD-final-4 C1 closure — the quote is present in the snapshot FILE but ONLY inside a
+# markdown HEADING line; no prose line of the fetched body says it.
+#
+# Why this is a defect and not a nit: the guard checks the declared `section` FATALLY against
+# the body, so snapshot headings are deliberately AUTHORED to carry the section names the
+# citing templates declare. Heading text is therefore the one part of a snapshot the citer is
+# allowed to write. If a quote may resolve against a heading, an author who cannot make a
+# citation match the fetched prose can simply put the sentence in the table of contents and
+# the "verified against upstream" claim becomes verified against itself.
+#
+# TEMPLATE_QUOTE_ONLY_IN_HEADING is a falsified-evidence FINDING (same family as a fabricated
+# quote or a fabricated section) ⇒ exit 1 under --strict --strict-templates, not exit 2.
+# require: templates/L1/components/sample-widget.tsx::sample-src
+# min_entries: 1
+templates/L1/components/sample-widget.tsx::sample-src

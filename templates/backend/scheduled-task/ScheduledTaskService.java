@@ -209,7 +209,7 @@ public class ScheduledTaskService extends BaseService {
             return false;
         } finally {
             historyRepository.save(history);
-            lockingPolicy.release(task.getId());
+            lockingPolicy.release(task.getId(), lockHolderNodeId);
         }
     }
 }

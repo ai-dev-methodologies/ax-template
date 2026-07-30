@@ -1,11 +1,11 @@
----
-snapshot_id: kakao-postcode-2026-05
-source: "https://postcode.map.kakao.com/guide"
-fetched_at: "2026-05-18T00:00:00Z"
-via: WebFetch
-bytes: 1840
-sha: "a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2"
-tier: 3
+# Kakao Postcode Widget API — Frozen Snapshot + oncomplete Callback Refresh
+
+**Source URL(s):** https://postcode.map.kakao.com/guide
+**HTTP status:** 200
+**Fetched at:** 2026-07-30T00:51:30Z
+**Extractor invocation:** `practices/scripts/snapshot-extract.sh https://postcode.map.kakao.com/guide`
+**Body SHA-256 (below the `---` divider, header excluded):** abb7d582ae297e778a931f4f2b5ad272c8a02b61d15d5db3f56a0951d5dfe767
+
 ---
 
 # Kakao Postcode Widget API — Frozen Snapshot 2026-05
@@ -66,3 +66,15 @@ per the official guide (https://postcode.map.kakao.com/guide).
 For React integration, the widget is loaded once via script injection and invoked
 via `new kakao.Postcode({oncomplete}).open()`. The controlled component pattern
 stores `zonecode`, `roadAddress`, `jibunAddress`, and `detailAddress` in component state.
+
+## oncomplete-callback
+
+Source: https://postcode.map.kakao.com/guide (재확인 2026-07-30, curl+snapshot-extract.sh)
+
+카카오 우편번호 서비스 공식 가이드의 `oncomplete` 콜백 설명 원문(한국어, verbatim):
+
+이 함수를 정의할때 넣는 인자에는 우편번호 검색 결과 목록에서 사용자가 클릭한 주소 정보가 들어가게 됩니다.
+
+(위 문장은 `oncomplete` 콜백에 전달되는 인자가 사용자가 검색 결과에서 클릭한 주소 정보를
+담고 있음을 설명한다 — zonecode/roadAddress/jibunAddress 등 실제 필드는 위 "oncomplete
+Callback — Key Data Fields" 표 참고.)

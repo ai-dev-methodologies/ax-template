@@ -32,6 +32,7 @@ import EmailOutboxView, {
   type OutboxResponse,
   type OutboxPage,
 } from './email-outbox-view'
+import { applyOptimisticDelete } from './email-outbox-cache'
 
 // ─── data ─────────────────────────────────────────────────────────────────────
 
@@ -108,11 +109,14 @@ export default function EmailOutboxPage() {
         return next
       })
       // R47 optimistic-update-snapshot-rollback: drop the row from cache
-      // immediately, restore on error.
+      // immediately, restore on error. Query cache stores an OutboxPage
+      // pagination envelope (content[] + totalElements etc.), not a bare
+      // array — applyOptimisticDelete filters `content` and decrements
+      // totalElements, preserving the rest of the envelope.
       await qc.cancelQueries({ queryKey: ['email-outbox', statusFilter] })
-      const previous = qc.getQueryData<OutboxResponse[]>(['email-outbox', statusFilter])
-      qc.setQueryData<OutboxResponse[]>(['email-outbox', statusFilter], (old) =>
-        old ? old.filter((r) => r.id !== id) : old,
+      const previous = qc.getQueryData<OutboxPage>(['email-outbox', statusFilter])
+      qc.setQueryData<OutboxPage>(['email-outbox', statusFilter], (old) =>
+        applyOptimisticDelete(old, id),
       )
       return { previous }
     },

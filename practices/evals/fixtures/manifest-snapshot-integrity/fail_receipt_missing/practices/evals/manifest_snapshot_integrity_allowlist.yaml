@@ -1,0 +1,6 @@
+# fail_receipt_missing — the assembly row references r999, which is not in the ledger: a link in the chain nobody can inspect (exit 2).
+baseline_count: 1
+baseline_universe:
+  - practices::legacy-src
+entries:
+  []

@@ -41,6 +41,8 @@ evidence:
 
 **Impact: HIGH — Boolean deleted=true flags are invisible to @Where filters, produce schema drift, and allow JPA hard-deletes to silently bypass the soft-delete contract.**
 
+**Jurisdiction**: this rule governs the **ORM row-removal interception layer** only — see the **Jurisdiction** section near the end of this document for how it composes (not conflicts) with `soft-delete-audit-trail.md`'s service-level lifecycle/audit layer.
+
 Soft-delete is a data-retention pattern: rows are never physically removed; instead, a marker signals "this row is logically gone." There are two implementation paths:
 
 1. **Boolean flag** (`deleted BOOLEAN DEFAULT FALSE`) — application code sets `entity.setDeleted(true)` and every query must manually add `WHERE deleted = false`.
@@ -139,5 +141,11 @@ CREATE INDEX IF NOT EXISTS idx_notifications_not_deleted
 See `templates/backend/data/migrations/V202605181200__add_soft_delete_columns.sql` for the full migration covering all 8 entities.
 
 Verification: `./gradlew testPractices --tests "*BaseEntitySoftDelete*"` (@Tag PRACTICES-PERS-005) enforces three structural checks: every `@SQLDelete` entity also carries `@Where` (else soft-deleted rows leak into queries), the BaseEntity fixture carries its audit annotations, and no entity declares a primitive `boolean deleted` field (timestamp `deleted_at` is required). Note it does NOT by itself assert that a given BaseEntity subclass carries `@SQLDelete` — concrete entities MUST add `@SQLDelete` + `@Where` as shown above.
+
+## Jurisdiction
+
+This rule governs the **ORM row-removal interception layer**: how a JPA/Hibernate-triggered `DELETE` (via `entityManager.remove()` or `repository.deleteById()`) is intercepted and rewritten to an `UPDATE ... SET deleted_at = ...` before it ever reaches the database. It does **not** govern *when* application code decides a row should be deleted, nor what audit metadata that business decision records — that is `soft-delete-audit-trail.md`'s domain, the **service-level lifecycle/audit layer** (an explicit status flip such as `ACTIVE → DELETED`, plus `deletedByUserId` / content clearing driven by business logic, not by JPA's delete-interception mechanism).
+
+The two rules **compose — they do not conflict** — on domains such as file-storage: `StoredFile` (`templates/backend/file-storage/StoredFile.java`) carries `@SQLDelete`/`@Where` (this rule's invariant — the ORM layer refuses to let *any* code path physically delete the row), while `FileStorageService.deleteFile()` (`templates/backend/file-storage/FileStorageService.java`) independently flips `status → DELETED` and records the event (`soft-delete-audit-trail.md`'s invariant — a service-level audit trail layered *on top of*, not *instead of*, the ORM interception). Removing either layer loses a different guarantee: dropping `@SQLDelete`/`@Where` would let some other, less careful code path physically delete the row; dropping the service-level status flip would lose the who/when/why audit metadata this rule's mechanism does not itself capture (`@SQLDelete` records only that the row was updated, not who asked or why).
 
 Reference: [Hibernate ORM 6.4 — @SQLDelete](https://docs.jboss.org/hibernate/orm/6.4/userguide/html_single/Hibernate_User_Guide.html#soft-delete) | [Hibernate ORM 6.4 — @Where](https://docs.jboss.org/hibernate/orm/6.4/userguide/html_single/Hibernate_User_Guide.html#mapping-where)

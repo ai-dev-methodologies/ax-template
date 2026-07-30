@@ -7,7 +7,7 @@ evidence:
   - source_type: upstream_id
     upstream_id: shadcn-ui-2026-05
     section: calendar
-    quote: "A date field component that allows users to enter and edit date. Built on top of react-day-picker."
+    quote: "A calendar component that allows users to select a date or a range of dates."
   - source_type: external
     citation: "WCAG 2.2 SC 1.3.1 Info and Relationships (Level A) — full normative text, W3C Recommendation 2023-10-05"
     url: "https://www.w3.org/TR/WCAG22/#info-and-relationships"

@@ -84,10 +84,68 @@
 # require: templates/L2/blocks/translation-boundary.tsx::react-19-error-boundary
 # require: templates/L2/blocks/virtualized-table.tsx::tanstack-virtual-2026-05
 #
-# min_entries — the protected set MAY NOT BE REDUCED below this count. The guard
-# additionally pins LIVE_MIN_PROTECTED_ENTRIES=18 in evidence_quote_spotcheck_guard.sh for
-# the real repo tree, so lowering the directive here does not silently shrink the gate.
-# min_entries: 18
+# ── P3-93 / PRD-final-4 W1 (2026-07-30): 18 → 64. FIVE-SURFACE EQUALITY CENSUS ────────
+# The 46 directives below are the identities the full-refresh made verbatim-clean. Their
+# rows appear at the bottom of this file, their tuples in the guard's
+# LIVE_REQUIRED_PROTECTED_IDENTITIES frozenset, and the count in BOTH min_entries below and
+# the guard's LIVE_MIN_PROTECTED_ENTRIES. Those five surfaces are now census-compared for
+# EQUALITY inside the guard on every live run (PROTECTED_LEDGER_CENSUS_UNEQUAL, exit 3), so
+# the half-move this ratchet used to permit — raise the two numbers, add only some of the
+# tuples and only some of these directives, still green — is mechanically impossible. Adding
+# a 65th anchor means editing all five places in one commit; there is no legal partial edit.
+# require: templates/L1/components/accordion.tsx::shadcn-ui-2026-05
+# require: templates/L1/components/address-search.tsx::kakao-postcode-2026-05
+# require: templates/L1/components/alert-dialog.tsx::shadcn-ui-2026-05
+# require: templates/L1/components/alert.tsx::shadcn-ui-2026-05
+# require: templates/L1/components/aspect-ratio.tsx::shadcn-ui-2026-05
+# require: templates/L1/components/avatar.tsx::shadcn-ui-2026-05
+# require: templates/L1/components/badge.tsx::shadcn-ui-2026-05
+# require: templates/L1/components/button.tsx::shadcn-ui-2026-05
+# require: templates/L1/components/calendar.tsx::shadcn-ui-2026-05
+# require: templates/L1/components/card.tsx::shadcn-ui-2026-05
+# require: templates/L1/components/checkbox.tsx::shadcn-ui-2026-05
+# require: templates/L1/components/collapsible.tsx::shadcn-ui-2026-05
+# require: templates/L1/components/combobox.tsx::shadcn-ui-2026-05
+# require: templates/L1/components/command.tsx::shadcn-ui-2026-05
+# require: templates/L1/components/date-picker.tsx::shadcn-ui-2026-05
+# require: templates/L1/components/date-range-picker.tsx::shadcn-ui-2026-05
+# require: templates/L1/components/dialog.tsx::shadcn-ui-2026-05
+# require: templates/L1/components/dropdown-menu.tsx::shadcn-ui-2026-05
+# require: templates/L1/components/file-dropzone.tsx::react-dropzone-2026-05
+# require: templates/L1/components/form.tsx::shadcn-ui-2026-05
+# require: templates/L1/components/hover-card.tsx::shadcn-ui-2026-05
+# require: templates/L1/components/input.tsx::shadcn-ui-2026-05
+# require: templates/L1/components/label.tsx::shadcn-ui-2026-05
+# require: templates/L1/components/otp-input.tsx::input-otp-2026-05
+# require: templates/L1/components/otp-input.tsx::shadcn-ui-2026-05
+# require: templates/L1/components/popover.tsx::shadcn-ui-2026-05
+# require: templates/L1/components/progress.tsx::shadcn-ui-2026-05
+# require: templates/L1/components/radio-group.tsx::shadcn-ui-2026-05
+# require: templates/L1/components/resizable.tsx::shadcn-ui-2026-05
+# require: templates/L1/components/scroll-area.tsx::shadcn-ui-2026-05
+# require: templates/L1/components/select.tsx::shadcn-ui-2026-05
+# require: templates/L1/components/separator.tsx::shadcn-ui-2026-05
+# require: templates/L1/components/sheet.tsx::shadcn-ui-2026-05
+# require: templates/L1/components/skeleton.tsx::shadcn-ui-2026-05
+# require: templates/L1/components/slider.tsx::shadcn-ui-2026-05
+# require: templates/L1/components/sonner.tsx::shadcn-ui-2026-05
+# require: templates/L1/components/switch.tsx::shadcn-ui-2026-05
+# require: templates/L1/components/tabs.tsx::shadcn-ui-2026-05
+# require: templates/L1/components/textarea.tsx::shadcn-ui-2026-05
+# require: templates/L1/components/tooltip.tsx::shadcn-ui-2026-05
+# require: templates/L2/blocks/billing-history.tsx::stripe-billing-2026-05
+# require: templates/L2/blocks/invoice-list.tsx::stripe-billing-2026-05
+# require: templates/L2/blocks/pricing-table.tsx::stripe-billing-2026-05
+# require: templates/L2/blocks/theme-switcher.tsx::next-themes-2026-05
+# require: templates/L2/blocks/toast-queue.tsx::shadcn-registry-2026-05
+# require: templates/L2/blocks/toast.tsx::shadcn-registry-2026-05
+#
+# min_entries — the protected set MAY NOT BE REDUCED below this count, and on the live
+# tree it may not EXCEED it either: the guard pins LIVE_MIN_PROTECTED_ENTRIES=64 in
+# evidence_quote_spotcheck_guard.sh and census-compares row count, `# require:` count, this
+# directive, its own pin-set size and its own floor for EQUALITY. Lowering the directive here
+# does not silently shrink the gate; raising it alone does not silently fake a ratchet.
+# min_entries: 64
 
 # The anchor P2-40 found fabricated and re-anchored. This is the RED-on-revert subject:
 # restoring the pre-P2-40 quote makes the registered live guard exit 1.
@@ -119,3 +177,66 @@ templates/L2/blocks/offline-banner.tsx::mdn-navigator-online-2026-05
 templates/L2/blocks/translation-boundary.tsx::next-intl-2026-05
 templates/L2/blocks/translation-boundary.tsx::react-19-error-boundary
 templates/L2/blocks/virtualized-table.tsx::tanstack-virtual-2026-05
+
+# ── P3-93 / PRD-final-4 W1 ratchet (2026-07-30): 46 further anchors promoted to FATAL ──
+# Provenance, so a later reader can tell verification from assertion: the wave-start advisory
+# sweep reported 53 findings over 52 unique (path, upstream_id) identities. Every cited page
+# was re-fetched with curl and turned into snapshot prose by the committed deterministic
+# extractor practices/scripts/snapshot-extract.sh (no model in the loop); every URL attempt is
+# a row in practices/upstream/_FETCH-RECEIPTS.yaml. 27 of the 37 shadcn-ui quotes matched the
+# fresh extraction verbatim on the first fetch; 19 citations across 18 files were RE-ANCHORED
+# to genuine page text — including three that were never quotes of anything (an invented
+# Stripe event gloss, an English gloss of a Korean-only guide, and a next-themes 'cookie
+# storage' premise the library does not implement). The snapshots were never doctored to fit a
+# citation: where the two disagreed, the CITATION moved.
+#
+# The 6 recharts-2026-05 identities (7 findings) are NOT here and are not a silent omission:
+# all 5 canonical recharts.org/en-US/api URLs return HTTP 404 with a byte-identical 1938-byte
+# SPA shell, so no snapshot body can be honestly authored from a static fetch. They are a
+# registered BACKLOG residual carrying their dead-URL probe receipts.
+templates/L1/components/accordion.tsx::shadcn-ui-2026-05
+templates/L1/components/address-search.tsx::kakao-postcode-2026-05
+templates/L1/components/alert-dialog.tsx::shadcn-ui-2026-05
+templates/L1/components/alert.tsx::shadcn-ui-2026-05
+templates/L1/components/aspect-ratio.tsx::shadcn-ui-2026-05
+templates/L1/components/avatar.tsx::shadcn-ui-2026-05
+templates/L1/components/badge.tsx::shadcn-ui-2026-05
+templates/L1/components/button.tsx::shadcn-ui-2026-05
+templates/L1/components/calendar.tsx::shadcn-ui-2026-05
+templates/L1/components/card.tsx::shadcn-ui-2026-05
+templates/L1/components/checkbox.tsx::shadcn-ui-2026-05
+templates/L1/components/collapsible.tsx::shadcn-ui-2026-05
+templates/L1/components/combobox.tsx::shadcn-ui-2026-05
+templates/L1/components/command.tsx::shadcn-ui-2026-05
+templates/L1/components/date-picker.tsx::shadcn-ui-2026-05
+templates/L1/components/date-range-picker.tsx::shadcn-ui-2026-05
+templates/L1/components/dialog.tsx::shadcn-ui-2026-05
+templates/L1/components/dropdown-menu.tsx::shadcn-ui-2026-05
+templates/L1/components/file-dropzone.tsx::react-dropzone-2026-05
+templates/L1/components/form.tsx::shadcn-ui-2026-05
+templates/L1/components/hover-card.tsx::shadcn-ui-2026-05
+templates/L1/components/input.tsx::shadcn-ui-2026-05
+templates/L1/components/label.tsx::shadcn-ui-2026-05
+templates/L1/components/otp-input.tsx::input-otp-2026-05
+templates/L1/components/otp-input.tsx::shadcn-ui-2026-05
+templates/L1/components/popover.tsx::shadcn-ui-2026-05
+templates/L1/components/progress.tsx::shadcn-ui-2026-05
+templates/L1/components/radio-group.tsx::shadcn-ui-2026-05
+templates/L1/components/resizable.tsx::shadcn-ui-2026-05
+templates/L1/components/scroll-area.tsx::shadcn-ui-2026-05
+templates/L1/components/select.tsx::shadcn-ui-2026-05
+templates/L1/components/separator.tsx::shadcn-ui-2026-05
+templates/L1/components/sheet.tsx::shadcn-ui-2026-05
+templates/L1/components/skeleton.tsx::shadcn-ui-2026-05
+templates/L1/components/slider.tsx::shadcn-ui-2026-05
+templates/L1/components/sonner.tsx::shadcn-ui-2026-05
+templates/L1/components/switch.tsx::shadcn-ui-2026-05
+templates/L1/components/tabs.tsx::shadcn-ui-2026-05
+templates/L1/components/textarea.tsx::shadcn-ui-2026-05
+templates/L1/components/tooltip.tsx::shadcn-ui-2026-05
+templates/L2/blocks/billing-history.tsx::stripe-billing-2026-05
+templates/L2/blocks/invoice-list.tsx::stripe-billing-2026-05
+templates/L2/blocks/pricing-table.tsx::stripe-billing-2026-05
+templates/L2/blocks/theme-switcher.tsx::next-themes-2026-05
+templates/L2/blocks/toast-queue.tsx::shadcn-registry-2026-05
+templates/L2/blocks/toast.tsx::shadcn-registry-2026-05

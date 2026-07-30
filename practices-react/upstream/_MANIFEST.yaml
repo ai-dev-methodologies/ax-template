@@ -216,19 +216,19 @@ snapshots:
   - id: "shadcn-ui-2026-05"
     tier: 2
     source: "https://ui.shadcn.com/docs"
-    via: "WebFetch"
-    fetched_at: "2026-05-17T13:00:00Z"
-    bytes: 2800
-    sha: "d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7"
+    via: "curl+snapshot-extract.sh"
+    fetched_at: "2026-07-30T00:51:30Z"
+    bytes: 8030
+    sha: "0e2450f4abd75de32650270ad61e32e81238544ce6168175710cf7a0217a88a3"
     version_observed: "shadcn-ui@2026-05"
 
   - id: "shadcn-registry-2026-05"
     tier: 2
     source: "https://ui.shadcn.com/docs/components/accordion"
-    via: "WebFetch"
-    fetched_at: "2026-05-17T13:00:00Z"
-    bytes: 3200
-    sha: "e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8"
+    via: "curl+snapshot-extract.sh"
+    fetched_at: "2026-07-30T00:51:30Z"
+    bytes: 4527
+    sha: "5b6a9c4d8b25e00e2a2550ae1ad923019f54b19a36c14a49af73372903076f99"
     version_observed: "shadcn-ui@2026-05"
     purpose: drift-detection
 
@@ -262,28 +262,28 @@ snapshots:
   - id: "kakao-postcode-2026-05"
     tier: 3
     source: "https://postcode.map.kakao.com/guide"
-    via: "WebFetch"
-    fetched_at: "2026-05-18T00:00:00Z"
-    bytes: 1840
-    sha: "a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2"
+    via: "curl+snapshot-extract.sh"
+    fetched_at: "2026-07-30T00:51:30Z"
+    bytes: 2989
+    sha: "b555265ae6145b1fafcaa21a0a87f1cb79b4af488e86c5d92b25f380161f73b8"
     purpose: address-search-evidence
 
   - id: "react-dropzone-2026-05"
     tier: 3
     source: "https://react-dropzone.js.org/"
-    via: "WebFetch"
-    fetched_at: "2026-05-18T00:00:00Z"
-    bytes: 1620
-    sha: "b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3"
+    via: "curl+snapshot-extract.sh"
+    fetched_at: "2026-07-30T00:51:30Z"
+    bytes: 3514
+    sha: "10ac7d79c1ccbf08f873a1b58253d8061ad554104c00f89098071c7b1f7ea553"
     purpose: file-dropzone-evidence
 
   - id: "input-otp-2026-05"
     tier: 3
     source: "https://input-otp.rodz.dev/"
-    via: "WebFetch"
-    fetched_at: "2026-05-18T00:00:00Z"
-    bytes: 1390
-    sha: "c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4"
+    via: "curl+snapshot-extract.sh"
+    fetched_at: "2026-07-30T00:51:30Z"
+    bytes: 2673
+    sha: "367154fa525a23479eddb49555ba47fe55510dc5bf5e3cf8d291bf2f4c82ee49"
     purpose: otp-input-evidence
 
   - id: "tanstack-virtual-2026-05"
@@ -338,10 +338,10 @@ snapshots:
   - id: "next-themes-2026-05"
     tier: 3
     source: "https://github.com/pacocoursey/next-themes"
-    via: "WebFetch"
-    fetched_at: "2026-05-18T00:00:00Z"
-    bytes: 3240
-    sha: "e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6"
+    via: "curl+snapshot-extract.sh"
+    fetched_at: "2026-07-30T00:51:30Z"
+    bytes: 4311
+    sha: "3c8da38db8a38ac3de9e1fe7a77f8a52abe167a5a06dd558e9dbd38485e76ed2"
     version_observed: "next-themes@0.3.x"
     purpose: "Cookie-based SSR theme storage for ThemeSwitcher — eliminates first-paint flicker; SP34 R1 default"
 
@@ -357,10 +357,10 @@ snapshots:
   - id: "stripe-billing-2026-05"
     tier: 2
     source: "https://docs.stripe.com/billing/subscriptions/overview"
-    via: "curl"
-    fetched_at: "2026-07-14T00:00:00Z"
-    bytes: 1657
-    sha: "2e7d4ece6d2556a38db90177f281939f173bda8ba73fab25e74cf7ec1af7c88a"
+    via: "curl+snapshot-extract.sh"
+    fetched_at: "2026-07-30T00:51:30Z"
+    bytes: 3394
+    sha: "94287a976a406c8cfcae337374ce1a370e5ecf7aecc45e3c6ac24cd9140a6fee"
     version_observed: "stripe-api@2024-06-20"
     curated_sources:
       - "https://docs.stripe.com/billing/subscriptions/overview (subscription status table)"

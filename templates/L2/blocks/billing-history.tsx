@@ -10,7 +10,7 @@ evidence:
   - source_type: upstream_id
     upstream_id: stripe-billing-2026-05
     section: "Webhook events"
-    quote: "customer.subscription.updated — Plan change, quantity change, trial end."
+    quote: "Sent when a subscription starts or changes."
 dependencies: []
 imports_from: []
 imports_forbidden: [L4, app/, lib/payment/]

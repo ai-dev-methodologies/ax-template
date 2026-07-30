@@ -7,7 +7,7 @@ evidence:
   - source_type: upstream_id
     upstream_id: shadcn-ui-2026-05
     section: sonner
-    quote: "An opinionated toast component for React."
+    quote: "A succinct message that is displayed temporarily."
   - source_type: upstream_id
     upstream_id: wcag-22-techniques-2026-05
     section: "Success Criterion (SC)"

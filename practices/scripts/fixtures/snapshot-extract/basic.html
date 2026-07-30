@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Fixture Page</title>
+    <style type="text/css">
+      body { color: red; font-family: sans-serif; }
+      .hidden { display: none; }
+    </style>
+    <script type="text/javascript">
+      console.log("this must never appear in extracted output");
+      var x = 1 < 2;
+    </script>
+    <meta name="description" content="Displays a fixture &amp; a component that looks like a fixture." />
+  </head>
+  <body>
+    <h1>Fixture   Heading</h1>
+    <p>This is a &quot;fixture&quot; paragraph with an &amp; ampersand and a
+       non&nbsp;breaking space.</p>
+    <p>Second   paragraph    with   extra    whitespace.</p>
+    <script>alert('inline script must be stripped too');</script>
+  </body>
+</html>

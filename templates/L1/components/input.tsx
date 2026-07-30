@@ -7,7 +7,7 @@ evidence:
   - source_type: upstream_id
     upstream_id: shadcn-ui-2026-05
     section: input
-    quote: "Displays a form input field or a component that looks like an input field."
+    quote: "A text input component for forms and user data entry with built-in styling and accessibility features."
   - source_type: external
     citation: "WCAG 2.2 SC 3.3.2 Labels or Instructions (Level A) — full normative text, W3C Recommendation 2023-10-05"
     url: "https://www.w3.org/TR/WCAG22/#labels-or-instructions"

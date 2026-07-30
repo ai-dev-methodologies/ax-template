@@ -11,6 +11,20 @@
  *   and the code now agree. The exemption stands on the first reason ALONE, and re-anchoring is
  *   now a live option rather than a self-violation. Enumerated in JAVA_NO_ANCHOR_EXEMPT in
  *   practices/evals/evidence_guard.sh.
+ *   BACKLOG P3-102 (holder-verified release): release(UUID) was an unconditional
+ *   findById-then-clear — any caller could clear ANY node's lock regardless of who actually
+ *   held it (lock-theft replay: a late/stale releaser deletes a lock a different node has
+ *   since legitimately reclaimed). Closed by adding the `lockHolder` parameter, reading
+ *   through the same findByIdForUpdate pessimistic lock tryAcquire uses, and clearing only
+ *   on a holder match (mismatch = no-op + WARN, never a throw) — see DbRowLockingPolicy.release.
+ *   Remaining BY-DESIGN gap (NOT closed by this fix, intentionally out of scope): this
+ *   template's lock key is the scheduled_tasks row's UUID id, one row per task, whereas the
+ *   production SPI (DatabaseAdvisoryLock + TaskLockRepository, backend/src) keys its
+ *   task_locks table by taskName (a separate advisory-lock table, not a column pair on the
+ *   domain row). The holder-VERIFICATION divergence between this template and the production
+ *   SPI is now closed (both check the holder before releasing); the lock-KEY-SHAPE divergence
+ *   (row-UUID vs taskName-keyed table) is a deliberate template-simplicity choice, documented
+ *   here rather than silently inherited by forks.
  * provenance_class: internal_design
  * evidence:
  *   - source_type: external
@@ -38,6 +52,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Objects;
 import java.util.UUID;
 
 /**
@@ -57,7 +72,18 @@ import java.util.UUID;
  *   <li>{@link #tryAcquire}: returns true if lock acquired; false if already held. A lost
  *       race MUST be reported by returning false, never by throwing — callers treat an
  *       exception as a failed job, not as a skipped one.
- *   <li>{@link #release}: releases the lock; safe to call even if not held.
+ *   <li>{@link #release}: releases the lock ONLY if {@code lockHolder} is still the
+ *       current holder of record; safe to call even if not held. A holder MISMATCH
+ *       (the lock was reclaimed as stale and is now held by someone else, or was already
+ *       released) is a no-op — logged at WARN — never a throw. An unconditional release
+ *       keyed on {@code taskId} alone is a lock-theft replay: holder B still believes it
+ *       holds the lock, the lock is reclaimed as stale by node C, and B's late release()
+ *       then deletes C's lock state out from under it while C's job is still running —
+ *       the same at-most-one violation {@link #tryAcquire} exists to prevent, from the
+ *       other side. The read that decides the match MUST be the same pessimistic
+ *       {@code SELECT ... FOR UPDATE} the acquire uses ({@link
+ *       ScheduledTaskRepository#findByIdForUpdate}) — a plain {@code findById} lets the
+ *       match-test race a concurrent stale takeover.
  *   <li>Stale locks (held by crashed nodes) are reclaimed after {@code lock_ttl_seconds}.
  * </ul>
  */
@@ -73,12 +99,15 @@ public interface LockingPolicy {
     boolean tryAcquire(UUID taskId, String lockHolder);
 
     /**
-     * Releases the distributed lock for the given task.
-     * No-op if the lock is not currently held.
+     * Releases the distributed lock for the given task, but only if {@code lockHolder}
+     * is still the current holder of record. No-op (logged at WARN, never thrown) if the
+     * lock is not held, or is held by a different holder — a stale/late release from a
+     * holder that no longer owns the lock must never clear someone else's lock state.
      *
-     * @param taskId UUID of the task
+     * @param taskId     UUID of the task
+     * @param lockHolder string identifying the node that believes it holds the lock
      */
-    void release(UUID taskId);
+    void release(UUID taskId, String lockHolder);
 
     // ─── DbRowLockingPolicy ────────────────────────────────────────────────
 
@@ -94,6 +123,12 @@ public interface LockingPolicy {
      *
      * <p>Stale lock reclaim: if lockedAt + TTL &lt; now, the lock is considered stale
      * (held by a crashed node) and may be forcibly reclaimed (SCHED-LOCK-002).
+     *
+     * <p>Release: also reads through {@code SELECT ... FOR UPDATE} and clears the lock
+     * ONLY if the caller's {@code lockHolder} still matches {@code task.getLockHolder()}.
+     * Without the row lock and the match test, a holder whose lock was already reclaimed
+     * as stale by another node could delete that other node's brand-new lock — the same
+     * at-most-one guarantee {@code tryAcquire} provides, broken from the release side.
      */
     @Component
     class DbRowLockingPolicy implements LockingPolicy {
@@ -132,8 +167,17 @@ public interface LockingPolicy {
 
         @Override
         @Transactional
-        public void release(UUID taskId) {
-            taskRepository.findById(taskId).ifPresent(task -> {
+        public void release(UUID taskId, String lockHolder) {
+            // FOR UPDATE, not findById: the holder-match test and the clearing write below
+            // must be one indivisible step, or a concurrent stale takeover can commit between
+            // the test and the write and have its brand-new lock deleted by this stale caller
+            // (lock-theft replay — the same hazard tryAcquire's row lock prevents).
+            taskRepository.findByIdForUpdate(taskId).ifPresent(task -> {
+                if (!Objects.equals(lockHolder, task.getLockHolder())) {
+                    log.warn("Release attempted by non-holder (expected={}, actual={}) — "
+                            + "no-op for taskId={}", task.getLockHolder(), lockHolder, taskId);
+                    return;
+                }
                 task.releaseLock();
                 taskRepository.save(task);
             });
@@ -155,6 +199,10 @@ public interface LockingPolicy {
      * Test double for LockingPolicy.
      *
      * <p>Default: always grants the lock. Configure via {@link #setGrantLock(boolean)}.
+     * Tracks which holder was actually granted the lock and, analogous to
+     * {@link DbRowLockingPolicy#release}, only counts a {@link #release} as real when the
+     * releasing holder matches — a mismatched holder is a no-op, never a throw, so this
+     * double does not silently diverge from the production holder-verified contract.
      *
      * <pre>
      *   var mock = new LockingPolicy.MockLockingPolicy();
@@ -169,6 +217,7 @@ public interface LockingPolicy {
         private boolean grantLock = true;
         private int acquireCount = 0;
         private int releaseCount = 0;
+        private String grantedHolder;
 
         public void setGrantLock(boolean grant) {
             this.grantLock = grant;
@@ -177,12 +226,18 @@ public interface LockingPolicy {
         @Override
         public boolean tryAcquire(UUID taskId, String lockHolder) {
             acquireCount++;
+            if (grantLock) {
+                grantedHolder = lockHolder;
+            }
             return grantLock;
         }
 
         @Override
-        public void release(UUID taskId) {
-            releaseCount++;
+        public void release(UUID taskId, String lockHolder) {
+            if (grantedHolder != null && grantedHolder.equals(lockHolder)) {
+                releaseCount++;
+                grantedHolder = null;
+            }
         }
 
         public int acquireCallCount() { return acquireCount; }
@@ -192,6 +247,7 @@ public interface LockingPolicy {
             acquireCount = 0;
             releaseCount = 0;
             grantLock = true;
+            grantedHolder = null;
         }
     }
 }

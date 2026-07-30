@@ -1,0 +1,371 @@
+# manifest_snapshot_integrity_allowlist.yaml — the residual of BACKLOG P2-57 / PRD-final-4 W1b.
+# Consumed by practices/evals/manifest_snapshot_integrity_guard.sh, which enforces every
+# mechanic described below rather than trusting this comment.
+#
+# WHAT IS BEING SUPPRESSED, AND WHY IT IS NOT A COVER-UP
+# -----------------------------------------------------
+# For these ids the manifest's `sha`/`bytes` do not describe the `<id>.snapshot.md` currently on
+# disk, and the ORIGINALLY-FETCHED bytes are gone — so the records are history that cannot be
+# corrected by editing a number. Correcting them by recomputing from the present file would be
+# the worst option available: it would MANUFACTURE a provenance claim ("this is what the fetch
+# produced") about bytes nobody can attest to, which is the exact defect this guard exists to
+# make impossible. The honest closure is a re-fetch per id, appending receipts — i.e. burn-down,
+# tracked as a backlog row, not a same-wave edit.
+#
+# Three of the baseline's records are provably fabricated rather than merely stale:
+# recharts-2026-05, next-intl-2026-05 and kakao-postcode-2026-05 shared ONE sha across three
+# different byte counts. A sha256 is a function of the bytes, so at least two of those three were
+# never computed from any file.
+#
+# MECHANICS (all enforced by the guard, exit code in parentheses)
+# --------------------------------------------------------------
+#   · `baseline_universe` below is the FROZEN wave-start divergent census — 71 (catalog, id)
+#     pairs, measured 2026-07-30 before any Lane A edit, at commit-tree HEAD. Every entry must be
+#     a member (2). Additions are therefore impossible: divergence introduced after the freeze
+#     can be FIXED but never suppressed.
+#   · entries are keyed by unique (catalog, id) — a duplicate is a defect (2).
+#   · NON-REDUNDANCY — an entry whose manifest now MATCHES disk is stale and FAILS (1). The list
+#     length therefore always equals the true residual, and burn-down is visible instead of being
+#     absorbed by padding.
+#   · every entry carries a non-empty `reason:` (2).
+#   · a W1-touched id (one carrying a `kind: assembly` receipt) may NOT appear here (2) — a
+#     freshly-fetched body has a verifiable digest by construction.
+#
+# ARITHMETIC AT INTRODUCTION: 71 frozen baseline − 8 ids synchronized by the W1 refresh
+# (practices-react shadcn-ui / shadcn-registry / react-dropzone / next-themes / kakao-postcode /
+# input-otp / stripe-billing, plus practices stripe-billing) = 63 entries below. Both numbers
+# were re-censused from disk at integration, not carried over from the plan.
+#
+# THE ONLY LEGAL EDIT IS REMOVAL: re-fetch an id with practices/scripts/snapshot-extract.sh,
+# append its receipts, sync the manifest to the true whole-file sha/bytes, delete its row here.
+
+baseline_count: 71
+baseline_universe:
+  - practices-react::cwv-2026
+  - practices-react::input-otp-2026-05
+  - practices-react::kakao-postcode-2026-05
+  - practices-react::mdn-navigator-online-2026-05
+  - practices-react::next-intl-2026-05
+  - practices-react::next-themes-2026-05
+  - practices-react::nextjs-app-router-16
+  - practices-react::nextjs-server-actions-16
+  - practices-react::nextjs-use-cache-16
+  - practices-react::react-19-error-boundary
+  - practices-react::react-dropzone-2026-05
+  - practices-react::react-hook-form-2026-05
+  - practices-react::remark-2026-05
+  - practices-react::shadcn-registry-2026-05
+  - practices-react::shadcn-ui-2026-05
+  - practices-react::stripe-billing-2026-05
+  - practices-react::tanstack-query-v5
+  - practices-react::tanstack-virtual-2026-05
+  - practices-react::tiptap-2026-05
+  - practices-react::toss-billing-2026-05
+  - practices-react::wcag-2-2
+  - practices-react::wcag-22-techniques-2026-05
+  - practices::archunit-userguide
+  - practices::caffeine-2026-05
+  - practices::cwe-915
+  - practices::google-aip-versioning
+  - practices::gradle-toolchains
+  - practices::hibernate-validator
+  - practices::iso-4217
+  - practices::jep-395-records
+  - practices::jep-409-sealed-classes
+  - practices::jep-444-virtual-threads
+  - practices::logback-layouts
+  - practices::owasp-api-error-handling
+  - practices::owasp-logging-cheatsheet
+  - practices::owasp-mass-assignment
+  - practices::pci-dss-saq-a
+  - practices::rest-assured-usage
+  - practices::rfc-7807
+  - practices::slf4j-mdc
+  - practices::spring-aop-proxying
+  - practices::spring-application-events
+  - practices::spring-beans-constructor-injection
+  - practices::spring-beans-scopes
+  - practices::spring-boot-actuator-endpoints
+  - practices::spring-boot-cache
+  - practices::spring-boot-external-config
+  - practices::spring-boot-profiles
+  - practices::spring-boot-sql-migration
+  - practices::spring-boot-testing
+  - practices::spring-cache-2026-05
+  - practices::spring-cache-abstraction
+  - practices::spring-data-paging
+  - practices::spring-dependency-management
+  - practices::spring-jpa-fetching
+  - practices::spring-jpa-locking
+  - practices::spring-mvc-controlleradvice
+  - practices::spring-mvc-exception-handler
+  - practices::spring-mvc-modelattribute
+  - practices::spring-mvc-requestmapping
+  - practices::spring-mvc-validation
+  - practices::spring-rest-clients
+  - practices::spring-scheduling
+  - practices::spring-security-csrf
+  - practices::spring-security-headers
+  - practices::spring-security-stateless
+  - practices::spring-task-execution
+  - practices::spring-tx-declarative
+  - practices::stripe-billing-2026-05
+  - practices::toss-billing-2026-05
+  - practices::wcag-22-techniques-2026-05
+
+# 63 entries — the post-W1 residual. Uniform reason: the class is uniform (lost original body),
+# and a per-id restatement of the same fact would be noise pretending to be diligence. Any id
+# whose reason later turns out to be DIFFERENT gets its own wording at that point.
+entries:
+  - catalog: practices-react
+    id: cwv-2026
+    reason: >-
+      originally-fetched body lost — the recorded sha/bytes are unverifiable-or-fabricated history that cannot be corrected without a re-fetch of this id
+  - catalog: practices-react
+    id: mdn-navigator-online-2026-05
+    reason: >-
+      originally-fetched body lost — the recorded sha/bytes are unverifiable-or-fabricated history that cannot be corrected without a re-fetch of this id
+  - catalog: practices-react
+    id: next-intl-2026-05
+    reason: >-
+      originally-fetched body lost — the recorded sha/bytes are unverifiable-or-fabricated history that cannot be corrected without a re-fetch of this id
+  - catalog: practices-react
+    id: nextjs-app-router-16
+    reason: >-
+      originally-fetched body lost — the recorded sha/bytes are unverifiable-or-fabricated history that cannot be corrected without a re-fetch of this id
+  - catalog: practices-react
+    id: nextjs-server-actions-16
+    reason: >-
+      originally-fetched body lost — the recorded sha/bytes are unverifiable-or-fabricated history that cannot be corrected without a re-fetch of this id
+  - catalog: practices-react
+    id: nextjs-use-cache-16
+    reason: >-
+      originally-fetched body lost — the recorded sha/bytes are unverifiable-or-fabricated history that cannot be corrected without a re-fetch of this id
+  - catalog: practices-react
+    id: react-19-error-boundary
+    reason: >-
+      originally-fetched body lost — the recorded sha/bytes are unverifiable-or-fabricated history that cannot be corrected without a re-fetch of this id
+  - catalog: practices-react
+    id: react-hook-form-2026-05
+    reason: >-
+      originally-fetched body lost — the recorded sha/bytes are unverifiable-or-fabricated history that cannot be corrected without a re-fetch of this id
+  - catalog: practices-react
+    id: remark-2026-05
+    reason: >-
+      originally-fetched body lost — the recorded sha/bytes are unverifiable-or-fabricated history that cannot be corrected without a re-fetch of this id
+  - catalog: practices-react
+    id: tanstack-query-v5
+    reason: >-
+      originally-fetched body lost — the recorded sha/bytes are unverifiable-or-fabricated history that cannot be corrected without a re-fetch of this id
+  - catalog: practices-react
+    id: tanstack-virtual-2026-05
+    reason: >-
+      originally-fetched body lost — the recorded sha/bytes are unverifiable-or-fabricated history that cannot be corrected without a re-fetch of this id
+  - catalog: practices-react
+    id: tiptap-2026-05
+    reason: >-
+      originally-fetched body lost — the recorded sha/bytes are unverifiable-or-fabricated history that cannot be corrected without a re-fetch of this id
+  - catalog: practices-react
+    id: toss-billing-2026-05
+    reason: >-
+      originally-fetched body lost — the recorded sha/bytes are unverifiable-or-fabricated history that cannot be corrected without a re-fetch of this id
+  - catalog: practices-react
+    id: wcag-2-2
+    reason: >-
+      originally-fetched body lost — the recorded sha/bytes are unverifiable-or-fabricated history that cannot be corrected without a re-fetch of this id
+  - catalog: practices-react
+    id: wcag-22-techniques-2026-05
+    reason: >-
+      originally-fetched body lost — the recorded sha/bytes are unverifiable-or-fabricated history that cannot be corrected without a re-fetch of this id
+  - catalog: practices
+    id: archunit-userguide
+    reason: >-
+      originally-fetched body lost — the recorded sha/bytes are unverifiable-or-fabricated history that cannot be corrected without a re-fetch of this id
+  - catalog: practices
+    id: caffeine-2026-05
+    reason: >-
+      originally-fetched body lost — the recorded sha/bytes are unverifiable-or-fabricated history that cannot be corrected without a re-fetch of this id
+  - catalog: practices
+    id: cwe-915
+    reason: >-
+      originally-fetched body lost — the recorded sha/bytes are unverifiable-or-fabricated history that cannot be corrected without a re-fetch of this id
+  - catalog: practices
+    id: google-aip-versioning
+    reason: >-
+      originally-fetched body lost — the recorded sha/bytes are unverifiable-or-fabricated history that cannot be corrected without a re-fetch of this id
+  - catalog: practices
+    id: gradle-toolchains
+    reason: >-
+      originally-fetched body lost — the recorded sha/bytes are unverifiable-or-fabricated history that cannot be corrected without a re-fetch of this id
+  - catalog: practices
+    id: hibernate-validator
+    reason: >-
+      originally-fetched body lost — the recorded sha/bytes are unverifiable-or-fabricated history that cannot be corrected without a re-fetch of this id
+  - catalog: practices
+    id: iso-4217
+    reason: >-
+      originally-fetched body lost — the recorded sha/bytes are unverifiable-or-fabricated history that cannot be corrected without a re-fetch of this id
+  - catalog: practices
+    id: jep-395-records
+    reason: >-
+      originally-fetched body lost — the recorded sha/bytes are unverifiable-or-fabricated history that cannot be corrected without a re-fetch of this id
+  - catalog: practices
+    id: jep-409-sealed-classes
+    reason: >-
+      originally-fetched body lost — the recorded sha/bytes are unverifiable-or-fabricated history that cannot be corrected without a re-fetch of this id
+  - catalog: practices
+    id: jep-444-virtual-threads
+    reason: >-
+      originally-fetched body lost — the recorded sha/bytes are unverifiable-or-fabricated history that cannot be corrected without a re-fetch of this id
+  - catalog: practices
+    id: logback-layouts
+    reason: >-
+      originally-fetched body lost — the recorded sha/bytes are unverifiable-or-fabricated history that cannot be corrected without a re-fetch of this id
+  - catalog: practices
+    id: owasp-api-error-handling
+    reason: >-
+      originally-fetched body lost — the recorded sha/bytes are unverifiable-or-fabricated history that cannot be corrected without a re-fetch of this id
+  - catalog: practices
+    id: owasp-logging-cheatsheet
+    reason: >-
+      originally-fetched body lost — the recorded sha/bytes are unverifiable-or-fabricated history that cannot be corrected without a re-fetch of this id
+  - catalog: practices
+    id: owasp-mass-assignment
+    reason: >-
+      originally-fetched body lost — the recorded sha/bytes are unverifiable-or-fabricated history that cannot be corrected without a re-fetch of this id
+  - catalog: practices
+    id: pci-dss-saq-a
+    reason: >-
+      originally-fetched body lost — the recorded sha/bytes are unverifiable-or-fabricated history that cannot be corrected without a re-fetch of this id
+  - catalog: practices
+    id: rest-assured-usage
+    reason: >-
+      originally-fetched body lost — the recorded sha/bytes are unverifiable-or-fabricated history that cannot be corrected without a re-fetch of this id
+  - catalog: practices
+    id: rfc-7807
+    reason: >-
+      originally-fetched body lost — the recorded sha/bytes are unverifiable-or-fabricated history that cannot be corrected without a re-fetch of this id
+  - catalog: practices
+    id: slf4j-mdc
+    reason: >-
+      originally-fetched body lost — the recorded sha/bytes are unverifiable-or-fabricated history that cannot be corrected without a re-fetch of this id
+  - catalog: practices
+    id: spring-aop-proxying
+    reason: >-
+      originally-fetched body lost — the recorded sha/bytes are unverifiable-or-fabricated history that cannot be corrected without a re-fetch of this id
+  - catalog: practices
+    id: spring-application-events
+    reason: >-
+      originally-fetched body lost — the recorded sha/bytes are unverifiable-or-fabricated history that cannot be corrected without a re-fetch of this id
+  - catalog: practices
+    id: spring-beans-constructor-injection
+    reason: >-
+      originally-fetched body lost — the recorded sha/bytes are unverifiable-or-fabricated history that cannot be corrected without a re-fetch of this id
+  - catalog: practices
+    id: spring-beans-scopes
+    reason: >-
+      originally-fetched body lost — the recorded sha/bytes are unverifiable-or-fabricated history that cannot be corrected without a re-fetch of this id
+  - catalog: practices
+    id: spring-boot-actuator-endpoints
+    reason: >-
+      originally-fetched body lost — the recorded sha/bytes are unverifiable-or-fabricated history that cannot be corrected without a re-fetch of this id
+  - catalog: practices
+    id: spring-boot-cache
+    reason: >-
+      originally-fetched body lost — the recorded sha/bytes are unverifiable-or-fabricated history that cannot be corrected without a re-fetch of this id
+  - catalog: practices
+    id: spring-boot-external-config
+    reason: >-
+      originally-fetched body lost — the recorded sha/bytes are unverifiable-or-fabricated history that cannot be corrected without a re-fetch of this id
+  - catalog: practices
+    id: spring-boot-profiles
+    reason: >-
+      originally-fetched body lost — the recorded sha/bytes are unverifiable-or-fabricated history that cannot be corrected without a re-fetch of this id
+  - catalog: practices
+    id: spring-boot-sql-migration
+    reason: >-
+      originally-fetched body lost — the recorded sha/bytes are unverifiable-or-fabricated history that cannot be corrected without a re-fetch of this id
+  - catalog: practices
+    id: spring-boot-testing
+    reason: >-
+      originally-fetched body lost — the recorded sha/bytes are unverifiable-or-fabricated history that cannot be corrected without a re-fetch of this id
+  - catalog: practices
+    id: spring-cache-2026-05
+    reason: >-
+      originally-fetched body lost — the recorded sha/bytes are unverifiable-or-fabricated history that cannot be corrected without a re-fetch of this id
+  - catalog: practices
+    id: spring-cache-abstraction
+    reason: >-
+      originally-fetched body lost — the recorded sha/bytes are unverifiable-or-fabricated history that cannot be corrected without a re-fetch of this id
+  - catalog: practices
+    id: spring-data-paging
+    reason: >-
+      originally-fetched body lost — the recorded sha/bytes are unverifiable-or-fabricated history that cannot be corrected without a re-fetch of this id
+  - catalog: practices
+    id: spring-dependency-management
+    reason: >-
+      originally-fetched body lost — the recorded sha/bytes are unverifiable-or-fabricated history that cannot be corrected without a re-fetch of this id
+  - catalog: practices
+    id: spring-jpa-fetching
+    reason: >-
+      originally-fetched body lost — the recorded sha/bytes are unverifiable-or-fabricated history that cannot be corrected without a re-fetch of this id
+  - catalog: practices
+    id: spring-jpa-locking
+    reason: >-
+      originally-fetched body lost — the recorded sha/bytes are unverifiable-or-fabricated history that cannot be corrected without a re-fetch of this id
+  - catalog: practices
+    id: spring-mvc-controlleradvice
+    reason: >-
+      originally-fetched body lost — the recorded sha/bytes are unverifiable-or-fabricated history that cannot be corrected without a re-fetch of this id
+  - catalog: practices
+    id: spring-mvc-exception-handler
+    reason: >-
+      originally-fetched body lost — the recorded sha/bytes are unverifiable-or-fabricated history that cannot be corrected without a re-fetch of this id
+  - catalog: practices
+    id: spring-mvc-modelattribute
+    reason: >-
+      originally-fetched body lost — the recorded sha/bytes are unverifiable-or-fabricated history that cannot be corrected without a re-fetch of this id
+  - catalog: practices
+    id: spring-mvc-requestmapping
+    reason: >-
+      originally-fetched body lost — the recorded sha/bytes are unverifiable-or-fabricated history that cannot be corrected without a re-fetch of this id
+  - catalog: practices
+    id: spring-mvc-validation
+    reason: >-
+      originally-fetched body lost — the recorded sha/bytes are unverifiable-or-fabricated history that cannot be corrected without a re-fetch of this id
+  - catalog: practices
+    id: spring-rest-clients
+    reason: >-
+      originally-fetched body lost — the recorded sha/bytes are unverifiable-or-fabricated history that cannot be corrected without a re-fetch of this id
+  - catalog: practices
+    id: spring-scheduling
+    reason: >-
+      originally-fetched body lost — the recorded sha/bytes are unverifiable-or-fabricated history that cannot be corrected without a re-fetch of this id
+  - catalog: practices
+    id: spring-security-csrf
+    reason: >-
+      originally-fetched body lost — the recorded sha/bytes are unverifiable-or-fabricated history that cannot be corrected without a re-fetch of this id
+  - catalog: practices
+    id: spring-security-headers
+    reason: >-
+      originally-fetched body lost — the recorded sha/bytes are unverifiable-or-fabricated history that cannot be corrected without a re-fetch of this id
+  - catalog: practices
+    id: spring-security-stateless
+    reason: >-
+      originally-fetched body lost — the recorded sha/bytes are unverifiable-or-fabricated history that cannot be corrected without a re-fetch of this id
+  - catalog: practices
+    id: spring-task-execution
+    reason: >-
+      originally-fetched body lost — the recorded sha/bytes are unverifiable-or-fabricated history that cannot be corrected without a re-fetch of this id
+  - catalog: practices
+    id: spring-tx-declarative
+    reason: >-
+      originally-fetched body lost — the recorded sha/bytes are unverifiable-or-fabricated history that cannot be corrected without a re-fetch of this id
+  - catalog: practices
+    id: toss-billing-2026-05
+    reason: >-
+      originally-fetched body lost — the recorded sha/bytes are unverifiable-or-fabricated history that cannot be corrected without a re-fetch of this id
+  - catalog: practices
+    id: wcag-22-techniques-2026-05
+    reason: >-
+      originally-fetched body lost — the recorded sha/bytes are unverifiable-or-fabricated history that cannot be corrected without a re-fetch of this id

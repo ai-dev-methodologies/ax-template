@@ -14,7 +14,7 @@ evidence:
   - source_type: upstream_id
     upstream_id: stripe-billing-2026-05
     section: "Plan / Price model"
-    quote: "A Price defines the recurring amount, currency, and interval."
+    quote: "The recurring components of a price such as interval and usage"
 dependencies: [currency-input]
 imports_from: [L1]
 imports_forbidden: [L4, app/, lib/payment/]

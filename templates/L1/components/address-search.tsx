@@ -10,7 +10,7 @@ evidence:
   - source_type: upstream_id
     upstream_id: kakao-postcode-2026-05
     section: oncomplete-callback
-    quote: "The callback receives a data object with address information. Key properties: zonecode, roadAddress, jibunAddress"
+    quote: "이 함수를 정의할때 넣는 인자에는 우편번호 검색 결과 목록에서 사용자가 클릭한 주소 정보가 들어가게 됩니다."
   - source_type: external
     citation: "WCAG 2.2 SC 1.3.1 Info and Relationships (Level A) — full normative text, W3C Recommendation 2023-10-05"
     url: "https://www.w3.org/TR/WCAG22/#info-and-relationships"

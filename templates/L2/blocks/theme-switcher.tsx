@@ -5,8 +5,8 @@ layer: L2
 provenance_class: external_canonical
 evidence:
   - upstream_id: next-themes-2026-05
-    section: "Cookie-based SSR theme — avoid flash of incorrect theme"
-    quote: "Use cookies to store the theme so the server can read it and render the correct theme without a flash."
+    section: "No-flash theme abstraction"
+    quote: "An abstraction for themes in your React app."
   - source_type: external
     citation: "next-themes — Cookie strategy for SSR: set the theme in a cookie on change, read it server-side to avoid hydration mismatch and theme flicker on first paint."
     url: "https://github.com/pacocoursey/next-themes#with-app"

@@ -26,12 +26,18 @@
 #       satisfied while the proof it stood for is gone.
 #   Registering a SECOND anchor against an already-registered (guard, fixture) pair is
 #   therefore a reviewed edit to the guard, not a manifest-only change. No such item exists
-#   today (57 items / 57 distinct pairs), and the restriction is what makes the floor mean
-#   something.
+#   today — every registered pair is distinct, so the unique-pair count equals the item count
+#   and `min_items` below is the single place that number is stated. (BACKLOG P3-104: this
+#   paragraph used to restate a literal count, which then rotted independently of the
+#   directive — the file claimed 57 while enforcing 62. Prose refers to the directive now.)
 
-# min_items — the unique item count MAY NOT BE REDUCED below this number. Measured from
-# disk on 2026-07-30: 57 items, 57 distinct ids, 57 distinct (guard, fixture) pairs.
-min_items: 62
+# min_items — the unique item count MAY NOT BE REDUCED below this number, and it is the ONLY
+# place in this file that states it (BACKLOG P3-104 — a prose restatement rotted to 57 while the
+# directive read 62). Re-measured from disk 2026-07-30 after the PRD-final-4 W5b append: items,
+# distinct ids and distinct (guard, fixture) pairs are all equal to the value below.
+# fixture_kill_proof_guard.sh pins the same number as LIVE_MIN_ITEMS, so lowering the gate takes
+# two coordinated edits rather than one silent deletion.
+min_items: 64
 
 items:
 
@@ -994,3 +1000,31 @@ items:
     fixture2: practices/evals/fixtures/background-poll-refresh-state/fail_no_data_updated_at/ledger.yaml
     anchor: "! has_code_token \"$f\" 'dataUpdatedAt'"
     neuter: 'false'
+
+  # ── manifest_snapshot_integrity (BACKLOG P2-57 / PRD-final-4 W1b) ────────────
+  # fixture: legacy-src.snapshot.md exists, its manifest records sha=000...0/bytes=1, and the
+  #          id is IN the frozen baseline_universe but carries NO allowlist entry — an
+  #          unsuppressed divergence.
+  # anchor:  the sole (a)-domain comparison, manifest record vs whole-file digest on disk.
+  # neuter:  condition-constant — divergence is never detected, so divergent_keys stays empty
+  #          and the run reports a clean 1-id census → exit 0. Measured: 1 → 0.
+  - id: manifest_snapshot_integrity/fail_diverged
+    guard: practices/evals/manifest_snapshot_integrity_guard.sh
+    fixture: practices/evals/fixtures/manifest-snapshot-integrity/fail_diverged
+    fixture_arg: '--root'
+    anchor: 'e_sha != file_sha or e_bytes != file_bytes'
+    neuter: 'False'
+
+  # fixture: legacy-src's manifest record MATCHES disk, yet the id still carries an allowlist
+  #          entry — a suppression that suppresses nothing, which makes the list stop
+  #          describing the residual and hides burn-down progress.
+  # anchor:  the sole NON-REDUNDANCY comparison (is this allowlisted key still divergent?).
+  # neuter:  condition-constant — every allowlisted key is treated as still-divergent, so no
+  #          stale entry is ever reported → exit 0. Measured: 1 → 0. This is the check that
+  #          makes the allowlist's LENGTH mean "residual" instead of "whatever was pasted".
+  - id: manifest_snapshot_integrity/fail_stale_allowlist
+    guard: practices/evals/manifest_snapshot_integrity_guard.sh
+    fixture: practices/evals/fixtures/manifest-snapshot-integrity/fail_stale_allowlist
+    fixture_arg: '--root'
+    anchor: 'key not in divergent_keys'
+    neuter: 'False'

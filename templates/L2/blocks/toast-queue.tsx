@@ -7,7 +7,7 @@ evidence:
   - source_type: upstream_id
     upstream_id: shadcn-registry-2026-05
     section: sonner
-    quote: "An opinionated toast component for React."
+    quote: "A succinct message that is displayed temporarily."
   - source_type: external
     citation: "WCAG 2.2 — 4.1.3 Status Messages (Level AA): Status messages must be programmatically determinable via role or property such that they can be presented to the user by assistive technologies without receiving focus."
     url: "https://www.w3.org/TR/WCAG22/#status-messages"

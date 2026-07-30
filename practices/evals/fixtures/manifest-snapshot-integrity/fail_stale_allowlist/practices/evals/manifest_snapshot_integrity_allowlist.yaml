@@ -1,0 +1,9 @@
+# fail_stale_allowlist — legacy-src's manifest now MATCHES disk, so the entry suppresses nothing: a padded list stops describing the residual and hides burn-down (exit 1).
+baseline_count: 1
+baseline_universe:
+  - practices::legacy-src
+entries:
+  - catalog: practices
+    id: legacy-src
+    reason: >-
+      originally-fetched body lost — recorded sha/bytes are unverifiable history

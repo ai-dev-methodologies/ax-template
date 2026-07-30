@@ -1,0 +1,680 @@
+version: '1.0'
+notes: 'PRD-final-4 W1 per-URL fetch receipts (Lane A, single-writer). EVERY attempted URL during the
+  2026-07-30 curl+snapshot-extract.sh refresh gets a `kind: fetch` row here — url, curl_exit, http_status,
+  bytes + sha256 of THAT URL''s EXTRACTED output (not the raw HTML download size), fetched_at, and error
+  (blank unless the transport itself failed; a substantively-empty-but-200 response, e.g. recharts.org
+  root, is not an error). A `kind: assembly` row additionally records, per touched (catalog, snapshot_id)
+  identity, the sha256 + byte count of that identity''s FULL assembled BODY (the snapshot file with its
+  header stripped, split on the first `---\n\n` divider) plus the `from_receipts` list of fetch-row ids
+  it was built from (append-only: historical pre-2026-07-30 content is preserved verbatim and is not re-fetched,
+  so only THIS session''s new URLs are listed). recharts-2026-05 has fetch rows only (5 canonical probe
+  URLs + 2 informational root/redirect checks) — no snapshot body or assembly row exists for it; it stays
+  a registered-but-dead residual (BACKLOG W5(c)).'
+receipts:
+- id: r001
+  kind: fetch
+  url: https://ui.shadcn.com/docs
+  curl_exit: 0
+  http_status: '200'
+  bytes: 5276
+  sha256: df0b4542b4786b9164196733917e410df69f3f03db7c8ed40cbca1a78d8dac81
+  fetched_at: '2026-07-30T00:51:30Z'
+  error: ''
+  note: overview page, root of shadcn-ui-2026-05
+- id: r002
+  kind: fetch
+  url: https://ui.shadcn.com/docs/components/accordion
+  curl_exit: 0
+  http_status: '200'
+  bytes: 5431
+  sha256: bb31714157101cb375070373a1a4d47b4d1d8c438002742cdf2b814861272120
+  fetched_at: '2026-07-30T00:51:30Z'
+  error: ''
+  note: per-component page for templates/L1/components/accordion*.tsx section:accordion
+- id: r003
+  kind: fetch
+  url: https://ui.shadcn.com/docs/components/alert-dialog
+  curl_exit: 0
+  http_status: '200'
+  bytes: 4662
+  sha256: bb096fc7c89f0f679bc627c9eea7218fbe1134ac20c675b6d88ffee00c864855
+  fetched_at: '2026-07-30T00:51:30Z'
+  error: ''
+  note: per-component page for templates/L1/components/alert-dialog*.tsx section:alert-dialog
+- id: r004
+  kind: fetch
+  url: https://ui.shadcn.com/docs/components/alert
+  curl_exit: 0
+  http_status: '200'
+  bytes: 4818
+  sha256: 865b535d2c656713bbb2dd9dc5e894a012ff9514087a58d9020f6c907190af20
+  fetched_at: '2026-07-30T00:51:30Z'
+  error: ''
+  note: per-component page for templates/L1/components/alert*.tsx section:alert
+- id: r005
+  kind: fetch
+  url: https://ui.shadcn.com/docs/components/aspect-ratio
+  curl_exit: 0
+  http_status: '200'
+  bytes: 3055
+  sha256: 828b7aad70e5e43828899010ce43f166d148429200f23b6a495f9b2fbd358b82
+  fetched_at: '2026-07-30T00:51:30Z'
+  error: ''
+  note: per-component page for templates/L1/components/aspect-ratio*.tsx section:aspect-ratio
+- id: r006
+  kind: fetch
+  url: https://ui.shadcn.com/docs/components/avatar
+  curl_exit: 0
+  http_status: '200'
+  bytes: 5378
+  sha256: 36eace44de87449b73f87568d1db5c57b1f8f362ca837e3ea4b5258d856283aa
+  fetched_at: '2026-07-30T00:51:30Z'
+  error: ''
+  note: per-component page for templates/L1/components/avatar*.tsx section:avatar
+- id: r007
+  kind: fetch
+  url: https://ui.shadcn.com/docs/components/badge
+  curl_exit: 0
+  http_status: '200'
+  bytes: 3860
+  sha256: f6a027107900928e8950b45dbbaf0a84ee086654880908614f2d808e5f4c1854
+  fetched_at: '2026-07-30T00:51:30Z'
+  error: ''
+  note: per-component page for templates/L1/components/badge*.tsx section:badge
+- id: r008
+  kind: fetch
+  url: https://ui.shadcn.com/docs/components/button
+  curl_exit: 0
+  http_status: '200'
+  bytes: 5599
+  sha256: 96b03bce09ce6944982997c2b6489935eb22fff991d70a4434119cff3d979c04
+  fetched_at: '2026-07-30T00:51:30Z'
+  error: ''
+  note: per-component page for templates/L1/components/button*.tsx section:button
+- id: r009
+  kind: fetch
+  url: https://ui.shadcn.com/docs/components/calendar
+  curl_exit: 0
+  http_status: '200'
+  bytes: 13456
+  sha256: 7e0fd5914c4ce91f96e3a19c133ec5aad3b2bccfddd5e54cae4fee767c9342f2
+  fetched_at: '2026-07-30T00:51:30Z'
+  error: ''
+  note: per-component page for templates/L1/components/calendar*.tsx section:calendar
+- id: r010
+  kind: fetch
+  url: https://ui.shadcn.com/docs/components/card
+  curl_exit: 0
+  http_status: '200'
+  bytes: 8910
+  sha256: 70e50b019d84ad429410950b8a0c196bc1b6c07a9a3a908b63a158ddbdbd84bd
+  fetched_at: '2026-07-30T00:51:30Z'
+  error: ''
+  note: per-component page for templates/L1/components/card*.tsx section:card
+- id: r011
+  kind: fetch
+  url: https://ui.shadcn.com/docs/components/checkbox
+  curl_exit: 0
+  http_status: '200'
+  bytes: 4749
+  sha256: 3b634ce3e10b8451f8637570740ac9e9f1a166ebc2d49efb2f9bc3ef813f21b8
+  fetched_at: '2026-07-30T00:51:30Z'
+  error: ''
+  note: per-component page for templates/L1/components/checkbox*.tsx section:checkbox
+- id: r012
+  kind: fetch
+  url: https://ui.shadcn.com/docs/components/collapsible
+  curl_exit: 0
+  http_status: '200'
+  bytes: 3903
+  sha256: 62b370782c9d5dc0c9618d157acd03336a088d1cf26ce1e71f68cd50eafff635
+  fetched_at: '2026-07-30T00:51:30Z'
+  error: ''
+  note: per-component page for templates/L1/components/collapsible*.tsx section:collapsible
+- id: r013
+  kind: fetch
+  url: https://ui.shadcn.com/docs/components/combobox
+  curl_exit: 0
+  http_status: '200'
+  bytes: 7297
+  sha256: 5866f5d8e3f474b2c9f8bbd163efd4fe95e02b3b4b7d168db5493effcbcfb3c1
+  fetched_at: '2026-07-30T00:51:30Z'
+  error: ''
+  note: per-component page for templates/L1/components/combobox*.tsx section:combobox
+- id: r014
+  kind: fetch
+  url: https://ui.shadcn.com/docs/components/command
+  curl_exit: 0
+  http_status: '200'
+  bytes: 4312
+  sha256: 96fec1f473e7aae8b96a5517273f80778507cbf33bfbbdf7d2f9b57e9981725e
+  fetched_at: '2026-07-30T00:51:30Z'
+  error: ''
+  note: per-component page for templates/L1/components/command*.tsx section:command
+- id: r015
+  kind: fetch
+  url: https://ui.shadcn.com/docs/components/date-picker
+  curl_exit: 0
+  http_status: '200'
+  bytes: 4535
+  sha256: cbc4c5a6af92da6399758c564b4bdf202429905b38f6bcac64908f5136e4f329
+  fetched_at: '2026-07-30T00:51:30Z'
+  error: ''
+  note: per-component page for templates/L1/components/date-picker*.tsx section:date-picker
+- id: r016
+  kind: fetch
+  url: https://ui.shadcn.com/docs/components/dialog
+  curl_exit: 0
+  http_status: '200'
+  bytes: 3677
+  sha256: 5e57c3a7a6ff700e610068c256a9ec675e0c1f59d22d37c0a257ea024c4df403
+  fetched_at: '2026-07-30T00:51:30Z'
+  error: ''
+  note: per-component page for templates/L1/components/dialog*.tsx section:dialog
+- id: r017
+  kind: fetch
+  url: https://ui.shadcn.com/docs/components/dropdown-menu
+  curl_exit: 0
+  http_status: '200'
+  bytes: 5407
+  sha256: 0ded28777d6274606926f33a880aa86ced343e3ce7d75610a1f5341f3f1972df
+  fetched_at: '2026-07-30T00:51:30Z'
+  error: ''
+  note: per-component page for templates/L1/components/dropdown-menu*.tsx section:dropdown-menu
+- id: r018
+  kind: fetch
+  url: https://ui.shadcn.com/docs/components/form
+  curl_exit: 0
+  http_status: '200'
+  bytes: 1917
+  sha256: a9f6e74166f0632707fab55c4034681fb081e01bb3cc37a6b265c845d2106bf5
+  fetched_at: '2026-07-30T00:51:30Z'
+  error: ''
+  note: per-component page for templates/L1/components/form*.tsx section:form
+- id: r019
+  kind: fetch
+  url: https://ui.shadcn.com/docs/components/hover-card
+  curl_exit: 0
+  http_status: '200'
+  bytes: 3349
+  sha256: e0bdc4bbb559bf57d2195fb0324939c8ce6d373de08514ad14f3833c7f680d05
+  fetched_at: '2026-07-30T00:51:30Z'
+  error: ''
+  note: per-component page for templates/L1/components/hover-card*.tsx section:hover-card
+- id: r020
+  kind: fetch
+  url: https://ui.shadcn.com/docs/components/input
+  curl_exit: 0
+  http_status: '200'
+  bytes: 5302
+  sha256: f5f945764eca3ec31407c81bd6d000fea36a1de36004293996572d82bf145e82
+  fetched_at: '2026-07-30T00:51:30Z'
+  error: ''
+  note: per-component page for templates/L1/components/input*.tsx section:input
+- id: r021
+  kind: fetch
+  url: https://ui.shadcn.com/docs/components/label
+  curl_exit: 0
+  http_status: '200'
+  bytes: 3121
+  sha256: 0721d8aec9668114aa493dd60e802c67e2a6905f75e8da03fbdf6bff6bc28a3b
+  fetched_at: '2026-07-30T00:51:30Z'
+  error: ''
+  note: per-component page for templates/L1/components/label*.tsx section:label
+- id: r022
+  kind: fetch
+  url: https://ui.shadcn.com/docs/components/input-otp
+  curl_exit: 0
+  http_status: '200'
+  bytes: 4791
+  sha256: 1e376d553e34c786534b6c7ea723c19971251eff5767f2cb9d6e2c0ca1271c1d
+  fetched_at: '2026-07-30T00:51:30Z'
+  error: ''
+  note: per-component page for templates/L1/components/input-otp*.tsx section:input-otp
+- id: r023
+  kind: fetch
+  url: https://ui.shadcn.com/docs/components/popover
+  curl_exit: 0
+  http_status: '200'
+  bytes: 3474
+  sha256: 4477e89575efc1b6d25ddbb7cf2f8195f5e3dfdccc62e5a2bb1c2e9816830ac4
+  fetched_at: '2026-07-30T00:51:30Z'
+  error: ''
+  note: per-component page for templates/L1/components/popover*.tsx section:popover
+- id: r024
+  kind: fetch
+  url: https://ui.shadcn.com/docs/components/progress
+  curl_exit: 0
+  http_status: '200'
+  bytes: 3068
+  sha256: b0aa6b90b276317daa39132ae4e43f93a24466f21c9c781cfee59135c65ae00f
+  fetched_at: '2026-07-30T00:51:30Z'
+  error: ''
+  note: per-component page for templates/L1/components/progress*.tsx section:progress
+- id: r025
+  kind: fetch
+  url: https://ui.shadcn.com/docs/components/radio-group
+  curl_exit: 0
+  http_status: '200'
+  bytes: 4484
+  sha256: 8073bce83a83c086a3aa514a86ceb465ab67e4160f94bd8b7d6a2e24a249bb3f
+  fetched_at: '2026-07-30T00:51:30Z'
+  error: ''
+  note: per-component page for templates/L1/components/radio-group*.tsx section:radio-group
+- id: r026
+  kind: fetch
+  url: https://ui.shadcn.com/docs/components/resizable
+  curl_exit: 0
+  http_status: '200'
+  bytes: 3706
+  sha256: 732e214b7dd50f14c8b2205103d53584ffd0a6fef38d5726d62c0a5c12fb6f2d
+  fetched_at: '2026-07-30T00:51:30Z'
+  error: ''
+  note: per-component page for templates/L1/components/resizable*.tsx section:resizable
+- id: r027
+  kind: fetch
+  url: https://ui.shadcn.com/docs/components/scroll-area
+  curl_exit: 0
+  http_status: '200'
+  bytes: 4244
+  sha256: 93b27f5830bff782958e464742b6910f426704a34655bf21eb9d87e5aaaf6113
+  fetched_at: '2026-07-30T00:51:30Z'
+  error: ''
+  note: per-component page for templates/L1/components/scroll-area*.tsx section:scroll-area
+- id: r028
+  kind: fetch
+  url: https://ui.shadcn.com/docs/components/select
+  curl_exit: 0
+  http_status: '200'
+  bytes: 4365
+  sha256: 83f938effbf7f74c5de893c41a90360f4fa13bd6d3b210bbc193041fbb6ef77e
+  fetched_at: '2026-07-30T00:51:30Z'
+  error: ''
+  note: per-component page for templates/L1/components/select*.tsx section:select
+- id: r029
+  kind: fetch
+  url: https://ui.shadcn.com/docs/components/separator
+  curl_exit: 0
+  http_status: '200'
+  bytes: 3217
+  sha256: f405721687c36fa82297ca96304c024355efac9e8a692f780ea12be2d4a4c46d
+  fetched_at: '2026-07-30T00:51:30Z'
+  error: ''
+  note: per-component page for templates/L1/components/separator*.tsx section:separator
+- id: r030
+  kind: fetch
+  url: https://ui.shadcn.com/docs/components/sheet
+  curl_exit: 0
+  http_status: '200'
+  bytes: 3317
+  sha256: 1c331f3aaf7e0bfba16bc6ea99f19d9bc4c531ad0ac4ee52c7d0793eb3ee3994
+  fetched_at: '2026-07-30T00:51:30Z'
+  error: ''
+  note: per-component page for templates/L1/components/sheet*.tsx section:sheet
+- id: r031
+  kind: fetch
+  url: https://ui.shadcn.com/docs/components/skeleton
+  curl_exit: 0
+  http_status: '200'
+  bytes: 2814
+  sha256: 6aa5718b4d4654bbc40fa1dd789815de69104243d8bde47273f8648c2445abc5
+  fetched_at: '2026-07-30T00:51:30Z'
+  error: ''
+  note: per-component page for templates/L1/components/skeleton*.tsx section:skeleton
+- id: r032
+  kind: fetch
+  url: https://ui.shadcn.com/docs/components/slider
+  curl_exit: 0
+  http_status: '200'
+  bytes: 3060
+  sha256: ecbe959362ba55fcdb76848a241a1bb95531fed649eb31da4c64649b62bbab78
+  fetched_at: '2026-07-30T00:51:30Z'
+  error: ''
+  note: per-component page for templates/L1/components/slider*.tsx section:slider
+- id: r033
+  kind: fetch
+  url: https://ui.shadcn.com/docs/components/sonner
+  curl_exit: 0
+  http_status: '200'
+  bytes: 3135
+  sha256: 44f7a9e4cc57967f654d50c784ebbbfb55e9145264900c1bfbfa9b830f2f2612
+  fetched_at: '2026-07-30T00:51:30Z'
+  error: ''
+  note: per-component page for templates/L1/components/sonner*.tsx section:sonner
+- id: r034
+  kind: fetch
+  url: https://ui.shadcn.com/docs/components/switch
+  curl_exit: 0
+  http_status: '200'
+  bytes: 3703
+  sha256: adb99f0fe9613e816f30d5f94e4ebaa332202c31c0468e2b5c30b8ddc700b015
+  fetched_at: '2026-07-30T00:51:30Z'
+  error: ''
+  note: per-component page for templates/L1/components/switch*.tsx section:switch
+- id: r035
+  kind: fetch
+  url: https://ui.shadcn.com/docs/components/tabs
+  curl_exit: 0
+  http_status: '200'
+  bytes: 4025
+  sha256: d3df38f98ca081907a10b95f8f88fcce5520f0d94e46322238e8117d2c03baad
+  fetched_at: '2026-07-30T00:51:30Z'
+  error: ''
+  note: per-component page for templates/L1/components/tabs*.tsx section:tabs
+- id: r036
+  kind: fetch
+  url: https://ui.shadcn.com/docs/components/textarea
+  curl_exit: 0
+  http_status: '200'
+  bytes: 3167
+  sha256: a72f048d378464caaf2f6a6589aaaa9898c8268a6aeec8b5fc5661247095a466
+  fetched_at: '2026-07-30T00:51:30Z'
+  error: ''
+  note: per-component page for templates/L1/components/textarea*.tsx section:textarea
+- id: r037
+  kind: fetch
+  url: https://ui.shadcn.com/docs/components/tooltip
+  curl_exit: 0
+  http_status: '200'
+  bytes: 3480
+  sha256: 5dfbc197d03712ae39f6dd5bad3c1768ae9a69609b6d38cc93c6427aff24bfc2
+  fetched_at: '2026-07-30T00:51:30Z'
+  error: ''
+  note: per-component page for templates/L1/components/tooltip*.tsx section:tooltip
+- id: r038
+  kind: fetch
+  url: https://react-dropzone.js.org/
+  curl_exit: 0
+  http_status: '200'
+  bytes: 325
+  sha256: b1ba5b0029d0e983ae1be4082a88add52a02a263bb760f81481c4e330d963977
+  fetched_at: '2026-07-30T00:51:30Z'
+  error: ''
+  note: root landing shell — no useDropzone reference content (SPA doc site)
+- id: r039
+  kind: fetch
+  url: https://react-dropzone.js.org/guide/getting-started
+  curl_exit: 0
+  http_status: '200'
+  bytes: 1593
+  sha256: c82a78dd228e8e784e899ee2f5d89c0014505b213e96a4f829d154df45d4849c
+  fetched_at: '2026-07-30T00:51:30Z'
+  error: ''
+  note: actual useDropzone reference content; used for the requoted citation
+- id: r040
+  kind: fetch
+  url: https://github.com/pacocoursey/next-themes
+  curl_exit: 0
+  http_status: '200'
+  bytes: 20833
+  sha256: e66de5aac42c73554269f4a14b69e0250c4eccb6e751d7997e6aaa9c12445d05
+  fetched_at: '2026-07-30T00:51:30Z'
+  error: ''
+  note: GitHub repo page — nav/chrome only, README not server-rendered here
+- id: r041
+  kind: fetch
+  url: https://raw.githubusercontent.com/pacocoursey/next-themes/main/README.md
+  curl_exit: 0
+  http_status: '404'
+  bytes: 14
+  sha256: d5558cd419c8d46bdc958064cb97f963d1ea793866414c025906ec15033512ed
+  fetched_at: '2026-07-30T00:51:30Z'
+  error: ''
+  note: wrong path — root README.md is a git symlink stub, not real content
+- id: r042
+  kind: fetch
+  url: https://raw.githubusercontent.com/pacocoursey/next-themes/main/next-themes/README.md
+  curl_exit: 0
+  http_status: '200'
+  bytes: 16665
+  sha256: 4270c047a38dffbff85b5a80aff217bf7e57e2aa1f406bd8e8102d2860b58f79
+  fetched_at: '2026-07-30T00:51:30Z'
+  error: ''
+  note: actual package README; used for the requoted citation
+- id: r043
+  kind: fetch
+  url: https://postcode.map.kakao.com/guide
+  curl_exit: 0
+  http_status: '200'
+  bytes: 35465
+  sha256: 4a78f17b1459a66b1c9351d67fdb5d73aa48a5b4d236cc75d4935a5b3f2bc9f9
+  fetched_at: '2026-07-30T00:51:30Z'
+  error: ''
+  note: oncomplete callback description (Korean, verbatim)
+- id: r044
+  kind: fetch
+  url: https://input-otp.rodz.dev/
+  curl_exit: 0
+  http_status: '200'
+  bytes: 5756
+  sha256: d870cd9c74fa047df0f39c7f749b4b6dcf88f6eaff1204659bebef32bbf8346b
+  fetched_at: '2026-07-30T00:51:30Z'
+  error: ''
+  note: landing tagline — 'passcode' not 'password'; used for the requoted citation
+- id: r045
+  kind: fetch
+  url: https://docs.stripe.com/billing/subscriptions/webhooks
+  curl_exit: 0
+  http_status: '200'
+  bytes: 22399
+  sha256: 1bdcf0623dcda84a79f528d4e064b1315448353d656b05960edd6e3b00c24563
+  fetched_at: '2026-07-30T00:51:30Z'
+  error: ''
+  note: customer.subscription.updated description
+- id: r046
+  kind: fetch
+  url: https://docs.stripe.com/api/events/types
+  curl_exit: 0
+  http_status: '200'
+  bytes: 34438
+  sha256: b5c5152629c5a45a1da4cefd1187b27d4ea72a46ec7667631ec5729c70661ebd
+  fetched_at: '2026-07-30T00:51:30Z'
+  error: ''
+  note: invoice.payment_succeeded description
+- id: r047
+  kind: fetch
+  url: https://docs.stripe.com/api/prices/object
+  curl_exit: 0
+  http_status: '200'
+  bytes: 9905
+  sha256: 0c9fa6c291de632303a977b29bbdeda0d187d491286726f0c409439a1488b07f
+  fetched_at: '2026-07-30T00:51:30Z'
+  error: ''
+  note: Price.recurring field description
+- id: r048
+  kind: fetch
+  url: https://docs.stripe.com/invoicing/overview
+  curl_exit: 0
+  http_status: '200'
+  bytes: 8546
+  sha256: bea861ddb20caf720f116788a724dca7fcb8cff36b1d6ae3df9a286926e57701
+  fetched_at: '2026-07-30T00:51:30Z'
+  error: ''
+  note: probed for invoice.payment_succeeded — not found here, used events/types instead
+- id: r049
+  kind: fetch
+  url: https://recharts.org/en-US/api
+  curl_exit: 0
+  http_status: '404'
+  bytes: 33
+  sha256: 6c06d060d78489c91293b67ad5af0400d2cf7f672f81fad3679fadb3a2fa79d4
+  fetched_at: '2026-07-30T00:51:30Z'
+  error: ''
+  note: manifest-registered canonical source URL — dead
+- id: r050
+  kind: fetch
+  url: https://recharts.org/en-US/api/BarChart
+  curl_exit: 0
+  http_status: '404'
+  bytes: 33
+  sha256: 6c06d060d78489c91293b67ad5af0400d2cf7f672f81fad3679fadb3a2fa79d4
+  fetched_at: '2026-07-30T00:51:30Z'
+  error: ''
+  note: dead
+- id: r051
+  kind: fetch
+  url: https://recharts.org/en-US/api/PieChart
+  curl_exit: 0
+  http_status: '404'
+  bytes: 33
+  sha256: 6c06d060d78489c91293b67ad5af0400d2cf7f672f81fad3679fadb3a2fa79d4
+  fetched_at: '2026-07-30T00:51:30Z'
+  error: ''
+  note: dead
+- id: r052
+  kind: fetch
+  url: https://recharts.org/en-US/api/LineChart
+  curl_exit: 0
+  http_status: '404'
+  bytes: 33
+  sha256: 6c06d060d78489c91293b67ad5af0400d2cf7f672f81fad3679fadb3a2fa79d4
+  fetched_at: '2026-07-30T00:51:30Z'
+  error: ''
+  note: dead
+- id: r053
+  kind: fetch
+  url: https://recharts.org/en-US/api/ResponsiveContainer
+  curl_exit: 0
+  http_status: '404'
+  bytes: 33
+  sha256: 6c06d060d78489c91293b67ad5af0400d2cf7f672f81fad3679fadb3a2fa79d4
+  fetched_at: '2026-07-30T00:51:30Z'
+  error: ''
+  note: dead
+- id: r054
+  kind: fetch
+  url: https://recharts.org
+  curl_exit: 0
+  http_status: '200'
+  bytes: 169
+  sha256: f969118208a3f6c6a36715cfc497a3ee34ec2c7d07e3dac1689fe45378bb67a4
+  fetched_at: '2026-07-30T00:51:30Z'
+  error: ''
+  note: bare root — client-side redirect notice to recharts.github.io, not API content
+- id: r055
+  kind: fetch
+  url: https://recharts.org/en-US
+  curl_exit: 0
+  http_status: '404'
+  bytes: 33
+  sha256: 6c06d060d78489c91293b67ad5af0400d2cf7f672f81fad3679fadb3a2fa79d4
+  fetched_at: '2026-07-30T00:51:30Z'
+  error: ''
+  note: dead
+- id: asm-shadcn-ui-2026-05
+  kind: assembly
+  catalog: practices-react
+  snapshot_id: shadcn-ui-2026-05
+  body_bytes: 7453
+  body_sha256: 5b5dfa2f1d4703c62bc43a3683502fb24de78b8314ed995e9363001670f7fbbe
+  from_receipts:
+  - r001
+  - r002
+  - r003
+  - r004
+  - r005
+  - r006
+  - r007
+  - r008
+  - r009
+  - r010
+  - r011
+  - r012
+  - r013
+  - r014
+  - r015
+  - r016
+  - r017
+  - r018
+  - r019
+  - r020
+  - r021
+  - r022
+  - r023
+  - r024
+  - r025
+  - r026
+  - r027
+  - r028
+  - r029
+  - r030
+  - r031
+  - r032
+  - r033
+  - r034
+  - r035
+  - r036
+  - r037
+  fetched_at: '2026-07-30T00:51:30Z'
+- id: asm-shadcn-registry-2026-05
+  kind: assembly
+  catalog: practices-react
+  snapshot_id: shadcn-registry-2026-05
+  body_bytes: 3969
+  body_sha256: 491d495de216242c3e33b8fce238c72fe08544bd3252380a367485f7a823dc95
+  from_receipts:
+  - r033
+  fetched_at: '2026-07-30T00:51:30Z'
+- id: asm-react-dropzone-2026-05
+  kind: assembly
+  catalog: practices-react
+  snapshot_id: react-dropzone-2026-05
+  body_bytes: 2964
+  body_sha256: 7a87a1520c1bfc16c18c6c85cc2c286099c094c10ce9dedd292d847f2c7c5d7b
+  from_receipts:
+  - r038
+  - r039
+  fetched_at: '2026-07-30T00:51:30Z'
+- id: asm-next-themes-2026-05
+  kind: assembly
+  catalog: practices-react
+  snapshot_id: next-themes-2026-05
+  body_bytes: 3655
+  body_sha256: 757221cb8a79ea419de1fbf3127d2c0ded9263ed08a92857ddc26c4a86298e86
+  from_receipts:
+  - r040
+  - r041
+  - r042
+  fetched_at: '2026-07-30T00:51:30Z'
+- id: asm-kakao-postcode-2026-05
+  kind: assembly
+  catalog: practices-react
+  snapshot_id: kakao-postcode-2026-05
+  body_bytes: 2561
+  body_sha256: abb7d582ae297e778a931f4f2b5ad272c8a02b61d15d5db3f56a0951d5dfe767
+  from_receipts:
+  - r043
+  fetched_at: '2026-07-30T00:51:30Z'
+- id: asm-input-otp-2026-05
+  kind: assembly
+  catalog: practices-react
+  snapshot_id: input-otp-2026-05
+  body_bytes: 2218
+  body_sha256: aa7d7296927bec2170d68344fe2cd87c9777b720856f30d9c98563e8ae68d6a4
+  from_receipts:
+  - r044
+  fetched_at: '2026-07-30T00:51:30Z'
+- id: asm-stripe-billing-2026-05-practices-react
+  kind: assembly
+  catalog: practices-react
+  snapshot_id: stripe-billing-2026-05
+  body_bytes: 2660
+  body_sha256: d42d9ebc4fc383c6dff3578cfa0057efb42b7a7a87f163c36a71bdc99509f20e
+  from_receipts:
+  - r045
+  - r046
+  - r047
+  - r048
+  fetched_at: '2026-07-30T00:51:30Z'
+- id: asm-stripe-billing-2026-05-practices
+  kind: assembly
+  catalog: practices
+  snapshot_id: stripe-billing-2026-05
+  body_bytes: 2660
+  body_sha256: d42d9ebc4fc383c6dff3578cfa0057efb42b7a7a87f163c36a71bdc99509f20e
+  from_receipts:
+  - r045
+  - r046
+  - r047
+  - r048
+  fetched_at: '2026-07-30T00:51:30Z'

@@ -514,3 +514,112 @@ the trigger event, do not relitigate.
 
 ## TD-2026-07-29-P3-89 — keep step-boundary tree sampling
 - Recorded in practices/evals/midrun_tree_mutation_guard.sh header. Intra-step periodic sampling shrinks the window by a constant factor and never closes the class — only an immutable tree does. Cost: a ~2,200s background sampler needing reaping on every exit path incl. SIGTERM, whose own failure modes (orphaned process, false "mutated" from reading a file mid-write) land on the PUSH path. Exposure is already bounded by the sibling links (both endpoints clean and equal to the audited fingerprint). REVISIT TRIGGER: a demonstrated real evasion not constructed to demonstrate one; on that evidence prefer an immutable-tree run (read-only snapshot / container) over a sampler.
+
+## TD-2026-07-30-(P3-93) — snapshot refresh is a fetch transaction, and the quote ratchet moves in five halves
+- Status: ACCEPT
+- Date: 2026-07-30
+- Maintainer: ax-template (PRD-final-4 W1, Lanes A + B)
+- **Refresh path.** Snapshot bodies were rebuilt with `curl` piped through the COMMITTED
+  deterministic extractor `practices/scripts/snapshot-extract.sh` (strip script/style → strip tags
+  → HTML-unescape → collapse whitespace; `--self-test` replays committed fixture pairs). No model
+  in the loop, by construction. `practices/upstream/_FETCH-RECEIPTS.yaml` is established as the ONLY
+  LEGAL REFRESH PATH: every attempted URL gets a `kind: fetch` row (url, curl exit, HTTP status,
+  extracted byte count, sha256, fetched_at) and every touched identity a `kind: assembly` row
+  binding its body digest to the fetch ids it was built from. A snapshot edited without a matching
+  receipt is `RECEIPT_MISSING` (exit 2) — see the sibling entry (P2-57).
+- Alternatives considered:
+  - **WebFetch / WebSearch as the fetch mechanism** — REJECTED. A WebFetch result is a model's
+    rendering of a page, not source bytes. A snapshot authored from one is a PARAPHRASE LABELLED
+    VERIFIED, which is strictly worse than today's honest "unverifiable": it converts an admitted
+    gap into a false provenance claim. Those tools were used for triage only (is the URL alive,
+    where does the content live).
+  - **Ledger-only ratchet, no fetch (the row's own fallback wording, "or ledger 추가 래칫으로
+    플로어 상승")** — REJECTED as legitimate-but-weaker. It raises the floor without checking whether
+    the citations are true; the P3-69 precedent showed fetch-verification finds real citation
+    defects, and it did again here (19 of them).
+  - **Doctoring a snapshot so a cited quote resolves** — REJECTED absolutely. Where citation and
+    fetched page disagreed, the CITATION moved. 19 quotes across 18 files were re-anchored to genuine
+    page text, including three that were never quotes of anything: a stale `sonner` description that
+    actually belonged to shadcn's retired `toast` component, two invented Stripe webhook-event
+    summaries, and a `next-themes` "cookie storage" premise the library does not implement
+    (it uses localStorage + a blocking script). The remaining 27 of 37 shadcn-ui quotes matched the
+    fresh extraction verbatim on first fetch.
+- **Ratchet.** Protected-anchor floor 18 → **64** (= 18 + 46; the 46 newly-clean identities are
+  disjoint from the existing 18 — the overlapping FILES carry a different `upstream_id` in each set,
+  and identity is the `(path, upstream_id)` pair). All FIVE surfaces move together and are
+  census-compared for EQUALITY *inside the guard on every live run*
+  (`PROTECTED_LEDGER_CENSUS_UNEQUAL`, exit 3 — distinct from findings and from other structural
+  defects): ledger rows == distinct `# require:` directives == `# min_entries:` ==
+  `len(LIVE_REQUIRED_PROTECTED_IDENTITIES)` == `LIVE_MIN_PROTECTED_ENTRIES`. The prior `<=`/`>=`
+  pair permitted the UPWARD HALF-MOVE — raise both numbers, add only some tuples and only some
+  directives, stay green. Demonstrated: deleting ONE `# require:` line with all four other surfaces
+  at 64 now exits 3; under the old asserts it exited 0.
+- Also closed: a protected quote must now match at least one NON-heading line of the body
+  (`TEMPLATE_QUOTE_ONLY_IN_HEADING`, exit 1). Snapshot HEADINGS are deliberately authored to carry
+  cited `section` names because `section` is checked fatally — so heading text is the one part of a
+  snapshot the citer writes, and a quote allowed to resolve there would be verified against the
+  citer's own table of contents. Prose may not be authored; headings may.
+- Consequences: 64 files / 68 anchors / 0 findings at exit 0. The advisory `--include-templates`
+  sweep drops 53 findings → **7**, all `TEMPLATE_SNAPSHOT_FILE_MISSING` for `recharts-2026-05`.
+- Residual, honestly bounded → **(P3-103)**: all 5 canonical `recharts.org/en-US/api` URLs return
+  HTTP 404 with a byte-identical 1938-byte SPA shell, so no body can be authored from a static
+  fetch. 6 identities / 7 findings, probe receipts committed (r049–r055), floor 7. NOT closable by
+  this method and not papered over as one.
+- Re-evaluation trigger: recharts publishes statically-fetchable API docs; or `time_decay_guard`
+  approaches expiry (`practices-react` oldest `fetched_at` 2026-05-13) — at which point `fetched_at`
+  may NOT be bulk-touched without re-fetching, which would be doctoring one level up.
+- Commits: (this commit — PRD-final-4 wave, Lanes A + B)
+
+## TD-2026-07-30-(P2-57) — snapshot bodies get a three-domain integrity chain and a shrink-only residual
+- Status: ACCEPT
+- Date: 2026-07-30
+- Maintainer: ax-template (PRD-final-4 W1b, Lane B)
+- **Problem.** The protected-anchor ratchet pins template citations to the TEXT OF SNAPSHOT BODIES,
+  and nothing checksummed those bodies. Measured at wave start: of the 91 manifest ids with a
+  committed `.snapshot.md`, **71 recorded a `sha`/`bytes` pair that did not describe the file it
+  claims to describe**, and no guard looked. stripe-billing recorded 1657 bytes for a 2089-byte file.
+  recharts-2026-05, next-intl-2026-05 and kakao-postcode-2026-05 shared ONE sha across THREE
+  different byte counts — a sha256 is a function of the bytes, so at least two of those records were
+  never computed from any file. Ratcheting 46 further identities onto bodies in that state would have
+  been a PAPER ratchet: quote locked, quoted thing freely editable. Hence W1b landed IN-WAVE, before
+  the ratchet was declared done.
+- **`practices/evals/manifest_snapshot_integrity_guard.sh`** — a chain of three checks in three
+  DISTINCT digest domains, deliberately never collapsed into one comparison (a single "does
+  everything agree" digest is satisfiable by recomputing it, which is exactly what a doctored
+  refresh does):
+  - (a) FILE — every manifest id with a body: `sha`/`bytes` == `shasum -a 256`/`wc -c` of the WHOLE
+    FILE (`MANIFEST_FILE_DIVERGED`, exit 1);
+  - (b) BODY — every W1-touched id: the header's recorded body-sha == a recompute with the header
+    stripped at the first literal `---` + blank line. The header records the BODY's digest, never its
+    own file's: a self-referential sha inside the file it hashes is unverifiable by construction;
+  - (c) RECEIPT — that body-sha == the id's assembly receipt (or single-URL fetch receipt), with every
+    referenced per-URL row present (`RECEIPT_MISSING`, exit 2). This is the link that makes a fetch
+    the only legal refresh: editing a body and its manifest entry together — the natural way to
+    launder a doctored snapshot past (a) — leaves no receipt describing the new bytes, and writing one
+    means recording a URL, an HTTP status and a fetched_at.
+  The touched set is DERIVED from the assembly rows, not hardcoded: it is the committed ledger, not
+  the guard's author, that says which ids are covered.
+- **Allowlist.** `71` is the FROZEN baseline universe recorded in the allowlist header; the post-W1
+  residual is **63** (71 − the 8 ids W1 synchronized), re-censused from disk at integration rather
+  than carried over from the plan. Four mechanics are enforced by the guard, not by convention:
+  subset-only against the frozen baseline (additions exit 2, so post-freeze divergence can be FIXED
+  but never suppressed) · unique `(catalog, id)` keys · NON-REDUNDANCY (an entry whose manifest now
+  matches disk is stale and FAILS, so the list length always IS the residual and burn-down cannot be
+  absorbed by padding) · a non-empty per-entry `reason:`. A W1-touched id may not appear at all.
+- Alternatives considered:
+  - **Correct the 63 records by recomputing sha/bytes from the present file** — REJECTED, and this is
+    the load-bearing judgment. The originally-fetched bytes are gone; recomputing would MANUFACTURE
+    the provenance claim ("this is what the fetch produced") about bytes nobody can attest to — the
+    precise defect this guard exists to make impossible. Honest suppression with a stated reason beats
+    a fabricated green.
+  - **Register the guard as advisory until the residual is zero** — REJECTED: an advisory guard is one
+    nobody promotes. Blocking-with-a-shrink-only-allowlist blocks all NEW divergence today.
+  - **Fold (a)+(b)+(c) into one digest** — REJECTED as above (cross-domain equality is self-certifying).
+- Consequences: guard files 102 → 103 (three enforced headline counts updated: `README.md`,
+  `CLAUDE.md`, `skills/ax-transform/SKILL.md`); `[87]` double floor 62 → 64 for two new kill-proofs
+  (`fail_diverged`, `fail_stale_allowlist`); 4 fixtures. RED-verified: a ONE-BYTE edit to a
+  Lane-A-fetched body → `RECEIPT_MISSING` exit 2, restored byte-identical → exit 0.
+- Re-evaluation trigger: the 63-entry residual reaches 0 (delete the allowlist and the subset
+  machinery with it); or an id needs refreshing WITHOUT an assembly row, which would reveal the
+  derived-touched-set convention as too narrow.
+- Commits: (this commit — PRD-final-4 wave, Lane B)

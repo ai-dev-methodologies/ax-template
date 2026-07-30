@@ -1,0 +1,20 @@
+version: '1.0'
+notes: 'fixture receipts ledger — one fetch row + one assembly row.'
+receipts:
+- id: r001
+  kind: fetch
+  url: https://example-vendor.test/docs/fresh
+  curl_exit: 0
+  http_status: '200'
+  bytes: 120
+  sha256: 0000000000000000000000000000000000000000000000000000000000000000
+  fetched_at: '2026-07-30T00:00:00Z'
+  error: ''
+- id: asm-fresh-src
+  kind: assembly
+  catalog: practices
+  snapshot_id: fresh-src
+  body_bytes: 220
+  body_sha256: a58ad59ca07a5cb557f37c0ce9c10e3c0074b4a7bc82dbd48663e7a53a00c7f8
+  from_receipts:
+  - r001

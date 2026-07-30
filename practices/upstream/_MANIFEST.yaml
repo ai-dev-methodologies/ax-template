@@ -425,10 +425,10 @@ snapshots:
   - id: "stripe-billing-2026-05"
     tier: 2
     source: "https://docs.stripe.com/billing/subscriptions/overview"
-    via: "curl"
-    fetched_at: "2026-07-14T00:00:00Z"
-    bytes: 1657
-    sha: "2e7d4ece6d2556a38db90177f281939f173bda8ba73fab25e74cf7ec1af7c88a"
+    via: "curl+snapshot-extract.sh"
+    fetched_at: "2026-07-30T00:51:30Z"
+    bytes: 3394
+    sha: "94287a976a406c8cfcae337374ce1a370e5ecf7aecc45e3c6ac24cd9140a6fee"
     version_observed: "stripe-api@2024-06-20"
     curated_sources:
       - "https://docs.stripe.com/billing/subscriptions/overview (subscription status table)"

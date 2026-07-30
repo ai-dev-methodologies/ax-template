@@ -1,11 +1,11 @@
----
-snapshot_id: react-dropzone-2026-05
-source: "https://react-dropzone.js.org/"
-fetched_at: "2026-05-18T00:00:00Z"
-via: WebFetch
-bytes: 1620
-sha: "b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3"
-tier: 3
+# react-dropzone API — Frozen Snapshot + useDropzone Refresh
+
+**Source URL(s):** https://react-dropzone.js.org/ (original 2026-05 fetch, preserved below); https://react-dropzone.js.org/guide/getting-started (2026-07-30 refresh)
+**HTTP status:** 200 (both URLs)
+**Fetched at:** 2026-07-30T00:51:30Z
+**Extractor invocation:** `practices/scripts/snapshot-extract.sh https://react-dropzone.js.org/guide/getting-started`
+**Body SHA-256 (below the `---` divider, header excluded):** 7a87a1520c1bfc16c18c6c85cc2c286099c094c10ce9dedd292d847f2c7c5d7b
+
 ---
 
 # react-dropzone API — Frozen Snapshot 2026-05
@@ -96,3 +96,12 @@ function MyDropzone() {
   )
 }
 ```
+
+## useDropzone (2026-07 refresh)
+
+Source: https://react-dropzone.js.org/guide/getting-started (curl+snapshot-extract.sh; the doc site moved from a single-page overview to
+a multi-page "Guide" — the root `https://react-dropzone.js.org/` is now a landing shell whose
+useDropzone reference content lives at this Guide URL)
+
+react-dropzone is a set of React hooks and components for creating a drag 'n' drop zone for files. Use the `useDropzone` hook to bind the necessary handlers to any element — it returns
+`getRootProps()`/`getInputProps()` prop-spreaders plus state flags such as `isDragActive`.

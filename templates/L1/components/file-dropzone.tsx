@@ -7,7 +7,7 @@ evidence:
   - source_type: upstream_id
     upstream_id: react-dropzone-2026-05
     section: useDropzone
-    quote: "The primary API for integrating drag-and-drop functionality into React components."
+    quote: "react-dropzone is a set of React hooks and components for creating a drag 'n' drop zone for files."
   - source_type: external
     citation: "WCAG 2.2 SC 2.1.1 Keyboard (Level A) — full normative text, W3C Recommendation 2023-10-05"
     url: "https://www.w3.org/TR/WCAG22/#keyboard"

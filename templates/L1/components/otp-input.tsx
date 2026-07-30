@@ -7,11 +7,11 @@ evidence:
   - source_type: upstream_id
     upstream_id: input-otp-2026-05
     section: InputOTP
-    quote: "One-time password input component for React. Accessible. Unstyled. Customizable."
+    quote: "One-time passcode input for React."
   - source_type: upstream_id
     upstream_id: shadcn-ui-2026-05
     section: input-otp
-    quote: "Accessible one-time password component with copy paste functionality."
+    quote: "Accessible one-time password component with copy-paste functionality."
   - source_type: external
     citation: "WCAG 2.2 SC 1.3.5 Identify Input Purpose (Level AA) — full normative text, W3C Recommendation 2023-10-05"
     url: "https://www.w3.org/TR/WCAG22/#identify-input-purpose"

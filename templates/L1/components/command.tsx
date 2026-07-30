@@ -7,7 +7,7 @@ evidence:
   - source_type: upstream_id
     upstream_id: shadcn-ui-2026-05
     section: command
-    quote: "Fast, composable, unstyled command menu for React."
+    quote: "Command menu for search and quick actions."
   - source_type: external
     citation: "WCAG 2.2 SC 2.1.1 Keyboard (Level A) — full normative text, W3C Recommendation 2023-10-05"
     url: "https://www.w3.org/TR/WCAG22/#keyboard"

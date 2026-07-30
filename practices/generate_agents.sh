@@ -77,16 +77,18 @@ join_cs() { awk 'NR>1{printf ", "} {printf "%s", $0} END{if (NR>0) print ""}'; }
   printf '\n## Sealed verdicts\n\n'
   for v in ../skills/_tests/sealed-verdict/*.md; do
     [[ "$(basename "$v")" == "README.md" ]] && continue
+    [[ "$(basename "$v")" == *-transcript.md ]] && continue  # execution receipt, not a verdict
     printf -- '- %s\n' "$(basename "$v" .md)"
   done
   printf '\n'
 } > "$OUT"
 
-# Inline disk-truth assertions (realtime-policy promotion: 25 L4 = 24 prior + realtime-policy backend_only / 11 recipes / 13 verdicts)
+# Inline disk-truth assertions (25 L4 / 11 recipes / 14 verdicts — a *-transcript.md is a
+# verdict's execution receipt (final-4 W4), not a verdict; excluded from the count)
 L4_COUNT=$(ls -d ../templates/L4/*/ 2>/dev/null | wc -l | tr -d ' ')
 REC_COUNT=$(printf '%s\n' "$MANIFEST_ROWS" | grep -c '|' || true)
-VER_COUNT=$(ls ../skills/_tests/sealed-verdict/*.md 2>/dev/null | grep -v README | wc -l | tr -d ' ')
+VER_COUNT=$(ls ../skills/_tests/sealed-verdict/*.md 2>/dev/null | grep -v README | grep -v -- '-transcript\.md$' | wc -l | tr -d ' ')
 [[ "$L4_COUNT"  == "25" ]] || { echo "ASSERT FAIL: L4 $L4_COUNT != 25"  >&2; exit 1; }
 [[ "$REC_COUNT" == "11" ]] || { echo "ASSERT FAIL: recipes $REC_COUNT != 11" >&2; exit 1; }
-[[ "$VER_COUNT" == "13" ]] || { echo "ASSERT FAIL: verdicts $VER_COUNT != 13" >&2; exit 1; }
+[[ "$VER_COUNT" == "14" ]] || { echo "ASSERT FAIL: verdicts $VER_COUNT != 14" >&2; exit 1; }
 echo "wrote $OUT — $COUNT rules, sha=$SHA, TOC: $L4_COUNT L4 / $REC_COUNT recipes / $VER_COUNT verdicts"

@@ -7,7 +7,7 @@ evidence:
   - source_type: upstream_id
     upstream_id: shadcn-registry-2026-05
     section: sonner
-    quote: "An opinionated toast component for React."
+    quote: "A succinct message that is displayed temporarily."
   - source_type: internal
     rationale: "L2 common block — thin Sonner wrapper with ax-template type presets; no domain coupling."
 dependencies: [sonner]

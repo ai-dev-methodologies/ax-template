@@ -1,0 +1,1 @@
+Section A Text with bold and nested tags plus <literal brackets> and an entity — dash and © symbol. Item one Item two with gaps

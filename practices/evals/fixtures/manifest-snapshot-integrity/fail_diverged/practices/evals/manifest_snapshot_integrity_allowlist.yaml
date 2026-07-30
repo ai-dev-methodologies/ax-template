@@ -1,0 +1,6 @@
+# fail_diverged — legacy-src is IN the frozen baseline but carries NO entry, so its divergence is unsuppressed and must BLOCK (exit 1).
+baseline_count: 1
+baseline_universe:
+  - practices::legacy-src
+entries:
+  []

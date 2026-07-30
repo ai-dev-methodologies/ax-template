@@ -1,0 +1,9 @@
+# pass_clean — legacy-src diverges and is carried by a reason-bearing, in-baseline entry; fresh-src is verified through file<-body<-receipt.
+baseline_count: 1
+baseline_universe:
+  - practices::legacy-src
+entries:
+  - catalog: practices
+    id: legacy-src
+    reason: >-
+      originally-fetched body lost — recorded sha/bytes are unverifiable history

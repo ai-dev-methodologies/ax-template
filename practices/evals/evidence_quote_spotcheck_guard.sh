@@ -209,7 +209,17 @@ PROTECTED_LEDGER_REL = os.path.join("practices", "evals",
 # silently leave the fatal set while the gate still reported green — exactly the shrink the
 # two-number duplication exists to prevent. Live protected sweep with all 18: 18 file(s),
 # 22 anchor(s), 0 finding(s), exit 0.
-LIVE_MIN_PROTECTED_ENTRIES = 18
+#
+# BACKLOG P3-93 / PRD-final-4 W1 (2026-07-30): 18 → 64. The wave-start census of the
+# advisory templates sweep found 53 findings over 52 unique (path, upstream_id) identities;
+# 46 of those (every identity except the 6 recharts-2026-05 ones, whose vendor URLs are
+# genuinely dead by static fetch — 5 canonical URLs all HTTP 404, recorded per-URL in
+# practices/upstream/_FETCH-RECEIPTS.yaml) were re-verified VERBATIM against freshly
+# curl-fetched, deterministically-extracted snapshot bodies and are promoted to FATAL here.
+# 18 + 46 = 64, and the 46 are disjoint from the existing 18 (verified by set comparison, not
+# assumed: the overlapping FILES — checkbox.tsx, skeleton.tsx, sonner.tsx — carry a DIFFERENT
+# upstream_id in each set, and identity is the (path, upstream_id) pair).
+LIVE_MIN_PROTECTED_ENTRIES = 64
 
 # Identity pinning (codex round-3). A COUNT is not an identity: min_entries=2 was satisfied
 # by duplicating one clean row after deleting the row that actually matters. These exact
@@ -249,13 +259,91 @@ LIVE_REQUIRED_PROTECTED_IDENTITIES = frozenset({
     ("templates/L2/blocks/translation-boundary.tsx", "next-intl-2026-05"),
     ("templates/L2/blocks/translation-boundary.tsx", "react-19-error-boundary"),
     ("templates/L2/blocks/virtualized-table.tsx", "tanstack-virtual-2026-05"),
+    # ── P3-93 / PRD-final-4 W1 (2026-07-30): the 46 identities the full-refresh made
+    # verbatim-clean, promoted from ADVISORY to FATAL. Each one is a (path, upstream_id)
+    # whose quote was re-verified as a literal substring of a snapshot body assembled by
+    # practices/scripts/snapshot-extract.sh from a live curl fetch (per-URL receipts in
+    # practices/upstream/_FETCH-RECEIPTS.yaml). Nineteen of the 46 citations were RE-ANCHORED
+    # rather than confirmed — the snapshot was never doctored to fit a citation.
+    ("templates/L1/components/accordion.tsx", "shadcn-ui-2026-05"),
+    ("templates/L1/components/address-search.tsx", "kakao-postcode-2026-05"),
+    ("templates/L1/components/alert-dialog.tsx", "shadcn-ui-2026-05"),
+    ("templates/L1/components/alert.tsx", "shadcn-ui-2026-05"),
+    ("templates/L1/components/aspect-ratio.tsx", "shadcn-ui-2026-05"),
+    ("templates/L1/components/avatar.tsx", "shadcn-ui-2026-05"),
+    ("templates/L1/components/badge.tsx", "shadcn-ui-2026-05"),
+    ("templates/L1/components/button.tsx", "shadcn-ui-2026-05"),
+    ("templates/L1/components/calendar.tsx", "shadcn-ui-2026-05"),
+    ("templates/L1/components/card.tsx", "shadcn-ui-2026-05"),
+    ("templates/L1/components/checkbox.tsx", "shadcn-ui-2026-05"),
+    ("templates/L1/components/collapsible.tsx", "shadcn-ui-2026-05"),
+    ("templates/L1/components/combobox.tsx", "shadcn-ui-2026-05"),
+    ("templates/L1/components/command.tsx", "shadcn-ui-2026-05"),
+    ("templates/L1/components/date-picker.tsx", "shadcn-ui-2026-05"),
+    ("templates/L1/components/date-range-picker.tsx", "shadcn-ui-2026-05"),
+    ("templates/L1/components/dialog.tsx", "shadcn-ui-2026-05"),
+    ("templates/L1/components/dropdown-menu.tsx", "shadcn-ui-2026-05"),
+    ("templates/L1/components/file-dropzone.tsx", "react-dropzone-2026-05"),
+    ("templates/L1/components/form.tsx", "shadcn-ui-2026-05"),
+    ("templates/L1/components/hover-card.tsx", "shadcn-ui-2026-05"),
+    ("templates/L1/components/input.tsx", "shadcn-ui-2026-05"),
+    ("templates/L1/components/label.tsx", "shadcn-ui-2026-05"),
+    ("templates/L1/components/otp-input.tsx", "input-otp-2026-05"),
+    ("templates/L1/components/otp-input.tsx", "shadcn-ui-2026-05"),
+    ("templates/L1/components/popover.tsx", "shadcn-ui-2026-05"),
+    ("templates/L1/components/progress.tsx", "shadcn-ui-2026-05"),
+    ("templates/L1/components/radio-group.tsx", "shadcn-ui-2026-05"),
+    ("templates/L1/components/resizable.tsx", "shadcn-ui-2026-05"),
+    ("templates/L1/components/scroll-area.tsx", "shadcn-ui-2026-05"),
+    ("templates/L1/components/select.tsx", "shadcn-ui-2026-05"),
+    ("templates/L1/components/separator.tsx", "shadcn-ui-2026-05"),
+    ("templates/L1/components/sheet.tsx", "shadcn-ui-2026-05"),
+    ("templates/L1/components/skeleton.tsx", "shadcn-ui-2026-05"),
+    ("templates/L1/components/slider.tsx", "shadcn-ui-2026-05"),
+    ("templates/L1/components/sonner.tsx", "shadcn-ui-2026-05"),
+    ("templates/L1/components/switch.tsx", "shadcn-ui-2026-05"),
+    ("templates/L1/components/tabs.tsx", "shadcn-ui-2026-05"),
+    ("templates/L1/components/textarea.tsx", "shadcn-ui-2026-05"),
+    ("templates/L1/components/tooltip.tsx", "shadcn-ui-2026-05"),
+    ("templates/L2/blocks/billing-history.tsx", "stripe-billing-2026-05"),
+    ("templates/L2/blocks/invoice-list.tsx", "stripe-billing-2026-05"),
+    ("templates/L2/blocks/pricing-table.tsx", "stripe-billing-2026-05"),
+    ("templates/L2/blocks/theme-switcher.tsx", "next-themes-2026-05"),
+    ("templates/L2/blocks/toast-queue.tsx", "shadcn-registry-2026-05"),
+    ("templates/L2/blocks/toast.tsx", "shadcn-registry-2026-05"),
 })
-# Consistency invariant for the two-number/two-place duplication: every pinned identity is
-# also a protected row, so the pinned set can never exceed the floor. A pin count above
-# LIVE_MIN_PROTECTED_ENTRIES would mean the floor permits a ledger that the pins reject —
-# an unsatisfiable gate, which is a maintenance defect and not a stricter gate.
-assert len(LIVE_REQUIRED_PROTECTED_IDENTITIES) <= LIVE_MIN_PROTECTED_ENTRIES, (
-    "LIVE_REQUIRED_PROTECTED_IDENTITIES exceeds LIVE_MIN_PROTECTED_ENTRIES")
+# FIVE-SURFACE EQUALITY CENSUS (PRD-final-4 C3, 2026-07-30). Until now this was a
+# ONE-DIRECTIONAL `<=`: the pinned set merely had to not EXCEED the floor. That permitted the
+# "upward half-move" — raise LIVE_MIN_PROTECTED_ENTRIES and the ledger's `# min_entries:` to
+# 64 while adding only some of the tuples to the frozenset and only some of the `# require:`
+# directives — and every check still passed, because a floor is satisfied by any larger row
+# count and `<=` is satisfied by any smaller pin set. The ratchet is supposed to move as FIVE
+# HALVES AT ONCE; a gate that accepts four of the five moving is a gate that lets the fifth
+# stay behind silently.
+#
+# So the five surfaces are now census-compared for EQUALITY, and the comparison EXECUTES on
+# every live run (see load_protected_ledger) rather than being asserted in prose:
+#     1. ledger rows                        (unique (path, upstream_id) identities on disk)
+#     2. distinct `# require:` directives    (the ledger's own identity pins)
+#     3. `# min_entries:` directive          (the ledger's declared floor)
+#     4. len(LIVE_REQUIRED_PROTECTED_IDENTITIES)  (the guard's identity pins)
+#     5. LIVE_MIN_PROTECTED_ENTRIES          (the guard's declared floor)
+# Any inequality is PROTECTED_LEDGER_CENSUS_UNEQUAL, exit 3 — a code DISTINCT from findings
+# (1) and from the other structural ledger defects (2), so "the ratchet halves disagree" can
+# never be read as "a quote is fabricated" or vice versa.
+#
+# The two guard-side surfaces (4, 5) are constants, so their equality is checked here at
+# import time for EVERY root, live or fixture: a fixture root declares its own min_entries but
+# cannot make the guard's own two numbers disagree with each other.
+CENSUS_EXIT = 3   # distinct from 1 (findings) and 2 (other structural ledger defects)
+if len(LIVE_REQUIRED_PROTECTED_IDENTITIES) != LIVE_MIN_PROTECTED_ENTRIES:
+    print("evidence_quote_spotcheck_guard: PROTECTED_LEDGER_CENSUS_UNEQUAL — the guard's own "
+          "two halves disagree: len(LIVE_REQUIRED_PROTECTED_IDENTITIES)="
+          f"{len(LIVE_REQUIRED_PROTECTED_IDENTITIES)} != LIVE_MIN_PROTECTED_ENTRIES="
+          f"{LIVE_MIN_PROTECTED_ENTRIES}. Every protected row is exact-required (P2-51), so "
+          "the pin set and the floor are the same number by construction; a difference means "
+          "one half of a ratchet was moved without the other.", file=sys.stderr)
+    sys.exit(CENSUS_EXIT)
 
 # A protected quote must carry substance. `quote: 0` is closed by the isinstance check, but
 # `quote: "a"` is a genuine non-empty string that is still a substring of essentially every
@@ -325,6 +413,48 @@ def resolve_snapshot_any_catalog(uid):
         if snap is not None:
             return catalog, text
     return None, None
+
+# ── PROSE-PRESENCE PASS (PRD-final-4 C1, 2026-07-30) ─────────────────────────────────
+# A snapshot body is authored, and its SECTION MARKERS are markdown ATX headings that the
+# author writes to carry the exact `section:` names the citing templates declare (the guard
+# checks `section` fatally against the body, so the headings must contain those names — that
+# is by design, "headings MAY be authored to carry cited section names").
+#
+# That creates a hole the section check itself cannot close: an author under pressure to make
+# a `quote` resolve can put the quote's TEXT INTO A HEADING. The whole-body substring check
+# then passes while nothing in the actual fetched PROSE says it — the citation is verified
+# against the citer's own table of contents. PROSE MAY NOT BE AUTHORED; only headings may.
+#
+# So for a PROTECTED anchor the quote must additionally occur inside at least one NON-HEADING
+# region. Implementation: split the raw body on heading lines (`^#{1,6}<space>`, the shape the
+# authored snapshots use — see practices-react/upstream/shadcn-ui-2026-05.snapshot.md's
+# `### <slug>` per-component sections), DROP the heading lines, and normalize each remaining
+# run of lines as its own block. Quote must be a substring of >= 1 block.
+#
+# Why blocks and not "body with heading lines deleted, joined": a wrapped sentence legitimately
+# spans several consecutive prose lines, so per-LINE matching would produce false findings; but
+# joining ACROSS a dropped heading would let a quote match by straddling two unrelated
+# paragraphs. Splitting at headings and matching within a block accepts the first and rejects
+# the second.
+HEADING_LINE_RE = re.compile(r'^[ \t]*#{1,6}[ \t]')
+block_cache = {}
+
+def snapshot_prose_blocks(catalog, uid):
+    """Normalized non-heading blocks of {catalog}/upstream/{uid}.snapshot.md."""
+    snap = os.path.join(root, catalog, "upstream", uid + ".snapshot.md")
+    if snap not in block_cache:
+        blocks, current = [], []
+        for line in open(snap, errors="replace").read().splitlines():
+            if HEADING_LINE_RE.match(line):
+                if current:
+                    blocks.append("\n".join(current))
+                    current = []
+            else:
+                current.append(line)
+        if current:
+            blocks.append("\n".join(current))
+        block_cache[snap] = [normalize(strip_html(b)) for b in blocks]
+    return block_cache[snap]
 
 quotes = 0
 scanned_rules = 0
@@ -410,7 +540,9 @@ def check_template_anchor(rel, uid, quote, section=None, protected=False):
         that only bites under --strict-templates — otherwise deleting the snapshot is a
         cheaper bypass than falsifying the quote;
       · the declared `section` must itself occur in the snapshot body, so a fabricated
-        section is verified text rather than unchecked prose."""
+        section is verified text rather than unchecked prose;
+      · the quote must occur in the body's PROSE, not only inside a heading line — see the
+        snapshot_prose_blocks() block comment (QUOTE_ONLY_IN_HEADING)."""
     found_catalog, snap_text = resolve_snapshot_any_catalog(uid)
     if found_catalog is None:
         if protected:
@@ -419,8 +551,15 @@ def check_template_anchor(rel, uid, quote, section=None, protected=False):
                            "a protected anchor with no snapshot verifies nothing")
         template_misses.append((rel, uid, "TEMPLATE_SNAPSHOT_FILE_MISSING", ""))
         return
-    if normalize(quote) not in snap_text:
+    quote_in_body = normalize(quote) in snap_text
+    if not quote_in_body:
         template_misses.append((rel, uid, "TEMPLATE_QUOTE_NOT_IN_SNAPSHOT", quote[:90]))
+    elif protected and not any(normalize(quote) in block
+                               for block in snapshot_prose_blocks(found_catalog, uid)):
+        # Reported only when the quote DOES resolve against the whole body: a quote absent
+        # everywhere is already TEMPLATE_QUOTE_NOT_IN_SNAPSHOT, and emitting both for one
+        # defect would double-count the finding total the acceptance matrix reads.
+        template_misses.append((rel, uid, "TEMPLATE_QUOTE_ONLY_IN_HEADING", quote[:90]))
     if section is not None and normalize(section) not in snap_text:
         template_misses.append((rel, uid, "TEMPLATE_SECTION_NOT_IN_SNAPSHOT", section[:90]))
 
@@ -528,6 +667,43 @@ def load_protected_ledger():
         die_structural(f"PROTECTED_LEDGER_FLOOR — declared min_entries={declared_min} is below the "
                        f"guard-pinned live floor {LIVE_MIN_PROTECTED_ENTRIES} "
                        "(LIVE_MIN_PROTECTED_ENTRIES may not be reduced)")
+
+    # ── FIVE-SURFACE EQUALITY CENSUS, EXECUTED (PRD-final-4 C3) ──────────────────────
+    # The two checks immediately above are the ORIGINAL one-directional pair: rows >= min,
+    # min >= guard floor. Both are satisfied by a ledger that is LARGER than the ratchet
+    # declares, and neither says anything about whether the two identity-pin surfaces
+    # (`# require:` directives and the guard frozenset) moved with the numbers. So on the live
+    # tree all five surfaces are now compared for EQUALITY, here, on every run — not asserted
+    # in a comment and not verified by a count grep in an acceptance matrix that a future
+    # editor may not run. Exit 3 (CENSUS_EXIT), distinct from findings (1) and from the other
+    # structural ledger defects (2).
+    #
+    # FIXTURE ROOTS ARE DELIBERATELY EXEMPT and keep exactly today's gating (rows >= declared
+    # min, no guard-pinned floor, no census): a fixture exists to isolate ONE failure mode, so
+    # a 1-row fixture ledger must stay legal. The census is a property of the live ratchet, and
+    # the live tree is where the ratchet can be half-moved.
+    if live_root:
+        census = {
+            "ledger rows (unique identities)": len(entries),
+            "distinct `# require:` directives": len(declared_required),
+            "ledger `# min_entries:` directive": declared_min,
+            "len(LIVE_REQUIRED_PROTECTED_IDENTITIES)": len(LIVE_REQUIRED_PROTECTED_IDENTITIES),
+            "LIVE_MIN_PROTECTED_ENTRIES": LIVE_MIN_PROTECTED_ENTRIES,
+        }
+        if len(set(census.values())) != 1:
+            print("evidence_quote_spotcheck_guard: PROTECTED_LEDGER_CENSUS_UNEQUAL — the five "
+                  "ratchet surfaces must all carry the SAME number and do not:",
+                  file=sys.stderr)
+            for label, value in census.items():
+                print(f"    {value:>6}  {label}", file=sys.stderr)
+            print("  All five move together or none does. A larger row count than the declared "
+                  "floor, or a floor raised without the matching identity pins, is a HALF-MOVED "
+                  "ratchet: the surfaces that lag stop protecting anything while the gate still "
+                  "reports green.", file=sys.stderr)
+            sys.exit(CENSUS_EXIT)
+        print("evidence_quote_spotcheck_guard: protected ratchet census OK — all five surfaces "
+              f"== {len(entries)} (rows / require directives / min_entries / guard pin set / "
+              "guard floor)")
 
     required = set(declared_required)
     if live_root:
