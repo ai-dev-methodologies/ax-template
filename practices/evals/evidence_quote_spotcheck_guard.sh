@@ -141,6 +141,54 @@
 #                    --strict --strict-templates), so a fabricated section is no longer
 #                    unverified free text.
 #
+# ANCHOR RATCHET — THE FLOOR NOW LIVES IN THE PREVIOUS RELEASE, NOT IN THE WORKING TREE
+# ------------------------------------------------------------------------------------
+# (P1-1, cross-family reviewer finding 2026-07-30; TD-2026-07-30-P1-anchor-ratchet.)
+#
+# The five-surface census above compares five CURRENT-TREE values to each other. That is a
+# consistency check, not a ratchet: every one of the five is editable in the same commit, so
+# lowering all five together (64 → 63 in LIVE_MIN_PROTECTED_ENTRIES, in the frozenset, in the
+# ledger's `# min_entries:`, in one `# require:` directive, and by deleting the matching row)
+# left the census EQUAL and the gate GREEN while an anchor silently left the fatal set. The
+# reviewer reproduced exactly that. Duplicating a number in two in-tree places raises the cost
+# of a downgrade from one edit to five; it never makes it impossible, because all five live in
+# the same mutable tree.
+#
+# So the reference is moved OUT of the tree: the guard reads its OWN PREVIOUS-RELEASE COPY via
+# `git show <ANCHOR>:practices/evals/evidence_quote_spotcheck_guard.sh` and enforces
+#   · LIVE_MIN_PROTECTED_ENTRIES(current) >= LIVE_MIN_PROTECTED_ENTRIES(anchor)
+#     — MONOTONIC_FLOOR_REGRESSION, exit 4;
+#   · LIVE_REQUIRED_PROTECTED_IDENTITIES(anchor) ⊆ LIVE_REQUIRED_PROTECTED_IDENTITIES(current)
+#     — PROTECTED_IDENTITY_REMOVED, exit 5. Superset growth stays legal: that IS the ratchet
+#     direction. Subset comparison (not equality) is also what catches SUBSTITUTION across
+#     releases — swap one identity for another and the count/census stay satisfied, but the
+#     removed identity is missing from the current set.
+# Because the census forces all five surfaces to carry the same number, ratcheting the two
+# guard-side constants transitively ratchets the ledger's row count, its `# min_entries:` and
+# its `# require:` directives as well.
+#
+# WHY THIS IS SOUND (gate ordering): R25 (verify-completion.sh) runs with the working tree at
+# HEAD, and HEAD is AHEAD of origin/main — it is the commit being released. So origin/main is
+# genuinely the prior released state and cannot be edited by the commit under verification. The
+# pre-push recency guard then binds every push to an R25 run at that HEAD, so a commit cannot
+# reach origin/main without having satisfied the ratchet against the origin/main before it.
+#
+# Anchor resolution and its honest weak spots:
+#   · origin/main — the strong case, per the paragraph above.
+#   · HEAD — FALLBACK ONLY (detached checkout, or a fresh fork with no origin remote). Weaker:
+#     if the downgrade is already committed locally, HEAD contains it and the comparison is
+#     against the downgraded value. It preserves the ratchet across the *uncommitted* edit and
+#     nothing more.
+#   · unavailable (no git, no commits) — the anchor checks print WARN and are SKIPPED. Stated
+#     plainly: in a tarball export the ratchet is inert. It is also unpushable there (the
+#     pre-push recency guard is a git hook), so the released-artifact path retains the gate.
+#   · The anchor copy predating these constants (first-release bootstrap) prints an advisory and
+#     skips that half — there is nothing to ratchet against yet. An attacker cannot manufacture
+#     this state: git history is immutable to the working tree.
+#   · Parsing is AST-based over the anchor's embedded python block, so reformatting the
+#     frozenset (line breaks, ordering, comments, set-literal vs frozenset() call) does not
+#     evade it; only removing a tuple does.
+#
 # Usage:
 #   bash practices/evals/evidence_quote_spotcheck_guard.sh
 #   bash practices/evals/evidence_quote_spotcheck_guard.sh --strict
@@ -184,10 +232,31 @@ REPO_ROOT="${ROOT_OVERRIDE:-$SELF_REPO_ROOT}"
 RESOLVED_ROOT="$(cd "$REPO_ROOT" 2>/dev/null && pwd -P)" || RESOLVED_ROOT=""
 LIVE_ROOT=0; [ -n "$RESOLVED_ROOT" ] && [ "$RESOLVED_ROOT" = "$SELF_REPO_ROOT" ] && LIVE_ROOT=1
 
+# ── RELEASE ANCHOR (P1 anchor-ratchet, TD-2026-07-30-P1-anchor-ratchet) ───────────────
+# See the ANCHOR RATCHET header block for the why. Resolution order, and it is deliberately
+# short: origin/main (the previous release — the strong case, because R25 runs at a tree that
+# is AHEAD of it) → HEAD (WEAKER: a detached/fork-fresh clone with no origin/main; HEAD is the
+# commit being amended rather than a released state, so a ratchet edit that is already
+# committed locally is invisible to it) → unavailable (no git / no commits), in which case the
+# anchor checks print a loud WARN and are skipped. FIXTURE ROOTS NEVER ANCHOR: the whole block
+# is gated on LIVE_ROOT, exactly like the LIVE_MIN_* floors, because a fixture exists to
+# isolate one failure mode and has no release history of its own.
+GIT_ANCHOR=""
+GIT_ANCHOR_KIND="unavailable"
+if [ "$LIVE_ROOT" = "1" ] && command -v git >/dev/null 2>&1 \
+   && git -C "$SELF_REPO_ROOT" rev-parse --git-dir >/dev/null 2>&1; then
+    if git -C "$SELF_REPO_ROOT" rev-parse --verify --quiet origin/main >/dev/null 2>&1; then
+        GIT_ANCHOR="origin/main"; GIT_ANCHOR_KIND="origin/main"
+    elif git -C "$SELF_REPO_ROOT" rev-parse --verify --quiet HEAD >/dev/null 2>&1; then
+        GIT_ANCHOR="HEAD"; GIT_ANCHOR_KIND="HEAD"
+    fi
+fi
+
 STRICT="$STRICT" ALLOW_MISSING="$ALLOW_MISSING" INCLUDE_TEMPLATES="$INCLUDE_TEMPLATES" \
 STRICT_TEMPLATES="$STRICT_TEMPLATES" TEMPLATES_ONLY_PROTECTED="$TEMPLATES_ONLY_PROTECTED" \
-LIVE_ROOT="$LIVE_ROOT" python3 - "$REPO_ROOT" << 'PY'
-import glob, html, os, re, sys
+LIVE_ROOT="$LIVE_ROOT" GIT_ANCHOR="$GIT_ANCHOR" GIT_ANCHOR_KIND="$GIT_ANCHOR_KIND" \
+GIT_REPO_ROOT="$SELF_REPO_ROOT" python3 - "$REPO_ROOT" << 'PY'
+import ast, glob, html, os, re, subprocess, sys
 
 root = sys.argv[1]
 strict = os.environ.get("STRICT") == "1"
@@ -196,6 +265,9 @@ include_templates = os.environ.get("INCLUDE_TEMPLATES") == "1"
 strict_templates = os.environ.get("STRICT_TEMPLATES") == "1"
 protected_only = os.environ.get("TEMPLATES_ONLY_PROTECTED") == "1"
 live_root = os.environ.get("LIVE_ROOT") == "1"
+anchor = os.environ.get("GIT_ANCHOR") or ""
+anchor_kind = os.environ.get("GIT_ANCHOR_KIND") or "unavailable"
+git_root = os.environ.get("GIT_REPO_ROOT") or root
 
 # Committed protected-anchor ledger + the floor its declared min_entries may never drop
 # below on the real repo tree. BOTH numbers are deliberately duplicated (ledger directive +
@@ -344,6 +416,128 @@ if len(LIVE_REQUIRED_PROTECTED_IDENTITIES) != LIVE_MIN_PROTECTED_ENTRIES:
           "the pin set and the floor are the same number by construction; a difference means "
           "one half of a ratchet was moved without the other.", file=sys.stderr)
     sys.exit(CENSUS_EXIT)
+
+# ── ANCHOR RATCHET, EXECUTED (P1-1) ──────────────────────────────────────────────────
+# See the ANCHOR RATCHET header block. Two exit codes, distinct from findings (1), other
+# structural ledger defects (2) and the in-tree census (3), so "the ratchet was rolled back
+# across releases" is never readable as any of those.
+FLOOR_REGRESSION_EXIT = 4     # MONOTONIC_FLOOR_REGRESSION
+IDENTITY_REMOVED_EXIT = 5     # PROTECTED_IDENTITY_REMOVED
+GUARD_SELF_REL = "practices/evals/evidence_quote_spotcheck_guard.sh"
+
+
+def anchor_blob(rel):
+    """Bytes of `rel` as of the release anchor, or None when that path did not exist there."""
+    proc = subprocess.run(["git", "-C", git_root, "show", f"{anchor}:{rel}"],
+                          stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+    return proc.stdout if proc.returncode == 0 else None
+
+
+def _string_pair_tuples(node):
+    """Every 2-element all-string-constant tuple anywhere under `node`. Deliberately shape-
+    tolerant: frozenset({...}) / frozenset([...]) / a bare set literal / reordered / reflowed /
+    comment-interleaved all yield the same identity SET, so only DELETING a tuple registers."""
+    out = set()
+    for sub in ast.walk(node):
+        if not isinstance(sub, ast.Tuple) or len(sub.elts) != 2:
+            continue
+        vals = [e.value for e in sub.elts
+                if isinstance(e, ast.Constant) and isinstance(e.value, str)]
+        if len(vals) == 2:
+            out.add((vals[0], vals[1]))
+    return out
+
+
+def parse_anchor_pins(src_text):
+    """(floor, identities, error) as DECLARED BY THE ANCHOR COPY of this guard. A None element
+    means that constant is absent from the anchor (first-release bootstrap for that half)."""
+    marker = "<< 'PY'\n"
+    start = src_text.find(marker)
+    body = src_text[start + len(marker):] if start != -1 else src_text
+    end = body.rfind("\nPY\n")
+    if end != -1:
+        body = body[:end]
+    try:
+        tree = ast.parse(body)
+    except SyntaxError as exc:
+        return None, None, f"anchor python block does not parse ({exc})"
+    floor = ids = None
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Assign):
+            continue
+        names = [t.id for t in node.targets if isinstance(t, ast.Name)]
+        if "LIVE_MIN_PROTECTED_ENTRIES" in names and isinstance(node.value, ast.Constant) \
+                and isinstance(node.value.value, int):
+            floor = node.value.value
+        if "LIVE_REQUIRED_PROTECTED_IDENTITIES" in names:
+            found = _string_pair_tuples(node.value)
+            if found:
+                ids = found
+    return floor, ids, None
+
+
+if live_root:
+    if not anchor:
+        print("evidence_quote_spotcheck_guard: WARN ANCHOR_UNAVAILABLE — no git anchor "
+              "(origin/main or HEAD) could be resolved, so the cross-release ratchet checks "
+              "(MONOTONIC_FLOOR_REGRESSION / PROTECTED_IDENTITY_REMOVED) are SKIPPED. The "
+              "in-tree five-surface census still ran. A tree with no git history cannot be "
+              "pushed either (the pre-push recency guard is a git hook), so the released path "
+              "keeps the ratchet.", file=sys.stderr)
+    else:
+        if anchor_kind != "origin/main":
+            print(f"evidence_quote_spotcheck_guard: WARN ANCHOR_FALLBACK — ratcheting against "
+                  f"{anchor_kind}, not origin/main. Weaker by construction: a downgrade that is "
+                  "already committed locally is present in the anchor itself.", file=sys.stderr)
+        prior_src = anchor_blob(GUARD_SELF_REL)
+        if prior_src is None:
+            print(f"evidence_quote_spotcheck_guard: WARN ANCHOR_GUARD_ABSENT — {GUARD_SELF_REL} "
+                  f"does not exist at {anchor_kind}; nothing to ratchet against (first-release "
+                  "bootstrap). Skipped.", file=sys.stderr)
+        else:
+            prior_floor, prior_ids, perr = parse_anchor_pins(
+                prior_src.decode("utf-8", errors="replace"))
+            if perr:
+                print(f"evidence_quote_spotcheck_guard: WARN ANCHOR_UNPARSEABLE — {perr}; "
+                      "cross-release ratchet SKIPPED. (Git history is immutable to the working "
+                      "tree, so this state cannot be manufactured by an edit under review.)",
+                      file=sys.stderr)
+            else:
+                if prior_floor is None:
+                    print("evidence_quote_spotcheck_guard: WARN ANCHOR_NO_FLOOR — the "
+                          f"{anchor_kind} copy declares no LIVE_MIN_PROTECTED_ENTRIES "
+                          "(first-release bootstrap); floor ratchet skipped.", file=sys.stderr)
+                elif LIVE_MIN_PROTECTED_ENTRIES < prior_floor:
+                    print("evidence_quote_spotcheck_guard: MONOTONIC_FLOOR_REGRESSION — "
+                          f"LIVE_MIN_PROTECTED_ENTRIES={LIVE_MIN_PROTECTED_ENTRIES} is BELOW the "
+                          f"previous release's {prior_floor} (anchor {anchor_kind}:"
+                          f"{GUARD_SELF_REL}). The floor is a RATCHET: it may rise, never fall. "
+                          "Lowering the in-tree census surfaces coherently no longer helps — the "
+                          "reference is the released copy, which the commit under review cannot "
+                          "edit.", file=sys.stderr)
+                    sys.exit(FLOOR_REGRESSION_EXIT)
+                if prior_ids is None:
+                    print("evidence_quote_spotcheck_guard: WARN ANCHOR_NO_PIN_SET — the "
+                          f"{anchor_kind} copy declares no LIVE_REQUIRED_PROTECTED_IDENTITIES "
+                          "tuples (first-release bootstrap); identity ratchet skipped.",
+                          file=sys.stderr)
+                else:
+                    removed = sorted(prior_ids - set(LIVE_REQUIRED_PROTECTED_IDENTITIES))
+                    if removed:
+                        print("evidence_quote_spotcheck_guard: PROTECTED_IDENTITY_REMOVED — "
+                              f"{len(removed)} identity(ies) pinned by the previous release are "
+                              "absent from LIVE_REQUIRED_PROTECTED_IDENTITIES:", file=sys.stderr)
+                        for r, u in removed:
+                            print(f"    {r}::{u}", file=sys.stderr)
+                        print("  The pin set may only GROW. A removal (or a swap that keeps the "
+                              "count) drops an anchor out of the fatal set, which is the whole "
+                              "bypass this ratchet exists to make impossible.", file=sys.stderr)
+                        sys.exit(IDENTITY_REMOVED_EXIT)
+                if prior_floor is not None and prior_ids is not None:
+                    print("evidence_quote_spotcheck_guard: anchor ratchet OK — floor "
+                          f"{prior_floor} → {LIVE_MIN_PROTECTED_ENTRIES}, pin set "
+                          f"{len(prior_ids)} → {len(LIVE_REQUIRED_PROTECTED_IDENTITIES)} "
+                          f"(superset) vs {anchor_kind}")
 
 # A protected quote must carry substance. `quote: 0` is closed by the isinstance check, but
 # `quote: "a"` is a genuine non-empty string that is still a substring of essentially every

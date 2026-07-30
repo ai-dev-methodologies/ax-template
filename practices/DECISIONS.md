@@ -623,3 +623,114 @@ the trigger event, do not relitigate.
   machinery with it); or an id needs refreshing WITHOUT an assembly row, which would reveal the
   derived-touched-set convention as too narrow.
 - Commits: (this commit — PRD-final-4 wave, Lane B)
+
+## TD-2026-07-30-(P1-anchor-ratchet) — every floor/baseline moves out of the working tree and into the previous release
+- Status: ACCEPT
+- Date: 2026-07-30
+- Maintainer: PRD-final-4 wave, P1-seal lane
+- Evidence: three cross-family-reviewer reproductions, each re-run here against the RELEASED copy
+  of the guard (`git show origin/main:<guard>`, exit 0 = the bypass was real) and against the fixed
+  copy (non-zero), then restored byte-identically with sha verification. Guard headers carry the
+  mechanics; this entry carries the reasoning.
+- Rationale: **the three bypasses had ONE root cause — every floor, pin set, frozen baseline and
+  provenance record lived ONLY in mutable working-tree surfaces that a single commit can edit
+  coherently together.** Duplicating a number in two in-tree places (the posture P2-51/P3-104
+  established) raises the cost of a downgrade from one edit to five; it never makes it impossible,
+  because all five are in the same tree as the change being reviewed. A "frozen" list that is
+  re-read from the file being edited is not frozen — it is self-certifying. The fix is to move the
+  reference OUT of the tree: `git show <ANCHOR>:<path>`, ANCHOR resolved at guard runtime as
+  origin/main → HEAD.
+  Why that is sound rather than circular: **R25 runs with the working tree at HEAD, and HEAD is
+  AHEAD of origin/main — it is the commit being released.** So origin/main is genuinely the prior
+  released state and is not editable by the commit under verification; the pre-push recency guard
+  then binds every push to an R25 run at that HEAD, so nothing reaches origin/main without having
+  satisfied the ratchet against the origin/main before it. The ratchet is transitive across
+  releases: to lower a floor you would first have to release a commit that lowers it, which the
+  gate at that commit refuses.
+  The three reproductions, and what each proved was NOT covered by the in-tree pins:
+  1. **P1-1, protected-ledger ratchet coherently downgradeable.** The five-surface census
+     (`evidence_quote_spotcheck_guard.sh`) compares five CURRENT-TREE values *to each other*, so
+     lowering all five at once — `LIVE_MIN_PROTECTED_ENTRIES` 64→63, drop the accordion tuple from
+     `LIVE_REQUIRED_PROTECTED_IDENTITIES`, `# min_entries:` 64→63, drop the accordion `# require:`
+     directive, delete the accordion ledger row — left the census EQUAL and the gate GREEN while
+     `templates/L1/components/accordion.tsx::shadcn-ui-2026-05` silently left the fatal set.
+     Reproduced: released copy exit 0 (census "all five surfaces == 63"), fixed copy
+     `MONOTONIC_FLOOR_REGRESSION` exit **4**. A second reproduction covered SUBSTITUTION at a
+     constant count (swap accordion for another identity, all five still 64):
+     `PROTECTED_IDENTITY_REMOVED` exit **5** — which is why the identity comparison is a SUBSET
+     check and not an equality or a count.
+  2. **P1-2, refresh without receipt.** Chain scope was derived from the `kind: assembly` receipt
+     rows, i.e. the guard asked the *ledger* which ids to verify and the ledger is editable. So
+     refreshing an allowlisted NON-assembly id (`practices-react::cwv-2026`: doctor the body, sync
+     the manifest sha/bytes to the new file, delete its allowlist row) passed domain (a), was a
+     legal shrink of the allowlist, and the chain never looked. Reproduced: released copy exit 0
+     (PASS, 62 entries), fixed copy `RECEIPT_MISSING` exit 2. Separately, REWRITING an existing
+     assembly row's `body_sha256`/`body_bytes` to a doctored body's digest closed domain (c) on a
+     receipt edited to fit — released copy exit 0 with all three in-tree domains agreeing on the
+     doctored body; fixed copy `RECEIPT_LEDGER_MUTATED` exit **4**, as does a ONE-BYTE edit to an
+     existing fetch row (`r002 bytes: 5431 → 5432`).
+  3. **P1-3, "frozen" baseline mutable.** `baseline_universe` was enforced only against ITSELF, so
+     diverging a clean id (`practices-react::mdn-promise-all`) and then adding it to
+     `baseline_universe` + `entries` + bumping `baseline_count` satisfied subset-only. Reproduced:
+     released copy exit 0 (PASS, "baseline universe 72"), fixed copy `BASELINE_MUTATED` exit **4**.
+     `ALLOWLIST_GREW` exit 4 covers the second half (a residual entry that IS in the frozen
+     baseline but was not suppressed by the previous release).
+- Interaction resolved (reviewer's register note): **multiple `kind: assembly` rows per identity are
+  now LEGAL.** Append-only and "one digest per body" are only compatible if a repeat refresh may
+  APPEND — the old `RECEIPTS_DUPLICATE_ASSEMBLY` forced every repeat refresh to MUTATE history,
+  which is precisely what the append-only ratchet must forbid. The chain therefore binds to the
+  LATEST assembly row per identity (last in file order = last appended), and append-only keeps every
+  earlier row byte-intact, so supersession is auditable rather than a silent overwrite. Two fixtures
+  pin both halves: `pass_repeat_refresh_latest_assembly` (exit 0 here; exit 2 under the released
+  guard, which is the proof the relaxation was required) and `fail_latest_assembly_mismatch`
+  (latest row wrong while an EARLIER row matches → exit 2, so "bind to latest" cannot degrade into
+  any-row-matches or first-row-wins).
+- Alternatives considered:
+  - **Add a sixth and seventh in-tree pin** — REJECTED: the reviewer's three reproductions are all
+    the same shape, and N in-tree pins are defeated by N coordinated edits. Adding pins raises cost
+    linearly and closes nothing.
+  - **Store the floors in a signed/immutable sidecar file in the tree** — REJECTED: a sidecar is
+    still in the tree, and a signature the tree can also produce verifies nothing. git history is
+    already the immutable-relative-to-the-working-tree artifact, and the gate ordering above makes
+    it the *released* state rather than merely an older one.
+  - **Compare `baseline_universe` byte-for-byte instead of as a set** — REJECTED as implemented:
+    the freeze's MEANING is the set of `(catalog, id)` identities, and set equality catches every
+    addition and removal in both directions while tolerating reordering or a comment edit inside
+    the list, neither of which weakens anything. Stated as a deviation from the literal
+    "byte-equal" instruction rather than left implicit. `baseline_count` is still checked against
+    the list length by the pre-existing in-tree check.
+  - **Fail closed when no git anchor resolves** — REJECTED: it would break tarball exports and
+    fresh forks with no history. Instead the anchor checks print a loud WARN and skip, and the
+    honest consequence is stated in the guard headers: in a tree with no git history the ratchet is
+    inert — but such a tree is also unpushable, because the pre-push recency guard is a git hook.
+- Residual, stated rather than papered over: **a receipt is a SELF-REPORTED record and no offline
+  gate can prove a curl happened.** Append-only closes REWRITING a released receipt; it does not
+  close APPENDING a fabricated one (doctor the body, sync manifest + header, append a new fetch row
+  and a new assembly row whose digest matches). What the chain guarantees is not "a doctored refresh
+  is impossible" but "a doctored refresh leaves a permanent, immutable, reviewable claim naming a
+  URL, an HTTP status and a fetched_at". Closing the remainder needs evidence the tree cannot author
+  (an independent fetch at review time — cf. the periodic network `external_url_spot_audit.sh` — or
+  a signed transparency log). Two candidate tightenings were considered and deliberately NOT added,
+  because both would be paid for by future legitimate waves in false positives: requiring a
+  newly-appended assembly row to cite at least one newly-appended fetch row (breaks registering an
+  existing body under a second catalog) and freezing the ledger's `notes:` key (breaks documenting a
+  later refresh).
+- Coverage honesty: the anchor checks are gated on LIVE_ROOT — a fixture root has no release history
+  of its own, so **these codes are not fixture-coverable**, and their non-vacuity evidence is the
+  live pre-fix/post-fix reproductions above rather than a fixture pair. `[87]`'s double floor stays
+  64/64: the two new fixtures are a PASS fixture and an exit-2 fail fixture, and `[87]` registers
+  exit-1 fail fixtures.
+- New failure codes: `evidence_quote_spotcheck_guard.sh` — `MONOTONIC_FLOOR_REGRESSION` (exit 4),
+  `PROTECTED_IDENTITY_REMOVED` (exit 5); `manifest_snapshot_integrity_guard.sh` —
+  `RECEIPT_LEDGER_MUTATED`, `BASELINE_MUTATED`, `ALLOWLIST_GREW` (all exit 4, deliberately distinct
+  from 1 findings / 2 structural so "the ratchet was rolled back across releases" is never readable
+  as "a body diverged" or "a shape is wrong"). Advisory WARN codes (never fatal):
+  `ANCHOR_UNAVAILABLE`, `ANCHOR_FALLBACK`, `ANCHOR_GUARD_ABSENT`, `ANCHOR_ALLOWLIST_ABSENT`,
+  `ANCHOR_RECEIPTS_ABSENT`, `ANCHOR_UNPARSEABLE`, `ANCHOR_BASELINE_MALFORMED`,
+  `ANCHOR_DIFF_UNAVAILABLE`, `ANCHOR_RECEIPTS_UNCHUNKABLE`, `ANCHOR_NO_FLOOR`,
+  `ANCHOR_NO_PIN_SET`.
+- Re-evaluation trigger: the release branch stops being `origin/main` (the anchor name is pinned in
+  both guards); or a legitimate wave needs to LOWER a protected floor / REMOVE a baseline entry, at
+  which point the deliberate answer is a reviewed release that raises the floor differently, not a
+  relaxation of the ratchet.
+- Commits: (this commit — PRD-final-4 wave, P1-seal lane)

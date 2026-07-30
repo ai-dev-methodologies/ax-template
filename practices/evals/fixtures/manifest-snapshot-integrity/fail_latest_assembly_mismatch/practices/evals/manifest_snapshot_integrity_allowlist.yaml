@@ -1,0 +1,9 @@
+# pass_repeat_refresh_latest_assembly — same tree as pass_clean, but fresh-src carries TWO assembly rows (a superseded one + the latest). Proves the chain binds to the LATEST row per identity, which is what lets the receipts ledger stay append-only across repeat refreshes.
+baseline_count: 1
+baseline_universe:
+  - practices::legacy-src
+entries:
+  - catalog: practices
+    id: legacy-src
+    reason: >-
+      originally-fetched body lost — recorded sha/bytes are unverifiable history

@@ -1,0 +1,17 @@
+version: "1.1"
+generated_at: "2026-07-30T00:00:00Z"
+snapshots:
+  - id: "legacy-src"
+    tier: 3
+    source: "https://example-vendor.test/docs/legacy-src"
+    via: "curl"
+    fetched_at: "2026-07-30T00:00:00Z"
+    bytes: 1
+    sha: "0000000000000000000000000000000000000000000000000000000000000000"
+  - id: "fresh-src"
+    tier: 3
+    source: "https://example-vendor.test/docs/fresh-src"
+    via: "curl"
+    fetched_at: "2026-07-30T00:00:00Z"
+    bytes: 631
+    sha: "3087f5adb682c05c2dc058145d25cd03ed53254760d933afc93f57a8d1f76141"

@@ -1,0 +1,46 @@
+version: '1.0'
+notes: 'fixture receipts ledger — a REPEAT refresh of one identity. Two `kind: assembly` rows for
+  practices::fresh-src: asm-fresh-src-v1 (the first refresh, whose body has since been superseded)
+  and asm-fresh-src-v2 (the latest). The ledger is APPEND-ONLY vs the release anchor, so the
+  superseded row may not be rewritten or deleted — it stays as the audit trail of what the earlier
+  fetch produced. The chain therefore binds to the LATEST assembly row per identity (last in file
+  order = last appended), which is what makes append-only and "one digest per body" compatible.
+  Before P1-2c a second assembly row was RECEIPTS_DUPLICATE_ASSEMBLY (exit 2), i.e. every repeat
+  refresh was forced to MUTATE history — exactly what the append-only ratchet must forbid.'
+receipts:
+- id: r001
+  kind: fetch
+  url: https://example-vendor.test/docs/fresh
+  curl_exit: 0
+  http_status: '200'
+  bytes: 120
+  sha256: 0000000000000000000000000000000000000000000000000000000000000000
+  fetched_at: '2026-07-30T00:00:00Z'
+  error: ''
+- id: asm-fresh-src-v1
+  kind: assembly
+  catalog: practices
+  snapshot_id: fresh-src
+  body_bytes: 111
+  body_sha256: 11111111111111111111111111111111111111111111111111111111111111ab
+  from_receipts:
+  - r001
+  note: first refresh — superseded by asm-fresh-src-v2; preserved verbatim (append-only)
+- id: r002
+  kind: fetch
+  url: https://example-vendor.test/docs/fresh
+  curl_exit: 0
+  http_status: '200'
+  bytes: 120
+  sha256: 0000000000000000000000000000000000000000000000000000000000000000
+  fetched_at: '2026-07-30T06:00:00Z'
+  error: ''
+- id: asm-fresh-src-v2
+  kind: assembly
+  catalog: practices
+  snapshot_id: fresh-src
+  body_bytes: 220
+  body_sha256: a58ad59ca07a5cb557f37c0ce9c10e3c0074b4a7bc82dbd48663e7a53a00c7f8
+  from_receipts:
+  - r002
+  note: latest refresh — the row the chain binds to
