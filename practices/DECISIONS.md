@@ -734,3 +734,37 @@ the trigger event, do not relitigate.
   which point the deliberate answer is a reviewed release that raises the floor differently, not a
   relaxation of the ratchet.
 - Commits: (this commit — PRD-final-4 wave, P1-seal lane)
+
+## TD-2026-07-30-(P1-anchor-ratchet-r2) — the anchor parser and the receipts sequence become fail-closed surfaces themselves
+- Status: ACCEPT
+- Date: 2026-07-30
+- Maintainer: PRD-final-4 wave, P1-seal round-2 lane (report finalized by the main loop after the
+  implementing agent was cut twice by transient API 529s; implementation was already on disk and
+  is verified by the sweeps + an independent RED re-verification pass recorded in the wave report)
+- Evidence: two round-2 cross-family reproductions, both attacking the ROUND-1 FIX itself.
+- Rationale: round 1 moved every floor out of the tree and into `git show ANCHOR:`. Round 2 proved
+  the two remaining trust points were still in the tree: (A) the anchor is only useful if it can be
+  PARSED, and the parser's failure mode was WARN-and-skip — so release N could change nothing but
+  REPRESENTATION (`64` → `int("64")`, alias the frozenset, or even reformat the heredoc fence) while
+  runtime stayed 64/64 and its own gate stayed green, and release N+1 could then downgrade freely
+  against an unparseable anchor; (B) receipts append-only compared rows/chunks keyed BY ID,
+  discarding ORDER, while latest-assembly binding used FILE ORDER — so reordering intact chunks let
+  an OLD assembly row become "latest" and a reverted snapshot pass with no new receipt, and
+  indenting the whole list (identical YAML semantics) tripped the ADVISORY unchunkable path and
+  skipped byte identity entirely.
+  The repairs close the generation-N hole, not just the N+1 one:
+  1. **SELF-PARSE (exit 6 SELF_UNPARSEABLE)** — on every live-root run the guard parses its OWN
+     current file with the SAME extractor the anchor side uses. The laundered representation can
+     never ship, because the release that introduces it fails its own gate. Belt-and-braces:
+     anchor state (iii) "file present but unparseable" is now BLOCKING exit 7 ANCHOR_UNPARSEABLE
+     (for histories predating the self-check); states (i) no-git and (ii) file-absent-in-anchor
+     remain skip — (i) is unpushable anyway, (ii) is not attacker-creatable (git history is
+     immutable to the working tree).
+  2. **PREFIX RULE + SELF-CHUNK (RECEIPT_LEDGER_MUTATED exit 4 / RECEIPTS_SELF_UNCHUNKABLE
+     exit 2)** — the anchor's row-ID and byte-chunk sequences must be an EXACT PREFIX of the
+     current sequences; only suffix appends are legal (subsumes deletion/reorder/insertion-before-
+     end; per-row field diffs are kept only for sharper diagnostics). The unchunkable path is no
+     longer advisory anywhere on an anchored live root, and the CURRENT ledger failing to chunk is
+     itself blocking — the ledger is machine-owned, its format is ours to keep chunkable, so the
+     generation-N indent laundering also dies at its own gate.
+- Commits: (this commit — PRD-final-4 wave, P1-seal round-2)

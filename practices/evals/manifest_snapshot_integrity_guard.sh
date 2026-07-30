@@ -133,10 +133,12 @@
 # emptying the receipts ledger cannot turn this gate into a green nothing.
 #
 # EXIT: 0 PASS · 1 divergence / stale allowlist / body-sha mismatch · 2 structural
-#       (RECEIPT_MISSING, allowlist shape or in-tree subset violation, missing inputs, zero scan)
-#       · 4 cross-release ratchet violation (RECEIPT_LEDGER_MUTATED / BASELINE_MUTATED /
-#       ALLOWLIST_GREW) — deliberately distinct from 1 and 2 so "the ratchet was rolled back
-#       across releases" is never readable as "a body diverged" or "a shape is wrong".
+#       (RECEIPT_MISSING, allowlist shape or in-tree subset violation, missing inputs, zero scan,
+#       RECEIPTS_SELF_UNCHUNKABLE) · 4 cross-release ratchet violation (RECEIPT_LEDGER_MUTATED —
+#       rewritten row, deleted row, NON-PREFIX row/chunk order, or an unchunkable ledger on a live
+#       root / BASELINE_MUTATED / ALLOWLIST_GREW) — deliberately distinct from 1 and 2 so "the
+#       ratchet was rolled back across releases" is never readable as "a body diverged" or "a shape
+#       is wrong".
 #
 # Usage:
 #   bash practices/evals/manifest_snapshot_integrity_guard.sh
@@ -609,16 +611,58 @@ if os.path.isfile(receipts_path):
 # whether the row they resolve to still says what it said when it was written.)
 #
 # So every row present in the ANCHOR's ledger must still be present and unchanged here; only
-# APPENDS are legal. Two layers, both reported as RECEIPT_LEDGER_MUTATED (exit 4):
+# APPENDS are legal. THREE layers, all reported as RECEIPT_LEDGER_MUTATED (exit 4):
 #   1. PARSED-ROW identity — the anchor row's mapping must equal a current row of the same id.
 #      Robust to reflowing/re-quoting, which is the layer that always runs.
-#   2. BYTE-CHUNK identity — when both files chunk cleanly into column-0 `- id: <id>` list
-#      items, the anchor's exact chunk text must appear verbatim (trailing blank lines
-#      normalized, since those belong to the separator between rows and not to the row). This
-#      catches an edit that parses identically. If either side does not chunk cleanly the layer
-#      prints an advisory and only layer 1 applies — stated rather than assumed.
+#   2. BYTE-CHUNK identity — the anchor's exact chunk text must appear verbatim (trailing blank
+#      lines normalized, since those belong to the separator between rows and not to the row).
+#      This catches an edit that parses identically.
+#   3. PREFIX (ORDER) identity — see below. Layers 1-2 were ORDER-BLIND (both keyed by id), and
+#      order is load-bearing here.
 # Top-level keys other than `receipts` (e.g. `notes:`) are NOT frozen: prose about the ledger is
 # not a provenance record, and freezing it would make documenting a later refresh impossible.
+#
+# ORDER IS LOAD-BEARING — THE APPEND-ONLY CHECK IS NOW A PREFIX CHECK
+# ------------------------------------------------------------------
+# (P1-B, cross-family reviewer ROUND 2, 2026-07-30; TD-2026-07-30-P1-anchor-ratchet-r2.)
+#
+# Allowing multiple assembly rows per identity (P1-2c) made "which row wins" a real question, and
+# the answer is FILE ORDER: the chain binds to the LAST assembly row for an id. But the
+# append-only check compared rows and chunks BY ID, discarding order — so file order was
+# simultaneously authoritative for the verdict and unprotected by the ratchet. The reviewer walked
+# straight through the gap:
+#   anchor (release N): rows [… , asm-v1(body1), asm-v2(body2)], snapshot = body2 (latest wins)
+#   attack (release N+1): SWAP the two intact chunks to [… , asm-v2, asm-v1] and revert the
+#                         snapshot + manifest + header back to body1.
+#   result: every parsed row is present and equal by id; every byte chunk is present and equal by
+#           id; nothing "changed" — but asm-v1 is now LATEST, so the chain verifies body1 and a
+#           released refresh has been silently ROLLED BACK.
+# An append-only ledger is a SEQUENCE, not a set. So the anchor's row-ID sequence must be an
+# EXACT PREFIX of the current sequence, and (when both sides chunk) so must the byte-chunk
+# sequence. Only suffix appends are legal; reordering, insertion anywhere but the end, and removal
+# are all RECEIPT_LEDGER_MUTATED (exit 4). Note the prefix rule SUBSUMES deletion detection and
+# makes the by-id layers a redundancy rather than the only defense — deliberately kept, because
+# they produce the precise "field X of row Y was rewritten" diagnostic that a prefix mismatch
+# cannot.
+#
+# CHUNKABILITY IS NOW MANDATORY ON A LIVE ROOT (not an advisory downgrade)
+# -----------------------------------------------------------------------
+# ANCHOR_RECEIPTS_UNCHUNKABLE used to print an advisory and drop the byte layer. That is the same
+# two-release laundering shape closed in evidence_quote_spotcheck_guard (P1-A): the reviewer
+# INDENTED the whole `receipts:` list — semantically identical YAML, so every value-level check
+# still passed — and the byte layer silently retired itself. Two changes:
+#   · SELF-CHUNK (generation-N kill, exit 2 RECEIPTS_SELF_UNCHUNKABLE): the CURRENT ledger must
+#     chunk — on EVERY root that has one, live or fixture. The ledger is MACHINE-OWNED (written by
+#     practices/scripts/snapshot-extract.sh and appended to by refresh waves), so its shape is ours
+#     to keep verifiable; an indent-the-list reformat can therefore never ship and can never become
+#     an anchor. Deliberately NOT live-root-gated, unlike every anchor check: it inspects the tree
+#     in front of it rather than a release history, so it is the one half of this P1 that a FIXTURE
+#     can prove (fail_ledger_unchunkable is a byte-copy of pass_clean whose ledger is indented and
+#     nothing else — exit 0 → exit 2 is attributable to the indent alone). Every pre-existing
+#     fixture ledger already chunks, so universalizing it costs nothing and buys the proof.
+#   · ANCHOR side (exit 4 RECEIPT_LEDGER_MUTATED): an anchor that does not chunk is BLOCKING on a
+#     live root — belt-and-braces for any anchor committed before the self-chunk check existed.
+#     Fixture roots keep the advisory here, because they never anchor at all.
 
 
 def receipt_chunks(text):
@@ -643,6 +687,23 @@ def receipt_chunks(text):
         chunks[cur_id] = "".join(buf)
     return chunks or None
 
+
+# ── P1-B: SELF-CHUNK CHECK (generation-N kill for the indent-the-list laundering) ──────
+# Runs before anything consults the anchor, independently of whether an anchor resolved, and on
+# EVERY root (see the header): a shape that a future release could not verify must not ship, and
+# unlike the anchor checks this one inspects only the tree in front of it, so a fixture can prove
+# it. Every pre-existing fixture ledger already chunks.
+cur_chunks = receipt_chunks(receipts_raw) if receipts_raw else None
+if receipts_raw and cur_chunks is None:
+    die_structural(f"RECEIPTS_SELF_UNCHUNKABLE — {RECEIPTS_REL} does not chunk into column-0 "
+                   "`- id: <id>` list items. The byte-identity and prefix layers of the "
+                   "append-only ratchet are defined over those chunks, so a ledger in this shape "
+                   "retires them — and since this file becomes the NEXT release's anchor, shipping "
+                   "it is the first half of a two-release bypass (indent the list: semantically "
+                   "identical YAML, every value-level check still green, byte layer silently "
+                   "gone). The ledger is machine-owned (practices/scripts/snapshot-extract.sh "
+                   "writes it and refresh waves append to it), so keeping it chunkable is a "
+                   "formatting rule we own, not a constraint imposed from outside")
 
 if anchored:
     prior_raw = anchor_blob(RECEIPTS_REL)
@@ -691,13 +752,52 @@ if anchored:
                              "on manufactured provenance. The ledger is APPEND-ONLY: a repeat "
                              "refresh appends a new assembly row (the chain binds to the latest), "
                              "it never edits the old one")
+            # ── P1-B layer 3: PREFIX (ORDER) identity over the PARSED row-id sequence ──
+            # Layers 1-2 are keyed by id and therefore order-blind, while the chain's verdict
+            # binds to the LAST assembly row for an identity. Swapping two intact rows changes
+            # the verdict without changing any row, so the sequence itself is ratcheted: the
+            # anchor's row-id sequence must be an EXACT PREFIX of the current one.
+            prior_id_seq = [r.get("id") for r in prior_rows
+                            if isinstance(r, dict) and r.get("id") is not None]
+            cur_id_seq = [r.get("id") for r in cur_rows
+                          if isinstance(r, dict) and r.get("id") is not None]
+            head = cur_id_seq[:len(prior_id_seq)]
+            if head != prior_id_seq:
+                first = next((i for i in range(max(len(head), len(prior_id_seq)))
+                              if head[i:i + 1] != prior_id_seq[i:i + 1]), 0)
+                die_anchor("RECEIPT_LEDGER_MUTATED",
+                           f"the {anchor_kind} row order is not a PREFIX of the current "
+                           f"{RECEIPTS_REL}: at position {first} the released ledger has "
+                           f"{prior_id_seq[first:first + 1] or ['<end>']} and this tree has "
+                           f"{head[first:first + 1] or ['<end>']} "
+                           f"({len(prior_id_seq)} released row(s), {len(cur_id_seq)} now). An "
+                           "append-only ledger is a SEQUENCE, not a set: the chain binds to the "
+                           "LAST assembly row for an identity, so REORDERING two intact rows "
+                           "silently rolls a released refresh back to an earlier body while every "
+                           "by-id comparison still reports 'unchanged'. Only SUFFIX APPENDS are "
+                           "legal — insertion before the end, reordering and removal are not")
             prior_chunks = receipt_chunks(prior_text)
-            cur_chunks = receipt_chunks(receipts_raw)
             if prior_chunks is None or cur_chunks is None:
+                if live_root:
+                    # P1-B: on a live root an unchunkable ledger is BLOCKING, not an advisory
+                    # downgrade. The current-side case is already dead (RECEIPTS_SELF_UNCHUNKABLE
+                    # above); this is the belt-and-braces for an ANCHOR committed before that
+                    # check existed, i.e. exactly the state the reviewer's indent-the-list
+                    # laundering would have created one release earlier.
+                    die_anchor("RECEIPT_LEDGER_MUTATED",
+                               f"ANCHOR_RECEIPTS_UNCHUNKABLE — {RECEIPTS_REL} does not chunk into "
+                               "column-0 `- id: <id>` list items at "
+                               f"{anchor_kind if prior_chunks is None else 'the working tree'}, so "
+                               "the byte-identity and prefix-by-bytes layers cannot run. That is a "
+                               "SILENT RETIREMENT of the ratchet, which is why it is fatal here "
+                               "rather than advisory: an indent-the-list reformat is semantically "
+                               "identical YAML and passes every value-level check. Re-anchor onto "
+                               "a release whose ledger chunks, or restore the shape")
                 anchor_warn("ANCHOR_RECEIPTS_UNCHUNKABLE — the ledger's list items are not "
                             "column-0 `- id: <id>` entries on one or both sides, so the "
                             "byte-identity layer is inapplicable; parsed-row identity still "
-                            "applies (an edit that changes no parsed value is not detected)")
+                            "applies (an edit that changes no parsed value is not detected). "
+                            "Advisory on FIXTURE roots only — blocking on the live tree")
             else:
                 def trim(chunk):
                     return re.sub(r"\s+$", "", chunk)
@@ -710,6 +810,16 @@ if anchored:
                                + ", ".join(map(repr, sorted(byte_mutated)[:8]))
                                + (" …" if len(byte_mutated) > 8 else "")
                                + ". Only appends are legal")
+                # PREFIX identity over the BYTE-CHUNK sequence — the same order ratchet applied
+                # in the byte domain, so a reorder that somehow parsed into an identical row-id
+                # sequence still cannot pass.
+                prior_chunk_seq = list(prior_chunks.keys())
+                cur_chunk_seq = list(cur_chunks.keys())
+                if cur_chunk_seq[:len(prior_chunk_seq)] != prior_chunk_seq:
+                    die_anchor("RECEIPT_LEDGER_MUTATED",
+                               f"the {anchor_kind} BYTE-CHUNK order is not a PREFIX of the current "
+                               f"{RECEIPTS_REL} ({len(prior_chunk_seq)} released chunk(s), "
+                               f"{len(cur_chunk_seq)} now). Only suffix appends are legal")
 
 # ── (b)+(c) BODY and RECEIPT domains: assembly-row ids UNION anchor-changed ids ────────
 # `touched` (the assembly-row population) keeps its meaning for the LIVE_MIN_TOUCHED floor;

@@ -182,12 +182,56 @@
 #   · unavailable (no git, no commits) — the anchor checks print WARN and are SKIPPED. Stated
 #     plainly: in a tarball export the ratchet is inert. It is also unpushable there (the
 #     pre-push recency guard is a git hook), so the released-artifact path retains the gate.
-#   · The anchor copy predating these constants (first-release bootstrap) prints an advisory and
-#     skips that half — there is nothing to ratchet against yet. An attacker cannot manufacture
-#     this state: git history is immutable to the working tree.
 #   · Parsing is AST-based over the anchor's embedded python block, so reformatting the
 #     frozenset (line breaks, ordering, comments, set-literal vs frozenset() call) does not
 #     evade it; only removing a tuple does.
+#
+# TWO-RELEASE REPRESENTATION LAUNDERING — WHY THE PARSER IS NOW FAIL-CLOSED IN BOTH DIRECTIONS
+# -------------------------------------------------------------------------------------------
+# (P1-A, cross-family reviewer ROUND 2, 2026-07-30; TD-2026-07-30-P1-anchor-ratchet-r2.)
+#
+# The ratchet above reads the ANCHOR through a parser, and the parser only recognizes a literal
+# int assignment and literal 2-string tuples. Everything it fails to recognize used to WARN and
+# SKIP. That turned the parser itself into the bypass, spread over TWO RELEASES:
+#
+#   release N   — change REPRESENTATION ONLY, runtime values untouched (still 64/64, so the
+#                 in-tree census is EQUAL and every finding-level check passes):
+#                   · `LIVE_MIN_PROTECTED_ENTRIES = int("64")`   → not an ast.Constant int
+#                   · `LIVE_REQUIRED_PROTECTED_IDENTITIES = _PREVIOUS_PINS` (an alias)
+#                                                              → no tuple literals under it
+#                   · or merely reflow the here-document opener so the embedded python block is
+#                     no longer located at all → ast.parse sees shell text
+#                 Release N therefore SHIPS GREEN while becoming unparseable to its successor.
+#   release N+1 — do the real downgrade (64 → 63, delete the accordion row, drop the tuple).
+#                 The anchor is release N, whose constants no longer parse ⇒ (None, None) ⇒
+#                 WARN ANCHOR_UNPARSEABLE / ANCHOR_NO_FLOOR / ANCHOR_NO_PIN_SET ⇒ exit 0.
+#
+# Two layers close it, and the FIRST one is what actually kills the attack:
+#
+#   (1) SELF-PARSE CHECK (generation-N kill, exit 6 SELF_UNPARSEABLE). On every live-root run the
+#       guard feeds ITS OWN CURRENT FILE to the SAME parser the anchor comparison uses, and
+#       demands that the parse yield BOTH constants AND that the parsed values EQUAL the runtime
+#       ones. So a representation that a future release could not read can never ship in the
+#       first place: release N dies at its own gate. Value equality (not merely
+#       "something parsed") is deliberate — it also catches a decoy assignment, a shadowing
+#       re-assignment, and any tuple added to/removed from the literal that the runtime object
+#       does not carry.
+#
+#   (2) FAIL-CLOSED ANCHOR SEMANTICS (belt-and-braces for histories that PREDATE (1)). Three
+#       anchor states are now DISTINGUISHED instead of collapsed into one skip:
+#         (i)   anchor ref / git unavailable          → WARN + skip STAYS. Nothing to compare;
+#               such a tree is also unpushable (the pre-push recency guard is a git hook).
+#         (ii)  this file ABSENT in the anchor commit → WARN + skip STAYS (first-release
+#               bootstrap). Not attacker-creatable: git history is immutable to the working tree,
+#               so an edit under review cannot make its own file vanish from a released commit.
+#         (iii) this file PRESENT in the anchor but its constants NOT extractable as literals
+#               (block does not parse / no floor / no pin set) → BLOCKING, exit 7
+#               ANCHOR_UNPARSEABLE. This is the state release N above manufactures, and it is
+#               the one state of the three that a mutable tree CAN reach on purpose.
+#       Consequence, disclosed: the "first-release bootstrap" leniency that (iii) used to grant
+#       is gone. It was already spent — origin/main carries both constants — and keeping it
+#       would have meant keeping the laundering path open for the sake of a state that can no
+#       longer occur going forward.
 #
 # Usage:
 #   bash practices/evals/evidence_quote_spotcheck_guard.sh
@@ -423,6 +467,8 @@ if len(LIVE_REQUIRED_PROTECTED_IDENTITIES) != LIVE_MIN_PROTECTED_ENTRIES:
 # across releases" is never readable as any of those.
 FLOOR_REGRESSION_EXIT = 4     # MONOTONIC_FLOOR_REGRESSION
 IDENTITY_REMOVED_EXIT = 5     # PROTECTED_IDENTITY_REMOVED
+SELF_UNPARSEABLE_EXIT = 6     # SELF_UNPARSEABLE — generation-N representation laundering (P1-A)
+ANCHOR_UNPARSEABLE_EXIT = 7   # ANCHOR_UNPARSEABLE — anchor state (iii): present but unreadable
 GUARD_SELF_REL = "practices/evals/evidence_quote_spotcheck_guard.sh"
 
 
@@ -448,19 +494,34 @@ def _string_pair_tuples(node):
     return out
 
 
-def parse_anchor_pins(src_text):
-    """(floor, identities, error) as DECLARED BY THE ANCHOR COPY of this guard. A None element
-    means that constant is absent from the anchor (first-release bootstrap for that half)."""
-    marker = "<< 'PY'\n"
-    start = src_text.find(marker)
-    body = src_text[start + len(marker):] if start != -1 else src_text
+# The here-document opener is matched by PATTERN, not by one literal spelling, so the several
+# equivalent shell spellings of it are all located. This is deliberately RELAXING: it can only
+# make extraction succeed where it used to fail, and any spelling it still cannot locate is
+# caught fail-closed by the self-parse check (exit 6) rather than skipped.
+PY_HEREDOC_RE = re.compile(r"<<-?[ \t]*(['\"]?)PY\1[ \t]*\n")
+
+
+def _embedded_python(src_text):
+    """The embedded python block of a copy of this guard (or the whole text when the opener
+    cannot be located — which then fails ast.parse, which is the fail-closed outcome)."""
+    m = PY_HEREDOC_RE.search(src_text)
+    body = src_text[m.end():] if m else src_text
     end = body.rfind("\nPY\n")
     if end != -1:
         body = body[:end]
+    return body
+
+
+def parse_pins(src_text):
+    """(floor, identities, error) as DECLARED BY a copy of this guard — the ANCHOR copy for the
+    cross-release ratchet, and the CURRENT copy for the self-parse check (same parser on purpose:
+    a representation this cannot read must not be shippable). A None element means that constant
+    is not extractable as literals from that copy."""
+    body = _embedded_python(src_text)
     try:
         tree = ast.parse(body)
     except SyntaxError as exc:
-        return None, None, f"anchor python block does not parse ({exc})"
+        return None, None, f"python block does not parse ({exc})"
     floor = ids = None
     for node in ast.walk(tree):
         if not isinstance(node, ast.Assign):
@@ -476,7 +537,58 @@ def parse_anchor_pins(src_text):
     return floor, ids, None
 
 
+def self_parse_check():
+    """P1-A layer (1): the CURRENT file must be readable by the SAME parser the anchor comparison
+    uses, and the parse must reproduce the RUNTIME values. This is the generation-N kill for the
+    two-release representation laundering: a copy of this guard that a future release could not
+    read is refused HERE, before it can become anybody's anchor. Runs on every live-root run,
+    with or without a resolvable git anchor — a tree that cannot be ratcheted against is still a
+    tree that must not ship an unreadable representation."""
+    self_path = os.path.join(git_root, GUARD_SELF_REL)
+    try:
+        self_src = open(self_path, encoding="utf-8", errors="replace").read()
+    except OSError as exc:
+        print("evidence_quote_spotcheck_guard: SELF_UNPARSEABLE — cannot read this guard's own "
+              f"source at {GUARD_SELF_REL} ({exc}); the self-parse check is the generation-N kill "
+              "for representation laundering and may not be skipped on the live tree.",
+              file=sys.stderr)
+        sys.exit(SELF_UNPARSEABLE_EXIT)
+    s_floor, s_ids, s_err = parse_pins(self_src)
+    problems = []
+    if s_err:
+        problems.append(f"the embedded python block of the CURRENT file {s_err}")
+    if s_floor is None:
+        problems.append("LIVE_MIN_PROTECTED_ENTRIES is not extractable as a literal int "
+                        "assignment (e.g. it is a call, a name, or an expression)")
+    elif s_floor != LIVE_MIN_PROTECTED_ENTRIES:
+        problems.append(f"the parsed LIVE_MIN_PROTECTED_ENTRIES literal ({s_floor}) is not the "
+                        f"RUNTIME value ({LIVE_MIN_PROTECTED_ENTRIES}) — a decoy or shadowing "
+                        "assignment makes the parser and the program disagree")
+    if s_ids is None:
+        problems.append("LIVE_REQUIRED_PROTECTED_IDENTITIES yields no literal (path, upstream_id) "
+                        "tuples (e.g. it is aliased to another name or built at runtime)")
+    elif s_ids != set(LIVE_REQUIRED_PROTECTED_IDENTITIES):
+        only_parsed = sorted(s_ids - set(LIVE_REQUIRED_PROTECTED_IDENTITIES))
+        only_runtime = sorted(set(LIVE_REQUIRED_PROTECTED_IDENTITIES) - s_ids)
+        problems.append("the parsed LIVE_REQUIRED_PROTECTED_IDENTITIES tuples are not the RUNTIME "
+                        f"set ({len(only_parsed)} parsed-only, {len(only_runtime)} runtime-only; "
+                        f"first parsed-only {only_parsed[:1]}, first runtime-only {only_runtime[:1]})")
+    if problems:
+        print("evidence_quote_spotcheck_guard: SELF_UNPARSEABLE — this file cannot be read by its "
+              "OWN anchor parser, or reads differently than it runs:", file=sys.stderr)
+        for p in problems:
+            print(f"    · {p}", file=sys.stderr)
+        print("  A release that ships in this shape becomes the NEXT release's anchor, and the "
+              "cross-release ratchet would then find (None, None) and skip — which is the "
+              "two-release representation-laundering bypass (change representation only while the "
+              "runtime numbers stay 64/64, ship green, THEN downgrade). Keep both constants as "
+              "literals the parser recognizes: `LIVE_MIN_PROTECTED_ENTRIES = <int>` and a "
+              "frozenset/set of literal 2-string tuples.", file=sys.stderr)
+        sys.exit(SELF_UNPARSEABLE_EXIT)
+
+
 if live_root:
+    self_parse_check()
     if not anchor:
         print("evidence_quote_spotcheck_guard: WARN ANCHOR_UNAVAILABLE — no git anchor "
               "(origin/main or HEAD) could be resolved, so the cross-release ratchet checks "
@@ -495,19 +607,44 @@ if live_root:
                   f"does not exist at {anchor_kind}; nothing to ratchet against (first-release "
                   "bootstrap). Skipped.", file=sys.stderr)
         else:
-            prior_floor, prior_ids, perr = parse_anchor_pins(
+            prior_floor, prior_ids, perr = parse_pins(
                 prior_src.decode("utf-8", errors="replace"))
+            # ── ANCHOR STATE (iii): PRESENT BUT UNREADABLE ⇒ BLOCKING (P1-A layer 2) ──
+            # States (i) anchor/git unavailable and (ii) file absent at the anchor are handled
+            # ABOVE and keep their WARN+skip: (i) has nothing to compare and is unpushable, (ii)
+            # is git history the working tree cannot author. State (iii) is different in kind —
+            # it is the state a release can DELIBERATELY manufacture by shipping an unparseable
+            # representation of its own constants while leaving the runtime numbers untouched,
+            # so that its successor's ratchet degrades to a skip. Layer (1) (self_parse_check)
+            # prevents that shape from shipping at all; this is the belt-and-braces for anchors
+            # committed BEFORE layer (1) existed, and it is why "no floor"/"no pin set" are
+            # fatal here rather than treated as a bootstrap.
+            unreadable = []
             if perr:
-                print(f"evidence_quote_spotcheck_guard: WARN ANCHOR_UNPARSEABLE — {perr}; "
-                      "cross-release ratchet SKIPPED. (Git history is immutable to the working "
-                      "tree, so this state cannot be manufactured by an edit under review.)",
-                      file=sys.stderr)
+                unreadable.append(f"ANCHOR_UNPARSEABLE: {perr}")
             else:
                 if prior_floor is None:
-                    print("evidence_quote_spotcheck_guard: WARN ANCHOR_NO_FLOOR — the "
-                          f"{anchor_kind} copy declares no LIVE_MIN_PROTECTED_ENTRIES "
-                          "(first-release bootstrap); floor ratchet skipped.", file=sys.stderr)
-                elif LIVE_MIN_PROTECTED_ENTRIES < prior_floor:
+                    unreadable.append("ANCHOR_NO_FLOOR: the anchor copy declares no "
+                                      "LIVE_MIN_PROTECTED_ENTRIES extractable as a literal int")
+                if prior_ids is None:
+                    unreadable.append("ANCHOR_NO_PIN_SET: the anchor copy yields no literal "
+                                      "(path, upstream_id) tuples for "
+                                      "LIVE_REQUIRED_PROTECTED_IDENTITIES")
+            if unreadable:
+                print("evidence_quote_spotcheck_guard: ANCHOR_UNPARSEABLE — "
+                      f"{anchor_kind}:{GUARD_SELF_REL} EXISTS but its ratchet constants cannot be "
+                      "read:", file=sys.stderr)
+                for u in unreadable:
+                    print(f"    · {u}", file=sys.stderr)
+                print("  This is fail-closed on purpose. A skip here is the second half of the "
+                      "two-release representation-laundering bypass: release N changes only the "
+                      "REPRESENTATION of these constants (runtime values unchanged, so it ships "
+                      "green), and release N+1 then does the real downgrade against an anchor its "
+                      "own parser cannot read. Restore the anchor-side constants to literals, or "
+                      "re-anchor onto a release that carries them.", file=sys.stderr)
+                sys.exit(ANCHOR_UNPARSEABLE_EXIT)
+            else:
+                if LIVE_MIN_PROTECTED_ENTRIES < prior_floor:
                     print("evidence_quote_spotcheck_guard: MONOTONIC_FLOOR_REGRESSION — "
                           f"LIVE_MIN_PROTECTED_ENTRIES={LIVE_MIN_PROTECTED_ENTRIES} is BELOW the "
                           f"previous release's {prior_floor} (anchor {anchor_kind}:"
@@ -516,28 +653,24 @@ if live_root:
                           "reference is the released copy, which the commit under review cannot "
                           "edit.", file=sys.stderr)
                     sys.exit(FLOOR_REGRESSION_EXIT)
-                if prior_ids is None:
-                    print("evidence_quote_spotcheck_guard: WARN ANCHOR_NO_PIN_SET — the "
-                          f"{anchor_kind} copy declares no LIVE_REQUIRED_PROTECTED_IDENTITIES "
-                          "tuples (first-release bootstrap); identity ratchet skipped.",
-                          file=sys.stderr)
-                else:
-                    removed = sorted(prior_ids - set(LIVE_REQUIRED_PROTECTED_IDENTITIES))
-                    if removed:
-                        print("evidence_quote_spotcheck_guard: PROTECTED_IDENTITY_REMOVED — "
-                              f"{len(removed)} identity(ies) pinned by the previous release are "
-                              "absent from LIVE_REQUIRED_PROTECTED_IDENTITIES:", file=sys.stderr)
-                        for r, u in removed:
-                            print(f"    {r}::{u}", file=sys.stderr)
-                        print("  The pin set may only GROW. A removal (or a swap that keeps the "
-                              "count) drops an anchor out of the fatal set, which is the whole "
-                              "bypass this ratchet exists to make impossible.", file=sys.stderr)
-                        sys.exit(IDENTITY_REMOVED_EXIT)
-                if prior_floor is not None and prior_ids is not None:
-                    print("evidence_quote_spotcheck_guard: anchor ratchet OK — floor "
-                          f"{prior_floor} → {LIVE_MIN_PROTECTED_ENTRIES}, pin set "
-                          f"{len(prior_ids)} → {len(LIVE_REQUIRED_PROTECTED_IDENTITIES)} "
-                          f"(superset) vs {anchor_kind}")
+                # Both constants are non-None from here on: the unreadable branch above is fatal,
+                # so there is no longer a "skip that half" path for either of them (that skip WAS
+                # the second half of the two-release laundering bypass).
+                removed = sorted(prior_ids - set(LIVE_REQUIRED_PROTECTED_IDENTITIES))
+                if removed:
+                    print("evidence_quote_spotcheck_guard: PROTECTED_IDENTITY_REMOVED — "
+                          f"{len(removed)} identity(ies) pinned by the previous release are "
+                          "absent from LIVE_REQUIRED_PROTECTED_IDENTITIES:", file=sys.stderr)
+                    for r, u in removed:
+                        print(f"    {r}::{u}", file=sys.stderr)
+                    print("  The pin set may only GROW. A removal (or a swap that keeps the "
+                          "count) drops an anchor out of the fatal set, which is the whole "
+                          "bypass this ratchet exists to make impossible.", file=sys.stderr)
+                    sys.exit(IDENTITY_REMOVED_EXIT)
+                print("evidence_quote_spotcheck_guard: anchor ratchet OK — floor "
+                      f"{prior_floor} → {LIVE_MIN_PROTECTED_ENTRIES}, pin set "
+                      f"{len(prior_ids)} → {len(LIVE_REQUIRED_PROTECTED_IDENTITIES)} "
+                      f"(superset) vs {anchor_kind}; self-parse OK")
 
 # A protected quote must carry substance. `quote: 0` is closed by the isinstance check, but
 # `quote: "a"` is a genuine non-empty string that is still a substring of essentially every
