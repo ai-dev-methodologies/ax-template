@@ -1256,3 +1256,129 @@ the trigger event, do not relitigate.
   the runner runs can still fabricate a record. Without a key there is no ceremony that changes
   that, and a key committed beside the data authenticates nothing.
 - Commits: (this commit — PRD-final-4 wave, P1-seal round-5)
+
+### TD-2026-07-30-P1-preflight-and-raw-bytes — 게이트가 실행되기 전과, 게이트가 "바이트"라고 부르는 것 (round 6)
+
+- Context: cross-family reviewer, P1-seal round 6 (2026-07-30). Round 5's seals were verified dead
+  for the exact inputs they named. Four new P1s landed one level below them. Both are instances
+  of two invariants, stated once so the next round can be checked against them rather than against
+  a list of patches:
+  - **(α) NOTHING OVERRIDABLE MAY EXECUTE BEFORE THE SCRUB THAT DETECTS OVERRIDES.**
+  - **(β) ANY CLAIM ABOUT BYTES MUST BE MADE ON RAW BYTES, NEVER THROUGH A FILTERED/NORMALIZING
+    VIEW.**
+
+- **P1-1 — overridable commands ran BEFORE the scrub (α).** `.githooks/pre-push:36` executed
+  `set -uo pipefail` ahead of its own hermetic bootstrap, and every bootstrap used `[ … ]` before
+  the surviving-function sweep; neither `set` nor `[` was on the dependency list, and the
+  evidence guard parsed ALL of its arguments before its bootstrap. MEASURED, honest baselines in
+  parentheses: `BASH_FUNC_set%%='() { exit 0; }'` → pre-push **exit 0** (baseline 1);
+  `BASH_FUNC_[%%='() { exit 0; }'` → the recency guard on an invalid root **exit 0** (baseline 2).
+  A dependency LIST cannot close this: the list is consulted by code that has already run.
+  FIX — every entry now opens with a **pure-keyword preflight** whose only tools are (i) shell
+  keywords (`if`/`case`/`for`/`[[ ]]`), (ii) variable assignment, (iii) ONE command invoked by
+  ABSOLUTE PATH (`/usr/bin/env` — bash never resolves a word containing a slash through the
+  function table), and (iv) abort via `${x:?msg}`, which is a parameter expansion, not a command:
+  a non-interactive shell prints to stderr and exits non-zero. `exit`, `echo`, `printf`, `[` and
+  `set` are all shadowable and are therefore unusable at that point. `${!BASH_FUNC_@}` is NOT the
+  sensor: bash imports the function and DELETES the shell variable, so the prefix expansion is
+  empty in the child while the environ still carries the entry (measured, bash 3.2.57 / Apple);
+  `/usr/bin/env` is the only unhijackable way to see the channel. The dependency list was
+  additionally extended to every name any entry invokes (`set`, `[`, `test`, `printf`, `exit`,
+  `exec`, `read`, `trap`, `shift`, `local`, `eval`, …), and the evidence guard's argument parsing
+  was moved BELOW its bootstrap. New codes: **HERMETIC_PREFLIGHT_HOSTILE**,
+  **HERMETIC_PREFLIGHT_UNVERIFIABLE** (an `/usr/bin/env` that produces nothing is unknown, and
+  unknown never passes).
+
+- **P1-2 — an absolute path authenticates neither the binary nor python's startup.** The round-5
+  validator accepted anything lexically absolute that passed symlink-FOLLOWING `-f`/`-x`.
+  MEASURED: a symlink named `python3` → `/usr/bin/true` passed every test and turned the recency
+  guard's entire python body into **exit 0** (honest baseline 1); a `sitecustomize.py` calling
+  `os._exit(0)`, reached through an inherited `PYTHONPATH`, did the same. FIX — (a) the tool's
+  DIRECTORY is canonicalised with `builtin pwd -P` and the program is then made to IDENTIFY ITSELF
+  by being RUN (`git --version` must produce a git banner; python3 must print a self-report under
+  `-I -S`), new code **HERMETIC_TOOL_UNAUTHENTIC**; (b) the whole `PYTHON*` family is scrubbed in
+  the bootstrap and every ratchet-internal python call site runs `-I -S` (isolated, no `site`,
+  which is what a `sitecustomize.py` rides in on); (c) the PyYAML concern is real and is answered
+  rather than hidden — see the honest limit below.
+  HONEST LIMIT, stated because the alternative is theatre: **`-I -S` is NOT applied to the two
+  call sites that need PyYAML** (verify-completion's checklist parser and the manifest guard's
+  body). On this maintainer machine PyYAML lives in the USER site directory, so `python3 -I -c
+  'import yaml'` already fails; running the checklist parser isolated would block every honest run.
+  Those two sites use `-E`, which still refuses `PYTHONPATH`/`PYTHONHOME`/`PYTHONSTARTUP` — the
+  reviewer's actual injection vector — and they are preceded by an `import yaml` capability probe
+  **run with the same interpreter and the same flags**, which BLOCKS
+  (**HERMETIC_PY_YAML_UNAVAILABLE**) and never degrades to a skip. The residual is a
+  `sitecustomize.py` already installed inside site-packages, which is the same trust domain as
+  PyYAML itself.
+
+- **P1-3 — six-file authentication was circular and incomplete.** The runner and both ratcheting
+  guards authenticated the toolchain against **HEAD** — which is the thing being shipped, so a
+  COMMITTED backdoor equals HEAD and certifies itself. MEASURED: inserting
+  `if [ -n "$EXPECT_SHA" ]; then exit 0; fi` after the recency guard's argument parsing and
+  COMMITTING it made `.githooks/pre-push` **exit 0** on a tree with no audit log at all (honest
+  baseline 1) — invisible to run-all-guards (which drives that guard with `--fixtures`), to the
+  falsification proofs (which omit `--expect-sha`), and to the guard's own self-check (which the
+  early exit precedes). The six-path list also EXCLUDED both ratcheting guards and
+  `run-all-guards.sh`. FIX — (a) the path list is **nine**; (b) the PUSH-TIME consumer extracts the
+  **REMOTE-ADVERTISED previous release's** copy of the recency guard (plus the runner, the anchor
+  library and the fingerprint helper) into a directory outside the tree and **RUNS it** against the
+  live root, BEFORE the tree's own copy is invoked at all — an argument-triggered early exit cannot
+  short-circuit a check that happens in the hook, not in the guard. Byte-equality with the anchor
+  is deliberately NOT required; that would make every legitimate change to these files unpushable
+  forever. New code **RATCHET_PRIOR_RELEASE_GUARD_FAILED** (+ **RATCHET_ANCHOR_COPY_UNVERIFIABLE**
+  when no prior release can be resolved — fail-closed).
+  MIGRATION REALITY, disclosed: a legitimate change to the toolchain ships in a release whose gate
+  ran with the PRIOR copy. Tightenings are free. A change to what the prior copy MEASURES (the
+  audit line's field set, the fingerprint algorithm's output) cannot pass this gate and is a
+  deliberate human decision, exactly as the round-5 fingerprint binding already recorded.
+  RESIDUAL, unprovable here and said plainly: **this hook cannot authenticate ITSELF.** A committed
+  backdoor in `.githooks/pre-push` or `pre-push-lib.sh` is executed by git from the working tree,
+  and the only thing that could catch it is the thing being subverted. Off-box review of the diff
+  is what remains.
+
+- **P1-4 — byte claims honoured git's clean filters (β).** `ax_ratchet_toolchain_authentic` used
+  `git diff --quiet <rev> -- <path>` *specifically* so that "git's own filters/eol handling are
+  applied on both sides" — which is the defect. MEASURED (the reviewer's axmask reproduction,
+  re-run and recorded): with `filter.axmask.clean = cat <the committed copy>` and
+  `$GIT_DIR/info/attributes: practices/scripts/lib/tree_fingerprint.py filter=axmask`, a working
+  file carrying appended attacker bytes gave `git diff --quiet HEAD -- <path>` **rc 0**,
+  `git hash-object -- <path>` = the HEAD blob `79e18672…`, and `git hash-object --no-filters`
+  = the truth `3627bc8c…`; `git diff HEAD --binary` was **0 bytes**. FIX — (a) the comparison is
+  `git rev-parse <rev>:<rel>` vs `git hash-object --no-filters`, two raw ids, no filtered view;
+  (b) a live root that DECLARES any `filter.*.clean|smudge`, carries a non-empty
+  `$GIT_DIR/info/attributes`, or attaches a filter attribute to a ratchet-critical path is refused
+  outright — new code **GIT_FILTERS_PRESENT** (`ax_ratchet_filters_absent`, plus the same three
+  probes inside the recency guard and inside `tree_fingerprint.py`, which now exits **5**);
+  (c) the dirty accumulator's sensor no longer uses `git diff HEAD --binary` — the content of every
+  modified path is read with `open()`, which no git configuration can interpose on.
+  **The clean-tree constant is preserved BY CONSTRUCTION** (`0a815065ebf5…`, verified before and
+  after): on a clean tree nothing is appended after the `\0diff\0` separator. That is load-bearing —
+  the recency guard recomputes with the PREVIOUS RELEASE's copy of the helper, and a changed
+  clean-tree constant would brick every honest push.
+
+- Registered P2s (reviewer), closed in the same code: the previous-release extraction honoured
+  `TMPDIR` (now pinned to `/tmp`, refused if the result is a symlink or sits inside a work tree)
+  and mutated the blob with `.strip()` + an added newline (now read as BYTES, written verbatim, and
+  required to hash back to the blob id it came from); several post-bootstrap sites still spelled
+  the tool as the bare word `git`/`python3` despite the round-5 absolute-call-site claim (closed —
+  it is part of P1-2's fix). STILL OPEN, registered not closed: **no parity guard prevents the
+  eight duplicated bootstraps from drifting.** They are duplicated on purpose (the scrub cannot
+  live in a file it must precede the sourcing of), which is exactly why drift is the risk.
+
+- Evidence: `practices/scripts/ax-prove-hermetic-runtime.sh` (registered in run-all-guards) was
+  extended from six cases to thirteen. New: **(G)** exported `set` and exported `[` injected
+  through the environment → HERMETIC_PREFLIGHT_HOSTILE, with **(G′)** the same attack in a sandbox
+  whose preflight is removed → exit 0, reproduces; **(H)** python3 → `/usr/bin/true` →
+  HERMETIC_TOOL_UNAUTHENTIC, **(H′)** reproduces with the self-report removed; **(I)** a
+  `PYTHONPATH` sitecustomize `os._exit(0)` → the gate still reaches its honest non-zero verdict;
+  **(J)** the clean-filter byte mask → GIT_FILTERS_PRESENT / RATCHET_TOOLCHAIN_MODIFIED, **(J′)**
+  reproduces (rc 0) with the raw comparison reverted to `git diff --quiet`; **(K)** the COMMITTED
+  push-only bypass through the LIVE hook → RATCHET_PRIOR_RELEASE_GUARD_FAILED, **(K′)** reproduces
+  (exit 0) with the prior-release re-run removed; **(L)** a POSITIVE control — an honest push
+  through the FULL hook exits 0 and reports that the previous release's guard also passes, without
+  which "(K) blocks" would be compatible with "it always blocks". Every neuter anchor is asserted
+  to occur exactly once, so the harness goes stale LOUDLY rather than silently proving nothing.
+  NOT fixture-covered, and why: these four attack surfaces are the ENVIRONMENT and the git CONFIG,
+  neither of which a `fixtures/<guard>/fail_*` DIRECTORY can express — the proof harness is the
+  registered mechanism, and it runs inside `run-all-guards.sh`.
+- Commits: (this commit — PRD-final-4 wave, P1-seal round-6)

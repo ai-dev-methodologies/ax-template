@@ -113,6 +113,38 @@
 #   bash practices/evals/completion_checklist_recency_guard.sh --fixtures
 #   bash practices/evals/completion_checklist_recency_guard.sh --root DIR
 
+# ── ROUND 6 / P1-1: PURE-KEYWORD PREFLIGHT — THESE ARE THE FIRST EXECUTABLE LINES ────
+# (TD-2026-07-30-P1-preflight-and-raw-bytes.) INVARIANT (α): NOTHING OVERRIDABLE MAY EXECUTE
+# BEFORE THE SCRUB THAT DETECTS OVERRIDES. Round 5 put `set -uo pipefail` and `[ -n … ]` ahead of
+# its own hermetic bootstrap, and both are ordinary command lookups: MEASURED —
+#   BASH_FUNC_set%%='() { exit 0; }'  → .githooks/pre-push exit 0   (honest baseline 1)
+#   BASH_FUNC_[%%='() { exit 0; }'    → this guard      exit 0      (honest baseline 2)
+# A dependency LIST cannot fix that, because the list is consulted by code that has already run.
+# So the first thing every entry does is expressed ONLY in constructs an exported function cannot
+# reach:
+#   · shell KEYWORDS (`if`, `case`, `for`, `[[ ]]`) — never resolved through the function table;
+#   · variable ASSIGNMENT — not a command at all;
+#   · ONE command invoked by ABSOLUTE PATH (`/usr/bin/env`): bash never looks a word containing a
+#     slash up as a function, so this call cannot be hijacked;
+#   · abort via `${x:?msg}` — a PARAMETER EXPANSION, not a command. A non-interactive shell writes
+#     msg to stderr and exits non-zero. `exit`, `echo`, `printf`, `[`, `test` and `set` are all
+#     shadowable and are therefore unusable at this point.
+# WHY /usr/bin/env AND NOT `${!BASH_FUNC_@}`: bash imports BASH_FUNC_* out of the environment and
+# then DELETES the shell variable, so the prefix expansion is EMPTY in the child while the environ
+# still carries the entry (measured, bash 3.2.57 / Apple). The environ is the only place the
+# channel is visible, and /usr/bin/env is the only unhijackable way to read it.
+_AX_PF_LABEL="completion_checklist_recency_guard"
+_AX_PF_ENV="$(/usr/bin/env)"
+case "$_AX_PF_ENV" in
+    "") _AX_PF_NULL=; _AX_PF_DIE=${_AX_PF_NULL:?"$_AX_PF_LABEL: HERMETIC_PREFLIGHT_UNVERIFIABLE — /usr/bin/env produced no output, so this gate cannot tell whether the environment carries exported shell functions. It is the one read that cannot be hijacked; without it, unknown never passes."} ;;
+esac
+case "$_AX_PF_ENV" in
+    *BASH_FUNC_*) _AX_PF_NULL=; _AX_PF_DIE=${_AX_PF_NULL:?"$_AX_PF_LABEL: HERMETIC_PREFLIGHT_HOSTILE — the environment carries an exported shell function (BASH_FUNC_*). bash imports it BEFORE this script's first line, so it replaces a command this gate runs: measured, an exported set/[ turned this gate's honest exit into exit 0. Unset it (unset -f <name>) and re-run."} ;;
+esac
+case "${BASH_ENV:-}${ENV:-}" in
+    ?*) _AX_PF_NULL=; _AX_PF_DIE=${_AX_PF_NULL:?"$_AX_PF_LABEL: HERMETIC_PREFLIGHT_HOSTILE — BASH_ENV/ENV is set, so every non-interactive bash this gate starts would source that file before running the gate's own code. Unset it and re-run."} ;;
+esac
+unset _AX_PF_ENV _AX_PF_NULL _AX_PF_DIE _AX_PF_LABEL
 set -uo pipefail
 
 # ── ROUND 5 / P1-1+P1-2: HERMETIC RUNTIME BOOTSTRAP (A) — DELIBERATELY DUPLICATED ────
@@ -125,11 +157,24 @@ set -uo pipefail
 # and BEFORE this script computes its own directory with `cd`/`pwd` — which is exactly why these
 # lines cannot live in a sourced file. The duplication IS the bootstrap.
 _AX_HRM_LABEL="completion_checklist_recency_guard"; _AX_HRM_EXIT=2; _AX_HRM_NEED_PY=1
+# ROUND 6 / P1-1(b): the list is now EVERY name any entry invokes anywhere, enumerated by
+# grepping this catalog's own gate files — including the shell keyword-lookalikes that round 5
+# omitted and that the reviewer weaponised (`set`, `[`, `test`, `printf`, `exit`, `exec`, `read`,
+# `trap`, `shift`, `local`, `eval`). The pure-keyword preflight above already refuses ANY exported
+# function, so this list is belt-and-braces — but a shortfall here used to BE the hole, and a list
+# that is merely "what we remembered" is what round 5 shipped.
 _AX_HRM_DEPS="git bash sh python python3 env cd pwd command builtin printf echo eval exec read \
-test declare unset export local source grep egrep sed awk cut tr sort uniq head tail wc find ls \
-cat cp mv rm mkdir mktemp dirname basename date shasum sha256sum xargs tee true false"
+test declare unset export local source grep egrep fgrep sed awk cut tr sort uniq head tail wc \
+find ls cat cp mv rm mkdir rmdir mktemp dirname basename date shasum sha256sum md5sum xargs tee \
+true false set exit return trap shift getopts times umask ulimit wait kill jobs let shopt \
+enable alias unalias type hash caller readonly typeset mapfile readarray realpath readlink stat \
+chmod touch diff cmp od base64 seq expr sleep tar gzip curl jq yq printenv id whoami uname \
+install"
+# Glob-metacharacter names (`[`, `[[`) cannot ride the unquoted split above — they would be
+# read as bracket expressions by pathname expansion — so they are appended QUOTED at each use.
+_AX_HRM_DEPS_Q="[ [["
 _AX_HRM_BAD=""
-for _ax_hn in $_AX_HRM_DEPS; do
+for _ax_hn in $_AX_HRM_DEPS "[" "[["; do
     declare -F "$_ax_hn" >/dev/null 2>&1 && _AX_HRM_BAD="$_ax_hn"
 done
 if [ -n "$_AX_HRM_BAD" ]; then
@@ -141,7 +186,7 @@ if [ -n "$_AX_HRM_BAD" ]; then
       echo "  pin's root to a foreign repository. Unset it (\`unset -f $_AX_HRM_BAD\`) and re-run."; } >&2
     exit $_AX_HRM_EXIT
 fi
-for _ax_hn in $_AX_HRM_DEPS; do unset -f "$_ax_hn" 2>/dev/null || true; done
+for _ax_hn in $_AX_HRM_DEPS "[" "[["; do unset -f "$_ax_hn" 2>/dev/null || true; done
 # Any exported shell function that SURVIVED the scrub above is refused too — the enumeration is a
 # list of what we know we call, and an unknown runtime is not a safe one. Names in this catalog's
 # own namespaces are reported as HELPER_FUNCTION_INJECTED instead, because that is what they are
@@ -196,6 +241,23 @@ done
 IFS="$_ax_hifs"; unset _ax_hifs _ax_hd
 AX_GIT_BIN="$(PATH="$_AX_HRM_PATH" command -v git 2>/dev/null || true)"
 AX_PY_BIN="$(PATH="$_AX_HRM_PATH" command -v python3 2>/dev/null || true)"
+# ── ROUND 6 / P1-2: A PATH IS NOT AN IDENTITY ───────────────────────────────────────
+# INVARIANT: a tool this gate runs must SAY WHAT IT IS. `-f`/`-x` FOLLOW SYMLINKS and assert
+# nothing about the program: MEASURED — a symlink named python3 pointing at /usr/bin/true passed
+# every lexical/`-x` test and turned the recency guard's entire python body into exit 0 (honest
+# baseline 1). So each tool is (a) canonicalised through its real directory, (b) refused if it
+# lives inside the tree under audit, and (c) made to IDENTIFY ITSELF by being RUN — `git --version`
+# must produce a git version banner, python3 must print a python self-report under `-I -S`. A
+# /usr/bin/true symlink prints nothing and is refused.
+# The PYTHON* family is scrubbed for the same reason the GIT_* family is: PYTHONPATH /
+# PYTHONHOME / PYTHONEXECUTABLE / PYTHONSTARTUP redirect what the interpreter IS before a single
+# line of ours runs — measured, a PYTHONPATH sitecustomize.py doing `os._exit(0)` skipped the whole
+# python guard (honest baseline 1). Scrubbing is belt; `-I -S` at every ratchet call site is braces.
+for _ax_hn in ${!PYTHON@}; do unset "$_ax_hn" 2>/dev/null || true; done
+unset PYTHONPATH PYTHONHOME PYTHONSTARTUP PYTHONEXECUTABLE PYTHONUSERBASE PYTHONWARNINGS \
+    PYTHONIOENCODING PYTHONMALLOC PYTHONBREAKPOINT PYTHONDEVMODE PYTHONPYCACHEPREFIX \
+    PYTHONOPTIMIZE PYTHONVERBOSE PYTHONINSPECT PYTHONCASEOK PYTHONNOUSERSITE 2>/dev/null || true
+export PYTHONDONTWRITEBYTECODE=1
 for _ax_hn in "git=$AX_GIT_BIN" "python3=$AX_PY_BIN"; do
     if [ "${_ax_hn%%=*}" = "python3" ] && [ "$_AX_HRM_NEED_PY" != "1" ]; then continue; fi
     _ax_hb="${_ax_hn#*=}"
@@ -206,9 +268,50 @@ for _ax_hn in "git=$AX_GIT_BIN" "python3=$AX_PY_BIN"; do
           echo "  guess, and it will not fall back to whatever the inherited PATH offers."; } >&2
         exit $_AX_HRM_EXIT
     fi
+    # (a) canonicalise: the DIRECTORY is resolved with `builtin pwd -P`, so a symlinked directory
+    #     on the way to the tool cannot disguise where it lives.
+    _ax_hdir="$(builtin cd "$(dirname "$_ax_hb")" 2>/dev/null && builtin pwd -P)" || _ax_hdir=""
+    if [ -z "$_ax_hdir" ]; then
+        { echo "$_AX_HRM_LABEL: HERMETIC_TOOL_UNUSABLE — the directory of ${_ax_hn%%=*} ('$_ax_hb')"
+          echo "  could not be canonicalised, so this gate cannot say where the program it is about"
+          echo "  to run actually lives."; } >&2
+        exit $_AX_HRM_EXIT
+    fi
+    _ax_hb="$_ax_hdir/$(basename "$_ax_hb")"
+    # (c) identity by SELF-REPORT — the only statement about a program that a path cannot forge.
+    if [ "${_ax_hn%%=*}" = "git" ]; then
+        _ax_hver="$("$_ax_hb" --version 2>/dev/null)" || _ax_hver=""
+        case "$_ax_hver" in
+            "git version "[0-9]*) AX_GIT_BIN="$_ax_hb" ;;
+            *)  { echo "$_AX_HRM_LABEL: HERMETIC_TOOL_UNAUTHENTIC — '$_ax_hb' is executable but does"
+                  echo "  not identify itself as git (\`git --version\` said '${_ax_hver:-<nothing>}')."
+                  echo "  Lexical absoluteness and -f/-x FOLLOW SYMLINKS and say nothing about the"
+                  echo "  program: a symlink named python3 → /usr/bin/true satisfied all of them and"
+                  echo "  turned an entire guard into exit 0. A tool this gate runs must say what it is."; } >&2
+                exit $_AX_HRM_EXIT ;;
+        esac
+    else
+        _ax_hver="$("$_ax_hb" -I -S -c 'import sys;sys.stdout.write("AXPY %d %d %s %s" % (sys.version_info[0], sys.version_info[1], sys.implementation.name, sys.executable or "-"))' 2>/dev/null)" || _ax_hver=""
+        case "$_ax_hver" in
+            "AXPY 3 "*) AX_PY_BIN="$_ax_hb" ;;
+            *)  { echo "$_AX_HRM_LABEL: HERMETIC_TOOL_UNAUTHENTIC — '$_ax_hb' is executable but does"
+                  echo "  not identify itself as a python3 interpreter under \`-I -S\` (it said"
+                  echo "  '${_ax_hver:-<nothing>}'). MEASURED: a symlink named python3 → /usr/bin/true"
+                  echo "  passed every path test and silently skipped this gate's whole python body"
+                  echo "  (exit 0 where the honest answer was 1). Identity is what the program says."; } >&2
+                exit $_AX_HRM_EXIT ;;
+        esac
+    fi
 done
 export AX_GIT_BIN AX_PY_BIN
-unset _ax_hn _ax_hb _AX_HRM_BAD _AX_HRM_PATH
+# Ratchet-internal python ALWAYS runs isolated: -I ignores PYTHON* env + user site + cwd on
+# sys.path, -S skips site entirely, which is what kills a sitecustomize.py payload. Exported so
+# every call site in this catalog spells it the same way. NOT usable for the checklist parser,
+# which needs PyYAML out of site-packages — that one call site uses -E and is preceded by an
+# explicit `import yaml` capability probe that BLOCKS (never skips). See DECISIONS.md
+# TD-2026-07-30-P1-preflight-and-raw-bytes.
+export AX_PY_ISO="-I -S"
+unset _ax_hn _ax_hb _ax_hdir _ax_hver _AX_HRM_BAD _AX_HRM_PATH
 
 SCRIPT_DIR="$(builtin cd "$(dirname "${BASH_SOURCE[0]}")" && builtin pwd)"
 REPO_ROOT="$(builtin cd "$SCRIPT_DIR/../.." && builtin pwd)"
@@ -326,7 +429,12 @@ fi
 # block receives the VALIDATED ABSOLUTE git binary rather than the word `git`.
 export GIT_NO_REPLACE_OBJECTS=1
 
-"$AX_PY_BIN" - "$SCAN_ROOT" "$EXPECT_SHA" "$EXPECT_ANCHOR_SHA" "$REPO_ROOT" "$AX_GIT_BIN" <<'PYEOF'
+# ROUND 6 / P1-2: -I -S — ISOLATED, NO site. -I ignores PYTHON* env vars, the user site
+# directory and the script directory on sys.path; -S skips site.py entirely, which is what a
+# `sitecustomize.py` payload rides in on. MEASURED: PYTHONPATH pointing at a sitecustomize.py
+# that calls os._exit(0) turned this guard from exit 1 into exit 0. This body imports stdlib
+# only (json/os/re/subprocess/pathlib/datetime), so isolation costs it nothing.
+"$AX_PY_BIN" -I -S - "$SCAN_ROOT" "$EXPECT_SHA" "$EXPECT_ANCHOR_SHA" "$REPO_ROOT" "$AX_GIT_BIN" <<'PYEOF'
 import sys
 import pathlib
 import json
@@ -805,28 +913,86 @@ if guard_repo is not None:
 #     never imported. `import tree_fingerprint` writes practices/scripts/lib/__pycache__/*.pyc
 #     into the very tree being fingerprinted, so the recompute would report a mismatch it caused
 #     itself — observed the first time this check ran. Running a file as a script leaves no cache.
+# ROUND 6 / P1-3(b): NINE, not six. The two RATCHETING GUARDS and the guard RUNNER were absent
+# from this list while being three of the programs that decide whether a release ships. Kept in
+# lockstep with ax_ratchet_toolchain_paths() in practices/scripts/lib/release_anchor.sh.
 TOOLCHAIN_RELS = (
     "practices/scripts/lib/release_anchor.sh",
     "practices/scripts/lib/tree_fingerprint.py",
     "practices/scripts/verify-completion.sh",
     "practices/evals/completion_checklist_recency_guard.sh",
+    "practices/evals/evidence_quote_spotcheck_guard.sh",
+    "practices/evals/manifest_snapshot_integrity_guard.sh",
+    "practices/evals/run-all-guards.sh",
     ".githooks/pre-push",
     ".githooks/pre-push-lib.sh",
 )
 
 if live_git_root and not expected_head_file.is_file() and guard_repo is not None:
-    # 12b. THE RATCHET'S OWN CODE MUST BE THE COMMITTED CODE (at the sha being pushed).
+    # 12b0. NO CONTENT FILTERS (ROUND 6 / P1-4, invariant β: a byte claim must be made on RAW
+    #       BYTES). `filter.<n>.clean` sits between the file on disk and every content answer git
+    #       gives — measured, a clean filter that echoes the committed copy made a TAMPERED
+    #       tree_fingerprint.py compare byte-identical to its blob (`git diff --quiet` rc 0). The
+    #       comparison below is fixed to use raw hashes; this refusal exists because "we passed
+    #       --no-filters everywhere" is a claim about every present and future call site.
+    rc_f, filt = git_out("config", "--get-regexp", r"^filter\..*\.(clean|smudge)$",
+                         root=root, check=False)
+    if rc_f == 0 and filt:
+        emit_fail(
+            "GIT_FILTERS_PRESENT",
+            f'this repository declares git content filters:\n    '
+            + "\n    ".join(filt.splitlines()[:5])
+            + '\n  A clean filter makes git report the FILTER\'S OUTPUT for a working file, not the '
+              'file. A released catalog has no reason to carry one; remove it and re-run.'
+        )
+    rc_g, gitdir = git_out("rev-parse", "--absolute-git-dir", root=root, check=False)
+    if rc_g == 0 and gitdir:
+        attrs = pathlib.Path(gitdir) / "info" / "attributes"
+        try:
+            attr_txt = attrs.read_text() if attrs.is_file() else ""
+        except OSError:
+            attr_txt = "<unreadable>"
+        if attr_txt.strip():
+            emit_fail(
+                "GIT_FILTERS_PRESENT",
+                f'{attrs} is non-empty. That file is neither tracked nor reviewed, and it is where '
+                f'a filter is attached to a path without touching a single committed byte.'
+            )
     for rel in TOOLCHAIN_RELS:
-        rc_d, _ = git_out("diff", "--quiet", expected_head, "--", rel, root=root, check=False)
-        if rc_d != 0:
+        rc_a, attr_out = git_out("check-attr", "filter", "--", rel, root=root, check=False)
+        if rc_a == 0 and attr_out and not attr_out.endswith(": filter: unspecified"):
+            emit_fail(
+                "GIT_FILTERS_PRESENT",
+                f'a filter attribute is attached to a ratchet-critical path: {attr_out}. Every byte '
+                f'claim about that path would be a claim about the filter\'s output.'
+            )
+
+    # 12b. THE RATCHET'S OWN CODE MUST BE THE COMMITTED CODE (at the sha being pushed) — ON RAW
+    #      BYTES. This used to be `git diff --quiet`, which honours clean filters and therefore
+    #      answered "identical" for a file whose on-disk bytes were not. `hash-object --no-filters`
+    #      hashes the file as it is; the blob id at <rev> is what git recorded. Two raw ids.
+    for rel in TOOLCHAIN_RELS:
+        rc_w, want = git_out("rev-parse", "--verify", "--quiet", f"{expected_head}:{rel}",
+                             root=root, check=False)
+        rc_h, have = git_out("hash-object", "--no-filters", "-t", "blob", "--", rel,
+                             root=root, check=False)
+        if rc_w != 0 or not want or rc_h != 0 or not have:
+            emit_fail(
+                "RATCHET_TOOLCHAIN_UNVERIFIABLE",
+                f'{rel} could not be compared on raw bytes against {expected_head[:12]} '
+                f'(blob at rev: {want or "<absent>"}; on disk: {have or "<unreadable>"}). These '
+                f'nine files ARE the gate; unknown never passes.'
+            )
+        if want != have:
             emit_fail(
                 "RATCHET_TOOLCHAIN_MODIFIED",
                 f'{rel} in this working tree is not what git records at {expected_head[:12]} '
-                f'(git diff exited {rc_d}). These six files ARE the gate: the anchor policy, the '
-                f'fingerprint, the runner, this guard and the hook. Every other check on them asks '
-                f'whether they are regular files; a regular-file tree_fingerprint.py rewritten to '
-                f'print a constant passed all of those and then served as BOTH the writer and the '
-                f'verifier of the evidence. Commit or restore the file and re-run.'
+                f'(raw {have[:12]} vs {want[:12]}). These nine files ARE the gate: the anchor '
+                f'policy, the fingerprint, the runner, both ratcheting guards, the guard runner, '
+                f'this guard and the hook. Every other check on them asks whether they are regular '
+                f'files; a regular-file tree_fingerprint.py rewritten to print a constant passed '
+                f'all of those and then served as BOTH the writer and the verifier of the evidence. '
+                f'Commit or restore the file and re-run.'
             )
 
     # 12a. THE TREE MUST BE CLEAN NOW, read from git rather than from the record. Check 7 reads
@@ -867,14 +1033,36 @@ if live_git_root and not expected_head_file.is_file() and guard_repo is not None
                 break
     impl_path, impl_kind, tmpdir = None, None, None
     if anchor_rev:
-        rc_b, blob = git_out("cat-file", "-p", f"{anchor_rev}:{fp_rel}", root=root, check=False)
-        if rc_b == 0 and blob:
+        # ROUND 6 / P2 (registered by the reviewer, closed here): the extraction used to run the
+        # blob through `git cat-file -p` CAPTURED AS TEXT, `.strip()` it and append a newline — so
+        # the "previous release's implementation" was not the previous release's bytes. It is now
+        # read as BYTES and written verbatim, and the written file is required to hash back to the
+        # blob id it came from. The temp directory is created under a base that does NOT honour
+        # TMPDIR (attacker-settable, and a TMPDIR inside a work tree gives the extracted helper a
+        # git context), with mkdtemp's 0700 semantics.
+        rc_w2, want_blob = git_out("rev-parse", "--verify", "--quiet",
+                                   f"{anchor_rev}:{fp_rel}", root=root, check=False)
+        if rc_w2 == 0 and want_blob:
             import tempfile
-            tmpdir = tempfile.mkdtemp(prefix="ax-fpimpl-")
-            impl_path = os.path.join(tmpdir, "tree_fingerprint.py")
-            with open(impl_path, "w") as fh:
-                fh.write(blob + "\n")
-            impl_kind = f"release {anchor_rev[:12]}"
+            import hashlib as _hl
+            proc_b = subprocess.run([GIT_BIN, "--no-replace-objects", "-C", str(root),
+                                     "cat-file", "blob", want_blob],
+                                    stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, env=GIT_ENV)
+            if proc_b.returncode == 0:
+                raw = proc_b.stdout
+                got = _hl.sha1(b"blob %d\0" % len(raw) + raw).hexdigest()
+                if got != want_blob:
+                    emit_fail(
+                        "AUDIT_FINGERPRINT_UNVERIFIABLE",
+                        f'the previous release\'s copy of {fp_rel} did not survive extraction '
+                        f'intact ({got[:12]} vs {want_blob[:12]}), so the recompute would be '
+                        f'performed with an implementation that is nobody\'s.'
+                    )
+                tmpdir = tempfile.mkdtemp(prefix="ax-fpimpl-", dir="/tmp")
+                impl_path = os.path.join(tmpdir, "tree_fingerprint.py")
+                with open(impl_path, "wb") as fh:
+                    fh.write(raw)
+                impl_kind = f"release {anchor_rev[:12]}"
     if impl_path is None:
         # No prior copy (first release carrying this file, or an anchor that predates it). Fall
         # back to the working-tree helper — which 12b has just proven identical to the pushed
@@ -889,7 +1077,9 @@ if live_git_root and not expected_head_file.is_file() and guard_repo is not None
             )
         impl_path, impl_kind = str(fp_helper), "the working tree (no release copy available)"
     try:
-        proc = subprocess.run([sys.executable, impl_path, str(root)],
+        # -I -S for the same reason the parent runs with them: this subprocess is the RECOMPUTE,
+        # i.e. the only independent statement about the tree, and a site hook would own it.
+        proc = subprocess.run([sys.executable, "-I", "-S", impl_path, str(root)],
                               stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=GIT_ENV)
         recomputed = proc.stdout.decode(errors="replace").strip()
         rec_rc = proc.returncode

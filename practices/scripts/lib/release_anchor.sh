@@ -240,6 +240,7 @@
 #   ax_anchor_export_pin "$REPO_ROOT"                 # runner only: publish the single resolution
 #   ax_ratchet_toolchain_authentic "$REPO_ROOT" "<label>" <rev> <rel>...   # → 1 on tampering
 #   ax_anchor_bind_repo "$REPO_ROOT" "<label>"        # → 1 on GIT_CONTEXT_REDIRECTED
+#   ax_ratchet_filters_absent "$REPO_ROOT" "<label>" <rel>...              # → 1 on GIT_FILTERS_PRESENT
 
 # ── P1-1: git must interpret objects as they are, not as refs/replace/* says ──────────
 # Exported (not merely set) so that it reaches the python subprocesses in the guards, which is
@@ -249,6 +250,38 @@
 # line re-establishes the value we actually want.
 export GIT_NO_REPLACE_OBJECTS=1
 
+# ── ROUND 6 / P1-1: PURE-KEYWORD PREFLIGHT — THESE ARE THE FIRST EXECUTABLE LINES ────
+# (TD-2026-07-30-P1-preflight-and-raw-bytes.) INVARIANT (α): NOTHING OVERRIDABLE MAY EXECUTE
+# BEFORE THE SCRUB THAT DETECTS OVERRIDES. Round 5 put `set -uo pipefail` and `[ -n … ]` ahead of
+# its own hermetic bootstrap, and both are ordinary command lookups: MEASURED —
+#   BASH_FUNC_set%%='() { exit 0; }'  → .githooks/pre-push exit 0   (honest baseline 1)
+#   BASH_FUNC_[%%='() { exit 0; }'    → this guard      exit 0      (honest baseline 2)
+# A dependency LIST cannot fix that, because the list is consulted by code that has already run.
+# So the first thing every entry does is expressed ONLY in constructs an exported function cannot
+# reach:
+#   · shell KEYWORDS (`if`, `case`, `for`, `[[ ]]`) — never resolved through the function table;
+#   · variable ASSIGNMENT — not a command at all;
+#   · ONE command invoked by ABSOLUTE PATH (`/usr/bin/env`): bash never looks a word containing a
+#     slash up as a function, so this call cannot be hijacked;
+#   · abort via `${x:?msg}` — a PARAMETER EXPANSION, not a command. A non-interactive shell writes
+#     msg to stderr and exits non-zero. `exit`, `echo`, `printf`, `[`, `test` and `set` are all
+#     shadowable and are therefore unusable at this point.
+# WHY /usr/bin/env AND NOT `${!BASH_FUNC_@}`: bash imports BASH_FUNC_* out of the environment and
+# then DELETES the shell variable, so the prefix expansion is EMPTY in the child while the environ
+# still carries the entry (measured, bash 3.2.57 / Apple). The environ is the only place the
+# channel is visible, and /usr/bin/env is the only unhijackable way to read it.
+_AX_PF_LABEL="release_anchor.sh"
+_AX_PF_ENV="$(/usr/bin/env)"
+case "$_AX_PF_ENV" in
+    "") _AX_PF_NULL=; _AX_PF_DIE=${_AX_PF_NULL:?"$_AX_PF_LABEL: HERMETIC_PREFLIGHT_UNVERIFIABLE — /usr/bin/env produced no output, so this gate cannot tell whether the environment carries exported shell functions. It is the one read that cannot be hijacked; without it, unknown never passes."} ;;
+esac
+case "$_AX_PF_ENV" in
+    *BASH_FUNC_*) _AX_PF_NULL=; _AX_PF_DIE=${_AX_PF_NULL:?"$_AX_PF_LABEL: HERMETIC_PREFLIGHT_HOSTILE — the environment carries an exported shell function (BASH_FUNC_*). bash imports it BEFORE this script's first line, so it replaces a command this gate runs: measured, an exported set/[ turned this gate's honest exit into exit 0. Unset it (unset -f <name>) and re-run."} ;;
+esac
+case "${BASH_ENV:-}${ENV:-}" in
+    ?*) _AX_PF_NULL=; _AX_PF_DIE=${_AX_PF_NULL:?"$_AX_PF_LABEL: HERMETIC_PREFLIGHT_HOSTILE — BASH_ENV/ENV is set, so every non-interactive bash this gate starts would source that file before running the gate's own code. Unset it and re-run."} ;;
+esac
+unset _AX_PF_ENV _AX_PF_NULL _AX_PF_DIE _AX_PF_LABEL
 # ── ROUND 5 / P1-1+P1-2: HERMETIC RUNTIME BOOTSTRAP (A) — DELIBERATELY DUPLICATED ────
 # (TD-2026-07-30-P1-hermetic-runtime; the full argument lives in the header of
 #  practices/scripts/lib/release_anchor.sh.) THE RATCHET MAY NOT INHERIT ITS OWN RUNTIME.
@@ -259,11 +292,24 @@ export GIT_NO_REPLACE_OBJECTS=1
 # and BEFORE this script computes its own directory with `cd`/`pwd` — which is exactly why these
 # lines cannot live in a sourced file. The duplication IS the bootstrap.
 _AX_HRM_LABEL="release_anchor.sh"; _AX_HRM_EXIT=2; _AX_HRM_NEED_PY=0
+# ROUND 6 / P1-1(b): the list is now EVERY name any entry invokes anywhere, enumerated by
+# grepping this catalog's own gate files — including the shell keyword-lookalikes that round 5
+# omitted and that the reviewer weaponised (`set`, `[`, `test`, `printf`, `exit`, `exec`, `read`,
+# `trap`, `shift`, `local`, `eval`). The pure-keyword preflight above already refuses ANY exported
+# function, so this list is belt-and-braces — but a shortfall here used to BE the hole, and a list
+# that is merely "what we remembered" is what round 5 shipped.
 _AX_HRM_DEPS="git bash sh python python3 env cd pwd command builtin printf echo eval exec read \
-test declare unset export local source grep egrep sed awk cut tr sort uniq head tail wc find ls \
-cat cp mv rm mkdir mktemp dirname basename date shasum sha256sum xargs tee true false"
+test declare unset export local source grep egrep fgrep sed awk cut tr sort uniq head tail wc \
+find ls cat cp mv rm mkdir rmdir mktemp dirname basename date shasum sha256sum md5sum xargs tee \
+true false set exit return trap shift getopts times umask ulimit wait kill jobs let shopt \
+enable alias unalias type hash caller readonly typeset mapfile readarray realpath readlink stat \
+chmod touch diff cmp od base64 seq expr sleep tar gzip curl jq yq printenv id whoami uname \
+install"
+# Glob-metacharacter names (`[`, `[[`) cannot ride the unquoted split above — they would be
+# read as bracket expressions by pathname expansion — so they are appended QUOTED at each use.
+_AX_HRM_DEPS_Q="[ [["
 _AX_HRM_BAD=""
-for _ax_hn in $_AX_HRM_DEPS; do
+for _ax_hn in $_AX_HRM_DEPS "[" "[["; do
     declare -F "$_ax_hn" >/dev/null 2>&1 && _AX_HRM_BAD="$_ax_hn"
 done
 if [ -n "$_AX_HRM_BAD" ]; then
@@ -275,7 +321,7 @@ if [ -n "$_AX_HRM_BAD" ]; then
       echo "  pin's root to a foreign repository. Unset it (\`unset -f $_AX_HRM_BAD\`) and re-run."; } >&2
     exit $_AX_HRM_EXIT
 fi
-for _ax_hn in $_AX_HRM_DEPS; do unset -f "$_ax_hn" 2>/dev/null || true; done
+for _ax_hn in $_AX_HRM_DEPS "[" "[["; do unset -f "$_ax_hn" 2>/dev/null || true; done
 # Any exported shell function that SURVIVED the scrub above is refused too — the enumeration is a
 # list of what we know we call, and an unknown runtime is not a safe one. Names in this catalog's
 # own namespaces are reported as HELPER_FUNCTION_INJECTED instead, because that is what they are
@@ -330,6 +376,23 @@ done
 IFS="$_ax_hifs"; unset _ax_hifs _ax_hd
 AX_GIT_BIN="$(PATH="$_AX_HRM_PATH" command -v git 2>/dev/null || true)"
 AX_PY_BIN="$(PATH="$_AX_HRM_PATH" command -v python3 2>/dev/null || true)"
+# ── ROUND 6 / P1-2: A PATH IS NOT AN IDENTITY ───────────────────────────────────────
+# INVARIANT: a tool this gate runs must SAY WHAT IT IS. `-f`/`-x` FOLLOW SYMLINKS and assert
+# nothing about the program: MEASURED — a symlink named python3 pointing at /usr/bin/true passed
+# every lexical/`-x` test and turned the recency guard's entire python body into exit 0 (honest
+# baseline 1). So each tool is (a) canonicalised through its real directory, (b) refused if it
+# lives inside the tree under audit, and (c) made to IDENTIFY ITSELF by being RUN — `git --version`
+# must produce a git version banner, python3 must print a python self-report under `-I -S`. A
+# /usr/bin/true symlink prints nothing and is refused.
+# The PYTHON* family is scrubbed for the same reason the GIT_* family is: PYTHONPATH /
+# PYTHONHOME / PYTHONEXECUTABLE / PYTHONSTARTUP redirect what the interpreter IS before a single
+# line of ours runs — measured, a PYTHONPATH sitecustomize.py doing `os._exit(0)` skipped the whole
+# python guard (honest baseline 1). Scrubbing is belt; `-I -S` at every ratchet call site is braces.
+for _ax_hn in ${!PYTHON@}; do unset "$_ax_hn" 2>/dev/null || true; done
+unset PYTHONPATH PYTHONHOME PYTHONSTARTUP PYTHONEXECUTABLE PYTHONUSERBASE PYTHONWARNINGS \
+    PYTHONIOENCODING PYTHONMALLOC PYTHONBREAKPOINT PYTHONDEVMODE PYTHONPYCACHEPREFIX \
+    PYTHONOPTIMIZE PYTHONVERBOSE PYTHONINSPECT PYTHONCASEOK PYTHONNOUSERSITE 2>/dev/null || true
+export PYTHONDONTWRITEBYTECODE=1
 for _ax_hn in "git=$AX_GIT_BIN" "python3=$AX_PY_BIN"; do
     if [ "${_ax_hn%%=*}" = "python3" ] && [ "$_AX_HRM_NEED_PY" != "1" ]; then continue; fi
     _ax_hb="${_ax_hn#*=}"
@@ -340,9 +403,50 @@ for _ax_hn in "git=$AX_GIT_BIN" "python3=$AX_PY_BIN"; do
           echo "  guess, and it will not fall back to whatever the inherited PATH offers."; } >&2
         exit $_AX_HRM_EXIT
     fi
+    # (a) canonicalise: the DIRECTORY is resolved with `builtin pwd -P`, so a symlinked directory
+    #     on the way to the tool cannot disguise where it lives.
+    _ax_hdir="$(builtin cd "$(dirname "$_ax_hb")" 2>/dev/null && builtin pwd -P)" || _ax_hdir=""
+    if [ -z "$_ax_hdir" ]; then
+        { echo "$_AX_HRM_LABEL: HERMETIC_TOOL_UNUSABLE — the directory of ${_ax_hn%%=*} ('$_ax_hb')"
+          echo "  could not be canonicalised, so this gate cannot say where the program it is about"
+          echo "  to run actually lives."; } >&2
+        exit $_AX_HRM_EXIT
+    fi
+    _ax_hb="$_ax_hdir/$(basename "$_ax_hb")"
+    # (c) identity by SELF-REPORT — the only statement about a program that a path cannot forge.
+    if [ "${_ax_hn%%=*}" = "git" ]; then
+        _ax_hver="$("$_ax_hb" --version 2>/dev/null)" || _ax_hver=""
+        case "$_ax_hver" in
+            "git version "[0-9]*) AX_GIT_BIN="$_ax_hb" ;;
+            *)  { echo "$_AX_HRM_LABEL: HERMETIC_TOOL_UNAUTHENTIC — '$_ax_hb' is executable but does"
+                  echo "  not identify itself as git (\`git --version\` said '${_ax_hver:-<nothing>}')."
+                  echo "  Lexical absoluteness and -f/-x FOLLOW SYMLINKS and say nothing about the"
+                  echo "  program: a symlink named python3 → /usr/bin/true satisfied all of them and"
+                  echo "  turned an entire guard into exit 0. A tool this gate runs must say what it is."; } >&2
+                exit $_AX_HRM_EXIT ;;
+        esac
+    else
+        _ax_hver="$("$_ax_hb" -I -S -c 'import sys;sys.stdout.write("AXPY %d %d %s %s" % (sys.version_info[0], sys.version_info[1], sys.implementation.name, sys.executable or "-"))' 2>/dev/null)" || _ax_hver=""
+        case "$_ax_hver" in
+            "AXPY 3 "*) AX_PY_BIN="$_ax_hb" ;;
+            *)  { echo "$_AX_HRM_LABEL: HERMETIC_TOOL_UNAUTHENTIC — '$_ax_hb' is executable but does"
+                  echo "  not identify itself as a python3 interpreter under \`-I -S\` (it said"
+                  echo "  '${_ax_hver:-<nothing>}'). MEASURED: a symlink named python3 → /usr/bin/true"
+                  echo "  passed every path test and silently skipped this gate's whole python body"
+                  echo "  (exit 0 where the honest answer was 1). Identity is what the program says."; } >&2
+                exit $_AX_HRM_EXIT ;;
+        esac
+    fi
 done
 export AX_GIT_BIN AX_PY_BIN
-unset _ax_hn _ax_hb _AX_HRM_BAD _AX_HRM_PATH
+# Ratchet-internal python ALWAYS runs isolated: -I ignores PYTHON* env + user site + cwd on
+# sys.path, -S skips site entirely, which is what kills a sitecustomize.py payload. Exported so
+# every call site in this catalog spells it the same way. NOT usable for the checklist parser,
+# which needs PyYAML out of site-packages — that one call site uses -E and is preceded by an
+# explicit `import yaml` capability probe that BLOCKS (never skips). See DECISIONS.md
+# TD-2026-07-30-P1-preflight-and-raw-bytes.
+export AX_PY_ISO="-I -S"
+unset _ax_hn _ax_hb _ax_hdir _ax_hver _AX_HRM_BAD _AX_HRM_PATH
 
 # ── P1-3(a): LOAD-TIME INJECTION CHECK ───────────────────────────────────────────────
 # Runs BEFORE any definition, and the definitions below run UNCONDITIONALLY afterwards. Two
@@ -357,7 +461,8 @@ unset _ax_hn _ax_hb _AX_HRM_BAD _AX_HRM_PATH
 _AX_ANCHOR_FN_NAMES="ax_git ax_anchor_resolve ax_anchor_export_pin ax_anchor_check_pin \
 ax_anchor_check_replace_refs ax_anchor_check_ancestry ax_anchor_release_paths_regular \
 ax_anchor_worktree_paths_regular ax_anchor_verify_unmoved _ax_anchor_bootstrap_implausible \
-ax_anchor_bind_repo ax_ratchet_toolchain_authentic ax_ratchet_toolchain_paths"
+ax_anchor_bind_repo ax_ratchet_toolchain_authentic ax_ratchet_toolchain_paths \
+ax_ratchet_filters_absent"
 
 _ax_anchor_injection_report() {
     {
@@ -473,14 +578,86 @@ ax_anchor_bind_repo() {
 
 # ax_ratchet_toolchain_paths — the ratchet's OWN implementation files, in one place so the runner,
 # both ratcheting guards and the push gate cannot disagree about what "the toolchain" is.
+#   ROUND 6 / P1-3(b): the list was SIX files and EXCLUDED the two ratcheting guards and the guard
+#   runner — i.e. three of the programs that actually decide whether a release may ship were not on
+#   the list of programs whose bytes are checked. It is nine now, and this function is the single
+#   definition so the runner, both guards and the push gate cannot disagree about what "the
+#   toolchain" is.
 ax_ratchet_toolchain_paths() {
     printf '%s\n' \
         "practices/scripts/lib/release_anchor.sh" \
         "practices/scripts/lib/tree_fingerprint.py" \
         "practices/scripts/verify-completion.sh" \
         "practices/evals/completion_checklist_recency_guard.sh" \
+        "practices/evals/evidence_quote_spotcheck_guard.sh" \
+        "practices/evals/manifest_snapshot_integrity_guard.sh" \
+        "practices/evals/run-all-guards.sh" \
         ".githooks/pre-push" \
         ".githooks/pre-push-lib.sh"
+}
+
+# ax_ratchet_filters_absent <repo_root> <label> <rel>...
+#   ROUND 6 / P1-4. INVARIANT (β): ANY CLAIM ABOUT BYTES MUST BE MADE ON RAW BYTES, NEVER THROUGH A
+#   FILTERED VIEW. git's clean/smudge machinery sits between the working file and every content
+#   answer git gives: `git diff`, `git status`, `git hash-object` (without --no-filters) and
+#   `git diff HEAD --binary` all report the CLEAN-FILTER OUTPUT, not what is on disk.
+#   MEASURED (the reviewer's axmask reproduction, re-run here): with
+#       git config filter.axmask.clean 'cat <the committed copy>'
+#       $GIT_DIR/info/attributes:  practices/scripts/lib/tree_fingerprint.py filter=axmask
+#   a working tree_fingerprint.py carrying appended attacker bytes produced
+#       git diff --quiet HEAD -- <path>                       → rc 0   ("identical")
+#       git hash-object      -- <path>                        → 79e18672…  (= the HEAD blob)
+#       git hash-object --no-filters -- <path>                → 3627bc8c…  (the truth)
+#   so ax_ratchet_toolchain_authentic (which used `git diff --quiet`) returned 0 on a tampered
+#   toolchain. The byte comparison is fixed below; THIS function is the second answer, because
+#   "we passed --no-filters at every site" is a claim about every present and future call site:
+#   a live root that DECLARES a clean/smudge filter, carries a non-empty $GIT_DIR/info/attributes,
+#   or attaches a filter attribute to any ratchet-critical path is refused outright. A legitimate
+#   release of this catalog has none of the three.
+#   0 = no filtering machinery in sight; 1 = GIT_FILTERS_PRESENT (blocking).
+#   No-op on a non-git root (the relocated-copy sandbox), which has no config to declare.
+ax_ratchet_filters_absent() {
+    local repo="$1" label="$2"; shift 2
+    local decl attrs gitdir rel out bad=0
+    "${AX_GIT_BIN:-git}" --no-replace-objects -C "$repo" rev-parse --git-dir >/dev/null 2>&1 || return 0
+    decl="$(ax_git "$repo" config --get-regexp '^filter\..*\.(clean|smudge)$' 2>/dev/null)"
+    if [ -n "$decl" ]; then
+        {
+            echo "${label}: GIT_FILTERS_PRESENT — this repository DECLARES git content filters:"
+            echo "$decl" | sed 's/^/    /'
+            echo "  A clean filter sits between the file on disk and every content answer git gives."
+            echo "  Measured: with one installed, a tampered ratchet file read as byte-identical to"
+            echo "  its committed blob (\`git diff --quiet\` rc 0) while its raw bytes differed."
+            echo "  A released catalog has no reason to carry one. Remove it (git config --unset"
+            echo "  filter.<name>.clean/.smudge) and re-run."
+        } >&2
+        bad=1
+    fi
+    gitdir="$(ax_git "$repo" rev-parse --absolute-git-dir 2>/dev/null)"
+    if [ -n "$gitdir" ] && [ -s "$gitdir/info/attributes" ]; then
+        {
+            echo "${label}: GIT_FILTERS_PRESENT — \$GIT_DIR/info/attributes is non-empty."
+            echo "    ${gitdir}/info/attributes"
+            echo "  That file is NOT tracked and NOT reviewed, and it is where a filter is attached"
+            echo "  to a path without touching a single committed byte. Empty it and re-run."
+        } >&2
+        bad=1
+    fi
+    for rel in "$@"; do
+        out="$(ax_git "$repo" check-attr filter -- "$rel" 2>/dev/null)"
+        case "$out" in
+            *": filter: unspecified"|"") ;;
+            *)  {
+                    echo "${label}: GIT_FILTERS_PRESENT — a filter attribute is attached to a"
+                    echo "  ratchet-critical path:"
+                    echo "    ${out}"
+                    echo "  Every byte claim this gate makes about that path would be a claim about the"
+                    echo "  filter's OUTPUT, not about the file."
+                } >&2
+                bad=1 ;;
+        esac
+    done
+    return "$bad"
 }
 
 # ax_ratchet_toolchain_authentic <repo_root> <label> <rev> <rel>...
@@ -500,20 +677,30 @@ ax_ratchet_toolchain_paths() {
 #   implementation nobody has committed — and it means toolchain work is "commit, then verify".
 ax_ratchet_toolchain_authentic() {
     local repo="$1" label="$2" rev="$3"; shift 3
-    local rel bad=0 rc
+    local rel bad=0 rc want have
     "${AX_GIT_BIN:-git}" --no-replace-objects -C "$repo" rev-parse --git-dir >/dev/null 2>&1 || return 0
+    # ROUND 6 / P1-4: the comparison is on RAW BYTES. It used to be `git diff --quiet <rev> -- <rel>`
+    # "so that git's own filters/eol handling are applied on both sides" — which is precisely the
+    # defect: a `filter.<n>.clean` that echoes the committed copy makes ANY working file compare
+    # equal to its blob (measured, rc 0 on a tampered tree_fingerprint.py). `hash-object
+    # --no-filters` hashes the file as it is on disk, with no clean filter and no eol conversion,
+    # and is compared to the blob id git records at <rev>. Two ids, both raw, no filtered view.
+    ax_ratchet_filters_absent "$repo" "$label" "$@" || bad=1
     for rel in "$@"; do
-        ax_git "$repo" diff --quiet "$rev" -- "$rel" >/dev/null 2>&1
-        rc=$?
-        [ "$rc" -eq 0 ] && continue
+        want="$(ax_git "$repo" rev-parse --verify --quiet "${rev}:${rel}" 2>/dev/null)"
+        have="$(ax_git "$repo" hash-object --no-filters -t blob -- "$rel" 2>/dev/null)"
+        rc=1
+        if [ -z "$want" ] || [ -z "$have" ]; then rc=2; fi
+        [ -n "$want" ] && [ "$want" = "$have" ] && continue
         {
             if [ "$rc" -eq 1 ]; then
                 echo "${label}: RATCHET_TOOLCHAIN_MODIFIED — ${rel} in the working tree is NOT the"
-                echo "  ${rel} that git records at ${rev}."
+                echo "  ${rel} that git records at ${rev} (raw ${have:-<unreadable>} vs ${want:-<absent>})."
             else
                 echo "${label}: RATCHET_TOOLCHAIN_UNVERIFIABLE — ${rel} could not be compared against"
-                echo "  ${rev} (git exited ${rc}), so the gate cannot tell which implementation it is"
-                echo "  about to run. Unknown never passes."
+                echo "  ${rev} on RAW BYTES (blob at rev: ${want:-<absent>}; on disk: ${have:-<unreadable>}),"
+                echo "  so the gate cannot tell which implementation it is about to run. Unknown never"
+                echo "  passes."
             fi
             echo "  THESE ARE THE FILES THAT DECIDE WHETHER A RELEASE MAY SHIP: the anchor policy,"
             echo "  the tree fingerprint, the runner, the push gate and the hook. Every other check"

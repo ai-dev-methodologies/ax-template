@@ -269,27 +269,44 @@
 #   bash practices/evals/evidence_quote_spotcheck_guard.sh --include-templates
 #   bash practices/evals/evidence_quote_spotcheck_guard.sh --include-templates --strict --strict-templates --root evals/fixtures/...
 #   bash practices/evals/evidence_quote_spotcheck_guard.sh --strict --strict-templates --templates-only-protected
+# ── ROUND 6 / P1-1: PURE-KEYWORD PREFLIGHT — THESE ARE THE FIRST EXECUTABLE LINES ────
+# (TD-2026-07-30-P1-preflight-and-raw-bytes.) INVARIANT (α): NOTHING OVERRIDABLE MAY EXECUTE
+# BEFORE THE SCRUB THAT DETECTS OVERRIDES. Round 5 put `set -uo pipefail` and `[ -n … ]` ahead of
+# its own hermetic bootstrap, and both are ordinary command lookups: MEASURED —
+#   BASH_FUNC_set%%='() { exit 0; }'  → .githooks/pre-push exit 0   (honest baseline 1)
+#   BASH_FUNC_[%%='() { exit 0; }'    → this guard      exit 0      (honest baseline 2)
+# A dependency LIST cannot fix that, because the list is consulted by code that has already run.
+# So the first thing every entry does is expressed ONLY in constructs an exported function cannot
+# reach:
+#   · shell KEYWORDS (`if`, `case`, `for`, `[[ ]]`) — never resolved through the function table;
+#   · variable ASSIGNMENT — not a command at all;
+#   · ONE command invoked by ABSOLUTE PATH (`/usr/bin/env`): bash never looks a word containing a
+#     slash up as a function, so this call cannot be hijacked;
+#   · abort via `${x:?msg}` — a PARAMETER EXPANSION, not a command. A non-interactive shell writes
+#     msg to stderr and exits non-zero. `exit`, `echo`, `printf`, `[`, `test` and `set` are all
+#     shadowable and are therefore unusable at this point.
+# WHY /usr/bin/env AND NOT `${!BASH_FUNC_@}`: bash imports BASH_FUNC_* out of the environment and
+# then DELETES the shell variable, so the prefix expansion is EMPTY in the child while the environ
+# still carries the entry (measured, bash 3.2.57 / Apple). The environ is the only place the
+# channel is visible, and /usr/bin/env is the only unhijackable way to read it.
+_AX_PF_LABEL="evidence_quote_spotcheck_guard"
+_AX_PF_ENV="$(/usr/bin/env)"
+case "$_AX_PF_ENV" in
+    "") _AX_PF_NULL=; _AX_PF_DIE=${_AX_PF_NULL:?"$_AX_PF_LABEL: HERMETIC_PREFLIGHT_UNVERIFIABLE — /usr/bin/env produced no output, so this gate cannot tell whether the environment carries exported shell functions. It is the one read that cannot be hijacked; without it, unknown never passes."} ;;
+esac
+case "$_AX_PF_ENV" in
+    *BASH_FUNC_*) _AX_PF_NULL=; _AX_PF_DIE=${_AX_PF_NULL:?"$_AX_PF_LABEL: HERMETIC_PREFLIGHT_HOSTILE — the environment carries an exported shell function (BASH_FUNC_*). bash imports it BEFORE this script's first line, so it replaces a command this gate runs: measured, an exported set/[ turned this gate's honest exit into exit 0. Unset it (unset -f <name>) and re-run."} ;;
+esac
+case "${BASH_ENV:-}${ENV:-}" in
+    ?*) _AX_PF_NULL=; _AX_PF_DIE=${_AX_PF_NULL:?"$_AX_PF_LABEL: HERMETIC_PREFLIGHT_HOSTILE — BASH_ENV/ENV is set, so every non-interactive bash this gate starts would source that file before running the gate's own code. Unset it and re-run."} ;;
+esac
+unset _AX_PF_ENV _AX_PF_NULL _AX_PF_DIE _AX_PF_LABEL
 set -uo pipefail
 
-STRICT=0
-ALLOW_MISSING=0
-ROOT_OVERRIDE=""
-INCLUDE_TEMPLATES=0
-STRICT_TEMPLATES=0
-TEMPLATES_ONLY_PROTECTED=0
-while [ $# -gt 0 ]; do
-    case "$1" in
-        --strict) STRICT=1; shift ;;
-        --allow-missing-snapshot) ALLOW_MISSING=1; shift ;;
-        --root) ROOT_OVERRIDE="$2"; shift 2 ;;
-        --root=*) ROOT_OVERRIDE="${1#--root=}"; shift ;;
-        --include-templates) INCLUDE_TEMPLATES=1; shift ;;
-        --strict-templates) STRICT_TEMPLATES=1; shift ;;
-        # implies --include-templates so the flag can never be a silent no-op
-        --templates-only-protected) TEMPLATES_ONLY_PROTECTED=1; INCLUDE_TEMPLATES=1; shift ;;
-        *) echo "evidence_quote_spotcheck_guard: unknown arg: $1" >&2; exit 2 ;;
-    esac
-done
+# ROUND 6 / P1-1(c): ARGUMENT PARSING MOVED BELOW THE BOOTSTRAP. It used to live here, ahead of
+# the hermetic scrub, and every line of it (`[`, `echo`, `exit`, `shift`) is an ordinary command
+# lookup — i.e. attacker code running inside the gate before the gate has looked at its runtime.
+# Nothing but the pure-keyword preflight may precede the scrub.
 
 # ── ROUND 5 / P1-1+P1-2: HERMETIC RUNTIME BOOTSTRAP (A) — DELIBERATELY DUPLICATED ────
 # (TD-2026-07-30-P1-hermetic-runtime; the full argument lives in the header of
@@ -301,11 +318,24 @@ done
 # and BEFORE this script computes its own directory with `cd`/`pwd` — which is exactly why these
 # lines cannot live in a sourced file. The duplication IS the bootstrap.
 _AX_HRM_LABEL="evidence_quote_spotcheck_guard"; _AX_HRM_EXIT=2; _AX_HRM_NEED_PY=1
+# ROUND 6 / P1-1(b): the list is now EVERY name any entry invokes anywhere, enumerated by
+# grepping this catalog's own gate files — including the shell keyword-lookalikes that round 5
+# omitted and that the reviewer weaponised (`set`, `[`, `test`, `printf`, `exit`, `exec`, `read`,
+# `trap`, `shift`, `local`, `eval`). The pure-keyword preflight above already refuses ANY exported
+# function, so this list is belt-and-braces — but a shortfall here used to BE the hole, and a list
+# that is merely "what we remembered" is what round 5 shipped.
 _AX_HRM_DEPS="git bash sh python python3 env cd pwd command builtin printf echo eval exec read \
-test declare unset export local source grep egrep sed awk cut tr sort uniq head tail wc find ls \
-cat cp mv rm mkdir mktemp dirname basename date shasum sha256sum xargs tee true false"
+test declare unset export local source grep egrep fgrep sed awk cut tr sort uniq head tail wc \
+find ls cat cp mv rm mkdir rmdir mktemp dirname basename date shasum sha256sum md5sum xargs tee \
+true false set exit return trap shift getopts times umask ulimit wait kill jobs let shopt \
+enable alias unalias type hash caller readonly typeset mapfile readarray realpath readlink stat \
+chmod touch diff cmp od base64 seq expr sleep tar gzip curl jq yq printenv id whoami uname \
+install"
+# Glob-metacharacter names (`[`, `[[`) cannot ride the unquoted split above — they would be
+# read as bracket expressions by pathname expansion — so they are appended QUOTED at each use.
+_AX_HRM_DEPS_Q="[ [["
 _AX_HRM_BAD=""
-for _ax_hn in $_AX_HRM_DEPS; do
+for _ax_hn in $_AX_HRM_DEPS "[" "[["; do
     declare -F "$_ax_hn" >/dev/null 2>&1 && _AX_HRM_BAD="$_ax_hn"
 done
 if [ -n "$_AX_HRM_BAD" ]; then
@@ -317,7 +347,7 @@ if [ -n "$_AX_HRM_BAD" ]; then
       echo "  pin's root to a foreign repository. Unset it (\`unset -f $_AX_HRM_BAD\`) and re-run."; } >&2
     exit $_AX_HRM_EXIT
 fi
-for _ax_hn in $_AX_HRM_DEPS; do unset -f "$_ax_hn" 2>/dev/null || true; done
+for _ax_hn in $_AX_HRM_DEPS "[" "[["; do unset -f "$_ax_hn" 2>/dev/null || true; done
 # Any exported shell function that SURVIVED the scrub above is refused too — the enumeration is a
 # list of what we know we call, and an unknown runtime is not a safe one. Names in this catalog's
 # own namespaces are reported as HELPER_FUNCTION_INJECTED instead, because that is what they are
@@ -372,6 +402,23 @@ done
 IFS="$_ax_hifs"; unset _ax_hifs _ax_hd
 AX_GIT_BIN="$(PATH="$_AX_HRM_PATH" command -v git 2>/dev/null || true)"
 AX_PY_BIN="$(PATH="$_AX_HRM_PATH" command -v python3 2>/dev/null || true)"
+# ── ROUND 6 / P1-2: A PATH IS NOT AN IDENTITY ───────────────────────────────────────
+# INVARIANT: a tool this gate runs must SAY WHAT IT IS. `-f`/`-x` FOLLOW SYMLINKS and assert
+# nothing about the program: MEASURED — a symlink named python3 pointing at /usr/bin/true passed
+# every lexical/`-x` test and turned the recency guard's entire python body into exit 0 (honest
+# baseline 1). So each tool is (a) canonicalised through its real directory, (b) refused if it
+# lives inside the tree under audit, and (c) made to IDENTIFY ITSELF by being RUN — `git --version`
+# must produce a git version banner, python3 must print a python self-report under `-I -S`. A
+# /usr/bin/true symlink prints nothing and is refused.
+# The PYTHON* family is scrubbed for the same reason the GIT_* family is: PYTHONPATH /
+# PYTHONHOME / PYTHONEXECUTABLE / PYTHONSTARTUP redirect what the interpreter IS before a single
+# line of ours runs — measured, a PYTHONPATH sitecustomize.py doing `os._exit(0)` skipped the whole
+# python guard (honest baseline 1). Scrubbing is belt; `-I -S` at every ratchet call site is braces.
+for _ax_hn in ${!PYTHON@}; do unset "$_ax_hn" 2>/dev/null || true; done
+unset PYTHONPATH PYTHONHOME PYTHONSTARTUP PYTHONEXECUTABLE PYTHONUSERBASE PYTHONWARNINGS \
+    PYTHONIOENCODING PYTHONMALLOC PYTHONBREAKPOINT PYTHONDEVMODE PYTHONPYCACHEPREFIX \
+    PYTHONOPTIMIZE PYTHONVERBOSE PYTHONINSPECT PYTHONCASEOK PYTHONNOUSERSITE 2>/dev/null || true
+export PYTHONDONTWRITEBYTECODE=1
 for _ax_hn in "git=$AX_GIT_BIN" "python3=$AX_PY_BIN"; do
     if [ "${_ax_hn%%=*}" = "python3" ] && [ "$_AX_HRM_NEED_PY" != "1" ]; then continue; fi
     _ax_hb="${_ax_hn#*=}"
@@ -382,9 +429,50 @@ for _ax_hn in "git=$AX_GIT_BIN" "python3=$AX_PY_BIN"; do
           echo "  guess, and it will not fall back to whatever the inherited PATH offers."; } >&2
         exit $_AX_HRM_EXIT
     fi
+    # (a) canonicalise: the DIRECTORY is resolved with `builtin pwd -P`, so a symlinked directory
+    #     on the way to the tool cannot disguise where it lives.
+    _ax_hdir="$(builtin cd "$(dirname "$_ax_hb")" 2>/dev/null && builtin pwd -P)" || _ax_hdir=""
+    if [ -z "$_ax_hdir" ]; then
+        { echo "$_AX_HRM_LABEL: HERMETIC_TOOL_UNUSABLE — the directory of ${_ax_hn%%=*} ('$_ax_hb')"
+          echo "  could not be canonicalised, so this gate cannot say where the program it is about"
+          echo "  to run actually lives."; } >&2
+        exit $_AX_HRM_EXIT
+    fi
+    _ax_hb="$_ax_hdir/$(basename "$_ax_hb")"
+    # (c) identity by SELF-REPORT — the only statement about a program that a path cannot forge.
+    if [ "${_ax_hn%%=*}" = "git" ]; then
+        _ax_hver="$("$_ax_hb" --version 2>/dev/null)" || _ax_hver=""
+        case "$_ax_hver" in
+            "git version "[0-9]*) AX_GIT_BIN="$_ax_hb" ;;
+            *)  { echo "$_AX_HRM_LABEL: HERMETIC_TOOL_UNAUTHENTIC — '$_ax_hb' is executable but does"
+                  echo "  not identify itself as git (\`git --version\` said '${_ax_hver:-<nothing>}')."
+                  echo "  Lexical absoluteness and -f/-x FOLLOW SYMLINKS and say nothing about the"
+                  echo "  program: a symlink named python3 → /usr/bin/true satisfied all of them and"
+                  echo "  turned an entire guard into exit 0. A tool this gate runs must say what it is."; } >&2
+                exit $_AX_HRM_EXIT ;;
+        esac
+    else
+        _ax_hver="$("$_ax_hb" -I -S -c 'import sys;sys.stdout.write("AXPY %d %d %s %s" % (sys.version_info[0], sys.version_info[1], sys.implementation.name, sys.executable or "-"))' 2>/dev/null)" || _ax_hver=""
+        case "$_ax_hver" in
+            "AXPY 3 "*) AX_PY_BIN="$_ax_hb" ;;
+            *)  { echo "$_AX_HRM_LABEL: HERMETIC_TOOL_UNAUTHENTIC — '$_ax_hb' is executable but does"
+                  echo "  not identify itself as a python3 interpreter under \`-I -S\` (it said"
+                  echo "  '${_ax_hver:-<nothing>}'). MEASURED: a symlink named python3 → /usr/bin/true"
+                  echo "  passed every path test and silently skipped this gate's whole python body"
+                  echo "  (exit 0 where the honest answer was 1). Identity is what the program says."; } >&2
+                exit $_AX_HRM_EXIT ;;
+        esac
+    fi
 done
 export AX_GIT_BIN AX_PY_BIN
-unset _ax_hn _ax_hb _AX_HRM_BAD _AX_HRM_PATH
+# Ratchet-internal python ALWAYS runs isolated: -I ignores PYTHON* env + user site + cwd on
+# sys.path, -S skips site entirely, which is what kills a sitecustomize.py payload. Exported so
+# every call site in this catalog spells it the same way. NOT usable for the checklist parser,
+# which needs PyYAML out of site-packages — that one call site uses -E and is preceded by an
+# explicit `import yaml` capability probe that BLOCKS (never skips). See DECISIONS.md
+# TD-2026-07-30-P1-preflight-and-raw-bytes.
+export AX_PY_ISO="-I -S"
+unset _ax_hn _ax_hb _ax_hdir _ax_hver _AX_HRM_BAD _AX_HRM_PATH
 
 SCRIPT_DIR="$(builtin cd "$(dirname "${BASH_SOURCE[0]}")" && builtin pwd)"
 SELF_REPO_ROOT="$(builtin cd "$SCRIPT_DIR/../.." && builtin pwd -P)"
@@ -428,6 +516,26 @@ if "$AX_GIT_BIN" -C "$SELF_REPO_ROOT" rev-parse --git-dir >/dev/null 2>&1; then
     fi
     unset _ax_hcan _ax_htop
 fi
+
+STRICT=0
+ALLOW_MISSING=0
+ROOT_OVERRIDE=""
+INCLUDE_TEMPLATES=0
+STRICT_TEMPLATES=0
+TEMPLATES_ONLY_PROTECTED=0
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --strict) STRICT=1; shift ;;
+        --allow-missing-snapshot) ALLOW_MISSING=1; shift ;;
+        --root) ROOT_OVERRIDE="$2"; shift 2 ;;
+        --root=*) ROOT_OVERRIDE="${1#--root=}"; shift ;;
+        --include-templates) INCLUDE_TEMPLATES=1; shift ;;
+        --strict-templates) STRICT_TEMPLATES=1; shift ;;
+        # implies --include-templates so the flag can never be a silent no-op
+        --templates-only-protected) TEMPLATES_ONLY_PROTECTED=1; INCLUDE_TEMPLATES=1; shift ;;
+        *) echo "evidence_quote_spotcheck_guard: unknown arg: $1" >&2; exit 2 ;;
+    esac
+done
 
 REPO_ROOT="${ROOT_OVERRIDE:-$SELF_REPO_ROOT}"
 # LIVE_ROOT=1 ⇔ the RESOLVED scan root IS this repository, however it was supplied. The
@@ -505,9 +613,10 @@ for _ax_pf_part in practices scripts lib release_anchor.sh; do
         exit 2
     fi
 done
-if command -v git >/dev/null 2>&1 \
-   && git --no-replace-objects -C "$SELF_REPO_ROOT" rev-parse --git-dir >/dev/null 2>&1; then
-    _ax_pf_mode="$(git --no-replace-objects -C "$SELF_REPO_ROOT" ls-tree HEAD -- "$_ax_pf_rel" 2>/dev/null | head -1)"
+# ROUND 6 / P2: the validated ABSOLUTE binary, not the bare word (which resolves through PATH).
+if [ -n "${AX_GIT_BIN:-}" ] \
+   && "$AX_GIT_BIN" --no-replace-objects -C "$SELF_REPO_ROOT" rev-parse --git-dir >/dev/null 2>&1; then
+    _ax_pf_mode="$("$AX_GIT_BIN" --no-replace-objects -C "$SELF_REPO_ROOT" ls-tree HEAD -- "$_ax_pf_rel" 2>/dev/null | head -1)"
     _ax_pf_mode="${_ax_pf_mode%% *}"
     case "${_ax_pf_mode:-}" in
         100644|100755|"") ;;   # "" = untracked: no committed mode to check, lstat walk above stands
@@ -528,7 +637,7 @@ fi
 # anchor-critical path list below (deletion at the anchor = ANCHOR_BOOTSTRAP_IMPLAUSIBLE).
 AX_ANCHOR_LIB="$SELF_REPO_ROOT/practices/scripts/lib/release_anchor.sh"
 if [ ! -f "$AX_ANCHOR_LIB" ] \
-   && ! git --no-replace-objects -C "$SELF_REPO_ROOT" rev-parse --git-dir >/dev/null 2>&1; then
+   && ! "$AX_GIT_BIN" --no-replace-objects -C "$SELF_REPO_ROOT" rev-parse --git-dir >/dev/null 2>&1; then
     AX_ANCHOR_LIB="${AX_RELEASE_ANCHOR_LIB:-$AX_ANCHOR_LIB}"
 fi
 if [ ! -f "$AX_ANCHOR_LIB" ]; then
@@ -591,7 +700,7 @@ fi
 STRICT="$STRICT" ALLOW_MISSING="$ALLOW_MISSING" INCLUDE_TEMPLATES="$INCLUDE_TEMPLATES" \
 STRICT_TEMPLATES="$STRICT_TEMPLATES" TEMPLATES_ONLY_PROTECTED="$TEMPLATES_ONLY_PROTECTED" \
 LIVE_ROOT="$LIVE_ROOT" GIT_ANCHOR="$GIT_ANCHOR" GIT_ANCHOR_KIND="$GIT_ANCHOR_KIND" \
-GIT_REPO_ROOT="$SELF_REPO_ROOT" python3 - "$REPO_ROOT" << 'PY'
+GIT_REPO_ROOT="$SELF_REPO_ROOT" "$AX_PY_BIN" -I -S - "$REPO_ROOT" << 'PY'
 import ast, glob, html, os, re, subprocess, sys
 
 root = sys.argv[1]

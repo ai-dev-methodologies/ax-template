@@ -56,6 +56,19 @@ class RedirectedGitContext(RuntimeError):
     """The git context answering our reads is not the repository we were asked about."""
 
 
+class GitFiltersPresent(RuntimeError):
+    """The repository declares content filters, so no git content answer is about raw bytes.
+
+    ROUND 6 / P1-4 (invariant beta: a claim about BYTES must be made on RAW BYTES). A
+    `filter.<name>.clean` sits between the working file and every content answer git gives —
+    `git diff HEAD --binary` reports the FILTER'S OUTPUT. Measured: with a clean filter echoing
+    the committed copy, a tampered file produced an EMPTY `git diff HEAD --binary` while its
+    on-disk bytes differed. The dirty accumulator below now hashes raw file bytes, but a
+    repository that declares filters at all is refused: this file is evidence, and evidence taken
+    through a lens the subject installed is not evidence.
+    """
+
+
 def _git_bin():
     """The absolute git binary, validated. AX_GIT_BIN is published by the hermetic bootstrap of
     whatever entry started us; it is re-validated here rather than trusted, because this file is
@@ -84,6 +97,27 @@ def _git(repo, *args, _bin=None, _env=None):
     return p.stdout
 
 
+def _filters_declared(repo, gbin, genv):
+    """Return a human description of any content-filter machinery in <repo>, else None."""
+    p = subprocess.run([gbin, "--no-replace-objects", "-C", repo, "config", "--get-regexp",
+                        r"^filter\..*\.(clean|smudge)$"],
+                       stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, env=genv)
+    if p.returncode == 0 and p.stdout.strip():
+        return ("git config declares content filters: "
+                + p.stdout.decode(errors="replace").strip().splitlines()[0])
+    p = subprocess.run([gbin, "--no-replace-objects", "-C", repo, "rev-parse",
+                        "--absolute-git-dir"],
+                       stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, env=genv)
+    if p.returncode == 0 and p.stdout.strip():
+        attrs = os.path.join(p.stdout.decode().strip(), "info", "attributes")
+        try:
+            if os.path.isfile(attrs) and os.path.getsize(attrs) > 0:
+                return f"{attrs} is non-empty (untracked, unreviewed filter attachment point)"
+        except OSError:
+            return f"{attrs} could not be inspected"
+    return None
+
+
 def fingerprint(repo):
     """Return the working-tree fingerprint for <repo>, or "nogit" when it is not a git tree.
 
@@ -103,9 +137,11 @@ def fingerprint(repo):
             f"the git work tree answering reads for {repo} is {top or '<unresolvable>'}; "
             "a fingerprint taken through a redirected context describes a different tree "
             "(measured: a dirty tree reported the clean-tree constant)")
+    filt = _filters_declared(repo, gbin, genv)
+    if filt is not None:
+        raise GitFiltersPresent(filt)
     try:
         status = _git(repo, "status", "--porcelain", "-z", "-uall", _bin=gbin, _env=genv)
-        diff = _git(repo, "diff", "HEAD", "--binary", _bin=gbin, _env=genv)
     except Exception as exc:
         # A tree that IS git but cannot be read is unknown, not clean. Fail closed: the caller
         # blocks rather than recording a value it could not compute.
@@ -115,11 +151,10 @@ def fingerprint(repo):
     h.update(b"status\0")
     h.update(status)
     h.update(b"\0diff\0")
-    h.update(diff)
 
-    # Untracked (non-ignored) files: `git diff HEAD` cannot see them, so hash their bytes.
     entries = status.split(b"\0")
     untracked = []
+    modified = []
     i = 0
     while i < len(entries):
         entry = entries[i]
@@ -131,7 +166,31 @@ def fingerprint(repo):
             i += 1  # a rename/copy record is followed by its origin path as a separate entry
         if xy == b"??":
             untracked.append(path)
+        else:
+            modified.append(path)
 
+    # ROUND 6 / P1-4 — THE CONTENT OF A MODIFICATION IS READ FROM THE FILE, NOT FROM `git diff`.
+    # This slot used to hold `git diff HEAD --binary`, which honours clean filters: with one
+    # installed, a tampered working file produced a ZERO-BYTE diff and the fingerprint reported
+    # the tree as it is committed. The bytes are now read with open(), which no git configuration
+    # can interpose on.
+    # THE CLEAN-TREE CONSTANT IS PRESERVED BY CONSTRUCTION: on a clean tree `status` is empty, so
+    # `modified` is empty and nothing is appended after the b"\0diff\0" separator — byte-identical
+    # to the old digest. That matters because the recency guard recomputes with the PREVIOUS
+    # RELEASE'S copy of this file; a changed clean-tree constant would brick every honest push.
+    for path in sorted(modified):
+        h.update(b"raw\0")
+        h.update(path)
+        h.update(b"\0")
+        try:
+            with open(os.path.join(os.fsencode(repo), path), "rb") as fh:
+                for chunk in iter(lambda: fh.read(1 << 16), b""):
+                    h.update(chunk)
+        except OSError:
+            h.update(b"<absent>")
+        h.update(b"\0")
+
+    # Untracked (non-ignored) files: no diff can see them, so hash their bytes.
     for path in sorted(untracked):
         h.update(b"untracked\0")
         h.update(path)
@@ -150,14 +209,19 @@ if __name__ == "__main__":
     if len(sys.argv) != 2:
         print("usage: tree_fingerprint.py <repo_root>", file=sys.stderr)
         sys.exit(2)
-    # Exit codes are part of the contract (ROUND 5): 0 = a digest (or the honest "nogit" of a
-    # non-git tree), 3 = the git context was redirected, 4 = a git tree we could not read. Callers
-    # BLOCK on 3/4 — printing nothing and exiting 0 is exactly the fail-open this round closed.
+    # Exit codes are part of the contract (ROUND 5/6): 0 = a digest (or the honest "nogit" of a
+    # non-git tree), 3 = the git context was redirected, 4 = a git tree we could not read,
+    # 5 = the repository declares content filters. Callers BLOCK on 3/4/5 — printing nothing and exiting 0 is exactly the fail-open this round closed.
     try:
         print(fingerprint(sys.argv[1]))
     except RedirectedGitContext as exc:
         print(f"tree_fingerprint: GIT_CONTEXT_REDIRECTED — {exc}", file=sys.stderr)
         sys.exit(3)
+    except GitFiltersPresent as exc:
+        # Exit 5 (ROUND 6): a repository that declares content filters cannot be fingerprinted
+        # honestly. Callers BLOCK — this is a tamper signal, not a degraded mode.
+        print(f"tree_fingerprint: GIT_FILTERS_PRESENT — {exc}", file=sys.stderr)
+        sys.exit(5)
     except Exception as exc:
         print(f"tree_fingerprint: FINGERPRINT_UNVERIFIABLE — {exc}", file=sys.stderr)
         sys.exit(4)
