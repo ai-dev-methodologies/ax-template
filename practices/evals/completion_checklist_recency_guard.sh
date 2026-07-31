@@ -21,6 +21,36 @@
 #      recorded so this guard verifies start == end instead of trusting a flag), and
 #   8. it ratcheted against the RELEASE THE REMOTE ACTUALLY HAS — anchor_sha must equal the
 #      sha git hands the pre-push hook for the ref being pushed (--expect-anchor-sha).
+#   9. the anchor was the SAME COMMIT at both ends of the run (anchor_stable +
+#      anchor_sha == anchor_sha_end) — the ref is writable while the guards run,
+#  10. the line's FIELD SET is exactly what the committed writer emits (and no key is
+#      duplicated), with the pin cross-checked against verify-completion.sh itself,
+#  11. the recorded tree_fingerprint is RECOMPUTED from the tree and must match,
+#  12. the repository carries no git REPLACEMENT REFS, and
+#  13. the summary is corroborated by the run's own per-step ledger (.ax-verify/last_run.jsonl:
+#      present, same head, same tree, no non-PASS step).
+#
+# Why 9-13 (cross-family review ROUND 4, 2026-07-30 — the ratchet's own runtime was
+# unauthenticated; TD-2026-07-30-P1-anchor-runtime):
+#   Checks 1-8 read the LINE and compare its fields to each other and to git. None of them asked
+#   who WROTE the line, whether git was interpreting real objects, or whether the anchor ref held
+#   still while the run happened. Each of those is an INPUT, and an input the gate trusts must be
+#   authenticated AT THE MOMENT OF USE:
+#     · 9  — the anchor ref can be aimed at a commit lacking the ratcheting files for exactly the
+#            minutes the guards run (they bootstrap-skip) and restored before the line is written;
+#            check 8 is satisfied by the honest recorded value, so only the producer can see it.
+#     · 10 — `.ax-verify/runs.jsonl` is an ordinary text file. `echo '{…}' >>` with the pushed sha
+#            and the advertised anchor satisfied every earlier check. Pinning the exact shape (and
+#            refusing duplicate keys, which a lenient parser resolves in the writer's favour) makes
+#            a hand-authored line reproduce the writer exactly or fail.
+#     · 11 — the recorded fingerprint was never checked to BE a fingerprint: "x" passed check 5.
+#     · 12 — `git replace` keeps shas identical and swaps the objects every git read sees.
+#     · 13 — one line is one claim; the per-step ledger is a second artifact that must agree.
+#   HONEST LIMIT, stated because the alternative is theater: none of this makes forgery
+#   IMPOSSIBLE. Everything recomputable is also reproducible by an attacker who runs the same
+#   commands. An HMAC would close it and is deliberately NOT shipped — a public fork-base catalog
+#   has nowhere to keep a key, and a key committed next to the data authenticates nothing. What
+#   these checks close is the cheap, observed shape: the appended hand-authored line.
 #
 # Why 8 (cross-family review P1-X, 2026-07-30 — the ref is not the tree):
 #   Two guards in an R25 run ratchet against "the previous release", which they resolve from
@@ -152,11 +182,17 @@ if [ ! -d "$SCAN_ROOT" ]; then
     exit 2
 fi
 
-python3 - "$SCAN_ROOT" "$EXPECT_SHA" "$EXPECT_ANCHOR_SHA" <<'PYEOF'
+# P1-1 (ROUND 4, TD-2026-07-30-P1-anchor-runtime): every git read below — including the ones in
+# the python subprocesses — must see the real object graph. `git replace` keeps shas identical
+# while swapping the objects, and this guard's whole job is to compare recorded shas to git.
+export GIT_NO_REPLACE_OBJECTS=1
+
+python3 - "$SCAN_ROOT" "$EXPECT_SHA" "$EXPECT_ANCHOR_SHA" "$REPO_ROOT" <<'PYEOF'
 import sys
 import pathlib
 import json
 import os
+import re
 import subprocess
 import datetime
 import warnings
@@ -165,6 +201,10 @@ warnings.filterwarnings("ignore", category=DeprecationWarning)
 root = pathlib.Path(sys.argv[1])
 expect_sha_arg = sys.argv[2] if len(sys.argv) > 2 else ""
 expect_anchor_arg = sys.argv[3] if len(sys.argv) > 3 else ""
+# The repo THIS GUARD lives in (never the scanned root). Used only to locate the committed
+# writer + fingerprint helper for the schema cross-check and the recompute, so that a fixture
+# root cannot supply its own definition of what a genuine audit line looks like.
+guard_repo = pathlib.Path(sys.argv[4]) if len(sys.argv) > 4 else None
 ZERO_SHA = "0" * 40
 audit_log = root / ".ax-verify" / "runs.jsonl"
 expected_head_file = root / ".ax-verify" / "expected_head.txt"
@@ -208,8 +248,28 @@ if not lines:
     )
 
 # 2. Parse latest entry; must be valid JSON with required keys.
+#    DUPLICATE KEYS ARE REFUSED (P1-4, ROUND 4). `json.loads` keeps the LAST occurrence silently,
+#    so `{"tree_clean":false, … ,"tree_clean":true}` reads as green while a human reading the
+#    line sees the honest value first. The reviewer's note is narrower still — a duplicated
+#    *_end field lets a placeholder pass — but the general shape is the same: a lenient parser
+#    turns one record into two claims and lets the writer choose which one is audited.
+def _no_dup_pairs(pairs):
+    seen = set()
+    for k, _v in pairs:
+        if k in seen:
+            emit_fail(
+                "AUDIT_LINE_DUPLICATE_KEY",
+                f'the latest audit line repeats the key {k!r}. JSON parsers keep the LAST '
+                f'occurrence, so a duplicated field is a line that says two different things and '
+                f'lets the writer pick which one is audited (a second "tree_clean" or a second '
+                f'"*_end" is exactly that). verify-completion.sh emits each key once; a line that '
+                f'does not is not a line it wrote.'
+            )
+        seen.add(k)
+    return dict(pairs)
+
 try:
-    latest = json.loads(lines[-1])
+    latest = json.loads(lines[-1], object_pairs_hook=_no_dup_pairs)
 except json.JSONDecodeError as e:
     emit_fail("AUDIT_LINE_MALFORMED", f"latest line is not valid JSON: {e}")
 
@@ -230,7 +290,7 @@ else:
     # Try git in this root.
     try:
         out = subprocess.check_output(
-            ["git", "-C", str(root), "rev-parse", "HEAD"],
+            ["git", "--no-replace-objects", "-C", str(root), "rev-parse", "HEAD"],
             stderr=subprocess.DEVNULL,
         ).decode().strip()
         expected_head = out
@@ -299,7 +359,7 @@ if not tree_clean_both:
     hint = ""
     try:
         dirty = subprocess.check_output(
-            ["git", "-C", str(root), "status", "--porcelain", "-uall"],
+            ["git", "--no-replace-objects", "-C", str(root), "status", "--porcelain", "-uall"],
             stderr=subprocess.DEVNULL,
         ).decode().splitlines()
         if dirty:
@@ -405,6 +465,241 @@ if expect_anchor_arg and expect_anchor_arg != ZERO_SHA:
             f'legitimate case and the honest resolution is the same: `git fetch origin` and '
             f're-run `bash practices/scripts/verify-completion.sh`. The ratchet was measured '
             f'against a release that is no longer the one you are extending.'
+        )
+
+# ── P1-4 (cross-family review ROUND 4, 2026-07-30 — A RECORD IS A CLAIM, NOT EVIDENCE) ──
+# Checks 1-9 read the audit line's FIELDS and compare them to each other and to git. Not one of
+# them asked WHO WROTE THE LINE. `.ax-verify/runs.jsonl` is an ordinary append-only text file in
+# the working tree; `echo '{…}' >> .ax-verify/runs.jsonl` with the pushed sha and the remote's
+# advertised anchor satisfied every check above, because every value they compare was supplied by
+# the same author.
+#
+# WHAT CAN AND CANNOT BE FIXED HERE, stated plainly rather than dressed up:
+#   · Anything RECOMPUTABLE is recomputed (checks 12/13) — the tree fingerprint from the working
+#     tree, head/refs from git. A forged "x" dies. But recomputable also means FORGEABLE by an
+#     attacker willing to run the same command, so this defeats sloppy forgery, not determined
+#     forgery.
+#   · Anything the run PRODUCES ON THE SIDE is required to exist and to agree (check 14): the
+#     per-step ledger .ax-verify/last_run.jsonl must be present, must be about the same head and
+#     the same tree, and must not contradict a green summary. The forger now has to fabricate a
+#     consistent SET of artifacts, not one line.
+#   · The SHAPE is pinned to the writer (check 11), so a hand-authored line drifts and fails.
+#   · WHAT IS NOT DONE, and why: an HMAC/signature would make forgery infeasible rather than
+#     merely inconvenient, and it is deliberately NOT implemented — there is nowhere to keep a
+#     key in a PUBLIC fork-base catalog, and a key committed beside the data it authenticates
+#     authenticates nothing. Shipping the ceremony without the secret would be theater. The
+#     residual is therefore REAL and stated: a party with write access to the repo who is willing
+#     to run the same commands the runner runs can still fabricate a passing record. What this
+#     closes is the cheap version — the hand-authored line.
+AUDIT_SCHEMA_KEYS = (
+    "ts", "head_sha", "exit", "pass", "warn_advisory", "hard_fail", "skip", "full_run",
+    "tree_fingerprint", "tree_clean", "head_sha_end", "tree_fingerprint_end", "tree_clean_end",
+    "tree_stable", "tree_samples", "anchor_sha", "anchor_kind", "anchor_sha_end", "anchor_stable",
+)
+
+# 10. The ANCHOR must have been the same commit at BOTH ends of the run (P1-2, ROUND 4).
+#     The ref the ratchets measure against is an ordinary local ref: aim it at an ancient root
+#     commit for the minutes the guards run — they find their own files absent and take the
+#     first-release bootstrap skip — then restore it before the audit line is written. Check 9
+#     compares the RECORDED anchor to the remote and is perfectly satisfied by that, because the
+#     recorded value is the honest one. Only the producer can see the drift, so it reports both
+#     endpoints and this check verifies the relation. Fail closed on absent fields: a line
+#     without them came from a producer that never looked.
+anchor_end = latest.get("anchor_sha_end")
+anchor_stable = latest.get("anchor_stable")
+if anchor_stable is not True or anchor_end != latest.get("anchor_sha"):
+    emit_fail(
+        "AUDIT_ANCHOR_MOVED_MIDRUN",
+        f'the audit line does not show a settled release anchor for the whole run '
+        f'(anchor_stable={anchor_stable!r}, anchor_sha={str(latest.get("anchor_sha"))[:12]} → '
+        f'anchor_sha_end={str(anchor_end)[:12]}). refs/remotes/origin/main is an ordinary local '
+        f'ref, so it can be pointed at a commit that merely LACKS the ratcheting files for the '
+        f'minutes the guards run — every ratchet then takes its first-release bootstrap skip — '
+        f'and restored before this line is written. Both readings cannot be the release being '
+        f'extended. Re-run `bash practices/scripts/verify-completion.sh` on a settled repository. '
+        f'(Missing fields mean the line predates this binding — re-run.)'
+    )
+
+# 11. SCHEMA PINNING — the line's field set must be exactly what the writer emits.
+#     A hand-authored record is written by hand: it carries the fields its author knew to
+#     include. Pinning the exact set turns every future field into a forgery detector, and turns
+#     "I copied an old line and edited the shas" into a failure. The pin is cross-checked against
+#     the COMMITTED writer, so the two cannot drift apart silently — if verify-completion.sh
+#     gains a field and this list does not, the guard BLOCKS and names the drift instead of
+#     quietly accepting a shape nobody pinned.
+line_keys = set(latest.keys())
+pinned = set(AUDIT_SCHEMA_KEYS)
+if line_keys != pinned:
+    emit_fail(
+        "AUDIT_LINE_SCHEMA_MISMATCH",
+        f'the latest audit line\'s field set is not the one verify-completion.sh emits '
+        f'(unexpected: {sorted(line_keys - pinned)}, missing: {sorted(pinned - line_keys)}). '
+        f'.ax-verify/runs.jsonl is an ordinary text file — appending a well-shaped line by hand '
+        f'is the cheapest forgery there is, and every check above compares values supplied by the '
+        f'same author. Pinning the exact shape means a hand-authored line has to reproduce the '
+        f'writer exactly, and any field added to the writer later becomes a new detector. '
+        f'Re-run `bash practices/scripts/verify-completion.sh` to get a genuine line.'
+    )
+if guard_repo is not None:
+    writer = guard_repo / "practices" / "scripts" / "verify-completion.sh"
+    if writer.is_file():
+        # The audit printf is the schema. Extract the key names from the FORMAT STRING of the
+        # line that appends to $AUDIT_LOG, so the pin above is checked against the code that
+        # actually writes, not against a comment.
+        wtext = writer.read_text(errors="replace")
+        m = re.search(r"printf\s+'(\{\"ts\".*?)\\n'", wtext, re.S)
+        if m:
+            emitted = tuple(re.findall(r'"([a-z_]+)":', m.group(1)))
+            if tuple(AUDIT_SCHEMA_KEYS) != emitted:
+                emit_fail(
+                    "AUDIT_WRITER_SCHEMA_DRIFT",
+                    f'this guard pins the audit-line shape as {list(AUDIT_SCHEMA_KEYS)} but the '
+                    f'committed writer (practices/scripts/verify-completion.sh) emits {list(emitted)}. '
+                    f'The pin exists so a hand-authored line cannot pass as genuine; a pin that no '
+                    f'longer matches the writer either rejects every honest run or accepts a shape '
+                    f'nobody reviewed. Update BOTH in the same commit.'
+                )
+
+# 12. RECOMPUTE the tree fingerprint rather than believing it.
+#     The record says which working tree was verified. Until now nothing checked that the value
+#     was a fingerprint at all — "x" satisfied check 6 (a non-empty string that is not "nogit"
+#     and does not start with "unverifiable-"). Recomputing it from the tree in front of us kills
+#     that. Skipped for fixture roots (which declare expected_head.txt and are not git trees).
+#     HONEST LIMIT, and it is a real one: on a CLEAN tree the fingerprint's two inputs are empty,
+#     so the digest is a CONSTANT shared by every clean tree of every commit. Since push
+#     eligibility already requires a clean tree (check 7), this recompute proves the record was
+#     produced by the algorithm and that the tree is as clean as claimed — it does NOT
+#     independently identify the code. head_sha, re-read from git in check 3, carries that.
+#     CONSEQUENCE, disclosed: a tree that has been modified since the certifying run no longer
+#     matches, so `push` after starting new edits is refused with "re-run or stash". That is the
+#     conservative direction — the alternative is a gate that accepts a value it never checked.
+#     A MEASUREMENT MUST NOT DISTURB WHAT IT MEASURES: the helper is executed as a SUBPROCESS,
+#     never imported. `import tree_fingerprint` writes practices/scripts/lib/__pycache__/*.pyc
+#     into the very tree being fingerprinted, so the recompute would report a mismatch it caused
+#     itself — observed the first time this check ran (the sandbox tree went dirty with a .pyc
+#     and every honest push was refused). Running the file as a script leaves no cache.
+if not expected_head_file.is_file() and guard_repo is not None:
+    fp_helper = guard_repo / "practices" / "scripts" / "lib" / "tree_fingerprint.py"
+    # FAIL CLOSED on a missing helper (P1-3(c) applied to this file too): deleting
+    # tree_fingerprint.py would otherwise turn the recompute into a silent skip, which is the
+    # same "delete the thing that checks you" shape the anchor-critical path lists close. It is
+    # ON those lists, so its deletion is separately blocking at the anchor; here it blocks at the
+    # push. Guarded by the git test so the non-git roots ([87]'s relocated copies) still run.
+    if not fp_helper.is_file() and (guard_repo / ".git").exists():
+        emit_fail(
+            "AUDIT_FINGERPRINT_UNVERIFIABLE",
+            f'practices/scripts/lib/tree_fingerprint.py is absent, so the recorded '
+            f'tree_fingerprint cannot be recomputed and the push gate would be trusting a value '
+            f'it never checked. The helper is anchor-critical: a gate that cannot verify its own '
+            f'evidence blocks rather than skipping.'
+        )
+    if fp_helper.is_file():
+        try:
+            recomputed = subprocess.check_output(
+                [sys.executable, str(fp_helper), str(root)],
+                stderr=subprocess.DEVNULL,
+            ).decode().strip()
+        except Exception as e:
+            emit_fail(
+                "AUDIT_FINGERPRINT_UNVERIFIABLE",
+                f'practices/scripts/lib/tree_fingerprint.py could not be run ({e}), so the '
+                f'recorded tree_fingerprint cannot be recomputed. The helper is anchor-critical; '
+                f'a push gate that cannot recompute its evidence blocks rather than trusting it.'
+            )
+        if recomputed and recomputed != "nogit" and recomputed != tree_fp:
+            emit_fail(
+                "AUDIT_FINGERPRINT_MISMATCH",
+                f'the recorded tree_fingerprint ({str(tree_fp)[:12]}) is not the fingerprint of '
+                f'the tree that is here now ({recomputed[:12]}). Either the line was written by '
+                f'hand — .ax-verify/runs.jsonl is an ordinary text file, and until this check '
+                f'existed any non-empty string satisfied the "tree identified" test — or the tree '
+                f'has changed since the run that certified it, in which case the certificate is '
+                f'about code that is no longer here. Both resolve the same way: re-run '
+                f'`bash practices/scripts/verify-completion.sh` at the commit you are pushing '
+                f'(or put the tree back the way the run found it).'
+            )
+
+# 13. Git REPLACEMENT REFS make every sha comparison above meaningless (P1-1, ROUND 4).
+#     `git replace <real> <fabricated>` keeps shas identical and swaps the object every ordinary
+#     git command reads. This guard compares recorded shas against git; the ratcheting guards
+#     walk history through git. All of it can be answered from a fabricated graph. Every call
+#     here runs with GIT_NO_REPLACE_OBJECTS=1, and a tree carrying such refs at all is refused —
+#     a released tree has no reason to have them, and "we read past them" is a claim about every
+#     call site forever.
+try:
+    _replace = subprocess.check_output(
+        ["git", "--no-replace-objects", "-C", str(root), "for-each-ref",
+         "--format=%(refname)", "refs/replace/"],
+        stderr=subprocess.DEVNULL,
+    ).decode().strip()
+except Exception:
+    _replace = ""
+if _replace:
+    emit_fail(
+        "AUDIT_REPLACE_REFS_PRESENT",
+        f'this repository carries git replacement refs ({_replace.splitlines()}). They keep every '
+        f'sha identical while swapping the OBJECT that rev-list/show/ls-tree/merge-base read, so '
+        f'the ratcheting guards\' ancestry and bootstrap checks — and the sha comparisons in this '
+        f'guard — can all be satisfied out of a fabricated history while the audit line records '
+        f'authentic shas. Remove them (`git replace -d <ref>`) and re-run R25.'
+    )
+
+# 14. The summary must be corroborated by the run's OWN per-step ledger.
+#     One line is one claim. verify-completion also publishes .ax-verify/last_run.jsonl — a
+#     record per step, written incrementally as the run proceeds and bound to the head and tree
+#     that produced it. Requiring the two artifacts to exist AND agree means a forger must
+#     fabricate a consistent set rather than append a line. It is not unforgeable (nothing here
+#     is, without a key — see the note above); it raises the cost and it catches every
+#     "append one green line" attempt, which is the shape actually observed.
+#     Fail closed: a green summary with no step ledger is a summary of nothing.
+run_ledger = root / ".ax-verify" / "last_run.jsonl"
+if not run_ledger.is_file():
+    emit_fail(
+        "AUDIT_RUN_LEDGER_MISSING",
+        f'.ax-verify/last_run.jsonl is absent, so the summary line has no per-step corroboration. '
+        f'verify-completion.sh publishes a record for every step it runs; a green summary with no '
+        f'step ledger is a claim with nothing behind it (and it is what an appended line looks '
+        f'like). Re-run `bash practices/scripts/verify-completion.sh`.'
+    )
+ledger_lines = [l for l in run_ledger.read_text().splitlines() if l.strip()]
+if not ledger_lines:
+    emit_fail(
+        "AUDIT_RUN_LEDGER_EMPTY",
+        f'.ax-verify/last_run.jsonl exists but records no steps, so nothing corroborates the '
+        f'summary line.'
+    )
+for raw in ledger_lines:
+    try:
+        rec = json.loads(raw)
+    except json.JSONDecodeError as e:
+        emit_fail("AUDIT_RUN_LEDGER_MALFORMED",
+                  f'.ax-verify/last_run.jsonl has a line that is not valid JSON: {e}')
+    for field in ("step_id", "status", "head_sha", "tree_fingerprint"):
+        if field not in rec:
+            emit_fail("AUDIT_RUN_LEDGER_INCOMPLETE",
+                      f'a step record in .ax-verify/last_run.jsonl is missing {field!r}: {raw[:120]}')
+    if rec["head_sha"] != latest["head_sha"]:
+        emit_fail(
+            "AUDIT_RUN_LEDGER_HEAD_MISMATCH",
+            f'step {rec["step_id"]!r} in .ax-verify/last_run.jsonl was recorded at head '
+            f'{str(rec["head_sha"])[:12]} but the summary line claims '
+            f'{latest["head_sha"][:12]}. The two artifacts describe different runs, so neither '
+            f'corroborates the other. Re-run the contract at the commit you are pushing.'
+        )
+    if rec["tree_fingerprint"] != tree_fp:
+        emit_fail(
+            "AUDIT_RUN_LEDGER_TREE_MISMATCH",
+            f'step {rec["step_id"]!r} was recorded against tree '
+            f'{str(rec["tree_fingerprint"])[:12]} but the summary line claims {str(tree_fp)[:12]}. '
+            f'Check 8 already requires the tree to have been settled for the whole run, so a step '
+            f'bound to a different tree means the two artifacts did not come from one run.'
+        )
+    if rec["status"] not in ("PASS",):
+        emit_fail(
+            "AUDIT_RUN_LEDGER_STATUS_CONFLICT",
+            f'step {rec["step_id"]!r} is recorded as {rec["status"]!r} in '
+            f'.ax-verify/last_run.jsonl while the summary line claims exit=0 / hard_fail=0. A '
+            f'step that did not pass cannot be part of a run that certifies a push.'
         )
 
 # All conditions satisfied.

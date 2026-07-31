@@ -212,21 +212,70 @@ command -v python3 >/dev/null 2>&1 || {
 # SELF_PATH_NOT_REGULAR runs on EVERY root (live and fixture): it inspects the tree in front of it
 # rather than a release history, which makes it the fixture-provable half of P1-Y.
 ANCHOR_AUTH_EXIT=5     # distinct from 1 (findings) / 2 (structural) / 4 (ratchet violation)
+#
+# ROUND 4 (P1-1/P1-2/P1-3, TD-2026-07-30-P1-anchor-runtime): rounds 1-3 authenticated WHAT the
+# anchor says, WHICH commit it is and HOW its bytes are represented; round 4 found the ratchet's
+# own RUNTIME unauthenticated. Two more codes at ANCHOR_AUTH_EXIT, one structural:
+#   · ANCHOR_REPLACE_REFS_PRESENT — `git replace` keeps every sha and swaps the OBJECT, so the
+#     ancestry / bootstrap / ls-tree reads above can all be answered out of a fabricated history.
+#     Every git call now runs --no-replace-objects (+ GIT_NO_REPLACE_OBJECTS=1 exported by the
+#     helper, which is what reaches the python subprocesses below), and a tree that carries
+#     replacement refs at all is refused.
+#   · ANCHOR_REF_MOVED_MIDRUN — single-resolution binding: the R25 runner resolves the anchor
+#     ONCE and exports it; this guard re-reads the ref at its own moment of use and must agree,
+#     then re-reads it again after its work (so a standalone run observes it twice too).
+#   · HELPER_PATH_NOT_REGULAR (EXIT 2, structural) — the inline preflight below.
+#
+# ── P1-3(b): INLINE HELPER PREFLIGHT — DELIBERATELY DUPLICATED IN EVERY CONSUMER ──────
+# `[ -f ]` FOLLOWS SYMLINKS: the old loader would source a link to anything, and did so before
+# any mode check existed. The check must run BEFORE the source, so it cannot live in the helper —
+# that would be the object under test certifying itself. These ~15 lines are duplicated in
+# evidence_quote_spotcheck_guard, manifest_snapshot_integrity_guard, verify-completion.sh and
+# .githooks/pre-push ON PURPOSE. The duplication IS the bootstrap.
+_ax_pf_rel="practices/scripts/lib/release_anchor.sh"
+_ax_pf_cur="$SELF_REPO_ROOT"
+for _ax_pf_part in practices scripts lib release_anchor.sh; do
+    _ax_pf_cur="$_ax_pf_cur/$_ax_pf_part"
+    if [ -L "$_ax_pf_cur" ]; then
+        echo "manifest_snapshot_integrity_guard: HELPER_PATH_NOT_REGULAR — ${_ax_pf_rel} resolves" >&2
+        echo "  through a SYMLINK at ${_ax_pf_cur}. The release-anchor helper decides the entire" >&2
+        echo "  ratchet policy; a link makes the bytes that are SOURCED differ from the bytes git" >&2
+        echo "  records for that path — the same asymmetry the P1-Y checks close for the ledger." >&2
+        exit 2
+    fi
+done
+if command -v git >/dev/null 2>&1 \
+   && git --no-replace-objects -C "$SELF_REPO_ROOT" rev-parse --git-dir >/dev/null 2>&1; then
+    _ax_pf_mode="$(git --no-replace-objects -C "$SELF_REPO_ROOT" ls-tree HEAD -- "$_ax_pf_rel" 2>/dev/null | head -1)"
+    _ax_pf_mode="${_ax_pf_mode%% *}"
+    case "${_ax_pf_mode:-}" in
+        100644|100755|"") ;;   # "" = untracked: no committed mode to check, lstat walk above stands
+        *)
+            echo "manifest_snapshot_integrity_guard: HELPER_PATH_NOT_REGULAR — ${_ax_pf_rel} has git" >&2
+            echo "  mode ${_ax_pf_mode} at HEAD, which is not a regular file blob (100644/100755)." >&2
+            exit 2 ;;
+    esac
+fi
 # shellcheck source=practices/scripts/lib/release_anchor.sh
-# RELOCATED-COPY AFFORDANCE, deliberately narrow: fixture_kill_proof_guard [87] proves fixture
+# RELOCATED-COPY AFFORDANCE, now gated (P1-3(v)): fixture_kill_proof_guard [87] proves fixture
 # non-vacuity by running a MUTATED COPY of this file from a bare temp path, where the
-# repo-relative helper does not exist. AX_RELEASE_ANCHOR_LIB names it for that case ONLY — the
-# override is consulted exclusively when the COMMITTED path is absent, so on any real tree the
-# committed helper always wins and the variable is inert. It therefore cannot be used to
-# substitute a weakened helper into a live run. A helper that resolves nowhere is EXIT 2, never
-# a silent skip: without it neither the symlink check nor the anchor authentication runs.
+# repo-relative helper does not exist. AX_RELEASE_ANCHOR_LIB names it for THAT case only, and the
+# gate is explicit: consulted ONLY when the committed path is absent AND this root is not a git
+# work tree. On a live tree a missing helper is a BLOCK, not an invitation to load the policy
+# from wherever the environment points; deletion is separately blocking because the helper is now
+# on the anchor-critical path list below.
 AX_ANCHOR_LIB="$SELF_REPO_ROOT/practices/scripts/lib/release_anchor.sh"
-[ -f "$AX_ANCHOR_LIB" ] || AX_ANCHOR_LIB="${AX_RELEASE_ANCHOR_LIB:-$AX_ANCHOR_LIB}"
+if [ ! -f "$AX_ANCHOR_LIB" ] \
+   && ! git --no-replace-objects -C "$SELF_REPO_ROOT" rev-parse --git-dir >/dev/null 2>&1; then
+    AX_ANCHOR_LIB="${AX_RELEASE_ANCHOR_LIB:-$AX_ANCHOR_LIB}"
+fi
 if [ ! -f "$AX_ANCHOR_LIB" ]; then
     echo "manifest_snapshot_integrity_guard: RELEASE_ANCHOR_LIB_MISSING — practices/scripts/lib/release_anchor.sh not" >&2
     echo "  found under $SELF_REPO_ROOT. It carries the anchor resolution, the symlink (P1-Y)" >&2
     echo "  checks and the ancestry/bootstrap authentication (P1-X); without it this guard cannot" >&2
     echo "  run its ratchet at all, so it BLOCKS rather than degrading silently." >&2
+    echo "  On a git work tree the AX_RELEASE_ANCHOR_LIB override is NOT consulted: a live root" >&2
+    echo "  that has lost its committed helper is a tampered tree, not a sandbox." >&2
     exit 2
 fi
 . "$AX_ANCHOR_LIB"
@@ -240,23 +289,38 @@ ANCHOR_ROOT_RELS=(
     "practices/upstream/_MANIFEST.yaml"
     "practices-react/upstream/_MANIFEST.yaml"
 )
+# P1-3(iv): the ratchet's own TOOLCHAIN is anchor-critical too. Until round 4 none of these was
+# on any list, so deleting the helper activated the env fallback above and symlinking the hook or
+# the runner was invisible to every gate. Always the REAL repo (a fixture root has no toolchain).
+ANCHOR_TOOLCHAIN_RELS=(
+    "practices/scripts/lib/release_anchor.sh"
+    "practices/scripts/lib/tree_fingerprint.py"
+    "practices/scripts/verify-completion.sh"
+    "practices/evals/completion_checklist_recency_guard.sh"
+    ".githooks/pre-push"
+    ".githooks/pre-push-lib.sh"
+)
 
 ax_anchor_worktree_paths_regular "$SELF_REPO_ROOT" "manifest_snapshot_integrity_guard" \
-    "$ANCHOR_SELF_REL" || exit 2
+    "$ANCHOR_SELF_REL" "${ANCHOR_TOOLCHAIN_RELS[@]}" || exit 2
 ax_anchor_worktree_paths_regular "$RESOLVED_ROOT" "manifest_snapshot_integrity_guard" \
     "${ANCHOR_ROOT_RELS[@]}" || exit 2
 
 GIT_ANCHOR=""
 GIT_ANCHOR_KIND="unavailable"
 if [ "$LIVE_ROOT" = "1" ]; then
+    ax_anchor_check_replace_refs "$SELF_REPO_ROOT" "manifest_snapshot_integrity_guard" \
+        || exit "$ANCHOR_AUTH_EXIT"
     ax_anchor_resolve "$SELF_REPO_ROOT"
+    ax_anchor_check_pin "manifest_snapshot_integrity_guard" || exit "$ANCHOR_AUTH_EXIT"
     GIT_ANCHOR="$AX_ANCHOR_REF"
     GIT_ANCHOR_KIND="$AX_ANCHOR_KIND"
     if [ -n "$GIT_ANCHOR" ]; then
         ax_anchor_check_ancestry "$SELF_REPO_ROOT" "manifest_snapshot_integrity_guard" \
             || exit "$ANCHOR_AUTH_EXIT"
         ax_anchor_release_paths_regular "$SELF_REPO_ROOT" "manifest_snapshot_integrity_guard" \
-            "$ANCHOR_SELF_REL" "${ANCHOR_ROOT_RELS[@]}" || exit "$ANCHOR_AUTH_EXIT"
+            "$ANCHOR_SELF_REL" "${ANCHOR_ROOT_RELS[@]}" "${ANCHOR_TOOLCHAIN_RELS[@]}" \
+            || exit "$ANCHOR_AUTH_EXIT"
     fi
 fi
 
@@ -1116,3 +1180,18 @@ print(f"manifest_snapshot_integrity_guard: PASS — {len(disk)} manifest id(s) w
       f"{anchor_kind if anchored else 'no anchor'})")
 sys.exit(0)
 PY
+GUARD_RC=$?
+
+# ── P1-2, standalone half: observe the anchor ref a SECOND time ───────────────────────
+# (ROUND 4, TD-2026-07-30-P1-anchor-runtime.) The pin check above compares this guard's read
+# against the RUNNER's, which only exists when a runner started us. A guard invoked directly has
+# no pin, so it authenticates the ref against ITSELF by re-reading it now that the ratchet work
+# is done. A ref that moved in between means every conclusion above concerns a commit that is no
+# longer the release being extended — and refs/remotes/origin/main is an ordinary local ref.
+# HONEST LIMIT: two observations bound a window, they do not eliminate it. A ref moved and
+# restored entirely between these two reads is unobserved.
+if [ "$LIVE_ROOT" = "1" ] && [ -n "$GIT_ANCHOR" ]; then
+    ax_anchor_verify_unmoved "$SELF_REPO_ROOT" "manifest_snapshot_integrity_guard" \
+        || exit "$ANCHOR_AUTH_EXIT"
+fi
+exit "$GUARD_RC"

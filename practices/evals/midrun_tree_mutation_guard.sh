@@ -142,6 +142,18 @@ NEUTER_S_ANCHOR='TREE_STABLE=false'
 NEUTER_S_VALUE='TREE_STABLE=true'
 NEUTER_T_ANCHOR='if not tree_settled:'
 NEUTER_T_VALUE='if False:'
+# ROUND 4 (TD-2026-07-30-P1-anchor-runtime): the consumer gained a SECOND, INDEPENDENT detector
+# of exactly this defect. The run's per-step ledger (.ax-verify/last_run.jsonl) binds each step
+# to the tree that produced it, and the recency guard now requires every step record to carry the
+# SAME fingerprint as the summary line (P1-4 check 13). A tree mutated mid-run leaves step records
+# bound to the mutated tree, so the push is refused even with S and T both neutered — measured,
+# and that measurement is the round-4 evidence that the ledger cross-check is load-bearing.
+# It is therefore neutered in EVERY mutation mode: "S alone is load-bearing" stopped being a true
+# statement to assert, and the honest form is "each of S and T is load-bearing given the ledger
+# cross-check is off". Leaving it on would make this harness report itself broken every time a
+# layer is ADDED — penalising defence in depth, which is backwards.
+NEUTER_L_ANCHOR='rec["tree_fingerprint"] != tree_fp'
+NEUTER_L_VALUE='False'
 
 # neuter_copy <src> <dest> <anchor> <value> <apply:0|1>
 neuter_copy() {
@@ -173,6 +185,10 @@ make_subject() {
         "$NEUTER_S_ANCHOR" "$NEUTER_S_VALUE" "$want_s" || return 3
     neuter_copy "$REAL_RECENCY" "$dest/completion_checklist_recency_guard.sh" \
         "$NEUTER_T_ANCHOR" "$NEUTER_T_VALUE" "$want_t" || return 3
+    # In place (src == dest): the pass above has already written the copy.
+    local want_l=0; [ "$want_s" -eq 1 ] || [ "$want_t" -eq 1 ] && want_l=1
+    neuter_copy "$dest/completion_checklist_recency_guard.sh" "$dest/completion_checklist_recency_guard.sh" \
+        "$NEUTER_L_ANCHOR" "$NEUTER_L_VALUE" "$want_l" || return 3
     return 0
 }
 
@@ -242,6 +258,9 @@ build_repo() {
     # reason. Copied VERBATIM (never neutered): it is plumbing for the scenario, not a subject.
     mkdir -p "$sb/repo/practices/scripts/lib"
     cp "$REPO_ROOT/practices/scripts/lib/release_anchor.sh" "$sb/repo/practices/scripts/lib/"
+    # ROUND 4: the fingerprint algorithm now lives in one file so the recency guard can
+    # RECOMPUTE what the runner records (P1-4). The runner needs it installed too.
+    cp "$REPO_ROOT/practices/scripts/lib/tree_fingerprint.py" "$sb/repo/practices/scripts/lib/"
     cp "$REAL_HOOK" "$REAL_HOOK_LIB" "$sb/repo/.githooks/"
     chmod +x "$sb/repo/.githooks/pre-push"
     printf '%s\n' "$checklist" > "$sb/repo/practices/verification-checklist.yaml"

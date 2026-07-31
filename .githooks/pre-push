@@ -35,8 +35,54 @@
 # remains the second line of defense for whichever git policy the fork-받은 팀 picks.
 set -uo pipefail
 
-# Source the pure decision logic before cd (resolve relative to this hook file).
+# ── P1-1 (ROUND 4, TD-2026-07-30-P1-anchor-runtime) ──────────────────────────────────
+# `git replace <real> <fabricated>` keeps every sha identical while swapping the OBJECT that
+# rev-parse / merge-base / diff read. This hook is the last gate before publication and every
+# decision it makes is such a read; so is every read the recency guard makes below it.
+export GIT_NO_REPLACE_OBJECTS=1
+
+# ── P1-3(b) INLINE LIB PREFLIGHT — DELIBERATELY DUPLICATED (ROUND 4) ─────────────────
+# `source` FOLLOWS SYMLINKS, so pre-push-lib.sh could be a link to anything and this hook would
+# execute it. The check must precede the source, which means it cannot live in the lib — that
+# would be the object under test certifying itself. The same ~15 lines appear in both ratcheting
+# guards and in verify-completion.sh; the duplication IS the bootstrap.
 _PP_LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [[ -L "$_PP_LIB_DIR/pre-push-lib.sh" ]]; then
+    echo "[practices] ✗ HELPER_PATH_NOT_REGULAR — .githooks/pre-push-lib.sh is a SYMLINK." >&2
+    echo "[practices]   It decides which refs ship work and whether the R25 recency guard is" >&2
+    echo "[practices]   handed the remote's advertised anchor sha. Push BLOCKED." >&2
+    exit 1
+fi
+if [[ ! -f "$_PP_LIB_DIR/pre-push-lib.sh" ]]; then
+    echo "[practices] ✗ .githooks/pre-push-lib.sh is missing — the push gate cannot decide" >&2
+    echo "[practices]   anything without it, so it BLOCKS rather than degrading silently." >&2
+    exit 1
+fi
+_PP_ROOT_PROBE="$(git rev-parse --show-toplevel 2>/dev/null || true)"
+if [[ -n "$_PP_ROOT_PROBE" ]]; then
+    _PP_LIB_MODE="$(git ls-tree HEAD -- .githooks/pre-push-lib.sh 2>/dev/null | head -1)"
+    _PP_LIB_MODE="${_PP_LIB_MODE%% *}"
+    case "${_PP_LIB_MODE:-}" in
+        100644|100755|"") ;;
+        *) echo "[practices] ✗ HELPER_PATH_NOT_REGULAR — .githooks/pre-push-lib.sh has git mode" >&2
+           echo "[practices]   ${_PP_LIB_MODE} at HEAD (not a regular file blob). Push BLOCKED." >&2
+           exit 1 ;;
+    esac
+    # A repository carrying git REPLACEMENT REFS can answer every history question above out of a
+    # fabricated object graph while every sha stays authentic. The ratcheting guards refuse to
+    # run on such a tree; the push gate refuses to publish from one.
+    _PP_REPLACE="$(git for-each-ref --format='%(refname)' refs/replace/ 2>/dev/null)"
+    if [[ -n "$_PP_REPLACE" ]]; then
+        echo "[practices] ✗ ANCHOR_REPLACE_REFS_PRESENT — this repository carries replacement refs:" >&2
+        echo "$_PP_REPLACE" | sed 's/^/[practices]     /' >&2
+        echo "[practices]   They keep shas identical while swapping the objects every git command" >&2
+        echo "[practices]   reads, so the ratchets' ancestry/bootstrap checks and this gate's sha" >&2
+        echo "[practices]   comparisons can all be satisfied from a history somebody wrote." >&2
+        echo "[practices]   Remove them (git replace -d <ref>) and re-run R25. Push BLOCKED." >&2
+        exit 1
+    fi
+fi
+# Source the pure decision logic before cd (resolve relative to this hook file).
 # shellcheck source=.githooks/pre-push-lib.sh
 source "$_PP_LIB_DIR/pre-push-lib.sh"
 

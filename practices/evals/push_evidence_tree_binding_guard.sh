@@ -129,6 +129,15 @@ NEUTER_P_VALUE='    local clean=true'
 # Likewise the consumer's cleanliness requirement is one predicate over both endpoints.
 NEUTER_C_ANCHOR='if not tree_clean_both:'
 NEUTER_C_VALUE='if False:'
+# ROUND 4 (TD-2026-07-30-P1-anchor-runtime): the consumer now enforces "the evidence must
+# describe the tree being pushed" in a SECOND, independent place — it RECOMPUTES the recorded
+# fingerprint from the tree in front of it (P1-4 check 12). "C neutered" means an INDIFFERENT
+# CONSUMER, not "one particular line disabled", so the C mutation has to switch both off;
+# otherwise the matrix would report the harness as broken every time a layer is ADDED, which is
+# the opposite of what it is for. Defence in depth and single-layer mutation proofs pull against
+# each other, and this is where that tension is paid: the neuter set grows with the layer set.
+NEUTER_C2_ANCHOR='if recomputed and recomputed != "nogit" and recomputed != tree_fp:'
+NEUTER_C2_VALUE='if False:'
 
 # neuter_copy <src> <dest> <anchor> <value> <apply:0|1>
 neuter_copy() {
@@ -160,6 +169,19 @@ make_subject() {
         "$NEUTER_P_ANCHOR" "$NEUTER_P_VALUE" "$want_p" || return 3
     neuter_copy "$REAL_RECENCY" "$dest/completion_checklist_recency_guard.sh" \
         "$NEUTER_C_ANCHOR" "$NEUTER_C_VALUE" "$want_c" || return 3
+    # Second consumer layer (the RECOMPUTE), neutered in place — src == dest is intentional:
+    # the first pass has already written the copy, this one edits it. It is switched off for
+    # the 'p' mode as well as 'c', and that is a claim about the layer set, so it is spelled out:
+    # the recompute is a THIRD, INDEPENDENT layer that blocks this attack ON ITS OWN. Measured,
+    # and recorded in DECISIONS.md as the round-4 evidence: with BOTH P and C neutered and the
+    # recompute left on, the stale-evidence push was still REFUSED. Consequently "P alone is
+    # load-bearing" is no longer a true statement to assert, and the honest matrix is "each of P
+    # and C is load-bearing GIVEN the recompute is off" — which is what neutering it in every
+    # mutation mode expresses. Leaving it on would make the matrix report the harness as broken
+    # every time a layer is ADDED, i.e. it would penalise defence in depth.
+    local want_f=0; [ "$want_p" -eq 1 ] || [ "$want_c" -eq 1 ] && want_f=1
+    neuter_copy "$dest/completion_checklist_recency_guard.sh" "$dest/completion_checklist_recency_guard.sh" \
+        "$NEUTER_C2_ANCHOR" "$NEUTER_C2_VALUE" "$want_f" || return 3
     return 0
 }
 
@@ -193,6 +215,9 @@ build_repo() {
     # reason. Copied VERBATIM (never neutered): it is plumbing for the scenario, not a subject.
     mkdir -p "$sb/repo/practices/scripts/lib"
     cp "$REPO_ROOT/practices/scripts/lib/release_anchor.sh" "$sb/repo/practices/scripts/lib/"
+    # ROUND 4: the fingerprint algorithm now lives in one file so the recency guard can
+    # RECOMPUTE what the runner records (P1-4). The runner needs it installed too.
+    cp "$REPO_ROOT/practices/scripts/lib/tree_fingerprint.py" "$sb/repo/practices/scripts/lib/"
     cp "$REAL_HOOK" "$REAL_HOOK_LIB" "$sb/repo/.githooks/"
     chmod +x "$sb/repo/.githooks/pre-push"
     printf '%s\n' "$CHECKLIST" > "$sb/repo/practices/verification-checklist.yaml"

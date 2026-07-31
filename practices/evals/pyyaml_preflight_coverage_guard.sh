@@ -414,6 +414,14 @@ run_root() {
     cp "$REAL_VC" "$harness/practices/scripts/verify-completion.sh"
     [ -f "$REPO_ROOT/practices/scripts/_collapse_plan.py" ] && \
         cp "$REPO_ROOT/practices/scripts/_collapse_plan.py" "$harness/practices/scripts/_collapse_plan.py"
+    # ROUND 4 (TD-2026-07-30-P1-anchor-runtime): verify-completion.sh now sources
+    # practices/scripts/lib/release_anchor.sh (release anchor + P1-1/P1-2 authentication) and
+    # shells out to practices/scripts/lib/tree_fingerprint.py (the ONE definition of the working
+    # -tree fingerprint, so the recency guard can recompute what the runner recorded). A sandbox
+    # that installs the runner without its libs is testing a runner that cannot start.
+    mkdir -p "$harness/practices/scripts/lib"
+    cp "$REPO_ROOT/practices/scripts/lib/release_anchor.sh" "$harness/practices/scripts/lib/"
+    cp "$REPO_ROOT/practices/scripts/lib/tree_fingerprint.py" "$harness/practices/scripts/lib/"
     echo "── [$label]"
     analyse "$harness" "$harness/practices/scripts/verify-completion.sh"
     local rc=$?

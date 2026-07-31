@@ -91,7 +91,15 @@
 # Side effect: writes an audit log line to .ax-verify/runs.jsonl with
 #   {ts, head_sha, exit, pass, warn_advisory, hard_fail, skip, full_run,
 #    tree_fingerprint, tree_clean, head_sha_end, tree_fingerprint_end, tree_clean_end,
-#    tree_stable, tree_samples, anchor_sha, anchor_kind}
+#    tree_stable, tree_samples, anchor_sha, anchor_kind, anchor_sha_end, anchor_stable}
+# That key set IS the schema: completion_checklist_recency_guard pins it and cross-checks the pin
+# against the printf below, so a hand-authored line with a different field set is refused instead
+# of leniently parsed (P1-4, ROUND 4). Changing the fields here requires changing the pin there.
+#
+# anchor_sha_end/anchor_stable are the anchor's CLOSING endpoint (P1-2, ROUND 4): the ref the
+# ratchets measure against is an ordinary local ref, so it can be moved for the minutes the
+# guards run and restored before this line is written. It is now read at both ends, exactly like
+# the tree, and a drift makes the run a HARD FAIL that is still written to the log.
 #
 # anchor_sha/anchor_kind record WHICH RELEASE the ratcheting guards measured against. They are
 # resolved by practices/scripts/lib/release_anchor.sh — the same helper the guards source — and
@@ -187,7 +195,16 @@ fi
 
 mkdir -p "$AUDIT_DIR"
 
-CURRENT_HEAD="$(git -C "$REPO_ROOT" rev-parse HEAD 2>/dev/null || echo "unknown")"
+# ── P1-1 (ROUND 4, TD-2026-07-30-P1-anchor-runtime): git must interpret objects as they ARE ──
+# `git replace <real> <fabricated>` keeps every sha identical and swaps the OBJECT every ordinary
+# git command reads. Every head/status/diff below — and the tree fingerprint's python
+# subprocesses, and every guard this runner starts — would then be describing a history the
+# attacker wrote while this file records the authentic shas. Exported HERE, before the FIRST git
+# call in this script, because an export placed after one is a check that arrives too late.
+# (The shared helper exports it too; that is for guards started without this runner.)
+export GIT_NO_REPLACE_OBJECTS=1
+
+CURRENT_HEAD="$(git --no-replace-objects -C "$REPO_ROOT" rev-parse HEAD 2>/dev/null || echo "unknown")"
 
 # ── Which RELEASE did the ratcheting guards measure against? (P1-X layer 3) ──
 # (cross-family reviewer ROUND 3, 2026-07-30; TD-2026-07-30-P1-anchor-authenticity.)
@@ -203,11 +220,62 @@ CURRENT_HEAD="$(git -C "$REPO_ROOT" rev-parse HEAD 2>/dev/null || echo "unknown"
 # therefore produces an audit line bound to a commit the remote does not have, and the push is
 # refused. Layers (1) ancestry and (2) bootstrap-plausibility live in the guards themselves;
 # this is the layer that holds even if both were bypassed.
+#
+# ── P1-3(b) INLINE HELPER PREFLIGHT — DELIBERATELY DUPLICATED (ROUND 4) ──────────────
+# `[ -f ]`/`.` FOLLOW SYMLINKS, so the helper path could be a link to anything and the loader
+# would source it. The check has to run BEFORE the source, which means it cannot live inside the
+# helper — that would be the object under test certifying itself. Duplicated verbatim in both
+# ratcheting guards and in .githooks/pre-push; the duplication IS the bootstrap.
+_ax_pf_rel="practices/scripts/lib/release_anchor.sh"
+_ax_pf_cur="$REPO_ROOT"
+for _ax_pf_part in practices scripts lib release_anchor.sh; do
+    _ax_pf_cur="$_ax_pf_cur/$_ax_pf_part"
+    if [ -L "$_ax_pf_cur" ]; then
+        echo "verify-completion: R25 BLOCK: HELPER_PATH_NOT_REGULAR — ${_ax_pf_rel} resolves through" >&2
+        echo "  a SYMLINK at ${_ax_pf_cur}. The release-anchor helper decides which commit this run" >&2
+        echo "  records as the release it ratcheted against; a link makes the bytes that are SOURCED" >&2
+        echo "  differ from the bytes git records for that path." >&2
+        exit 2
+    fi
+done
+if command -v git >/dev/null 2>&1 \
+   && git --no-replace-objects -C "$REPO_ROOT" rev-parse --git-dir >/dev/null 2>&1; then
+    _ax_pf_mode="$(git --no-replace-objects -C "$REPO_ROOT" ls-tree HEAD -- "$_ax_pf_rel" 2>/dev/null | head -1)"
+    _ax_pf_mode="${_ax_pf_mode%% *}"
+    case "${_ax_pf_mode:-}" in
+        100644|100755|"") ;;
+        *) echo "verify-completion: R25 BLOCK: HELPER_PATH_NOT_REGULAR — ${_ax_pf_rel} has git mode" >&2
+           echo "  ${_ax_pf_mode} at HEAD, which is not a regular file blob (100644/100755)." >&2
+           exit 2 ;;
+    esac
+fi
+if [ ! -f "$SCRIPT_DIR/lib/release_anchor.sh" ]; then
+    echo "verify-completion: R25 BLOCK: RELEASE_ANCHOR_LIB_MISSING — practices/scripts/lib/release_anchor.sh" >&2
+    echo "  is absent. It resolves the release anchor this run records; without it the audit line" >&2
+    echo "  cannot say which release was ratcheted against, so the run BLOCKS rather than writing" >&2
+    echo "  an unbound record. (No environment override is consulted here: the runner always uses" >&2
+    echo "  the committed helper.)" >&2
+    exit 2
+fi
 # shellcheck source=practices/scripts/lib/release_anchor.sh
 . "$SCRIPT_DIR/lib/release_anchor.sh"
+# P1-1: a tree carrying git REPLACEMENT REFS can answer every ancestry/history question out of a
+# fabricated object graph while every sha stays authentic. The guards refuse to ratchet on such a
+# tree; the runner refuses to certify one, for the same reason and before spending the run.
+if ! ax_anchor_check_replace_refs "$REPO_ROOT" "verify-completion"; then
+    echo "verify-completion: R25 BLOCK: ANCHOR_REPLACE_REFS_PRESENT (see above)" >&2
+    exit 2
+fi
 ax_anchor_resolve "$REPO_ROOT"
+# P1-2 SINGLE-RESOLUTION BINDING: resolve ONCE, then publish that resolution to every child
+# process. Each guard re-reads the ref at its own moment of use and must get the same commit
+# (ANCHOR_REF_MOVED_MIDRUN), and this runner re-verifies it once more after the last step. The
+# audit line's anchor_sha is therefore the value the guards were held to, not a fourth
+# independent read of a ref that anything can move in between.
+ax_anchor_export_pin "$REPO_ROOT"
 ANCHOR_SHA="${AX_ANCHOR_SHA:-unavailable}"
 ANCHOR_KIND="${AX_ANCHOR_KIND:-unavailable}"
+ANCHOR_REF_AT_START="${AX_ANCHOR_REF:-}"
 
 # ── Working-tree fingerprint — what a resume record is actually bound to ─────
 # head_sha alone does NOT identify the code that ran. R25 is routinely invoked on a DIRTY
@@ -233,58 +301,12 @@ ANCHOR_KIND="${AX_ANCHOR_KIND:-unavailable}"
 # delete resume for its actual use case (a long full run on a work-in-progress tree), and
 # a fingerprint gives the same guarantee — a record is consumable only by the tree that
 # produced it — without forbidding the workflow.
+# P1-4 (ROUND 4): the algorithm moved to practices/scripts/lib/tree_fingerprint.py so that the
+# recency guard can RECOMPUTE this value instead of trusting the number this script wrote. Two
+# copies of a hash would be two chances to drift, and a drifted recompute fails honest runs.
+# The behaviour is unchanged: prints the digest, or the constant "nogit" for a non-git tree.
 compute_tree_fingerprint() {
-    python3 - "$REPO_ROOT" <<'PYEOF'
-import hashlib, os, subprocess, sys
-
-repo = sys.argv[1]
-
-def git(*args):
-    p = subprocess.run(["git", "-C", repo, *args],
-                       stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
-    if p.returncode != 0:
-        raise RuntimeError("git " + " ".join(args))
-    return p.stdout
-
-try:
-    status = git("status", "--porcelain", "-z", "-uall")
-    diff = git("diff", "HEAD", "--binary")
-except Exception:
-    # Not a git working tree (or git unavailable): no cheap tree identity — see the
-    # HONEST LIMIT note above. Constant value ⇒ head-only binding, as before.
-    print("nogit")
-    sys.exit(0)
-
-h = hashlib.sha256()
-h.update(b"status\0"); h.update(status)
-h.update(b"\0diff\0"); h.update(diff)
-
-# Untracked (non-ignored) files: `git diff HEAD` cannot see them, so hash their bytes.
-entries = status.split(b"\0")
-untracked = []
-i = 0
-while i < len(entries):
-    entry = entries[i]
-    i += 1
-    if len(entry) < 4:
-        continue
-    xy, path = entry[:2], entry[3:]
-    if xy[:1] in (b"R", b"C"):
-        i += 1  # a rename/copy record is followed by its origin path as a separate entry
-    if xy == b"??":
-        untracked.append(path)
-
-for path in sorted(untracked):
-    h.update(b"untracked\0"); h.update(path); h.update(b"\0")
-    try:
-        with open(os.path.join(os.fsencode(repo), path), "rb") as fh:
-            for chunk in iter(lambda: fh.read(1 << 16), b""):
-                h.update(chunk)
-    except OSError:
-        h.update(b"<unreadable>")
-
-print(h.hexdigest())
-PYEOF
+    python3 "$SCRIPT_DIR/lib/tree_fingerprint.py" "$REPO_ROOT"
 }
 compute_tree_fingerprint_checked() {
     local fp
@@ -1216,6 +1238,44 @@ END_HEAD="$(git -C "$REPO_ROOT" rev-parse HEAD 2>/dev/null || echo "unknown")"
 END_TREE_FP="$CURRENT_TREE_FP"
 END_TREE_CLEAN="$CURRENT_TREE_CLEAN"
 
+# ── Closing endpoint for the ANCHOR (P1-2, ROUND 4, TD-2026-07-30-P1-anchor-runtime) ──
+# The tree was sampled across the run because A RUN IS NOT AN INSTANT. The anchor REF has
+# exactly the same property and none of the protection: refs/remotes/origin/main is an ordinary
+# local ref, so it can be aimed at an ancient root commit for the minutes the ratcheting guards
+# are running (they then find their own files absent and bootstrap-skip) and restored before the
+# audit line is written. The recorded anchor_sha would still be the honest one and the pre-push
+# binding against the remote's advertisement would still match perfectly.
+# So the ref is re-read HERE, at the closing endpoint, exactly as the tree is, and both readings
+# go into the audit line: anchor_sha (start) / anchor_sha_end (end) / anchor_stable. A drift is
+# a HARD FAIL — the run is written to the audit log AS A FAILURE rather than suppressed, because
+# fail_fast_blocking_audit_guard requires every blocking path to leave a trail, and because a
+# silent re-resolution would be precisely the laundering this check exists to stop.
+# HONEST LIMIT, inherited from the same shape as tree sampling: this is two observations, not
+# continuous custody. A ref moved and restored entirely between the two reads is unobserved —
+# though the guards' own pin checks add further observation points inside the window.
+ANCHOR_SHA_END="$ANCHOR_SHA"
+ANCHOR_STABLE=true
+if [ -n "$ANCHOR_REF_AT_START" ] && [ "$ANCHOR_SHA" != "unavailable" ]; then
+    ANCHOR_SHA_END="$(git -C "$REPO_ROOT" rev-parse --verify --quiet "${ANCHOR_REF_AT_START}^{commit}" 2>/dev/null)"
+    [ -n "$ANCHOR_SHA_END" ] || ANCHOR_SHA_END="unresolvable"
+    if [ "$ANCHOR_SHA_END" != "$ANCHOR_SHA" ]; then
+        ANCHOR_STABLE=false
+        HARD_FAIL=$((HARD_FAIL + 1))
+        {
+            echo ""
+            echo "  ⛔ ANCHOR_REF_MOVED_MIDRUN — ${ANCHOR_REF_AT_START} changed during this run."
+            echo "     at start: ${ANCHOR_SHA}"
+            echo "     at end  : ${ANCHOR_SHA_END}"
+            echo "     The ratcheting guards measure 'the previous release' through that ref. A"
+            echo "     reference point that moves while the run is in progress was not a reference"
+            echo "     point: aiming it at a commit that merely LACKS the ratcheting files makes"
+            echo "     every ratchet take its first-release bootstrap skip, and restoring it before"
+            echo "     the run ends leaves the audit line looking honest. This run certifies"
+            echo "     nothing. Re-run R25 on a settled repository."
+        } >&2
+    fi
+fi
+
 # Fault injection for the check below (same spirit as AX_PREFLIGHT_FAKE_MISSING):
 #   AX_FAKE_LEDGER_LOSS=missing  — the ledger disappears entirely mid-run
 #   AX_FAKE_LEDGER_LOSS=partial  — the ledger survives but an earlier step's records are gone
@@ -1365,11 +1425,21 @@ FULL_RUN=true
 # which lives in a mutable local ref and is otherwise invisible to every consumer. The pre-push
 # hook compares anchor_sha against the sha the REMOTE advertises for the ref being pushed, so a
 # forged refs/remotes/origin/main is unpushable regardless of what the guards concluded.
-printf '{"ts":"%s","head_sha":"%s","exit":%d,"pass":%d,"warn_advisory":%d,"hard_fail":%d,"skip":%d,"full_run":%s,"tree_fingerprint":"%s","tree_clean":%s,"head_sha_end":"%s","tree_fingerprint_end":"%s","tree_clean_end":%s,"tree_stable":%s,"tree_samples":%d,"anchor_sha":"%s","anchor_kind":"%s"}\n' \
+# anchor_sha_end / anchor_stable are the anchor's CLOSING endpoint (P1-2, ROUND 4). The tree got
+# two endpoints because a run is not an instant; the ref needs them for the same reason and had
+# none. A consumer can now verify the relation (start == end) instead of trusting a single read
+# taken before the guards ran.
+# ── THIS printf IS THE AUDIT SCHEMA (P1-4, ROUND 4) ──────────────────────────────────
+# completion_checklist_recency_guard pins the exact key set a genuine line carries and re-derives
+# it FROM THIS FORMAT STRING (AUDIT_WRITER_SCHEMA_DRIFT if the two disagree), so a hand-authored
+# line whose field set differs — one key too many, one too few, a duplicated key — is refused
+# rather than parsed leniently. Adding or removing a field here therefore REQUIRES updating the
+# guard's pinned key list in the same commit; that coupling is the point.
+printf '{"ts":"%s","head_sha":"%s","exit":%d,"pass":%d,"warn_advisory":%d,"hard_fail":%d,"skip":%d,"full_run":%s,"tree_fingerprint":"%s","tree_clean":%s,"head_sha_end":"%s","tree_fingerprint_end":"%s","tree_clean_end":%s,"tree_stable":%s,"tree_samples":%d,"anchor_sha":"%s","anchor_kind":"%s","anchor_sha_end":"%s","anchor_stable":%s}\n' \
     "$TS" "$CURRENT_HEAD" "$EXIT_CODE" "$PASS_COUNT" "$ADVISORY_FAIL" "$HARD_FAIL" "$SKIP_COUNT" "$FULL_RUN" \
     "$START_TREE_FP" "$START_TREE_CLEAN" \
     "$END_HEAD" "$END_TREE_FP" "$END_TREE_CLEAN" "$TREE_STABLE" "$TREE_SAMPLES" \
-    "$ANCHOR_SHA" "$ANCHOR_KIND" \
+    "$ANCHOR_SHA" "$ANCHOR_KIND" "$ANCHOR_SHA_END" "$ANCHOR_STABLE" \
     >> "$AUDIT_LOG"
 
 # ── ax-ledger capture — every verify run leaves a per-project usage trace (progress / violation),

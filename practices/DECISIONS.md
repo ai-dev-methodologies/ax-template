@@ -916,3 +916,197 @@ the trigger event, do not relitigate.
     run. A helper that resolves nowhere is `RELEASE_ANCHOR_LIB_MISSING`, exit 2 — fail-closed,
     because without it neither the symlink check nor the anchor authentication runs at all.
 - Commits: (this commit — PRD-final-4 wave, P1-seal round-3)
+
+## TD-2026-07-30-(P1-anchor-runtime) — every input the ratchet trusts is authenticated at the moment of use
+- Status: ACCEPT
+- Date: 2026-07-30
+- Maintainer: PRD-final-4 wave, P1-seal round-4 lane
+- Evidence: four round-4 cross-family reproductions, all attacking the ROUND-3 FIX. Every claim
+  below was reproduced in a throwaway clone under the session scratchpad (`git clone --no-hardlinks`
+  of the worktree); the live tree was only ever read, and its `git status` was verified unchanged
+  by the round-4 sweep afterwards.
+- Rationale, and it is one sentence because the four findings are one finding:
+  **EVERY INPUT THE RATCHET TRUSTS — how git interprets objects, the anchor ref at each read, the
+  helper code itself, the audit record — MUST BE AUTHENTICATED AT THE MOMENT OF USE, NOT ASSUMED.**
+  Rounds 1-3 authenticated the anchor's CONTENT (its constants must parse), its IDENTITY (which
+  commit it is) and its REPRESENTATION (regular file, not symlink). Round 4 found that the
+  ratchet's own RUNTIME was still unauthenticated in four places, and each of those places is an
+  input exactly like the anchor is.
+
+  **P1-1 — GIT REPLACEMENT REFS: the sha is stable, the object is not.**
+  `git replace <real> <fabricated>` installs `refs/replace/<sha>` and every ordinary git command —
+  rev-list, show, ls-tree, merge-base, log, diff — then reads the FABRICATED object while every sha
+  printed anywhere stays authentic. Layers (1) ancestry and (2) bootstrap-plausibility ARE those
+  commands, so they can be answered out of a history the attacker wrote; the audit line records the
+  honest sha, and the pre-push binding against the remote's advertisement matches perfectly. The
+  tree fingerprint cannot see it either — a replacement ref is not part of the working tree.
+  RED, measured in the clone (`refs/replace/5e1f5a9…` → a commit whose tree carries an
+  `evidence_quote_spotcheck_guard.sh` with `LIVE_MIN_PROTECTED_ENTRIES = 0`):
+      git rev-parse origin/main                       → 5e1f5a9…  (UNCHANGED, before and after)
+      git show origin/main:…evidence_quote…guard.sh   → LIVE_MIN_PROTECTED_ENTRIES = 0
+      git --no-replace-objects show <same>            → LIVE_MIN_PROTECTED_ENTRIES = 64
+      PRE-FIX guard (round-3 copy, in situ)           → exit 0     ← the ratchet's floor is now
+                                                                     whatever the attacker chose
+      POST-FIX guard                                  → exit 8  ANCHOR_REPLACE_REFS_PRESENT
+      NEGATIVE CONTROL (replace ref deleted, post-fix)→ exit 0
+  Closed twice over, deliberately: `GIT_NO_REPLACE_OBJECTS=1` is EXPORTED by the shared helper (so
+  it reaches the python subprocesses inside the guards — the class of call site a wrapper function
+  cannot reach) AND `ax_git` passes `--no-replace-objects` explicitly (so a call that loses the
+  environment still reads real objects); on top of that, a tree carrying `refs/replace/*` is
+  REFUSED outright by both guards, the runner, the recency guard and the hook. The refusal is the
+  load-bearing half: "we read past them at every call site" is a claim about every present and
+  future call site, which is not a property this catalog can keep true by inspection, and a
+  released tree has no reason to carry them.
+
+  **P1-2 — TOCTOU ON THE ANCHOR REF: a run is not an instant, and neither is a ref.**
+  verify-completion captured the anchor sha for the audit line while each guard re-resolved
+  origin/main INDEPENDENTLY, minutes later. Flip the ref to an ancient root commit for exactly the
+  window the guards run in: they find their own files absent, take the first-release bootstrap
+  skip, and the audit records the honest sha.
+  RED, measured (origin/main → the repo's root commit 00c9e2c…):
+      PRE-FIX guard, ref flipped                      → exit 0  (bootstrap-skips, silently)
+      POST-FIX guard with the runner's pin exported   → exit 8  ANCHOR_REF_MOVED_MIDRUN
+      POST-FIX guard STANDALONE, ref flipped 0.15s
+        into its own 0.55s run (no pin at all)        → exit 8  ANCHOR_REF_MOVED_MIDRUN
+      PRE-FIX runner, ref flipped 2s into the run     → exit 0, audit {"anchor_sha":"5e1f5a9…",
+                                                        anchor_sha_end: absent, anchor_stable: absent}
+      POST-FIX runner, same flip                      → exit 1, hard_fail 1, audit
+                                                        {"anchor_sha":"5e1f5a9…",
+                                                         "anchor_sha_end":"00c9e2c…",
+                                                         "anchor_stable":false}
+      NEGATIVE CONTROL, post-fix runner, ref untouched→ exit 0, anchor_stable true, endpoints equal
+  SINGLE-RESOLUTION BINDING: the runner resolves ONCE and exports
+  `AX_RELEASE_ANCHOR_SHA/_KIND/_REF/_ROOT` (the ROOT is part of the pin so a nested sandbox run
+  cannot inherit an unrelated repo's pin); every guard re-reads the ref at ITS OWN moment of use
+  and requires equality — the pin is used, and it is used only after being re-authenticated
+  against the ref as it stands at that instant; a guard with no pin re-reads the ref after its own
+  work; and the runner re-verifies at the END and writes the run AS A FAILURE on drift
+  (`anchor_sha_end`/`anchor_stable`, mirroring `tree_stable`/`tree_samples` — written to the audit
+  log, not suppressed, because `fail_fast_blocking_audit_guard` requires every blocking path to
+  leave a trail). The consumer half is fixture-proven:
+  `completion_checklist_recency/fail_anchor_moved_midrun` (pre-round-4 guard exits 0 on it),
+  registered in the [87] kill-proof manifest.
+
+  **P1-3 — THE SHARED HELPER IS AN INJECTABLE POLICY SURFACE.**
+  Round 3 made `practices/scripts/lib/release_anchor.sh` the single decider, which also made it
+  the single thing worth attacking. Three sub-attacks, three answers, all proven by
+  `practices/scripts/ax-prove-helper-injection-blocked.sh` (registered in run-all-guards, with its
+  own negative control):
+  (a) INHERITED FUNCTIONS. The idempotence guard `return 0`-ed on `_AX_RELEASE_ANCHOR_LIB` BEFORE
+      defining anything, so `export -f ax_anchor_*` plus a forged `_AX_RELEASE_ANCHOR_LIB=1` left
+      the ATTACKER's policy authoritative. RED: the round-3 helper, sourced with those exports,
+      reports `anchor=ATTACKER` and exits 0 — measured, and re-measured on every run of the proof
+      script so it can never become a claim about the past. FIX: **the early return is gone.** The
+      definitions are re-established on EVERY source; the marker guards only the injection REPORT.
+      Every reserved name is `unset -f`'d before definition, and a name that ARRIVES defined with
+      the marker unset — or a marker that arrives EXPORTED, which this file never does — is
+      `HELPER_FUNCTION_INJECTED`, exit 2. POST-FIX: exit 2 on both signatures. The same treatment
+      is applied verbatim to `.githooks/pre-push-lib.sh` and its `pp_*` namespace, which owns the
+      anchor binding the push gate hands the recency guard.
+  (b) SYMLINKED HELPER. Both loaders used `[ -f ]`, which FOLLOWS SYMLINKS, before any mode check
+      existed. FIX: a minimal lstat walk + `git ls-tree` mode check runs INLINE in each consumer
+      immediately before the source. BOOTSTRAP PROBLEM, and it dictates the shape: the check cannot
+      live in the file it is checking, so those ~15 lines are **deliberately duplicated** in both
+      ratcheting guards, verify-completion.sh and .githooks/pre-push. Factoring them out would
+      undo the fix. POST-FIX: `HELPER_PATH_NOT_REGULAR`, exit 2.
+  (c) DELETED HELPER. The helper was on nobody's anchor-critical list, so deleting it activated the
+      `AX_RELEASE_ANCHOR_LIB` env fallback — an attacker-chosen policy file on a live tree. FIX:
+      the fallback is honored only when the committed path is absent AND the root is NOT a git work
+      tree (exactly the relocated-copy sandbox [87] needs; [97]/[98]/[the pyyaml and resume
+      harnesses] copy the committed file instead, which is the pattern that should have been used
+      all along). On a git root a missing helper is `RELEASE_ANCHOR_LIB_MISSING`, exit 2. AND the
+      five ratchet-toolchain paths — the helper, `verify-completion.sh`,
+      `completion_checklist_recency_guard.sh`, `.githooks/pre-push`, `.githooks/pre-push-lib.sh` —
+      are now on BOTH guards' anchor-critical lists, so deleting one is
+      `ANCHOR_BOOTSTRAP_IMPLAUSIBLE` and symlinking one is `ANCHOR_PATH_NOT_REGULAR` /
+      `SELF_PATH_NOT_REGULAR`.
+
+  **P1-4 — A HAND-AUTHORED AUDIT LINE WAS ACCEPTED AS PROOF.**
+  `.ax-verify/runs.jsonl` is an ordinary append-only text file. `echo '{…}' >> runs.jsonl` with the
+  pushed sha and the remote's advertised anchor satisfied every check the recency guard had,
+  because every value those checks compare was supplied by the same author. Five answers, and the
+  honest accounting of what each is worth:
+  · **RECOMPUTE what is recomputable** (check 12). The tree fingerprint is recomputed from the
+    working tree; a forged `"x"` — which used to satisfy "the tree is identified" — now fails.
+    The algorithm moved to `practices/scripts/lib/tree_fingerprint.py` so writer and verifier
+    cannot drift. HONEST LIMIT, stated because it changes what this is worth: ON A CLEAN TREE both
+    of the fingerprint's inputs are EMPTY, so the digest is a CONSTANT shared by every clean tree
+    of every commit (measured: `0a815065…` in three unrelated repositories). Since push
+    eligibility already requires a clean tree, the recompute proves the value was produced by the
+    algorithm and that the tree is as clean as claimed — it does NOT independently identify the
+    code. `head_sha`, re-read from git, carries that.
+    A MEASUREMENT MUST NOT DISTURB WHAT IT MEASURES: the helper is executed as a SUBPROCESS, never
+    imported. `import tree_fingerprint` wrote `__pycache__/*.pyc` into the very tree being
+    fingerprinted, and the first run of this check refused every honest push for a mismatch it had
+    caused itself. Found by [97], fixed, and recorded here because it is the kind of self-inflicted
+    wound a gate that writes is always one import away from.
+  · **BIND to run-local evidence** (check 13). `.ax-verify/last_run.jsonl` must exist, must be
+    about the same head and the same tree, and must contain no non-PASS step. A forger must now
+    fabricate a consistent SET of artifacts rather than append one line.
+  · **PIN THE SHAPE to the writer** (check 11). The line's field set must be exactly what
+    verify-completion.sh emits, and the pin is cross-checked against that printf itself
+    (`AUDIT_WRITER_SCHEMA_DRIFT`), so the two cannot drift apart silently and every field added
+    later becomes a new forgery detector.
+  · **REFUSE DUPLICATE KEYS** (check 2) — the reviewer's specific note. `json.loads` keeps the
+    LAST occurrence, so a duplicated `*_end` field lets a placeholder pass while a human reading
+    the line sees the honest value first. A record that says two things lets its writer choose
+    which one is audited.
+  · **NO HMAC, and this is a decision rather than an oversight.** A signature would make forgery
+    infeasible instead of merely inconvenient. There is nowhere to keep a key in a PUBLIC
+    fork-base catalog, and a key committed beside the data it authenticates authenticates nothing.
+    Shipping the ceremony without the secret would be theater, so it is not shipped.
+  RED, measured (each fixture is green on EVERY pre-round-4 axis; pre-round-4 guard → exit 0,
+  post-fix → exit 1):
+      fail_audit_line_forged_shape       0 → 1  AUDIT_LINE_SCHEMA_MISMATCH
+      fail_audit_line_duplicate_key      0 → 1  AUDIT_LINE_DUPLICATE_KEY
+      fail_anchor_moved_midrun           0 → 1  AUDIT_ANCHOR_MOVED_MIDRUN
+      fail_run_ledger_missing            0 → 1  AUDIT_RUN_LEDGER_MISSING
+      fail_run_ledger_head_mismatch      0 → 1  AUDIT_RUN_LEDGER_HEAD_MISMATCH
+      fail_run_ledger_status_conflict    0 → 1  AUDIT_RUN_LEDGER_STATUS_CONFLICT
+  Five of the six are registered in the [87] kill-proof manifest and the floor moves 64 → 69.
+  `fail_run_ledger_missing` is deliberately NOT registered: neutering its condition lands on the
+  empty-ledger check, so it cannot flip to exit 0 by a single-anchor mutation and would be reported
+  vacuous for a structural reason rather than a coverage one. Saying so is cheaper than pretending.
+- Alternatives considered and rejected:
+  · *Trust `GIT_NO_REPLACE_OBJECTS` alone and skip the refusal.* Rejected: it is a claim about
+    every call site forever, including ones nobody has written yet.
+  · *Keep the helper's early return and simply not export functions.* Rejected: a gate cannot
+    depend on its attacker's restraint. The definitions are unconditional now.
+  · *Factor the inline helper preflight into the helper.* Rejected — that is the bootstrap error
+    itself: the object under test would certify itself. The duplication is the fix.
+  · *Sign the audit line with a repo-committed key.* Rejected as theater; see above.
+  · *Have the recency guard re-run the checklist itself.* Rejected: the cycle the guard's own
+    header has documented since it was written.
+- Residuals, stated rather than papered over:
+  · **Forgery is not impossible, only expensive.** Everything recomputable is reproducible by an
+    attacker willing to run the same commands the runner runs. What round 4 closes is the cheap,
+    observed shape — the appended hand-authored line — plus the drift of anyone who copies an old
+    line. A determined party with write access to the repository can still fabricate a passing
+    record, and no check in this catalog changes that without a secret it cannot hold.
+  · **Two observations bound a window; they do not eliminate it.** The anchor is read at the
+    runner's start, at each guard's own read, after each guard's work, and at the runner's end. A
+    ref moved and restored entirely between two adjacent reads is unobserved — the same shape as
+    the tree-sampling limit inherited from round 2 of the push-evidence work.
+  · **`ANCHOR_REPLACE_REFS_PRESENT`, `ANCHOR_REF_MOVED_MIDRUN` (guard side) and
+    `HELPER_PATH_NOT_REGULAR` are live-root / environment-bound and NOT `--root`-fixture-coverable.**
+    Their evidence is the RED reproductions above plus the scripted proof
+    `ax-prove-helper-injection-blocked.sh`, which carries its own negative control (the unattacked
+    sandbox exits 0, so the attacks' exit 2 is attributable to them).
+  · **Defence in depth and single-layer mutation proofs pull against each other, and round 4 paid
+    that bill twice.** The new consumer-side layers independently block the attacks that [97] and
+    [98] neuter one layer at a time to prove load-bearing, so with P+C (resp. S+T) neutered the
+    push was still refused — measured, and that measurement IS the evidence that the recompute and
+    the ledger cross-check are load-bearing. Both harnesses now neuter the new layer alongside the
+    old ones, and the honest reading is written into them: "each of P and C is load-bearing GIVEN
+    the recompute is off". Left alone, those harnesses would report themselves broken every time a
+    layer is ADDED, which penalises exactly the thing they exist to encourage.
+  · **The recency guard's schema pin couples two files.** Adding a field to
+    verify-completion.sh's audit printf without updating `AUDIT_SCHEMA_KEYS` is
+    `AUDIT_WRITER_SCHEMA_DRIFT` and blocks every push. That coupling is intentional and it is a
+    real maintenance cost; it is stated in both files.
+  · **Existing audit lines are now invalid by construction.** The two new fields mean every
+    pre-round-4 line fails check 9. Re-running R25 was already required for any push (recency), so
+    this costs nothing beyond saying it out loud.
+  · The pre-push hook remains opt-in per clone (`install-hooks.sh`), unchanged from every other
+    push-time gate here.
+- Commits: (this commit — PRD-final-4 wave, P1-seal round-4)

@@ -37,7 +37,7 @@
 # distinct ids and distinct (guard, fixture) pairs are all equal to the value below.
 # fixture_kill_proof_guard.sh pins the same number as LIVE_MIN_ITEMS, so lowering the gate takes
 # two coordinated edits rather than one silent deletion.
-min_items: 64
+min_items: 69
 
 items:
 
@@ -1027,4 +1027,71 @@ items:
     fixture: practices/evals/fixtures/manifest-snapshot-integrity/fail_stale_allowlist
     fixture_arg: '--root'
     anchor: 'key not in divergent_keys'
+    neuter: 'False'
+
+  # ── ROUND 4 (P1-2/P1-4, TD-2026-07-30-P1-anchor-runtime) — "the record is a claim" ──
+  # Five kill-proofs for the checks that authenticate the AUDIT RECORD and the ANCHOR's second
+  # endpoint. Every fixture below is green on EVERY pre-round-4 axis (head match, exit 0,
+  # hard_fail 0, full_run true, usable fingerprint, clean+stable tree, anchor recorded), and the
+  # pre-round-4 guard exits 0 on all five — measured. A sixth fixture,
+  # fail_run_ledger_missing, is DELIBERATELY NOT registered: neutering its condition lands on the
+  # empty-ledger check, so it cannot flip to 0 by a single-anchor mutation and would be reported
+  # as vacuous for a structural reason rather than a coverage one.
+
+  # fixture: an otherwise flawless HAND-AUTHORED line carrying one field verify-completion.sh
+  #          does not emit (`verified_by`). Every value it asserts was supplied by its author.
+  # anchor:  the schema-pin comparison (check #11 — the line's field set vs the writer's).
+  # neuter:  condition-constant → any shape accepted again → exit 0.
+  - id: completion_checklist_recency/fail_audit_line_forged_shape
+    guard: practices/evals/completion_checklist_recency_guard.sh
+    fixture: practices/evals/fixtures/completion_checklist_recency/fail_audit_line_forged_shape
+    fixture_arg: '--root'
+    anchor: 'line_keys != pinned'
+    neuter: 'False'
+
+  # fixture: the reviewer's note made concrete — `tree_fingerprint_end` appears TWICE, first as
+  #          the placeholder "x" and then as the real digest. json.loads keeps the LAST, so the
+  #          line reads perfect while it plainly says two things.
+  # anchor:  the duplicate-key detection inside the object_pairs_hook.
+  # neuter:  condition-constant → last-wins parsing restored → exit 0.
+  - id: completion_checklist_recency/fail_audit_line_duplicate_key
+    guard: practices/evals/completion_checklist_recency_guard.sh
+    fixture: practices/evals/fixtures/completion_checklist_recency/fail_audit_line_duplicate_key
+    fixture_arg: '--root'
+    anchor: 'k in seen'
+    neuter: 'False'
+
+  # fixture: anchor_stable=false with anchor_sha_end != anchor_sha — the ref was aimed at another
+  #          commit while the ratcheting guards ran and restored before the line was written.
+  #          Check 8 (recorded anchor == remote advertisement) is fully satisfied by it.
+  # anchor:  the settled-anchor check (check #9).
+  # neuter:  condition-constant → a moving reference point certifies a push again → exit 0.
+  - id: completion_checklist_recency/fail_anchor_moved_midrun
+    guard: practices/evals/completion_checklist_recency_guard.sh
+    fixture: practices/evals/fixtures/completion_checklist_recency/fail_anchor_moved_midrun
+    fixture_arg: '--root'
+    anchor: 'anchor_stable is not True or anchor_end != latest.get("anchor_sha")'
+    neuter: 'False'
+
+  # fixture: a per-step ledger copied from a DIFFERENT run (steps recorded at another head) beside
+  #          a summary line that claims the pushed head — the obvious next move once the ledger is
+  #          merely required to exist.
+  # anchor:  the ledger↔summary head comparison (check #13).
+  # neuter:  condition-constant → any ledger corroborates any summary → exit 0.
+  - id: completion_checklist_recency/fail_run_ledger_head_mismatch
+    guard: practices/evals/completion_checklist_recency_guard.sh
+    fixture: practices/evals/fixtures/completion_checklist_recency/fail_run_ledger_head_mismatch
+    fixture_arg: '--root'
+    anchor: 'rec["head_sha"] != latest["head_sha"]'
+    neuter: 'False'
+
+  # fixture: the run's own ledger records a step that did not pass while the summary claims
+  #          exit 0 / hard_fail 0.
+  # anchor:  the per-step status check (check #13).
+  # neuter:  condition-constant → a failed step rides inside a green summary → exit 0.
+  - id: completion_checklist_recency/fail_run_ledger_status_conflict
+    guard: practices/evals/completion_checklist_recency_guard.sh
+    fixture: practices/evals/fixtures/completion_checklist_recency/fail_run_ledger_status_conflict
+    fixture_arg: '--root'
+    anchor: 'rec["status"] not in ("PASS",)'
     neuter: 'False'

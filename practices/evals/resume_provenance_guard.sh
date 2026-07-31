@@ -261,6 +261,14 @@ build_sandbox() {
     cp "$vc" "$sb/repo/practices/scripts/verify-completion.sh"
     [ -f "$REPO_ROOT/practices/scripts/_collapse_plan.py" ] && \
         cp "$REPO_ROOT/practices/scripts/_collapse_plan.py" "$sb/repo/practices/scripts/"
+    # ROUND 4 (TD-2026-07-30-P1-anchor-runtime): verify-completion.sh now sources
+    # practices/scripts/lib/release_anchor.sh (release anchor + P1-1/P1-2 authentication) and
+    # shells out to practices/scripts/lib/tree_fingerprint.py (the ONE definition of the working
+    # -tree fingerprint, so the recency guard can recompute what the runner recorded). A sandbox
+    # that installs the runner without its libs is testing a runner that cannot start.
+    mkdir -p "$sb/repo/practices/scripts/lib"
+    cp "$REPO_ROOT/practices/scripts/lib/release_anchor.sh" "$sb/repo/practices/scripts/lib/"
+    cp "$REPO_ROOT/practices/scripts/lib/tree_fingerprint.py" "$sb/repo/practices/scripts/lib/"
     cat > "$sb/bin/mktemp" <<'SHIM'
 #!/bin/sh
 # TMPDIR-honouring mktemp (BSD mktemp ignores TMPDIR without a template).

@@ -20,8 +20,62 @@
 # branch selection is correct; proving the hook wires the branches to the right
 # side effects requires the integration scenarios in pre_push_decision_guard.sh.
 
-# Idempotent source guard.
-[[ -n "${_AX_PRE_PUSH_LIB:-}" ]] && return 0
+# ── P1-1 (ROUND 4, TD-2026-07-30-P1-anchor-runtime) ──────────────────────────────────
+# Every git read in this file must see the real object graph. `git replace` keeps shas identical
+# while swapping the objects rev-parse/merge-base/diff return, and the decisions below (which sha
+# is the push base, does this diff touch the regression scope) are exactly those reads.
+export GIT_NO_REPLACE_OBJECTS=1
+
+# ── P1-3(a) LOAD-TIME INJECTION CHECK (ROUND 4) ──────────────────────────────────────
+# THE EARLY RETURN IS GONE. It used to sit here, BEFORE any definition, so
+# `export -f pp_anchor_expect_sha` + `_AX_PRE_PUSH_LIB=1` left an attacker's version of the
+# ANCHOR BINDING authoritative inside the push gate — the one function that decides whether the
+# hook demands the remote's advertised sha at all. Definitions are now re-established on every
+# source; the marker guards only the injection REPORT, never the definitions.
+# Same two signatures as practices/scripts/lib/release_anchor.sh, deliberately duplicated rather
+# than shared: a hook must not depend on a library to decide whether its library was replaced.
+_AX_PP_FN_NAMES="pp_anchor_expect_sha pp_effective_push_specs pp_ref_is_deletion \
+pp_resolve_ref_base pp_diff_touches_scope"
+
+_ax_pp_injection_report() {
+    {
+        echo ".githooks/pre-push-lib.sh: HELPER_FUNCTION_INJECTED — $1"
+        echo "  These functions decide the push gate's branches: which refs ship work, which sha"
+        echo "  the regression diffs against, and whether the R25 recency guard is handed the"
+        echo "  REMOTE's advertised anchor sha. A definition arriving from outside (bash imports"
+        echo "  exported functions across \`bash hook\`) replaces the gate's policy with the"
+        echo "  caller's. Names reserved by this file: ${_AX_PP_FN_NAMES}"
+    } >&2
+    exit 1
+}
+
+if [[ -n "${_AX_PRE_PUSH_LIB:-}" ]]; then
+    if declare -p _AX_PRE_PUSH_LIB 2>/dev/null | grep -q '^declare -x'; then
+        _ax_pp_injection_report \
+            "_AX_PRE_PUSH_LIB arrived from the ENVIRONMENT (exported); this file sets it as a
+  plain shell variable, so an exported one is a forged 'already loaded' marker."
+    fi
+else
+    for _ax_pp_fn in $_AX_PP_FN_NAMES; do
+        if declare -F "$_ax_pp_fn" >/dev/null 2>&1; then
+            _ax_pp_injection_report \
+                "the function ${_ax_pp_fn} was ALREADY DEFINED before this file was sourced, and
+  no prior source in this shell set the load marker."
+        fi
+    done
+    unset _ax_pp_fn
+fi
+for _ax_pp_bf in ${!BASH_FUNC_@}; do
+    case "$_ax_pp_bf" in
+        BASH_FUNC_pp_*) _ax_pp_injection_report \
+            "the environment carries ${_ax_pp_bf} — an exported shell function aimed at this
+  file's namespace." ;;
+    esac
+done
+unset _ax_pp_bf
+for _ax_pp_fn in $_AX_PP_FN_NAMES; do unset -f "$_ax_pp_fn" 2>/dev/null || true; done
+unset _ax_pp_fn
+# Plain (NOT exported) marker: idempotent for the REPORT only, never for the definitions.
 _AX_PRE_PUSH_LIB=1
 
 PP_ZERO_SHA="0000000000000000000000000000000000000000"
