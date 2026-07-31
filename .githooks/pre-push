@@ -33,7 +33,56 @@
 # Activated by practices/scripts/install-hooks.sh together with pre-commit. The hook
 # is opt-in per clone; not installing it skips the regression locally but sentinel CI
 # remains the second line of defense for whichever git policy the fork-받은 팀 picks.
-# ── ROUND 6 / P1-1: PURE-KEYWORD PREFLIGHT — THESE ARE THE FIRST EXECUTABLE LINES ────
+# ── ROUND 7 / P1-1: PRIVILEGED-MODE RE-EXEC — THIS IS THE FIRST EXECUTABLE TEXT ─────
+# (TD-2026-07-30-P1-privileged-startup.) The round-6 preflight below is IN-SCRIPT, and bash
+# sources $BASH_ENV BEFORE a script's first line — so ANY in-script sensor is structurally too
+# late. MEASURED (cross-family reviewer, round 7): a SELF-ERASING payload
+#     builtin unset BASH_ENV ENV; function set(){ builtin exit 0; }
+# leaves NOTHING for the preflight to find — BASH_ENV is gone from the environ it reads, and the
+# function is NOT exported so no BASH_FUNC_* entry exists — and the first `set -uo pipefail` this
+# file runs exits 0. `shopt -s expand_aliases` + an alias is the same class.
+# THE FIX IS AT THE INVOCATION BOUNDARY, not in the script: bash PRIVILEGED MODE (-p) does not
+# process $BASH_ENV/$ENV and does not import functions from the environment. This entry therefore
+# re-executes ITSELF under -p before doing anything else. Measured, bash 3.2.57(1) / Apple:
+#     BASH_ENV=<payload> bash  <entry>   → exit 0          (pre-fix; the gate never ran)
+#     BASH_ENV=<payload> bash -p <entry> → honest verdict   (payload inert)
+# CONSTRUCTS USED, and why each is unhijackable: `case` is a shell KEYWORD (never resolved through
+# the function table); $-, ${x-} and ${x:?} are PARAMETER EXPANSIONS, not commands; /usr/bin/env is
+# invoked by ABSOLUTE PATH (bash never looks a word containing a slash up as a function).
+# `exec` IS shadowable, so the SECOND case re-asserts privileged mode AFTER it: a neutered exec
+# falls through to a non-zero abort instead of quietly continuing unprivileged (measured: a
+# BASH_ENV defining exec(){ :; } exits 1 here, it does not proceed).
+# THE LOOP MARKER IS NOT TRUSTED. AX_PRIV_REEXEC means only "a re-exec was already attempted".
+# An attacker who PRESETS it does not skip the re-exec — that branch ABORTS (measured, exit 1).
+# It is unset the moment privileged mode holds, so it never reaches a child entry and cannot turn
+# into a one-shot disable for the guards this entry launches.
+# RESIDUAL, stated rather than hidden: a $BASH_ENV whose first line is `exit 0` ends the shell
+# before this line exists (measured, exit 0, nothing printed). No in-script construct can survive
+# that. It is the environment-control boundary declared in practices/DECISIONS.md,
+# TD-2026-07-30-(ratchet-threat-model) — the same adversary can simply not install the hooks.
+case $- in
+    *p*) ;;
+    *) case "${AX_PRIV_REEXEC-}" in
+           1) _AX_PV_NULL=; _AX_PV_DIE=${_AX_PV_NULL:?"pre-push: HERMETIC_PRIVILEGED_UNREACHABLE — a re-exec into bash privileged mode was already attempted and this shell is STILL unprivileged. Either exec is shadowed by a function, or AX_PRIV_REEXEC was preset in the environment to skip the re-exec. Both are refused; nothing in this gate runs unprivileged. Start it from a clean shell."} ;;
+           *) case "${BASH:-}" in
+                  /*) exec /usr/bin/env AX_PRIV_REEXEC=1 "$BASH" -p "$0" "$@" ;;
+                  *) _AX_PV_NULL=; _AX_PV_DIE=${_AX_PV_NULL:?"pre-push: HERMETIC_PRIVILEGED_UNREACHABLE — the running interpreter (BASH) is not an absolute path, so the SAME interpreter cannot be named unambiguously for the privileged re-exec."} ;;
+              esac ;;
+       esac ;;
+esac
+case $- in
+    *p*) ;;
+    *) _AX_PV_NULL=; _AX_PV_DIE=${_AX_PV_NULL:?"pre-push: HERMETIC_PRIVILEGED_UNREACHABLE — the re-exec returned instead of replacing this process, which means exec itself is shadowed. Unprivileged execution is refused."} ;;
+esac
+unset AX_PRIV_REEXEC
+
+# ── ROUND 6 / P1-1: PURE-KEYWORD PREFLIGHT — SECOND, AND BEFORE ANY OVERRIDABLE COMMAND ──
+# CORRECTION (ROUND 7): round 6 claimed this block was "the first executable text of all 8
+# entries". It was NOT. The two SOURCED libs (practices/scripts/lib/release_anchor.sh:251 and
+# .githooks/pre-push-lib.sh:27) ran `export GIT_NO_REPLACE_OBJECTS=1` FIRST, and `export` is an
+# ordinary command lookup: MEASURED, an exported export() plus `alias exit=:` produced
+# SOURCE_RC=0 for both. Those two exports now sit BELOW this preflight, and the round-7
+# privileged re-exec above is what actually executes first.
 # (TD-2026-07-30-P1-preflight-and-raw-bytes.) INVARIANT (α): NOTHING OVERRIDABLE MAY EXECUTE
 # BEFORE THE SCRUB THAT DETECTS OVERRIDES. Round 5 put `set -uo pipefail` and `[ -n … ]` ahead of
 # its own hermetic bootstrap, and both are ordinary command lookups: MEASURED —

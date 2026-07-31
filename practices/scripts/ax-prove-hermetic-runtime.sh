@@ -46,6 +46,26 @@
 #                                                                   → RATCHET_PRIOR_RELEASE_GUARD_FAILED
 #       (K') with the prior-release re-run removed the bypass passes the hook again (exit 0).
 #
+# ROUND 7 (TD-2026-07-30-P1-privileged-startup / P1-3) restates (alpha) honestly: an IN-SCRIPT
+# sensor cannot see a STARTUP FILE, because bash runs $BASH_ENV before the script's first line.
+#   (M) a SELF-ERASING $BASH_ENV — `builtin unset BASH_ENV ENV; function set(){ exit 0; }` —
+#       leaves nothing for the round-6 preflight to find (no BASH_FUNC_* entry, no BASH_ENV in
+#       the environ) and turns the gate's honest non-zero into exit 0. Closed by re-executing
+#       every entry under bash PRIVILEGED MODE (-p), which processes neither $BASH_ENV/$ENV nor
+#       inherited functions                                          → the honest verdict stands.
+#       (M') with the privileged re-exec removed the payload lands again (exit 0).
+#       (M'') presetting the loop marker AX_PRIV_REEXEC ABORTS       → HERMETIC_PRIVILEGED_UNREACHABLE
+#             (a marker an attacker can set may never mean "already privileged").
+#   (N) the two SOURCED libs ran `export` — an ordinary command lookup — BEFORE the round-6
+#       preflight, so an exported export() exits them at 0. They now ASSERT privileged mode as
+#       their first executable text (a sourced file cannot re-exec without replacing its caller).
+#       (N') with the round-6 shape restored the exported export() lands again (exit 0).
+#   (O) `filter.<n>.process` — git's long-running filter protocol — was outside round 6's
+#       `clean|smudge` pattern and converts content identically: an equal-length swap of an
+#       ordinary tracked file's bytes makes `git status --porcelain` EMPTY, so the fingerprint's
+#       raw-byte loop never opens it        → GIT_FILTERS_PRESENT / GIT_RAW_INDEX_DIVERGENCE.
+#       (O') with the keyword subset restored and the raw sweep removed the mask lands (exit 0).
+#
 # Nothing outside the throwaway directory is touched; the live tree is only ever READ.
 # Exit: 0 all attacks blocked · 1 at least one attack open · 2 harness error.
 set -uo pipefail
@@ -183,7 +203,7 @@ run_gate() {   # run_gate <sb> <log> [env assignments...] — the LIVE recency g
 # refactor makes this harness fail loudly instead of silently proving nothing.
 round6_neuter() {   # round6_neuter <sb> <what>   what ∈ preflight|identity|rawbytes|priorrelease
     "${AX_PY_BIN:-python3}" - "$1/repo" "$2" <<'PY'
-import sys, pathlib
+import re, sys, pathlib
 repo, what = pathlib.Path(sys.argv[1]), sys.argv[2]
 GUARD = repo / "practices/evals/completion_checklist_recency_guard.sh"
 ANCHOR = repo / "practices/scripts/lib/release_anchor.sh"
@@ -220,6 +240,19 @@ for path, pairs in edits[what]:
             sys.exit(3)
         text = text.replace(a, b)
     path.write_text(text, encoding="utf-8")
+# ROUND 7 CORRECTION: "pre-round-6" also means PRE-ROUND-7 — the privileged re-exec did not exist
+# then either. Leaving it in place makes (G') structurally unreproducible (privileged mode alone
+# blocks the exported-`set` import), which would silently turn a non-vacuity proof into a
+# tautology. The pre-fix world must be the world as it actually was.
+if what == "preflight":
+    pat = (r"^case \$- in\n    \*p\*\) ;;\n    \*\) case \"\$\{AX_PRIV_REEXEC-\}\""
+           r".*?\nunset AX_PRIV_REEXEC\n")
+    body = GUARD.read_text(encoding="utf-8")
+    hits = re.findall(pat, body, re.M | re.S)
+    if len(hits) != 1:
+        print(f"round-7 block occurs {len(hits)}x (expected 1) in {GUARD}", file=sys.stderr)
+        sys.exit(3)
+    GUARD.write_text(re.sub(pat, "", body, count=1, flags=re.M | re.S), encoding="utf-8")
 PY
     local rc=$?
     [ "$rc" -ne 0 ] && return "$rc"
@@ -230,6 +263,111 @@ PY
     ( builtin cd "$1/repo" && git add -A && git "${GIT_ID[@]}" commit -q -m "pre-round-6" \
       && git update-ref refs/remotes/origin/main HEAD \
       && git push -q -f origin HEAD:refs/heads/main ) >/dev/null 2>&1
+    return 0
+}
+
+# ── ROUND 7 neuters (TD-2026-07-30-P1-privileged-startup / P1-3). Same contract as the round-5/6
+# neuters: EXACTLY ONE match per anchor, so a refactor makes this harness fail loudly.
+round7_neuter() {   # round7_neuter <sb> <what>   what ∈ privileged|sourcedpriv|filterproc
+    "${AX_PY_BIN:-python3}" - "$1/repo" "$2" <<'PY'
+import re, sys, pathlib
+repo, what = pathlib.Path(sys.argv[1]), sys.argv[2]
+GUARD = repo / "practices/evals/completion_checklist_recency_guard.sh"
+ANCHOR = repo / "practices/scripts/lib/release_anchor.sh"
+FP = repo / "practices/scripts/lib/tree_fingerprint.py"
+BANNER = "# ── ROUND 6 / P1-1: PURE-KEYWORD PREFLIGHT"
+
+def sub_once(path, pattern, repl, flags=re.M):
+    text = path.read_text(encoding="utf-8")
+    hits = re.findall(pattern, text, flags)
+    if len(hits) != 1:
+        print(f"round7 neuter anchor occurs {len(hits)}x (expected 1) in {path}: {pattern[:70]!r}",
+              file=sys.stderr)
+        sys.exit(3)
+    path.write_text(re.sub(pattern, repl, text, count=1, flags=flags), encoding="utf-8")
+
+def plain_once(path, a, b):
+    text = path.read_text(encoding="utf-8")
+    if text.count(a) != 1:
+        print(f"round7 neuter anchor occurs {text.count(a)}x (expected 1) in {path}: {a[:70]!r}",
+              file=sys.stderr)
+        sys.exit(3)
+    path.write_text(text.replace(a, b, 1), encoding="utf-8")
+
+if what == "privileged":
+    # (M') the round-6 world: no privileged re-exec, so $BASH_ENV is processed before line 1.
+    sub_once(GUARD, r"^case \$- in\n    \*p\*\) ;;\n    \*\) case \"\$\{AX_PRIV_REEXEC-\}\".*?\nunset AX_PRIV_REEXEC\n",
+             "", re.M | re.S)
+elif what == "sourcedpriv":
+    # (N') the round-6 world for a SOURCED lib: no privileged assertion, and `export` — an
+    # ordinary command lookup — back ahead of the pure-keyword preflight, which is where round 6
+    # actually left it (release_anchor.sh:251).
+    sub_once(ANCHOR, r"^case \$- in\n    \*p\*\) ;;\n    \*\) _AX_PV_NULL=[^\n]*HERMETIC_PRIVILEGED_UNREACHABLE[^\n]*\nesac\n",
+             "", re.M | re.S)
+    plain_once(ANCHOR, BANNER, "export GIT_NO_REPLACE_OBJECTS=1\n" + BANNER)
+elif what == "filterproc":
+    # (O') the round-6 world for content filters: the clean|smudge KEYWORD SUBSET, and no
+    # raw-bytes sweep on either the guard side or the fingerprint side.
+    plain_once(GUARD, 'r"^filter\\.",', 'r"^filter\\..*\\.(clean|smudge)$",')
+    plain_once(GUARD, "            if _h.hexdigest().encode() != _blob:", "            if False:")
+    plain_once(FP, 'r"^filter\\."],', 'r"^filter\\..*\\.(clean|smudge)$"],')
+    plain_once(FP, "    if diverged:", "    if False:")
+else:
+    print(f"unknown round7 neuter: {what}", file=sys.stderr); sys.exit(3)
+PY
+    local rc=$?
+    [ "$rc" -ne 0 ] && return "$rc"
+    ( builtin cd "$1/repo" && git add -A && git "${GIT_ID[@]}" commit -q -m "pre-round-7" \
+      && git update-ref refs/remotes/origin/main HEAD \
+      && git push -q -f origin HEAD:refs/heads/main ) >/dev/null 2>&1
+    return 0
+}
+
+# proc_filter_prepare <sb> <tracked-rel> — write git's LONG-RUNNING FILTER (protocol v2) and the
+# .gitattributes that attaches it, but do NOT enable it yet. Split in two on purpose: the
+# attribute commit MOVES HEAD, so it must land before write_audit or the gate would fail with
+# AUDIT_STALE_HEAD and the scenario would be measuring the wrong refusal.
+proc_filter_prepare() {
+    local sb="$1" rel="$2"
+    cat > "$sb/procfilter.py" <<'PYF'
+import sys, os
+IN, OUT = sys.stdin.buffer, sys.stdout.buffer
+MASK = open(os.environ["AX_MASK_FILE"], "rb").read()
+def rd():
+    h = IN.read(4)
+    if not h: return None
+    n = int(h, 16)
+    return b"" if n == 0 else IN.read(n - 4)
+def wr(d=None):
+    OUT.write(b"0000" if d is None else (b"%04x" % (len(d) + 4)) + d)
+def rlist():
+    out = []
+    while True:
+        p = rd()
+        if p is None or p == b"": return out
+        out.append(p)
+rlist()
+wr(b"git-filter-server\n"); wr(b"version=2\n"); wr(); OUT.flush()
+rlist()
+wr(b"capability=clean\n"); wr(b"capability=smudge\n"); wr(); OUT.flush()
+while True:
+    hdrs = rlist()
+    if not hdrs: break
+    rlist()
+    wr(b"status=success\n"); wr(); OUT.flush()
+    wr(MASK); wr(); wr(); OUT.flush()
+PYF
+    git -C "$sb/repo" show "HEAD:$rel" > "$sb/mask.bin" 2>/dev/null || return 2
+    printf '%s filter=axproc\n' "$rel" > "$sb/repo/.gitattributes" || return 2
+    ( builtin cd "$sb/repo" && git add .gitattributes \
+      && git "${GIT_ID[@]}" commit -q -m "attrs" ) >/dev/null 2>&1 || return 2
+    return 0
+}
+
+# proc_filter_enable <sb> — the one config key that is the whole attack surface: `.process`, which
+# round 6's `clean|smudge` pattern did not match.
+proc_filter_enable() {
+    git -C "$1/repo" config filter.axproc.process "${AX_PY_BIN:-python3} $1/procfilter.py" || return 2
     return 0
 }
 
@@ -245,7 +383,7 @@ build_sb_red() {
     return 0
 }
 
-echo "=== ax-prove-hermetic-runtime — ROUND 5 (P1-1 / P1-2 / P1-3) + ROUND 6 (preflight / raw bytes) ==="
+echo "=== ax-prove-hermetic-runtime — ROUND 5 (runtime) + ROUND 6 (preflight / raw bytes) + ROUND 7 (privileged startup / filter.process) ==="
 
 # ── (F) NEGATIVE CONTROL, first: an unattacked sandbox must actually PASS ─────────────
 SB_OK="$WORK/control"; build_sb "$SB_OK" || { echo "harness setup failed (control)" >&2; exit 2; }
@@ -418,7 +556,7 @@ git -C "$SB_J/repo" show "HEAD:$FP_REL" > "$SB_J/committed_fp.py" 2>/dev/null
 git -C "$SB_J/repo" config filter.axmask.clean "cat $SB_J/committed_fp.py"
 mkdir -p "$SB_J/repo/.git/info"; printf '%s filter=axmask\n' "$FP_REL" > "$SB_J/repo/.git/info/attributes"
 printf '\n# TAMPERED — attacker payload\n' >> "$SB_J/repo/$FP_REL"
-( builtin cd "$SB_J/repo" && bash -c 'source practices/scripts/lib/release_anchor.sh
+( builtin cd "$SB_J/repo" && bash -p -c 'source practices/scripts/lib/release_anchor.sh
 ax_ratchet_toolchain_authentic "$PWD" probe HEAD $(ax_ratchet_toolchain_paths)' ) > "$WORK/j.log" 2>&1; J_RC=$?
 note "(J) clean filter masks a tampered file    : exit=$J_RC (want non-zero)"
 if [ "$J_RC" -eq 0 ] || ! grep -qE "GIT_FILTERS_PRESENT|RATCHET_TOOLCHAIN_MODIFIED" "$WORK/j.log"; then
@@ -432,7 +570,7 @@ git -C "$SB_J2/repo" show "HEAD:$FP_REL" > "$SB_J2/committed_fp.py" 2>/dev/null
 git -C "$SB_J2/repo" config filter.axmask.clean "cat $SB_J2/committed_fp.py"
 mkdir -p "$SB_J2/repo/.git/info"; printf '%s filter=axmask\n' "$FP_REL" > "$SB_J2/repo/.git/info/attributes"
 printf '\n# TAMPERED — attacker payload\n' >> "$SB_J2/repo/$FP_REL"
-( builtin cd "$SB_J2/repo" && bash -c 'source practices/scripts/lib/release_anchor.sh
+( builtin cd "$SB_J2/repo" && bash -p -c 'source practices/scripts/lib/release_anchor.sh
 ax_ratchet_toolchain_authentic "$PWD" probe HEAD $(ax_ratchet_toolchain_paths)' ) > "$WORK/j2.log" 2>&1; J2_RC=$?
 note "(J') same tamper, raw comparison reverted  : exit=$J2_RC (want 0 = reproduces)"
 if [ "$J2_RC" -ne 0 ]; then
@@ -501,6 +639,120 @@ if [ "$L_RC" -ne 0 ] || ! grep -q "previous release's recency guard also PASSES"
     head -8 "$WORK/l.log" >&2
 fi
 
+# ══ ROUND 7 (TD-2026-07-30-P1-privileged-startup / P1-3) ════════════════════════════
+# INVARIANT (alpha) restated honestly: an IN-SCRIPT sensor cannot see a startup file, because
+# bash runs $BASH_ENV BEFORE the script's first line. Round 6 answered "what executes first
+# INSIDE the file"; round 7 answers "what executes first AT ALL".
+
+# ── (M) SELF-ERASING $BASH_ENV ──────────────────────────────────────────────────────
+# The payload defines a NON-EXPORTED function (so no BASH_FUNC_* entry exists) and then unsets
+# BASH_ENV (so the environ the round-6 preflight reads is clean). Nothing is left to detect; the
+# first `set -uo pipefail` the gate runs is the attacker's.
+printf 'builtin unset BASH_ENV ENV\nfunction set(){ builtin exit 0; }\n' > "$WORK/bashenv_payload.sh"
+SB_M="$WORK/bashenv"; build_sb_red "$SB_M" || { echo "harness setup failed (M)" >&2; exit 2; }
+run_gate "$SB_M" "$WORK/m.log" BASH_ENV="$WORK/bashenv_payload.sh"; M_RC=$?
+note "(M) self-erasing BASH_ENV shadowing \`set\`  : exit=$M_RC (want non-zero)"
+if [ "$M_RC" -eq 0 ] || ! grep -qE "AUDIT_LOG_MISSING|HERMETIC_" "$WORK/m.log"; then
+    violation "a \$BASH_ENV that erases its own trace turned the gate's honest non-zero verdict" \
+              "into exit=$M_RC. bash sources that file before line 1, so no in-script preflight" \
+              "can see it — the entry must re-exec itself into bash privileged mode."
+    head -5 "$WORK/m.log" >&2
+fi
+SB_M2="$WORK/bashenv-neutered"; build_sb_red "$SB_M2" || { echo "harness setup failed (M')" >&2; exit 2; }
+round7_neuter "$SB_M2" privileged || { echo "harness setup failed (M'/neuter stale)" >&2; exit 2; }
+run_gate "$SB_M2" "$WORK/m2.log" BASH_ENV="$WORK/bashenv_payload.sh"; M2_RC=$?
+note "(M') same payload, privileged re-exec gone: exit=$M2_RC (want 0 = reproduces)"
+if [ "$M2_RC" -ne 0 ]; then
+    violation "with the round-7 privileged re-exec removed the BASH_ENV payload did NOT reproduce" \
+              "(exit=$M2_RC); (M) is not attributable to it. Harness stale."
+    head -5 "$WORK/m2.log" >&2
+fi
+# (M'') the loop marker is NOT a skip switch: presetting it must ABORT, not proceed unprivileged.
+run_gate "$SB_M" "$WORK/m3.log" AX_PRIV_REEXEC=1; M3_RC=$?
+note "(M'') AX_PRIV_REEXEC preset by the attacker: exit=$M3_RC (want non-zero)"
+if [ "$M3_RC" -eq 0 ] || ! grep -q "HERMETIC_PRIVILEGED_UNREACHABLE" "$WORK/m3.log"; then
+    violation "presetting AX_PRIV_REEXEC skipped the privileged re-exec instead of aborting" \
+              "(exit=$M3_RC). A marker an attacker can set must never be trusted to mean 'already" \
+              "privileged' — it may only mean 'a re-exec was attempted', which is a refusal."
+    head -5 "$WORK/m3.log" >&2
+fi
+
+# ── (N) THE TWO SOURCED LIBS — `export` AHEAD OF THE PREFLIGHT ──────────────────────
+# Round 6 claimed its preflight was "the first executable text of all 8 entries". For the two
+# SOURCED libs that was FALSE: `export GIT_NO_REPLACE_OBJECTS=1` ran first, and `export` is an
+# ordinary command lookup. A sourced file cannot re-exec without replacing its caller, so it
+# ASSERTS privileged mode instead — a non-privileged caller is refused outright.
+SB_N="$WORK/sourced-export"; build_sb "$SB_N" || { echo "harness setup failed (N)" >&2; exit 2; }
+( builtin cd "$SB_N/repo" && env "BASH_FUNC_export%%=() { builtin exit 0; }" \
+    bash -c 'source practices/scripts/lib/release_anchor.sh; echo SOURCED_OK' ) \
+    > "$WORK/n.log" 2>&1; N_RC=$?
+note "(N) exported export() + non-privileged caller: exit=$N_RC (want non-zero)"
+if [ "$N_RC" -eq 0 ] || grep -q "SOURCED_OK" "$WORK/n.log"; then
+    violation "release_anchor.sh executed inside a shell that had already run attacker code" \
+              "(exit=$N_RC). Its first executable text must assert bash privileged mode, and the" \
+              "pre-preflight \`export\` must sit BELOW that assertion."
+    head -5 "$WORK/n.log" >&2
+fi
+SB_N2="$WORK/sourced-export-neutered"; build_sb "$SB_N2" || { echo "harness setup failed (N')" >&2; exit 2; }
+round7_neuter "$SB_N2" sourcedpriv || { echo "harness setup failed (N'/neuter stale)" >&2; exit 2; }
+( builtin cd "$SB_N2/repo" && env "BASH_FUNC_export%%=() { builtin exit 0; }" \
+    bash -c 'source practices/scripts/lib/release_anchor.sh; echo SOURCED_OK' ) \
+    > "$WORK/n2.log" 2>&1; N2_RC=$?
+note "(N') same attack, round-6 shape restored  : exit=$N2_RC (want 0 = reproduces)"
+if [ "$N2_RC" -ne 0 ]; then
+    violation "with the privileged assertion removed and \`export\` back above the preflight, the" \
+              "exported export() did NOT reproduce (exit=$N2_RC); (N) is not attributable. Stale."
+    head -5 "$WORK/n2.log" >&2
+fi
+
+# ── (O) filter.<n>.process — THE KEYWORD SUBSET (invariant beta, second pass) ───────
+# Round 6 refused `filter.<n>.clean|smudge`. git's LONG-RUNNING FILTER PROTOCOL is declared as
+# `filter.<n>.process` and converts content identically. With only that key set, a tracked file
+# whose disk bytes differ from its committed blob makes `git status --porcelain` EMPTY — so the
+# fingerprint's raw-byte loop never opens it and the push gate certifies a tree it never read.
+# THE TARGET IS AN ORDINARY TRACKED FILE, not a toolchain path: round 6 already ran `check-attr
+# filter` over the nine ratchet-critical paths, so attacking one of those would be caught by a
+# check that predates this round and the reproduction would prove nothing. Everything ELSE in the
+# tree — which is what R25 actually tests — had no such cover.
+# WHY THE TWO VERSIONS ARE THE SAME LENGTH: git's ie_modified() returns "modified" from the stat
+# comparison alone when the recorded size differs and is non-zero, WITHOUT consulting the filter.
+# An attacker therefore pads; measured, an equal-length swap makes `git status --porcelain` empty
+# while a length-changing one does not. Using an unequal length here would have made the scenario
+# pass for the wrong reason.
+TAMPER_REL="sentinel.bin"
+SB_O="$WORK/procfilter"; build_sb "$SB_O" || { echo "harness setup failed (O)" >&2; exit 2; }
+printf 'HOSTILE-PAYLOAD!\n' > "$SB_O/repo/$TAMPER_REL"
+( builtin cd "$SB_O/repo" && git add "$TAMPER_REL" && git "${GIT_ID[@]}" commit -q -m sentinel ) >/dev/null 2>&1 \
+    || { echo "harness setup failed (O/sentinel)" >&2; exit 2; }
+proc_filter_prepare "$SB_O" "$TAMPER_REL" || { echo "harness setup failed (O/filter)" >&2; exit 2; }
+write_audit "$SB_O"
+proc_filter_enable "$SB_O" || { echo "harness setup failed (O/enable)" >&2; exit 2; }
+printf 'BENIGN-COMMITTED\n' > "$SB_O/repo/$TAMPER_REL"
+run_gate "$SB_O" "$WORK/o.log" AX_MASK_FILE="$SB_O/mask.bin"; O_RC=$?
+note "(O) filter.<n>.process masks a tampered file: exit=$O_RC (want non-zero)"
+if [ "$O_RC" -eq 0 ] || ! grep -qE "GIT_FILTERS_PRESENT|GIT_RAW_INDEX_DIVERGENCE|RATCHET_TOOLCHAIN_MODIFIED" "$WORK/o.log"; then
+    violation "a \`filter.<n>.process\` driver made a tampered tracked file invisible to the push" \
+              "gate (exit=$O_RC). The refusal must cover ANY key under a filter driver, and the" \
+              "byte comparison must be made without asking git what the file contains."
+    head -5 "$WORK/o.log" >&2
+fi
+SB_O2="$WORK/procfilter-neutered"; build_sb "$SB_O2" || { echo "harness setup failed (O')" >&2; exit 2; }
+round7_neuter "$SB_O2" filterproc || { echo "harness setup failed (O'/neuter stale)" >&2; exit 2; }
+printf 'HOSTILE-PAYLOAD!\n' > "$SB_O2/repo/$TAMPER_REL"
+( builtin cd "$SB_O2/repo" && git add "$TAMPER_REL" && git "${GIT_ID[@]}" commit -q -m sentinel ) >/dev/null 2>&1 \
+    || { echo "harness setup failed (O'/sentinel)" >&2; exit 2; }
+proc_filter_prepare "$SB_O2" "$TAMPER_REL" || { echo "harness setup failed (O'/filter)" >&2; exit 2; }
+write_audit "$SB_O2"
+proc_filter_enable "$SB_O2" || { echo "harness setup failed (O'/enable)" >&2; exit 2; }
+printf 'BENIGN-COMMITTED\n' > "$SB_O2/repo/$TAMPER_REL"
+run_gate "$SB_O2" "$WORK/o2.log" AX_MASK_FILE="$SB_O2/mask.bin"; O2_RC=$?
+note "(O') same tamper, keyword subset restored : exit=$O2_RC (want 0 = reproduces)"
+if [ "$O2_RC" -ne 0 ]; then
+    violation "with the clean|smudge keyword subset restored and the raw sweep removed, the" \
+              "\`.process\` mask did NOT reproduce (exit=$O2_RC); (O) is not attributable. Stale."
+    head -5 "$WORK/o2.log" >&2
+fi
+
 echo ""
 if [ "$FAIL" -ne 0 ]; then
     echo "ax-prove-hermetic-runtime: FAIL — an inherited-runtime path is open" >&2
@@ -508,8 +760,10 @@ if [ "$FAIL" -ne 0 ]; then
 fi
 echo "ax-prove-hermetic-runtime: PASS — a redirected git context, an exported git/cd/pwd/python3,"
 echo "  a tampered fingerprint helper (committed or not), an exported set/[ arriving before the"
-echo "  scrub, a /usr/bin/true interpreter, a PYTHONPATH sitecustomize, a clean-filter byte mask"
-echo "  and a COMMITTED push-only bypass are each refused by the live gates; the unattacked control"
-echo "  passes, and every round-5/6 addition has a neutered twin in which its attack lands again —"
-echo "  so the refusals are attributable to the fixes, not to the sandbox."
+echo "  scrub, a /usr/bin/true interpreter, a PYTHONPATH sitecustomize, a clean-filter byte mask,"
+echo "  a COMMITTED push-only bypass, a SELF-ERASING \$BASH_ENV, a preset AX_PRIV_REEXEC, an"
+echo "  exported export() ahead of a sourced lib's preflight and a filter.<n>.process content mask"
+echo "  are each refused by the live gates; the unattacked control passes, and every round-5/6/7"
+echo "  addition has a neutered twin in which its attack lands again — so the refusals are"
+echo "  attributable to the fixes, not to the sandbox."
 exit 0

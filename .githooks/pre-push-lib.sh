@@ -20,13 +20,26 @@
 # branch selection is correct; proving the hook wires the branches to the right
 # side effects requires the integration scenarios in pre_push_decision_guard.sh.
 
-# ── P1-1 (ROUND 4, TD-2026-07-30-P1-anchor-runtime) ──────────────────────────────────
-# Every git read in this file must see the real object graph. `git replace` keeps shas identical
-# while swapping the objects rev-parse/merge-base/diff return, and the decisions below (which sha
-# is the push base, does this diff touch the regression scope) are exactly those reads.
-export GIT_NO_REPLACE_OBJECTS=1
 
-# ── ROUND 6 / P1-1: PURE-KEYWORD PREFLIGHT — THESE ARE THE FIRST EXECUTABLE LINES ────
+# ── ROUND 7 / P1-1: PRIVILEGED-MODE ASSERTION (SOURCED FILE) ────────────────────────
+# (TD-2026-07-30-P1-privileged-startup.) This file is SOURCED, never executed, so it cannot
+# re-exec itself under `bash -p` without replacing its caller's process. It does not need to:
+# privileged mode is a property of the PROCESS, and every entry that sources this file has
+# already re-executed itself under -p. So the honest statement is an ASSERTION — if the parent is
+# not privileged, $BASH_ENV was processed before the parent's first line and nothing downstream of
+# here is trustworthy. Refuse, rather than run inside a shell somebody else warmed up.
+case $- in
+    *p*) ;;
+    *) _AX_PV_NULL=; _AX_PV_DIE=${_AX_PV_NULL:?"pre-push-lib.sh: HERMETIC_PRIVILEGED_UNREACHABLE — this file is SOURCED, so it cannot re-exec without replacing its caller; it REQUIRES the caller to already be in bash privileged mode. Privileged mode is a property of the PROCESS, so a sourced file is covered by the entry that sourced it — which is why this is an assertion and not a re-exec. Source this only from an ax entry carrying the round-7 privileged re-exec."} ;;
+esac
+
+# ── ROUND 6 / P1-1: PURE-KEYWORD PREFLIGHT — SECOND, AND BEFORE ANY OVERRIDABLE COMMAND ──
+# CORRECTION (ROUND 7): round 6 claimed this block was "the first executable text of all 8
+# entries". It was NOT. The two SOURCED libs (practices/scripts/lib/release_anchor.sh:251 and
+# .githooks/pre-push-lib.sh:27) ran `export GIT_NO_REPLACE_OBJECTS=1` FIRST, and `export` is an
+# ordinary command lookup: MEASURED, an exported export() plus `alias exit=:` produced
+# SOURCE_RC=0 for both. Those two exports now sit BELOW this preflight, and the round-7
+# privileged re-exec above is what actually executes first.
 # (TD-2026-07-30-P1-preflight-and-raw-bytes.) INVARIANT (α): NOTHING OVERRIDABLE MAY EXECUTE
 # BEFORE THE SCRUB THAT DETECTS OVERRIDES. Round 5 put `set -uo pipefail` and `[ -n … ]` ahead of
 # its own hermetic bootstrap, and both are ordinary command lookups: MEASURED —
@@ -58,6 +71,12 @@ case "${BASH_ENV:-}${ENV:-}" in
     ?*) _AX_PF_NULL=; _AX_PF_DIE=${_AX_PF_NULL:?"$_AX_PF_LABEL: HERMETIC_PREFLIGHT_HOSTILE — BASH_ENV/ENV is set, so every non-interactive bash this gate starts would source that file before running the gate's own code. Unset it and re-run."} ;;
 esac
 unset _AX_PF_ENV _AX_PF_NULL _AX_PF_DIE _AX_PF_LABEL
+
+# ── P1-1 (ROUND 4, TD-2026-07-30-P1-anchor-runtime) ──────────────────────────────────
+# Every git read in this file must see the real object graph. `git replace` keeps shas identical
+# while swapping the objects rev-parse/merge-base/diff return, and the decisions below (which sha
+# is the push base, does this diff touch the regression scope) are exactly those reads.
+export GIT_NO_REPLACE_OBJECTS=1
 # ── ROUND 5 / P1-1+P1-2: HERMETIC RUNTIME BOOTSTRAP (A) — DELIBERATELY DUPLICATED ────
 # (TD-2026-07-30-P1-hermetic-runtime; the full argument lives in the header of
 #  practices/scripts/lib/release_anchor.sh.) THE RATCHET MAY NOT INHERIT ITS OWN RUNTIME.

@@ -66,6 +66,32 @@ class GitFiltersPresent(RuntimeError):
     on-disk bytes differed. The dirty accumulator below now hashes raw file bytes, but a
     repository that declares filters at all is refused: this file is evidence, and evidence taken
     through a lens the subject installed is not evidence.
+
+    ROUND 7 / P1-3 — THE KEYWORD SUBSET WAS THE HOLE. This refusal matched only
+    `filter.<n>.clean` and `filter.<n>.smudge`. git ALSO performs the same conversion through the
+    LONG-RUNNING FILTER PROTOCOL, declared as `filter.<n>.process` — one key, no clean/smudge in
+    sight. Measured (reviewer round 7): commit a malicious file plus a .gitattributes entry,
+    configure ONLY filter.<n>.process, then replace the file on disk with benign bytes →
+    `git status --porcelain` is EMPTY, so the path never enters `modified`, so the raw open()
+    loop below never reads it: R25 tests the benign bytes while the push ships the malicious blob.
+    The declaration test is now `^filter\\.` — ANY key under any filter driver, not a keyword
+    subset — because the next protocol key is not something this file can be asked to predict.
+    """
+
+
+class RawIndexDivergence(GitFiltersPresent):
+    """A tracked path git reports as unmodified whose RAW on-disk bytes are not its index blob.
+
+    ROUND 7 / P1-3(b) — THE ROBUST HALF, and the reason the broadened declaration test is not the
+    whole answer. Refusing declarations is a claim about the config keys we thought to enumerate;
+    THIS is a measurement. For every tracked path git's (filter-aware) status calls clean, the
+    bytes on disk are hashed as a git blob HERE, in python, with no git process in the loop, and
+    compared to the object id git recorded in the index. A `.process` driver (or a `.clean`, or
+    any future protocol) that makes a divergent file look clean lands on a mismatch it cannot
+    reach — the comparison never asks git what the file contains.
+
+    Subclasses GitFiltersPresent on purpose: every existing caller already BLOCKS on that type,
+    so a new failure mode cannot slip through an `except` that predates it.
     """
 
 
@@ -99,8 +125,10 @@ def _git(repo, *args, _bin=None, _env=None):
 
 def _filters_declared(repo, gbin, genv):
     """Return a human description of any content-filter machinery in <repo>, else None."""
+    # ROUND 7 / P1-3: ANY key under any filter driver. `filter.<n>.process` performs the same
+    # conversion through the long-running protocol and matched neither `clean` nor `smudge`.
     p = subprocess.run([gbin, "--no-replace-objects", "-C", repo, "config", "--get-regexp",
-                        r"^filter\..*\.(clean|smudge)$"],
+                        r"^filter\."],
                        stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, env=genv)
     if p.returncode == 0 and p.stdout.strip():
         return ("git config declares content filters: "
@@ -116,6 +144,75 @@ def _filters_declared(repo, gbin, genv):
         except OSError:
             return f"{attrs} could not be inspected"
     return None
+
+
+def _object_algo(repo, gbin, genv):
+    """The repository's object-id hash. sha1 unless the repo was created with sha256."""
+    p = subprocess.run([gbin, "--no-replace-objects", "-C", repo, "rev-parse",
+                        "--show-object-format"],
+                       stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, env=genv)
+    name = p.stdout.decode(errors="replace").strip() if p.returncode == 0 else ""
+    return "sha256" if name == "sha256" else "sha1"
+
+
+def _blob_id(data, algo):
+    """git's object id for <data> as a blob, computed here — no git process in the loop."""
+    h = hashlib.new(algo)
+    h.update(b"blob %d\0" % len(data))
+    h.update(data)
+    return h.hexdigest().encode()
+
+
+def _raw_index_divergence(repo, gbin, genv, dirty):
+    """Tracked paths git calls CLEAN whose raw on-disk bytes are not the blob it has in the index.
+
+    ROUND 7 / P1-3(b). WHAT IS COVERED: every path in `git ls-files -s` that git's status did NOT
+    report, i.e. the whole tracked tree minus what is already being hashed raw below. Measured on
+    this catalog: 5,745 tracked paths / 5.4 MB / 0.18 s, so whole-tree coverage is affordable and
+    is what runs — nothing is scoped out for cost.
+    WHAT IS NOT COVERED, stated: (i) gitlinks (submodule commits — no bytes of ours on disk),
+    (ii) tracked paths ABSENT from disk (sparse checkout / skip-worktree — an absent file cannot
+    carry benign bytes, and absence is not a bytes question), (iii) untracked and ignored files,
+    which have no index blob to disagree with and are hashed raw below anyway when non-ignored.
+    A mismatch is NOT automatically an attack: eol conversion (core.autocrlf=true, core.eol=crlf,
+    a `text` attribute) rewrites bytes on checkout and lands here too. Both causes make every byte
+    claim about that path a claim about something other than the file, so both BLOCK, and the
+    message names both so an honest operator is not left guessing.
+    """
+    out = subprocess.run([gbin, "--no-replace-objects", "-C", repo, "ls-files", "-s", "-z"],
+                         stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, env=genv)
+    if out.returncode != 0:
+        raise RuntimeError("the index of %s could not be listed" % repo)
+    algo = _object_algo(repo, gbin, genv)
+    rootb = os.fsencode(repo)
+    bad = []
+    for rec in out.stdout.split(b"\0"):
+        if not rec:
+            continue
+        try:
+            meta, path = rec.split(b"\t", 1)
+            mode, blob, _stage = meta.split(b" ")
+        except ValueError:
+            continue
+        if mode == b"160000" or path in dirty:
+            continue
+        full = os.path.join(rootb, path)
+        try:
+            if mode == b"120000":
+                data = os.readlink(full)
+                data = data if isinstance(data, bytes) else os.fsencode(data)
+            else:
+                if os.path.islink(full):
+                    continue
+                with open(full, "rb") as fh:
+                    data = fh.read()
+        except OSError:
+            continue
+        if _blob_id(data, algo) != blob:
+            bad.append(path.decode(errors="replace"))
+            if len(bad) >= 8:
+                break
+    return bad
 
 
 def fingerprint(repo):
@@ -169,6 +266,21 @@ def fingerprint(repo):
         else:
             modified.append(path)
 
+    # ROUND 7 / P1-3(b): the SET of dirty paths above came from `git status`, which is
+    # FILTER-AWARE — a `filter.<n>.process` driver makes a divergent file report clean, so it
+    # never enters `modified` and the raw loop below never opens it. Measure the complement
+    # instead of trusting it: every path git calls clean must hash, as raw bytes, to its index
+    # blob. No git process participates in that comparison, so no filter protocol can answer it.
+    diverged = _raw_index_divergence(repo, gbin, genv, set(modified) | set(untracked))
+    if diverged:
+        raise RawIndexDivergence(
+            "tracked files git reports as unmodified do NOT match their index blob when their "
+            "bytes are hashed directly: " + ", ".join(diverged)
+            + ". Either a content filter (filter.<n>.clean / .smudge / .process) is interposing "
+              "on git's answers, or an eol conversion (core.autocrlf / core.eol / a text "
+              "attribute) rewrites these files on checkout. Under both, a byte claim about these "
+              "paths describes something other than the file on disk.")
+
     # ROUND 6 / P1-4 — THE CONTENT OF A MODIFICATION IS READ FROM THE FILE, NOT FROM `git diff`.
     # This slot used to hold `git diff HEAD --binary`, which honours clean filters: with one
     # installed, a tampered working file produced a ZERO-BYTE diff and the fingerprint reported
@@ -211,12 +323,20 @@ if __name__ == "__main__":
         sys.exit(2)
     # Exit codes are part of the contract (ROUND 5/6): 0 = a digest (or the honest "nogit" of a
     # non-git tree), 3 = the git context was redirected, 4 = a git tree we could not read,
-    # 5 = the repository declares content filters. Callers BLOCK on 3/4/5 — printing nothing and exiting 0 is exactly the fail-open this round closed.
+    # 5 = the repository declares content filters, 6 (ROUND 7 / P1-3b) = a tracked file git calls
+    # clean does not match its index blob on raw bytes. Callers BLOCK on 3/4/5/6 — printing
+    # nothing and exiting 0 is exactly the fail-open this round closed.
     try:
         print(fingerprint(sys.argv[1]))
     except RedirectedGitContext as exc:
         print(f"tree_fingerprint: GIT_CONTEXT_REDIRECTED — {exc}", file=sys.stderr)
         sys.exit(3)
+    except RawIndexDivergence as exc:
+        # Ordered BEFORE GitFiltersPresent: RawIndexDivergence subclasses it so that callers
+        # written against the older type still block, but the code printed must be the specific
+        # one — "we refused because you declared a filter" would be a false statement here.
+        print(f"tree_fingerprint: GIT_RAW_INDEX_DIVERGENCE — {exc}", file=sys.stderr)
+        sys.exit(6)
     except GitFiltersPresent as exc:
         # Exit 5 (ROUND 6): a repository that declares content filters cannot be fingerprinted
         # honestly. Callers BLOCK — this is a tamper signal, not a degraded mode.

@@ -132,7 +132,56 @@
 #   bash practices/scripts/verify-completion.sh --json        # emit machine-readable summary
 #   bash practices/scripts/verify-completion.sh --resume      # skip prior PASS steps (same HEAD)
 #   bash practices/scripts/verify-completion.sh --no-collapse # disable per-domain collapse
-# ── ROUND 6 / P1-1: PURE-KEYWORD PREFLIGHT — THESE ARE THE FIRST EXECUTABLE LINES ────
+# ── ROUND 7 / P1-1: PRIVILEGED-MODE RE-EXEC — THIS IS THE FIRST EXECUTABLE TEXT ─────
+# (TD-2026-07-30-P1-privileged-startup.) The round-6 preflight below is IN-SCRIPT, and bash
+# sources $BASH_ENV BEFORE a script's first line — so ANY in-script sensor is structurally too
+# late. MEASURED (cross-family reviewer, round 7): a SELF-ERASING payload
+#     builtin unset BASH_ENV ENV; function set(){ builtin exit 0; }
+# leaves NOTHING for the preflight to find — BASH_ENV is gone from the environ it reads, and the
+# function is NOT exported so no BASH_FUNC_* entry exists — and the first `set -uo pipefail` this
+# file runs exits 0. `shopt -s expand_aliases` + an alias is the same class.
+# THE FIX IS AT THE INVOCATION BOUNDARY, not in the script: bash PRIVILEGED MODE (-p) does not
+# process $BASH_ENV/$ENV and does not import functions from the environment. This entry therefore
+# re-executes ITSELF under -p before doing anything else. Measured, bash 3.2.57(1) / Apple:
+#     BASH_ENV=<payload> bash  <entry>   → exit 0          (pre-fix; the gate never ran)
+#     BASH_ENV=<payload> bash -p <entry> → honest verdict   (payload inert)
+# CONSTRUCTS USED, and why each is unhijackable: `case` is a shell KEYWORD (never resolved through
+# the function table); $-, ${x-} and ${x:?} are PARAMETER EXPANSIONS, not commands; /usr/bin/env is
+# invoked by ABSOLUTE PATH (bash never looks a word containing a slash up as a function).
+# `exec` IS shadowable, so the SECOND case re-asserts privileged mode AFTER it: a neutered exec
+# falls through to a non-zero abort instead of quietly continuing unprivileged (measured: a
+# BASH_ENV defining exec(){ :; } exits 1 here, it does not proceed).
+# THE LOOP MARKER IS NOT TRUSTED. AX_PRIV_REEXEC means only "a re-exec was already attempted".
+# An attacker who PRESETS it does not skip the re-exec — that branch ABORTS (measured, exit 1).
+# It is unset the moment privileged mode holds, so it never reaches a child entry and cannot turn
+# into a one-shot disable for the guards this entry launches.
+# RESIDUAL, stated rather than hidden: a $BASH_ENV whose first line is `exit 0` ends the shell
+# before this line exists (measured, exit 0, nothing printed). No in-script construct can survive
+# that. It is the environment-control boundary declared in practices/DECISIONS.md,
+# TD-2026-07-30-(ratchet-threat-model) — the same adversary can simply not install the hooks.
+case $- in
+    *p*) ;;
+    *) case "${AX_PRIV_REEXEC-}" in
+           1) _AX_PV_NULL=; _AX_PV_DIE=${_AX_PV_NULL:?"verify-completion: HERMETIC_PRIVILEGED_UNREACHABLE — a re-exec into bash privileged mode was already attempted and this shell is STILL unprivileged. Either exec is shadowed by a function, or AX_PRIV_REEXEC was preset in the environment to skip the re-exec. Both are refused; nothing in this gate runs unprivileged. Start it from a clean shell."} ;;
+           *) case "${BASH:-}" in
+                  /*) exec /usr/bin/env AX_PRIV_REEXEC=1 "$BASH" -p "$0" "$@" ;;
+                  *) _AX_PV_NULL=; _AX_PV_DIE=${_AX_PV_NULL:?"verify-completion: HERMETIC_PRIVILEGED_UNREACHABLE — the running interpreter (BASH) is not an absolute path, so the SAME interpreter cannot be named unambiguously for the privileged re-exec."} ;;
+              esac ;;
+       esac ;;
+esac
+case $- in
+    *p*) ;;
+    *) _AX_PV_NULL=; _AX_PV_DIE=${_AX_PV_NULL:?"verify-completion: HERMETIC_PRIVILEGED_UNREACHABLE — the re-exec returned instead of replacing this process, which means exec itself is shadowed. Unprivileged execution is refused."} ;;
+esac
+unset AX_PRIV_REEXEC
+
+# ── ROUND 6 / P1-1: PURE-KEYWORD PREFLIGHT — SECOND, AND BEFORE ANY OVERRIDABLE COMMAND ──
+# CORRECTION (ROUND 7): round 6 claimed this block was "the first executable text of all 8
+# entries". It was NOT. The two SOURCED libs (practices/scripts/lib/release_anchor.sh:251 and
+# .githooks/pre-push-lib.sh:27) ran `export GIT_NO_REPLACE_OBJECTS=1` FIRST, and `export` is an
+# ordinary command lookup: MEASURED, an exported export() plus `alias exit=:` produced
+# SOURCE_RC=0 for both. Those two exports now sit BELOW this preflight, and the round-7
+# privileged re-exec above is what actually executes first.
 # (TD-2026-07-30-P1-preflight-and-raw-bytes.) INVARIANT (α): NOTHING OVERRIDABLE MAY EXECUTE
 # BEFORE THE SCRUB THAT DETECTS OVERRIDES. Round 5 put `set -uo pipefail` and `[ -n … ]` ahead of
 # its own hermetic bootstrap, and both are ordinary command lookups: MEASURED —
@@ -333,6 +382,25 @@ export AX_GIT_BIN AX_PY_BIN
 # `grep -n ' -I -S '` finds all of them; this export exists for fork-receiver call sites.
 export AX_PY_ISO="-I -S"
 unset _ax_hn _ax_hb _ax_hdir _ax_hver _AX_HRM_BAD _AX_HRM_PATH
+
+# ── ROUND 7 / P1-2: TOOL PATH TRANSPARENCY — THIS IS NOT AUTHENTICATION ─────────────
+# (TD-2026-07-30-(ratchet-threat-model).) The reviewer's round-7 finding stands and is NOT closed
+# here: a wrapper placed earlier on an absolute PATH entry can print the accepted self-report for
+# a fixed public challenge and behave arbitrarily otherwise — measured, it flipped
+# fail_audit_log_missing from exit 1 to exit 0, including for the extracted prior-release guard.
+# No executable can authenticate itself against a malicious wrapper using a public fixed
+# challenge. So this block claims nothing about identity; it makes the CHOICE VISIBLE, so that a
+# human reading a run can see which program answered. That is transparency, and calling it
+# hardening would be the fake-hardening this round was told not to ship.
+# NOT recorded in the audit line on purpose: that printf IS the pinned audit schema (the recency
+# guard re-derives the key set from it and refuses any line whose field set differs), so a
+# transparency field there would couple a cosmetic value to the push gate and to 21 fixtures. It
+# goes to stderr and to a sidecar instead.
+{
+    echo "R25 toolchain (transparency, not authentication — see DECISIONS TD-2026-07-30-(ratchet-threat-model)):"
+    echo "    git     = $AX_GIT_BIN"
+    echo "    python3 = ${AX_PY_BIN:-<not required by this step set>}"
+} >&2
 
 SCRIPT_DIR="$(builtin cd "$(dirname "${BASH_SOURCE[0]}")" && builtin pwd)"
 REPO_ROOT="$(builtin cd "$SCRIPT_DIR/../.." && builtin pwd)"
@@ -568,10 +636,12 @@ fi
 # The behaviour is unchanged: prints the digest, or the constant "nogit" for a non-git tree.
 # ROUND 5 / P1-3: FAIL CLOSED, and say WHY out loud. The helper distinguishes four states by exit
 # code — 0 a digest (or the honest "nogit" of a non-git tree), 3 GIT_CONTEXT_REDIRECTED, 4 a git
-# tree it could not read, and (ROUND 6 / P1-4) 5 GIT_FILTERS_PRESENT: a repository that declares a
-# `filter.<n>.clean` cannot be fingerprinted honestly, because every content answer git gives is
-# then the FILTER'S OUTPUT — and on a repository that IS git anything but a 64-hex digest is a
-# BLOCK. The old shape degraded silently to a per-run "unverifiable-" placeholder, which merely
+# tree it could not read, (ROUND 6 / P1-4) 5 GIT_FILTERS_PRESENT: a repository that declares a
+# content filter cannot be fingerprinted honestly, because every content answer git gives is then
+# the FILTER'S OUTPUT — and (ROUND 7 / P1-3) 6 GIT_RAW_INDEX_DIVERGENCE: a tracked file git calls
+# CLEAN whose bytes on disk are not its index blob, which is what a `filter.<n>.process` driver
+# produces without matching round 6's clean|smudge pattern. On a repository that IS git anything
+# but a 64-hex digest is a BLOCK. The old shape degraded silently to a per-run "unverifiable-" placeholder, which merely
 # moved the failure to the push gate and, in the meantime, let a run report a tree it never
 # identified.
 compute_tree_fingerprint() {
@@ -1779,6 +1849,19 @@ printf '{"ts":"%s","head_sha":"%s","exit":%d,"pass":%d,"warn_advisory":%d,"hard_
     "$END_HEAD" "$END_TREE_FP" "$END_TREE_CLEAN" "$TREE_STABLE" "$TREE_SAMPLES" \
     "$ANCHOR_SHA" "$ANCHOR_KIND" "$ANCHOR_SHA_END" "$ANCHOR_STABLE" \
     >> "$AUDIT_LOG"
+
+# ── ROUND 7 / P1-2 sidecar: which absolute tool paths answered this run ─────────────
+# Deliberately OUTSIDE the pinned schema above (see the transparency note in the bootstrap). It
+# is overwritten each run, is never read by any gate, and proves nothing — it exists so a human
+# reviewing a run can SEE a wrapper path instead of having to guess that one was possible.
+# TWO CONSTRAINTS, both learned the hard way in this round's own sweep: it must come AFTER the
+# audit printf and it must NOT begin with {"ts". The recency guard re-derives the audit schema by
+# regex from the FIRST `printf '{"ts"…\n'` in this file, so an earlier line of that shape becomes
+# the schema — measured: with this block above the audit printf, AUDIT_WRITER_SCHEMA_DRIFT failed
+# two PASS fixtures and blocked the honest pushes in push_evidence_tree_binding and
+# midrun_tree_mutation. Keep the leading key as "kind" and keep this block last.
+printf '{"kind":"toolpaths","run_ts":"%s","head_sha":"%s","git":"%s","python3":"%s","note":"transparency only — a PATH executable cannot authenticate itself against a wrapper answering a fixed public challenge"}\n' \
+    "$TS" "$CURRENT_HEAD" "$AX_GIT_BIN" "${AX_PY_BIN:-}" > "$AUDIT_DIR/toolpaths.json" 2>/dev/null || true
 
 # ── ax-ledger capture — every verify run leaves a per-project usage trace (progress / violation),
 # so a fork-receiver's gate history is reviewable (복기) and improvable. Never fails the gate. ──

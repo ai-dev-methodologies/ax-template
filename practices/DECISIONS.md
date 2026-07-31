@@ -1402,3 +1402,234 @@ the trigger event, do not relitigate.
   environment prefix, so the guard ran its body without them and still printed a green summary.
   `bash -n` passed. Only the live sweep saw it.
 - Commits: (this commit — PRD-final-4 wave, P1-seal round-6)
+
+---
+
+## TD-2026-07-30-(ratchet-threat-model) — what the ratchet defends against, and what it does not
+
+- Date: 2026-07-30
+- Status: accepted
+- Trigger: cross-family reviewer, ROUND 7, P1-2. A wrapper placed on an absolute `PATH` entry
+  prints the accepted banner for the gate's fixed self-identification challenge and exits 0 for
+  everything else. MEASURED: it flipped `fail_audit_log_missing` from exit 1 to exit 0, including
+  for the EXTRACTED PRIOR-RELEASE guard — the layer whose whole purpose is to be code the current
+  tree did not write. The reviewer states the general result plainly, and it is correct: **no
+  executable can authenticate itself against a malicious wrapper using a public fixed challenge.**
+  The options are to declare PATH executables trusted, or to bind the toolchain to an external
+  trust root (signed digests, a package boundary). This entry declares the first, and registers
+  the second as future work rather than pretending the first is the second.
+
+### The boundary, stated
+
+**The ratchet defends against COMMITTED SUBVERSION OF THE CATALOG** — what a fork, a pull request
+or an AI agent ships *in the tree*: a lowered floor, a removed anchor, a rewritten fingerprint
+helper, a backdoored guard, a forged audit line, a filtered view of the bytes, a laundering
+symlink, an evidence quote that no snapshot contains. It evaluates that on a developer machine
+**whose interpreter and PATH are trusted**.
+
+**It does NOT defend against an adversary who already controls the execution environment** —
+`PATH` wrappers, shell startup files, the user account, the kernel. This is not a gap discovered
+late; it is the DEFINITION OF THE ARTIFACT. Such an adversary does not need to defeat a check:
+they can simply **not install the opt-in hooks** (`practices/scripts/install-hooks.sh`), or push
+with the gate disabled entirely. A catalog gate is a **correctness ratchet, not a sandbox**. A
+ratchet raises the floor of what can be shipped by accident, by drift, or by an agent optimising
+for a green result; it does not contain a hostile operator, and any claim that it does would be
+false in a way that matters more than the checks it would decorate.
+
+Two consequences follow, and both are load-bearing:
+
+1. **Anything that is measurable ON THE TREE is in scope and is ratcheted** — bytes, blobs,
+   ancestry, schema, the previous release's copy of the gate. These are the checks that earn
+   their keep, because "the tree" is exactly what a fork/PR/agent controls.
+2. **Anything whose only defence would be authenticating the environment is OUT of scope and is
+   made VISIBLE instead of guarded.** `verify-completion.sh` prints the absolute tool paths it
+   resolved and writes them to `.ax-verify/toolpaths.json`, labelled *transparency, not
+   authentication*. A reviewer can SEE a wrapper path. Nothing verifies it, and nothing claims to.
+
+### What was deliberately NOT built (and why that is the honest answer)
+
+- **A harder self-identification challenge** (nonce, hash of a random string, timing). A wrapper
+  can forward the challenge to the real binary and answer correctly. Raising the cost of a wrapper
+  is not a boundary; it is theatre with a maintenance bill.
+- **Refusing non-root-owned tool paths.** Tempting and cheap-looking, but it would refuse every
+  Homebrew/pyenv/nvm toolchain — i.e. this maintainer's own machine, where `python3` carrying
+  PyYAML is not `/usr/bin/python3` — and the fallback would be to skip the python guards, which is
+  a fail-OPEN dressed as hardening. Where a root-owned absolute path already satisfies the
+  requirement it is preferred (`/usr/bin/env` is invoked by absolute path in every entry's
+  privileged re-exec, and `/bin/bash` is what `$BASH` resolves to here); where it does not, the
+  resolved path is RECORDED rather than swapped.
+- **Binding tools to an external trust root.** Registered as `docs/BACKLOG.md` **P2-68**, gated on
+  ax-template ever running in an untrusted-environment context (hosted CI for third-party forks,
+  an agent sandbox with an attacker-writable PATH). Until then it would be cost without a threat.
+
+### Where the boundary bites, concretely
+
+- `$BASH_ENV` whose FIRST line is `exit 0` ends the shell before any entry's first line exists
+  (measured: exit 0, nothing printed). The round-7 privileged re-exec kills the *stealth* class —
+  a payload that lets the gate appear to run and pass — but a payload that simply prevents the
+  gate from running at all is environment control, and is out of scope by the paragraph above.
+- A PATH wrapper on `git` or `python3`, per the reviewer's P1-2 reproduction.
+- Anything a fork-receiver chooses not to install. The hooks are opt-in by design (see CLAUDE.md,
+  "Fork받은 팀의 정책을 skill이 강제 ❌"); autonomy is a stated project value, and the asymmetry
+  between ax-template's own HEAD (fully gated) and a fork's (opt-in) is design, not oversight.
+
+---
+
+## TD-2026-07-30-(P1-privileged-startup) — a startup file runs before line 1, so the fix cannot live in the script
+
+- Date: 2026-07-30
+- Status: accepted
+- Trigger: cross-family reviewer, ROUND 7, P1-1 and P1-3.
+
+### P1-1 — the pure-keyword preflight is defeated by a SELF-ERASING `$BASH_ENV`
+
+Round 6 answered "what executes first INSIDE the file". The reviewer's round-7 finding is that
+this is the wrong question: bash sources `$BASH_ENV` **before the script's first line**, so any
+in-script sensor is structurally too late. RED, measured (bash 3.2.57(1)-release / Apple):
+
+```
+$BASH_ENV file:   builtin unset BASH_ENV ENV
+                  function set(){ builtin exit 0; }
+BASH_ENV=<payload> bash .githooks/pre-push …     → exit 0      (gate never ran)
+```
+
+The payload leaves **nothing to detect**: the function is not exported, so no `BASH_FUNC_*` entry
+exists for the preflight's `/usr/bin/env` read; and `BASH_ENV` is unset from the export list, so
+the preflight's `case "${BASH_ENV:-}${ENV:-}"` sees an empty string. `shopt -s expand_aliases`
+plus an alias is the same class.
+
+Round 6 also made a claim that was FALSE, and it is corrected in the code rather than argued away:
+"the pure-keyword preflight is the literal first executable text of all 8 entries". It was not.
+`.githooks/pre-push-lib.sh:27` and `practices/scripts/lib/release_anchor.sh:251` executed
+`export GIT_NO_REPLACE_OBJECTS=1` first, and `export` is an ordinary command lookup — an exported
+`export()` plus `alias exit=:` produced `SOURCE_RC=0` for both. Both exports now sit BELOW the
+preflight, and the banner in all eight files states what is actually true.
+
+**FIX — bash PRIVILEGED MODE at the invocation boundary.** In privileged mode bash does not
+process `$BASH_ENV`/`$ENV` and does not import functions from the environment. As its first
+executable text, each of the six EXECUTED entries detects privileged mode and, if absent, `exec`s
+the SAME interpreter with `-p`, re-running itself with the original arguments:
+
+```
+case $- in
+    *p*) ;;
+    *) case "${AX_PRIV_REEXEC-}" in
+           1) <abort: HERMETIC_PRIVILEGED_UNREACHABLE> ;;
+           *) case "${BASH:-}" in
+                  /*) exec /usr/bin/env AX_PRIV_REEXEC=1 "$BASH" -p "$0" "$@" ;;
+                  *)  <abort> ;;
+              esac ;;
+       esac ;;
+esac
+case $- in *p*) ;; *) <abort: the re-exec returned ⇒ exec is shadowed> ;; esac
+unset AX_PRIV_REEXEC
+```
+
+Every construct before the `exec` is unhijackable: `case` is a KEYWORD, `$-`/`${x-}`/`${x:?}` are
+PARAMETER EXPANSIONS, and `/usr/bin/env` is invoked by ABSOLUTE PATH. `exec` itself IS shadowable,
+which is why the SECOND `case` re-asserts privileged mode after it — a neutered `exec` falls
+through to a non-zero abort instead of continuing unprivileged.
+
+**THE LOOP MARKER IS DERIVED FROM PRIVILEGED MODE, NOT TRUSTED.** `AX_PRIV_REEXEC` means only "a
+re-exec was already attempted". An attacker who PRESETS it does not skip the re-exec — that branch
+ABORTS (measured, exit 1). It is `unset` the instant privileged mode holds, so it never reaches a
+child entry and cannot become a one-shot disable for the ~100 guards an entry launches.
+
+**THE TWO SOURCED LIBS ASSERT INSTEAD OF RE-EXECUTING.** A sourced file cannot `exec` without
+replacing its caller's process, and it does not need to: privileged mode is a property of the
+PROCESS, so a sourced file is covered by the entry that sourced it. Both libs therefore assert
+`$-` contains `p` as their first executable text and refuse otherwise. Verified: the three
+in-repo call sites that source them from a bare `bash -c` (two in
+`ax-prove-hermetic-runtime.sh`) are now `bash -p -c`; `verify-completion.sh`,
+`evidence_quote_spotcheck_guard.sh` and `manifest_snapshot_integrity_guard.sh` source them from
+their own privileged process.
+
+MEASURED, post-fix (all in throwaway sandboxes, `ax-prove-hermetic-runtime.sh` cases M/M'/M''/N/N'):
+
+```
+(M)   BASH_ENV self-erase, live gate            → exit 1 (honest verdict)  [pre-fix: 0]
+(M')  same payload, privileged re-exec removed  → exit 0 (reproduces ⇒ attributable)
+(M'') AX_PRIV_REEXEC=1 preset by the attacker   → exit 1 HERMETIC_PRIVILEGED_UNREACHABLE
+(N)   exported export() + non-privileged caller sourcing release_anchor.sh → exit 127, no SOURCED_OK
+(N')  same attack, round-6 shape restored       → exit 0 (reproduces)
+```
+
+`bash -p` was verified not to break the PyYAML sites: privileged mode changes startup-file and
+function-import behaviour only, and the python guards run under `-I -S` with a scrubbed
+`PYTHON*` environment either way — the full guard sweep is green with the re-exec in place. Git
+invokes the pre-push hook by `execve` on the hook path, so the re-exec keeps stdin (the push spec),
+the arguments (remote, url) and the cwd; the hook's own scenarios in
+`push_evidence_tree_binding_guard.sh` / `midrun_tree_mutation_guard.sh` exercise exactly that path.
+
+**HONEST RESIDUAL, and it is a boundary rather than a bug:** a `$BASH_ENV` whose first line is
+`exit 0` ends the shell before this line exists (measured, exit 0, nothing printed). No in-script
+construct can survive that. `#!/usr/bin/env -S bash -p` WOULD close it for `execve`-invoked
+entries (verified working on this machine), and was DECLINED: `env -S` is not portable to
+pre-2018 coreutils, a fork-receiver on an older system would get a hook that fails for an
+unrelated reason, and — decisively — it changes nothing about the boundary, because the same
+adversary can simply not install the hooks. Recorded in
+TD-2026-07-30-(ratchet-threat-model).
+
+### P1-3 — `filter.<driver>.process` bypasses GIT_FILTERS_PRESENT
+
+All three filter declarations matched only `clean|smudge`
+(`tree_fingerprint.py:102`, `release_anchor.sh:625`, the recency guard's check 12b0). Git performs
+the SAME conversion through the long-running filter protocol, declared as `filter.<n>.process`.
+RED, reproduced end to end: commit a file plus a `.gitattributes` entry, configure ONLY
+`.process`, replace the file on disk with different bytes of the SAME LENGTH →
+`git status --porcelain` is EMPTY → the path never enters `modified` → the fingerprint's raw
+`open()` loop never reads it → the tree fingerprints as the CLEAN-TREE CONSTANT
+`0a815065ebf5…`, so R25 tests the bytes on disk while the push ships the committed blob.
+
+(The equal length matters and is now documented in the harness: git's `ie_modified()` returns
+"modified" from the stat comparison alone when the recorded size differs and is non-zero, WITHOUT
+consulting the filter. An attacker pads; a reproduction that did not would pass for the wrong
+reason.)
+
+**FIX (a) — refuse ANY filter driver declaration**, `^filter\.`, at all three sites. Enumerating
+protocol keywords is a losing game: `.process` was the key round 6 did not think of, and the next
+one is not something this catalog can be asked to predict.
+
+**FIX (b) — stop deriving "unchanged" from a filtered `git status`.** For every tracked path git
+reports as CLEAN, the bytes on disk are hashed AS A GIT BLOB in python — no git process in the
+loop — and compared to the object id in the index (`GIT_RAW_INDEX_DIVERGENCE`, exit 6 from
+`tree_fingerprint.py`, and check 12c in the recency guard, which is the PUSH-blocking surface).
+
+**COVERAGE, stated exactly rather than implied.** WHOLE TREE: all of `git ls-files -s`, minus
+(i) gitlinks (submodule commits: no bytes of ours on disk), (ii) paths git already reports dirty
+(their raw bytes are hashed into the fingerprint anyway), and (iii) paths absent from disk
+(sparse checkout / skip-worktree; absence carries no bytes). Whole-tree coverage was measured
+before it was chosen: **5,745 tracked paths / 5.4 MB / ~0.2 s** on this catalog, so nothing is
+scoped out for cost and there is no remainder to register. A mismatch also fires for eol
+conversion (`core.autocrlf`, `core.eol`, a `text` attribute), which is not an attack but is
+equally fatal to a byte claim; the message names both causes so an honest operator is not left
+guessing.
+
+MEASURED (`ax-prove-hermetic-runtime.sh` cases O/O', plus a standalone reproduction):
+
+```
+(O)  .process mask on an ordinary tracked file, live gate → exit 1, GIT_FILTERS_PRESENT
+(O') same tamper, keyword subset restored + raw sweep removed → exit 0 (reproduces)
+standalone: declaration check neutered, raw comparison alive  → exit 6, GIT_RAW_INDEX_DIVERGENCE
+standalone: both neutered (= round-6 behaviour)               → exit 0, clean-tree constant
+negative control: live tree, no filter, 5,745 paths           → exit 0, digest in 0.25 s
+```
+
+The target of (O) is an ORDINARY tracked file, not a toolchain path: round 6 already ran
+`check-attr filter` over the nine ratchet-critical paths, so attacking one of those would have
+been caught by a check that predates this round and the reproduction would have proved nothing.
+Everything ELSE in the tree — which is what R25 actually tests — had no cover at all.
+
+### Harness reconciliation forced by this round, recorded because it is a real weakening
+
+`ax-prove-hermetic-runtime.sh` case (G') reproduces the round-6 preflight's attack by stripping
+the preflight. With round 7 in place that reproduction became structurally impossible — privileged
+mode alone blocks the exported-`set` import — so (G') silently became a tautology, measured as
+`exit=2` where `0` was required. Fixed by making the "pre-round-6" neuter also strip the round-7
+block: *pre-round-6 also means pre-round-7*, and a pre-fix world must be the world as it actually
+was. Without that, a non-vacuity proof would have quietly turned into a no-op — the exact failure
+mode this catalog exists to catch.
+
+- P1-2 is NOT fixed here. See TD-2026-07-30-(ratchet-threat-model) for the boundary and
+  `docs/BACKLOG.md` P2-68 for the external-trust-root work item.
+- Commits: (this commit — PRD-final-4 wave, P1-seal round-7)

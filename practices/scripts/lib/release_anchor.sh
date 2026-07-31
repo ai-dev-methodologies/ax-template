@@ -242,15 +242,26 @@
 #   ax_anchor_bind_repo "$REPO_ROOT" "<label>"        # → 1 on GIT_CONTEXT_REDIRECTED
 #   ax_ratchet_filters_absent "$REPO_ROOT" "<label>" <rel>...              # → 1 on GIT_FILTERS_PRESENT
 
-# ── P1-1: git must interpret objects as they are, not as refs/replace/* says ──────────
-# Exported (not merely set) so that it reaches the python subprocesses in the guards, which is
-# where most of the anchor reads actually happen. ROUND 5: the whole GIT_* family is scrubbed by
-# the hermetic bootstrap in every entry FIRST — including this variable, because
-# `GIT_NO_REPLACE_OBJECTS=0` inherited from the environment RE-ENABLES replacement refs — and this
-# line re-establishes the value we actually want.
-export GIT_NO_REPLACE_OBJECTS=1
 
-# ── ROUND 6 / P1-1: PURE-KEYWORD PREFLIGHT — THESE ARE THE FIRST EXECUTABLE LINES ────
+# ── ROUND 7 / P1-1: PRIVILEGED-MODE ASSERTION (SOURCED FILE) ────────────────────────
+# (TD-2026-07-30-P1-privileged-startup.) This file is SOURCED, never executed, so it cannot
+# re-exec itself under `bash -p` without replacing its caller's process. It does not need to:
+# privileged mode is a property of the PROCESS, and every entry that sources this file has
+# already re-executed itself under -p. So the honest statement is an ASSERTION — if the parent is
+# not privileged, $BASH_ENV was processed before the parent's first line and nothing downstream of
+# here is trustworthy. Refuse, rather than run inside a shell somebody else warmed up.
+case $- in
+    *p*) ;;
+    *) _AX_PV_NULL=; _AX_PV_DIE=${_AX_PV_NULL:?"release_anchor.sh: HERMETIC_PRIVILEGED_UNREACHABLE — this file is SOURCED, so it cannot re-exec without replacing its caller; it REQUIRES the caller to already be in bash privileged mode. Privileged mode is a property of the PROCESS, so a sourced file is covered by the entry that sourced it — which is why this is an assertion and not a re-exec. Source this only from an ax entry carrying the round-7 privileged re-exec."} ;;
+esac
+
+# ── ROUND 6 / P1-1: PURE-KEYWORD PREFLIGHT — SECOND, AND BEFORE ANY OVERRIDABLE COMMAND ──
+# CORRECTION (ROUND 7): round 6 claimed this block was "the first executable text of all 8
+# entries". It was NOT. The two SOURCED libs (practices/scripts/lib/release_anchor.sh:251 and
+# .githooks/pre-push-lib.sh:27) ran `export GIT_NO_REPLACE_OBJECTS=1` FIRST, and `export` is an
+# ordinary command lookup: MEASURED, an exported export() plus `alias exit=:` produced
+# SOURCE_RC=0 for both. Those two exports now sit BELOW this preflight, and the round-7
+# privileged re-exec above is what actually executes first.
 # (TD-2026-07-30-P1-preflight-and-raw-bytes.) INVARIANT (α): NOTHING OVERRIDABLE MAY EXECUTE
 # BEFORE THE SCRUB THAT DETECTS OVERRIDES. Round 5 put `set -uo pipefail` and `[ -n … ]` ahead of
 # its own hermetic bootstrap, and both are ordinary command lookups: MEASURED —
@@ -282,6 +293,14 @@ case "${BASH_ENV:-}${ENV:-}" in
     ?*) _AX_PF_NULL=; _AX_PF_DIE=${_AX_PF_NULL:?"$_AX_PF_LABEL: HERMETIC_PREFLIGHT_HOSTILE — BASH_ENV/ENV is set, so every non-interactive bash this gate starts would source that file before running the gate's own code. Unset it and re-run."} ;;
 esac
 unset _AX_PF_ENV _AX_PF_NULL _AX_PF_DIE _AX_PF_LABEL
+
+# ── P1-1: git must interpret objects as they are, not as refs/replace/* says ──────────
+# Exported (not merely set) so that it reaches the python subprocesses in the guards, which is
+# where most of the anchor reads actually happen. ROUND 5: the whole GIT_* family is scrubbed by
+# the hermetic bootstrap in every entry FIRST — including this variable, because
+# `GIT_NO_REPLACE_OBJECTS=0` inherited from the environment RE-ENABLES replacement refs — and this
+# line re-establishes the value we actually want.
+export GIT_NO_REPLACE_OBJECTS=1
 # ── ROUND 5 / P1-1+P1-2: HERMETIC RUNTIME BOOTSTRAP (A) — DELIBERATELY DUPLICATED ────
 # (TD-2026-07-30-P1-hermetic-runtime; the full argument lives in the header of
 #  practices/scripts/lib/release_anchor.sh.) THE RATCHET MAY NOT INHERIT ITS OWN RUNTIME.
@@ -622,7 +641,13 @@ ax_ratchet_filters_absent() {
     local repo="$1" label="$2"; shift 2
     local decl attrs gitdir rel out bad=0
     "${AX_GIT_BIN:-git}" --no-replace-objects -C "$repo" rev-parse --git-dir >/dev/null 2>&1 || return 0
-    decl="$(ax_git "$repo" config --get-regexp '^filter\..*\.(clean|smudge)$' 2>/dev/null)"
+    # ROUND 7 / P1-3: ANY key under ANY filter driver, not the clean|smudge keyword subset.
+    # `filter.<n>.process` (git's long-running filter protocol) performs the SAME conversion and
+    # matched neither word: measured, with only `.process` configured, a file whose disk bytes
+    # differed from its blob made `git status --porcelain` EMPTY and the tree fingerprint report
+    # the clean-tree constant 0a815065ebf5…. Enumerating protocol keywords is a losing game, so
+    # the declaration of a filter driver at all is what is refused.
+    decl="$(ax_git "$repo" config --get-regexp '^filter\.' 2>/dev/null)"
     if [ -n "$decl" ]; then
         {
             echo "${label}: GIT_FILTERS_PRESENT — this repository DECLARES git content filters:"
@@ -630,8 +655,9 @@ ax_ratchet_filters_absent() {
             echo "  A clean filter sits between the file on disk and every content answer git gives."
             echo "  Measured: with one installed, a tampered ratchet file read as byte-identical to"
             echo "  its committed blob (\`git diff --quiet\` rc 0) while its raw bytes differed."
-            echo "  A released catalog has no reason to carry one. Remove it (git config --unset"
-            echo "  filter.<name>.clean/.smudge) and re-run."
+            echo "  A released catalog has no reason to carry one. Remove it (git config"
+            echo "  --remove-section filter.<name>) and re-run. ANY key under a filter driver is"
+            echo "  refused, including .process — the long-running protocol converts content too."
         } >&2
         bad=1
     fi

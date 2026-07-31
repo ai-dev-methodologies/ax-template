@@ -113,7 +113,56 @@
 #   bash practices/evals/completion_checklist_recency_guard.sh --fixtures
 #   bash practices/evals/completion_checklist_recency_guard.sh --root DIR
 
-# ── ROUND 6 / P1-1: PURE-KEYWORD PREFLIGHT — THESE ARE THE FIRST EXECUTABLE LINES ────
+# ── ROUND 7 / P1-1: PRIVILEGED-MODE RE-EXEC — THIS IS THE FIRST EXECUTABLE TEXT ─────
+# (TD-2026-07-30-P1-privileged-startup.) The round-6 preflight below is IN-SCRIPT, and bash
+# sources $BASH_ENV BEFORE a script's first line — so ANY in-script sensor is structurally too
+# late. MEASURED (cross-family reviewer, round 7): a SELF-ERASING payload
+#     builtin unset BASH_ENV ENV; function set(){ builtin exit 0; }
+# leaves NOTHING for the preflight to find — BASH_ENV is gone from the environ it reads, and the
+# function is NOT exported so no BASH_FUNC_* entry exists — and the first `set -uo pipefail` this
+# file runs exits 0. `shopt -s expand_aliases` + an alias is the same class.
+# THE FIX IS AT THE INVOCATION BOUNDARY, not in the script: bash PRIVILEGED MODE (-p) does not
+# process $BASH_ENV/$ENV and does not import functions from the environment. This entry therefore
+# re-executes ITSELF under -p before doing anything else. Measured, bash 3.2.57(1) / Apple:
+#     BASH_ENV=<payload> bash  <entry>   → exit 0          (pre-fix; the gate never ran)
+#     BASH_ENV=<payload> bash -p <entry> → honest verdict   (payload inert)
+# CONSTRUCTS USED, and why each is unhijackable: `case` is a shell KEYWORD (never resolved through
+# the function table); $-, ${x-} and ${x:?} are PARAMETER EXPANSIONS, not commands; /usr/bin/env is
+# invoked by ABSOLUTE PATH (bash never looks a word containing a slash up as a function).
+# `exec` IS shadowable, so the SECOND case re-asserts privileged mode AFTER it: a neutered exec
+# falls through to a non-zero abort instead of quietly continuing unprivileged (measured: a
+# BASH_ENV defining exec(){ :; } exits 1 here, it does not proceed).
+# THE LOOP MARKER IS NOT TRUSTED. AX_PRIV_REEXEC means only "a re-exec was already attempted".
+# An attacker who PRESETS it does not skip the re-exec — that branch ABORTS (measured, exit 1).
+# It is unset the moment privileged mode holds, so it never reaches a child entry and cannot turn
+# into a one-shot disable for the guards this entry launches.
+# RESIDUAL, stated rather than hidden: a $BASH_ENV whose first line is `exit 0` ends the shell
+# before this line exists (measured, exit 0, nothing printed). No in-script construct can survive
+# that. It is the environment-control boundary declared in practices/DECISIONS.md,
+# TD-2026-07-30-(ratchet-threat-model) — the same adversary can simply not install the hooks.
+case $- in
+    *p*) ;;
+    *) case "${AX_PRIV_REEXEC-}" in
+           1) _AX_PV_NULL=; _AX_PV_DIE=${_AX_PV_NULL:?"completion_checklist_recency_guard: HERMETIC_PRIVILEGED_UNREACHABLE — a re-exec into bash privileged mode was already attempted and this shell is STILL unprivileged. Either exec is shadowed by a function, or AX_PRIV_REEXEC was preset in the environment to skip the re-exec. Both are refused; nothing in this gate runs unprivileged. Start it from a clean shell."} ;;
+           *) case "${BASH:-}" in
+                  /*) exec /usr/bin/env AX_PRIV_REEXEC=1 "$BASH" -p "$0" "$@" ;;
+                  *) _AX_PV_NULL=; _AX_PV_DIE=${_AX_PV_NULL:?"completion_checklist_recency_guard: HERMETIC_PRIVILEGED_UNREACHABLE — the running interpreter (BASH) is not an absolute path, so the SAME interpreter cannot be named unambiguously for the privileged re-exec."} ;;
+              esac ;;
+       esac ;;
+esac
+case $- in
+    *p*) ;;
+    *) _AX_PV_NULL=; _AX_PV_DIE=${_AX_PV_NULL:?"completion_checklist_recency_guard: HERMETIC_PRIVILEGED_UNREACHABLE — the re-exec returned instead of replacing this process, which means exec itself is shadowed. Unprivileged execution is refused."} ;;
+esac
+unset AX_PRIV_REEXEC
+
+# ── ROUND 6 / P1-1: PURE-KEYWORD PREFLIGHT — SECOND, AND BEFORE ANY OVERRIDABLE COMMAND ──
+# CORRECTION (ROUND 7): round 6 claimed this block was "the first executable text of all 8
+# entries". It was NOT. The two SOURCED libs (practices/scripts/lib/release_anchor.sh:251 and
+# .githooks/pre-push-lib.sh:27) ran `export GIT_NO_REPLACE_OBJECTS=1` FIRST, and `export` is an
+# ordinary command lookup: MEASURED, an exported export() plus `alias exit=:` produced
+# SOURCE_RC=0 for both. Those two exports now sit BELOW this preflight, and the round-7
+# privileged re-exec above is what actually executes first.
 # (TD-2026-07-30-P1-preflight-and-raw-bytes.) INVARIANT (α): NOTHING OVERRIDABLE MAY EXECUTE
 # BEFORE THE SCRUB THAT DETECTS OVERRIDES. Round 5 put `set -uo pipefail` and `[ -n … ]` ahead of
 # its own hermetic bootstrap, and both are ordinary command lookups: MEASURED —
@@ -442,6 +491,7 @@ import pathlib
 import json
 import os
 import re
+import hashlib
 import subprocess
 import datetime
 import warnings
@@ -937,7 +987,13 @@ if live_git_root and not expected_head_file.is_file() and guard_repo is not None
     #       tree_fingerprint.py compare byte-identical to its blob (`git diff --quiet` rc 0). The
     #       comparison below is fixed to use raw hashes; this refusal exists because "we passed
     #       --no-filters everywhere" is a claim about every present and future call site.
-    rc_f, filt = git_out("config", "--get-regexp", r"^filter\..*\.(clean|smudge)$",
+    #       ROUND 7 / P1-3: the pattern was a KEYWORD SUBSET and `filter.<n>.process` — git's
+    #       long-running filter protocol — performs the same conversion under a key that matches
+    #       neither word. MEASURED: with only .process configured, a file whose disk bytes differ
+    #       from its committed blob makes `git status --porcelain` EMPTY and the tree fingerprint
+    #       report the CLEAN-TREE CONSTANT 0a815065ebf5…, so R25 tests benign bytes while the push
+    #       ships the malicious blob. ANY key under ANY filter driver is refused now.
+    rc_f, filt = git_out("config", "--get-regexp", r"^filter\.",
                          root=root, check=False)
     if rc_f == 0 and filt:
         emit_fail(
@@ -1003,6 +1059,87 @@ if live_git_root and not expected_head_file.is_file() and guard_repo is not None
                 f'files; a regular-file tree_fingerprint.py rewritten to print a constant passed '
                 f'all of those and then served as BOTH the writer and the verifier of the evidence. '
                 f'Commit or restore the file and re-run.'
+            )
+
+    # 12c. THE WHOLE TRACKED TREE, ON RAW BYTES (ROUND 7 / P1-3b). 12b0 refuses a DECLARATION and
+    #      12b compares the nine toolchain paths; neither is a measurement of the rest of the tree,
+    #      and the attack does not need the toolchain: commit a malicious file, declare a filter
+    #      driver on it, put benign bytes on disk. git's status then reports nothing, so every
+    #      check that starts from `git status` — including the fingerprint's raw-byte loop, which
+    #      only opens the paths status named — is answered about a file that is not there.
+    #      So: for every tracked path git calls CLEAN, hash the bytes on disk AS A GIT BLOB, here,
+    #      and compare with the object id in the index. No git process participates, so no filter
+    #      protocol (present or future) can answer it.
+    #      COVERAGE, stated exactly: all of `git ls-files -s` MINUS (i) gitlinks, (ii) paths git
+    #      already reports dirty (their raw bytes are hashed into the fingerprint anyway), and
+    #      (iii) paths absent from disk (sparse/skip-worktree; absence carries no bytes). Measured
+    #      cost on this catalog: 5,745 paths / 5.4 MB / ~0.2 s.
+    #      A mismatch also fires for eol conversion (core.autocrlf/core.eol/`text`), which is not
+    #      an attack but is equally fatal to a byte claim; the message names both causes.
+    rc_of, objfmt = git_out("rev-parse", "--show-object-format", root=root, check=False)
+    _algo = "sha256" if (rc_of == 0 and objfmt.strip() == "sha256") else "sha1"
+    _p_idx = subprocess.run([GIT_BIN, "--no-replace-objects", "-C", str(root),
+                             "ls-files", "-s", "-z"],
+                            stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, env=GIT_ENV)
+    _p_st = subprocess.run([GIT_BIN, "--no-replace-objects", "-C", str(root),
+                            "status", "--porcelain", "-z", "-uall"],
+                           stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, env=GIT_ENV)
+    if _p_idx.returncode != 0 or _p_st.returncode != 0:
+        emit_fail(
+            "RAW_TREE_SWEEP_UNVERIFIABLE",
+            "the index or the status of this tree could not be read, so the raw-byte sweep that "
+            "backstops the filter refusal could not run. Unknown never passes."
+        )
+    else:
+        _dirty = set()
+        _ents = _p_st.stdout.split(b"\0")
+        _i = 0
+        while _i < len(_ents):
+            _e = _ents[_i]; _i += 1
+            if len(_e) < 4:
+                continue
+            if _e[:1] in (b"R", b"C"):
+                _i += 1
+            _dirty.add(_e[3:])
+        _bad = []
+        for _rec in _p_idx.stdout.split(b"\0"):
+            if not _rec:
+                continue
+            try:
+                _meta, _path = _rec.split(b"\t", 1)
+                _mode, _blob, _stage = _meta.split(b" ")
+            except ValueError:
+                continue
+            if _mode == b"160000" or _path in _dirty:
+                continue
+            _full = os.path.join(os.fsencode(str(root)), _path)
+            try:
+                if _mode == b"120000":
+                    _d = os.readlink(_full)
+                    _d = _d if isinstance(_d, bytes) else os.fsencode(_d)
+                else:
+                    if os.path.islink(_full):
+                        continue
+                    with open(_full, "rb") as _fh:
+                        _d = _fh.read()
+            except OSError:
+                continue
+            _h = hashlib.new(_algo)
+            _h.update(b"blob %d\0" % len(_d))
+            _h.update(_d)
+            if _h.hexdigest().encode() != _blob:
+                _bad.append(_path.decode(errors="replace"))
+                if len(_bad) >= 8:
+                    break
+        if _bad:
+            emit_fail(
+                "GIT_RAW_INDEX_DIVERGENCE",
+                "tracked files this repository reports as unmodified do NOT match their index "
+                "blob when their bytes are hashed directly: " + ", ".join(_bad) + ". Either a "
+                "content filter (filter.<n>.clean/.smudge/.process) is interposing on git's "
+                "answers, or an eol conversion (core.autocrlf/core.eol/a text attribute) rewrites "
+                "them on checkout. Under both, the tree that was verified is not the tree being "
+                "pushed."
             )
 
     # 12a. THE TREE MUST BE CLEAN NOW, read from git rather than from the record. Check 7 reads

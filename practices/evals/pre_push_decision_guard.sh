@@ -36,6 +36,30 @@
 # means "given a passing R25 and a passing suite, the hook routes every ref to
 # the correct stage"; it is silent about whether the suite itself is correct.
 
+# ── ROUND 7 / P1-1: PRIVILEGED-MODE RE-EXEC (TD-2026-07-30-P1-privileged-startup) ───
+# This guard SOURCES .githooks/pre-push-lib.sh to exercise its pure decision functions, and that
+# lib now ASSERTS bash privileged mode as its first executable text — a sourced file cannot
+# re-exec without replacing its caller, so it requires the caller to already be privileged. This
+# guard is therefore a first-class CALLER of the lib and must meet the same contract; without
+# this block every `source` below aborts with HERMETIC_PRIVILEGED_UNREACHABLE (measured in the
+# round-7 sweep). Re-execing here also covers the subshells, since privileged mode is a property
+# of the PROCESS. Same construction as the eight entries: `case` is a keyword, ${x:?} is a
+# parameter expansion, /usr/bin/env is absolute, and the second case catches a shadowed `exec`.
+case $- in
+    *p*) ;;
+    *) case "${AX_PRIV_REEXEC-}" in
+           1) _AX_PV_NULL=; _AX_PV_DIE=${_AX_PV_NULL:?"pre_push_decision_guard: HERMETIC_PRIVILEGED_UNREACHABLE — a re-exec into bash privileged mode was already attempted and this shell is STILL unprivileged."} ;;
+           *) case "${BASH:-}" in
+                  /*) exec /usr/bin/env AX_PRIV_REEXEC=1 "$BASH" -p "$0" "$@" ;;
+                  *) _AX_PV_NULL=; _AX_PV_DIE=${_AX_PV_NULL:?"pre_push_decision_guard: HERMETIC_PRIVILEGED_UNREACHABLE — the running interpreter (BASH) is not an absolute path."} ;;
+              esac ;;
+       esac ;;
+esac
+case $- in
+    *p*) ;;
+    *) _AX_PV_NULL=; _AX_PV_DIE=${_AX_PV_NULL:?"pre_push_decision_guard: HERMETIC_PRIVILEGED_UNREACHABLE — the re-exec returned instead of replacing this process, which means exec itself is shadowed."} ;;
+esac
+unset AX_PRIV_REEXEC
 set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
