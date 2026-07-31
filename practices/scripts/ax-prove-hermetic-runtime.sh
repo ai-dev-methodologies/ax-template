@@ -2217,7 +2217,7 @@ r9_case AM  symlegit  empty "NINE legitimate symlinks must NOT block   " ""
 #        legitimate shapes include a target reached THROUGH an intermediate symlinked directory,
 #        whose verdict the new resolver reaches by AGREEING with the record instead of by failing
 #        to recognise it. Both verdicts are exit 0; the reason changed, the answer did not.
-r9_case AN  symjump   empty "POSIX `..` behind a symlink (jump/../)    " \
+r9_case AN  symjump   empty "POSIX dotdot behind a symlink (jump/../)  " \
     "GIT_SYMLINK_TARGET_ALIAS" "" "$CLEAN_FP_R13"
 r9_case AN2 symjump   empty "same, LEXICAL resolution restored (both)  " "" r14all "$CLEAN_FP_R13"
 r9_case AN3 symjump   empty "jump topology, only the SWEEP neutered    " \
@@ -2390,6 +2390,12 @@ fi
 echo "  pre-round-13 and per-implementation twins, while NINE legitimate tracked symlinks (exact,"
 echo "  \`..\`, absolute, escaping, untracked, dangling, chained, directory, via-symlinked-dir) all"
 echo "  PASS in one tree;"
+echo "  a symlink target whose \`..\` sits BEHIND an intermediate symlink is resolved the way"
+echo "  the KERNEL resolves it — component by component, popping \`..\` AFTER the follow — so the"
+echo "  reviewer's jump/../GRADLEW-REAL topology, which the round-13 LEXICAL walk reported as"
+echo "  absent and passed in silence, is refused; the pre-round-14 twin restores the lexical walk"
+echo "  and it lands again, with sweep-only and helper-only twins; and a committed symlink CYCLE"
+echo "  exhausts the follow budget and BLOCKS on its own code rather than going silent;"
 echo "  the unattacked control passes, an uninitialized gitlink is NOT refused, the"
 if [ -n "${CS_ROOT:-}" ]; then
 echo "  false-positive controls pass ON A REAL CASE-SENSITIVE FILESYSTEM (distinct inodes for A/·a/"
