@@ -2542,9 +2542,20 @@ the SUBJECT is different — blob content, not an index path — and so is the R
 instruction the operator cannot follow.
 
 The clean-tree constant `0a815065…` is preserved by construction: nothing new is appended to the
-hash, only a new refusal. Measured on the live tree: digest IDENTICAL pre and post on the same
-dirty working state (`55441dfd…` with the round-13 edits present, from both the 9c8f339 copy and
-HEAD's copy of the helper).
+hash, only a new refusal. **Measured with the SAME auditable recipe round 12 used**, and it is
+stated that way on purpose — round 12's own corrections list "replacing an unauditable digest with
+ANOTHER unauditable digest" as one of the three defects it fixed, and quoting a working-state
+digest here would repeat it one round later. Recipe: at a CLEAN checkout of the commit,
+`printf 'X\n' > .ax-fp-probe.txt`, then `python3 practices/scripts/lib/tree_fingerprint.py .` —
+run with the 9c8f339 copy of the helper and with HEAD's, in the same tree state.
+
+| tree state | 9c8f339 helper | this commit's helper |
+|---|---|---|
+| CLEAN | `0a815065…` | `0a815065…` |
+| DIRTY (the probe recipe) | `8a91e493…` | `8a91e493…` |
+
+The dirty value is byte-identical to the one round 12 recorded for the same recipe, so the digest
+has not moved across two rounds of added refusals.
 
 ### Evidence
 
@@ -2559,7 +2570,7 @@ HEAD's copy of the helper).
 | (AM) FALSE-POSITIVE control | **nine** legitimate tracked symlinks in ONE tree — exact · `..` onto the exact record · absolute · escaping · untracked (gitignored) · dangling · chained · tracked directory · through a symlinked directory — **all exit 0** |
 | (AM) non-vacuity | adding ONE directory-aliased target (`ln -s B/real.txt` over a recorded `a/b`) to that same tree blocks, naming only that link |
 | live tree, 2 tracked symlinks | both are `..`-traversal links onto the exact record; exit 0, **zero** refusals |
-| performance | 0.25–0.26 s/run mean, pre and post — no measurable cost (the inode map reuses the existing `statcache`; 2 extra `lstat` calls for 2 symlinks) |
+| performance | 0.300 → **0.296** s/run mean over 5 runs each, same tree, 9c8f339's helper vs this commit's — **no measurable cost**, and the direction is noise, not a speedup. The inode map is one pass over the ~6.8k prefixes already in `statcache` (no new `lstat`), and the target resolution costs exactly 2 extra `lstat` calls, one per tracked symlink |
 
 ### What this round did NOT close, stated
 
