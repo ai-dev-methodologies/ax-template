@@ -2458,3 +2458,139 @@ correction is aimed at the *line the reviewer quoted* instead of at the *claim*.
   changes filename comparison does not hold for the target filesystem. Our side is locale-independent
   too: `str.casefold()` never consults the locale, so running R25 under `tr_TR` does not move the
   key. No code change.
+
+- Commits: (this commit — PRD-final-4 wave, P1-seal round-12)
+
+---
+
+## TD-2026-08-01-(P1-symlink-target-alias) — four rounds of alias census, and none of them looked at what a symlink POINTS AT
+
+**Round 13, cross-family reviewer P1.** Rounds 9-12 widened the alias KEY three times — ASCII case,
+canonical normalization, non-ASCII case, ignorable Cf — and never once widened the SUBJECT. Every
+one of them registered **INDEX PATHS** (`tree_fingerprint.py` `_register_prefixes`;
+`completion_checklist_recency_guard.sh` the prefix walk in 12c). A symlink's **TARGET is not an
+index path.** It is **blob content**: read as bytes, hashed as a blob, and **never resolved** — so
+the entire four-round census did not apply to it on any of the four axes. The gap was not a
+weakness of the key; it was a hole in the domain the key was ever applied to.
+
+```
+REPRODUCTION — the reviewer's topology, COMMIT ONLY, no environment control
+    git mv backend/gradlew backend/gradlew-real
+    ln -s GRADLEW-REAL backend/gradlew          # the CASE is the whole attack
+    git add backend/gradlew backend/gradlew-real && git commit
+
+    git status --porcelain -uall   → EMPTY
+    ./backend/gradlew              → runs      (so R25 EXECUTES the wrapper and goes green)
+    9c8f339 tree_fingerprint.py .  → exit 0, 0a815065…              (the CLEAN-TREE CONSTANT)
+    9c8f339 recency guard          → exit 0, completion_checklist.recency_pass
+    HEAD    tree_fingerprint.py .  → exit 15, GIT_SYMLINK_TARGET_ALIAS
+    HEAD    recency guard          → exit 1,  GIT_SYMLINK_TARGET_ALIAS
+```
+
+On a case-SENSITIVE checkout the committed symlink is **DANGLING**: the receiver gets a broken
+`backend/gradlew` while our evidence says the tree is clean and the build passed. Confirmed live by
+the reviewer against the shipped detector: `backend/gradlew` and `backend/GRADLEW` resolve to the
+same APFS inode, `backend/GRADLEW` is not an indexed spelling, the detector produced
+`helper_verdict ([], [])`, and the target folds equal to `backend/gradlew-real` while
+`target_is_registered_prefix` is FALSE.
+
+### THE RULE THAT SHIPS — and why precision matters more here than in any previous round
+
+Symlinks legitimately point at untracked paths, outside the repository, and at absolute paths. A
+bare *"the target must equal the recorded spelling"* rule would refuse most of the honest ones. The
+seven steps, in both implementations:
+
+1. take the target's **bytes** (already read for the blob comparison);
+2. resolve them **lexically, relative to the link's own directory** — which is the *index's*
+   recorded spelling, so the base is authentic;
+3. **absolute** / escapes the root through `..` / resolves to the root itself → not this class;
+4. `lstat` the candidate; **does not exist** → not this class;
+5. look its `(st_dev, st_ino)` up in the **registered prefix set** — the same
+   tracked-paths-and-their-directory-components map the prefix walk already builds. Not found
+   (**untracked target**) → not this class;
+6. candidate spelling **is** a registered spelling → **PASS**;
+7. otherwise, **fold-equal** (`_fold_path_key` / `_ax_fold_path_key`, the SHARED key) to a
+   registered spelling → **BLOCK**; not fold-equal → not this class.
+
+**Step 7 is where the precision lives.** Gating on FOLD-EQUALITY rather than on bare inequality is
+what makes `..` traversal, chains through an intermediate symlinked directory, and absolute targets
+fall out automatically instead of needing exceptions — and it means the class inherits every axis
+the fold already has, and every axis it gains later, for free.
+
+| edge case | treatment | why |
+|---|---|---|
+| `..` traversal staying inside the repo | **resolved, then compared** | both live tracked symlinks in this catalog are exactly this shape and land on the EXACT record; they pass |
+| lexical `..` that POSIX would resolve elsewhere (a symlinked component) | silent | the candidate lstats to a different inode or none — **under**-inclusive, never over |
+| **absolute** target | not blocked | it names a location on the receiver's root filesystem; the index cannot record it, so there is no recorded spelling to be an alias OF. `docs/BACKLOG.md` **P3-131** |
+| target escaping the repo through `..` | not blocked | same reason |
+| **chained** symlink (target is another tracked symlink) | **compared** | `lstat` does not follow the FINAL component, so the candidate's inode is the second link's own, which the prefix walk registered. Exact spelling passes; an aliased spelling of the second link BLOCKS — the same defect one level up |
+| target reached **through** an intermediate symlinked DIRECTORY | not blocked | `lstat` follows the intermediate components so the inode is the real file's, but the candidate does not FOLD-EQUAL the record. Correct: that intermediate link is itself committed and resolves at the receiver too |
+| target resolving to a **DIRECTORY** that is a tracked prefix | **compared** | the registry is the PREFIX map, not the leaf set. `link -> BACKEND` over a recorded `backend` BLOCKS |
+| **untracked** target | not blocked | no recorded spelling to alias; a link to a build output is ordinary |
+| **dangling** target | **not blocked, deliberately** | it is a real defect but a DIFFERENT class: identically broken here and at the receiver, so R25's evidence does not *lie* about it — whatever would have read it failed here first. Blocking it would refuse a link to a not-yet-built ignored artifact. `docs/BACKLOG.md` **P3-132** |
+| **dirty** symlinks | not examined | the on-disk target is not the committed one, and 12a refuses a dirty tree outright |
+
+### New blocking code
+
+| code | fires when | fingerprint exit |
+|---|---|---|
+| `GIT_SYMLINK_TARGET_ALIAS` | a tracked mode-120000 entry whose target resolves inside the repo to a REGISTERED prefix's `(st_dev, st_ino)` under a FOLD-EQUAL but textually different spelling | **15** |
+
+**Why a new code rather than widening 13/14** (rounds 11 and 12 both widened rather than added):
+the SUBJECT is different — blob content, not an index path — and so is the REMEDY. 13/14 say
+`git mv` a path; this one says `ln -sf <recorded-spelling>`. A shared code would print an
+instruction the operator cannot follow.
+
+The clean-tree constant `0a815065…` is preserved by construction: nothing new is appended to the
+hash, only a new refusal. Measured on the live tree: digest IDENTICAL pre and post on the same
+dirty working state (`55441dfd…` with the round-13 edits present, from both the 9c8f339 copy and
+HEAD's copy of the helper).
+
+### Evidence
+
+| Arm | Result |
+|---|---|
+| (AJ) CASE — the reviewer's gradlew topology, APFS | pre-fix exit 0 + clean-tree constant + `recency_pass` → post-fix helper exit 15 / guard exit 1, `GIT_SYMLINK_TARGET_ALIAS` |
+| (AK) NORMALIZATION — index `symdir/é-real` NFC, link blob NFD | same shape → `GIT_SYMLINK_TARGET_ALIAS`. **This is the arm that proves the fix reuses the SHARED fold**: a case-only check is silent here. git does NOT precompose blob content, so ordinary plumbing expresses it |
+| (AL) IGNORABLE Cf — target `safe-real<U+200C>`, REAL case-insensitive HFS+ volume | pre-fix exit 0 + clean-tree constant → post-fix `GIT_SYMLINK_TARGET_ALIAS` |
+| (AJ2)/(AK2)/(AL2) census removed in BOTH | the attacks land again — exit 0 |
+| (AJ3)/(AK3) sweep-only neuter | the fingerprint helper still refuses (`AUDIT_FINGERPRINT_UNVERIFIABLE`, recompute exit 15) |
+| (AJ4)/(AK4) helper-only neuter | the 12c sweep still refuses on its own code (`GIT_SYMLINK_TARGET_ALIAS`) |
+| (AM) FALSE-POSITIVE control | **nine** legitimate tracked symlinks in ONE tree — exact · `..` onto the exact record · absolute · escaping · untracked (gitignored) · dangling · chained · tracked directory · through a symlinked directory — **all exit 0** |
+| (AM) non-vacuity | adding ONE directory-aliased target (`ln -s B/real.txt` over a recorded `a/b`) to that same tree blocks, naming only that link |
+| live tree, 2 tracked symlinks | both are `..`-traversal links onto the exact record; exit 0, **zero** refusals |
+| performance | 0.25–0.26 s/run mean, pre and post — no measurable cost (the inode map reuses the existing `statcache`; 2 extra `lstat` calls for 2 symlinks) |
+
+### What this round did NOT close, stated
+
+- **`docs/BACKLOG.md` P3-131** — an absolute target that happens to point back inside this checkout
+  is unportable, but not by *aliasing*; refusing it is a different (portability) check.
+- **`docs/BACKLOG.md` P3-132** — a committed DANGLING symlink. Reasoned above; registered rather
+  than silently accepted.
+- **Lexical vs POSIX `..`.** The resolution is textual, so a `..` that crosses a symlinked component
+  resolves somewhere the kernel would not. That direction is **under**-inclusive (the lookup misses
+  and the check is silent), never over-inclusive, and it is what a receiver types when it opens the
+  committed path component by component.
+
+### Carried in this round, on the reviewer's instruction
+
+- `docs/BACKLOG.md` **P3-128** amended rather than duplicated — the row already named ZFS
+  `normalization=` as its own unmeasured residue, so a new row would have been a duplicate
+  registration. OpenZFS `normalization=formKC`/`formKD` compares filenames in a **compatibility**
+  normalization form, which collapses exactly the equivalence class (`Ａ`/`A`, `Ⅳ`/`IV`) that the
+  round-12 key deliberately excludes. **Graded honestly and NOT promoted**: it is a documented
+  **non-default** dataset property, settable only at creation, so it is an administrator's option
+  rather than a property of the filesystem; and **no live ZFS was available here**, so there is no
+  ordinary-use reproduction. Same grade as P3-129. No code change.
+- **The round-12 astral-plane gap is now CLOSED BY ARGUMENT, not left hanging.** Round 12's
+  superset claim for category Cf was measured BMP-complete (63,486 characters, exactly 16 fold, all
+  Cf) and the entry above honestly recorded "what remains unswept by anyone: the astral planes".
+  The reviewer closed it structurally: HFS+'s comparison (TN1150 `FastUnicodeCompare`) operates on
+  **UTF-16 code units** and indexes its fold table by unit; the **surrogate units (U+D800-DFFF) are
+  identity entries, not ignorables**, so neither half of a surrogate pair folds to zero and an
+  astral character cannot vanish. There is therefore no structural path by which an astral scalar
+  enters HFS+'s ignorable set, and "Cf is a superset" holds astral-inclusive. **The basis is the
+  algorithm's structure, not a sweep** — promoting it to a measurement would require an astral
+  enumeration, which is not claimed here. Recorded in P3-128 alongside the OpenZFS note.
+
+- Commits: (this commit — PRD-final-4 wave, P1-seal round-13)

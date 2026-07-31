@@ -1643,6 +1643,35 @@ run_guard "release_anchor/helper_injection_blocked" 0 \
 # spellings from DISTINCT inodes and must NOT be refused. (AF2)/(AG2) revert ONLY the strip in both
 # implementations and the attacks land again; (AF3)/(AF4)/(AG3)/(AG4) are the per-implementation
 # splits. If no folding volume can be attached the RED direction runs SIMULATED in (AI) and says so.
+# ROUND 13 (TD-2026-08-01-(P1-symlink-target-alias) / P1) attacks the census from OUTSIDE the set it
+# was ever taken over. Rounds 9-12 widened the KEY three times and never widened the SUBJECT: every
+# one of them registered INDEX PATHS. A symlink's TARGET is not an index path — it is BLOB CONTENT,
+# read as bytes and hashed and never RESOLVED — so the whole four-round census did not apply to it
+# on ANY axis. Measured at 9c8f339, committed content and no environment control: `git mv
+# backend/gradlew backend/gradlew-real` + `ln -s GRADLEW-REAL backend/gradlew` leaves `git status
+# --porcelain -uall` EMPTY, the wrapper RESOLVES so R25 executes it and goes green, the fingerprint
+# is the clean-tree constant 0a815065… and the recency guard emits recency_pass — while a
+# case-SENSITIVE receiver gets a DANGLING backend/gradlew. Both implementations now resolve a
+# tracked symlink's target LEXICALLY against the link's own recorded directory and refuse a spelling
+# that reaches a REGISTERED prefix's (st_dev, st_ino) under a FOLD-EQUAL but textually different
+# spelling → GIT_SYMLINK_TARGET_ALIAS (fingerprint exit 15). A NEW code rather than a widening of
+# 13/14, because the subject (blob content, not an index path) and the remedy (`ln -sf
+# <recorded-spelling>`, not `git mv`) are both different. THE PRECISION IS THE POINT: gating on
+# FOLD-EQUALITY instead of on bare inequality is what makes `..` traversal, chains through an
+# intermediate symlinked directory, and absolute targets fall out without exceptions. (AJ) is the
+# CASE variant, (AK) the NORMALIZATION variant — the index records NFC and the link's blob spells
+# NFD, which git does not precompose, so it proves the fix reuses the SHARED fold and is not a
+# case-only check — and (AL) the IGNORABLE-Cf variant on the same real HFS+ volume as (AF)/(AG).
+# Each has a pre-round-13 twin that lands again and per-implementation sweep-only/helper-only
+# splits. (AM) is the false-positive control and it is the one that decides shippability: NINE
+# legitimate tracked symlinks in ONE tree — exact spelling, `..` traversal onto the exact record
+# (the shape both live tracked symlinks in this catalog have), an ABSOLUTE target, a `..` target
+# that ESCAPES the repository, an UNTRACKED (gitignored) target, a DANGLING target, a CHAIN through
+# another tracked symlink, a target resolving to a tracked DIRECTORY, and one reached THROUGH an
+# intermediate symlinked directory — ALL PASS. A bare "the target must equal the record" rule would
+# refuse six of the nine. Deliberately NOT refused and registered rather than hidden: absolute
+# targets (docs/BACKLOG.md P3-131) and committed DANGLING symlinks (P3-132 — a real defect, but a
+# different class: identically broken here and at the receiver, so the evidence does not lie).
 run_guard "hermetic_runtime/inherited_runtime_blocked" 0 \
     bash "$REPO_ROOT/practices/scripts/ax-prove-hermetic-runtime.sh"
 # ── P1-2/P1-4 ROUND-4: the recency guard's FIXTURE SWEEP ───────────────────────────

@@ -29,8 +29,10 @@ signature를 발견**(17/17)함으로써 경험적으로 반증되었다 — 발
 | P0 (expiry-bound / live defects) | 30 | 30 | **100%** |
 | P1 (generic signature backlog) | 73 | 73 | **100%** |
 | P2 (verification escapes) | 73 | 60 | **82%** |
-| P3 (industry-niche deferrals) | 129 | 107 | **83%** |
-| **P0–P3 합계 (수렴 분모)** | **305** | **270** | **89%** |
+| P3 (industry-niche deferrals) | 131 | 107 | **82%** |
+| **P0–P3 합계 (수렴 분모)** | **307** | **270** | **88%** |
+
+> 2026-08-01 P1-seal 라운드 13 — reviewer P1(**네 라운드의 alias census가 전부 INDEX PATH만 등록했다**: 심볼릭 링크의 TARGET은 인덱스 경로가 아니라 **blob 내용**이라 바이트로 읽혀 해시될 뿐 **해석된 적이 없고**, 따라서 R9~R12가 넓혀온 fold(대소문자 → 정규화 → 비ASCII 대소문자 → ignorable Cf)가 **어느 축으로도 적용되지 않았다**)를 `tree_fingerprint.py` + recency guard 12c 양쪽에 대칭 봉합. 신규 코드 `GIT_SYMLINK_TARGET_ALIAS` (fingerprint exit 15) — 13/14의 확장이 아니라 신규인 이유는 **대상(blob 내용 vs 인덱스 경로)과 시정 방법(`ln -sf <기록된 스펠링>` vs `git mv`)이 다르기** 때문. 9c8f339 기계 재현(커밋만, 환경 통제 0): `git mv backend/gradlew backend/gradlew-real` + `ln -s GRADLEW-REAL backend/gradlew` → case-insensitive APFS에서 링크가 풀려 **R25가 래퍼를 실제로 실행하고 green**, `git status --porcelain -uall` EMPTY, pre-fix 두 구현 모두 침묵(fingerprint = **클린트리 상수 `0a815065…`**, recency `recency_pass` exit 0) → post-fix helper exit 15 · guard exit 1. case-**sensitive** 수신자는 **DANGLING gradlew**를 받는다. **규칙(정밀도가 핵심)**: 타깃을 링크 자신의 *기록된* 디렉터리 기준으로 **lexical 해석** → 레포 안 + 실재 + 등록된 prefix의 (st_dev, st_ino) 일치 시에만, 스펠링이 기록과 **다르면서 fold 동치**일 때 차단. bare "기록과 같아야 한다"였다면 정당한 9형태 중 6개를 오탐했을 것 — **fold 동치 게이팅**이 `..` 순회·중간 symlink 디렉터리 경유·절대경로를 자동으로 제외한다. 세 축 전부 **LIVE RED**: (AJ) 대소문자 APFS · (AK) 정규화(인덱스 NFC `é-real` / 타깃 blob NFD, **git이 blob은 precompose하지 않음**을 이용 — 공유 fold 재사용의 증거) · (AL) ignorable ZWNJ, 실제 case-insensitive HFS+ 볼륨. 각각 pre-round-13 twin(census만 제거 → exit 0으로 재현) + **구현별 분리 twin**(sweep-only → 헬퍼가 `AUDIT_FINGERPRINT_UNVERIFIABLE`로 거부 / helper-only → 스윕이 자기 코드로 거부). 오탐 control (AM)은 **한 트리에 정당한 tracked symlink 9종**(정확 스펠링 · `..` 순회로 기록에 정확 착지 — **라이브 카탈로그의 symlink 2건이 바로 이 형태** · 절대경로 · 레포 밖 탈출 · untracked(gitignore) 타깃 · dangling · 다른 tracked symlink 경유 chain · tracked 디렉터리 타깃 · 중간 symlink 디렉터리 경유) **전부 exit 0**, 같은 트리에 디렉터리 별칭 타깃 1건을 추가하면 그것만 지목해 차단(비공허성). 성능: 라이브 트리 digest **불변**(dirty 재현 `55441dfd…` pre==post), 0.25–0.26 s/run 변화 없음(prefix당 lstat 재사용, symlink 2건에 lstat 2회 추가). 의도적 **비차단** 3종을 명시 등재: 절대경로(P3-131) · dangling(P3-132) · untracked 타깃. P3-128 보강 2건(OpenZFS `normalization=formKC/formKD`가 호환 등가를 접는 구체 후보 — 단 비기본 옵션 + 라이브 ZFS 미보유로 **미검증 등급 유지** / R12가 남긴 **astral 갭은 논증으로 closed** — HFS+는 UTF-16 유닛 단위 비교이고 surrogate 엔트리는 identity이지 ignorable이 아니므로 astral 쌍은 사라질 수 없다) → 신규 2건 등재, 분모 305→307, 수렴 270/307 **88%**.
 
 > 2026-08-01 P1-seal 라운드 12 — reviewer P1(라운드-11의 canonical caseless 키가 **ignorable format 문자를 보존**했다: HFS+ case-insensitive 비교는 지정 서식 제어문자를 ZERO로 접어 건너뛰므로 `SAFE/` ≡ `SAFE<U+200C>/`가 한 디렉터리인데 두 키가 됐다)를 `tree_fingerprint.py` + recency guard 12c 양쪽에 대칭 봉합 — fold 앞단에 **general category Cf strip** 추가, **(st_dev, st_ino) 판별자와 leaf/directory 코드 분기는 또다시 불변**(신규 코드 0). **양쪽 arm 모두 REAL**: `hdiutil create -fs HFS+`로 실제 case-insensitive HFS+ 볼륨을 만들어 측정 — TN1150 fold 표가 0으로 접는 **16자 전부 한 inode(16/16)**, 나머지 Cf **154자 전부 distinct(0/154)** 로 표와 라이브 동작이 정확히 일치. 그 볼륨에서 e5fbd0a 재현: 인덱스 `SAFE/check.sh`(`cat SAFE/helper`) + `SAFE<U+200C>/helper`, status EMPTY · `bash SAFE/check.sh` → PASS · pre-fix helper exit 0 + **클린트리 상수 `0a815065…`** → post-fix exit 14 `GIT_CASEFOLD_DIR_ALIAS`. U+202E(RLO) 형제도 동일. 오탐 control은 **SIMULATED가 아니라 LIVE** — 두 APFS 변종 모두 두 스펠링을 distinct inode로 서비스하므로 평범한 샌드박스가 곧 대조군(exit 0). strip 집합 선택은 측정 기반: Default_Ignorable은 **기각**(Python API 없음 · UCD 고정 4,174자 테이블 중 3,769자 미할당 · Cf의 상위집합도 아님 — Cf 32자를 오히려 제외), hand-list도 기각(썩는 리터럴), ASCII∩Cf=∅라 fast path는 여전히 참 등가, casefold(NFD(·))·NFC(·)가 Cf를 **도입하지 않음(전 1,114,112 스칼라 실측 0)**이라 strip 1회로 충분. 성능: 라이브 트리 digest **불변**(clean 0a815065…, dirty 재현 레시피 기준 `8a91e493…` 양쪽 동일), 0.264→0.257 s/run. 문서 결함 3건 정정(부분 정정이 같은 반증 주장을 다른 곳에 남기는 패턴 — `.py:457` 'every pair' 허위 + DECISIONS outer-normalization 미철회 + 감사 불가 digest를 **또 다른** 감사 불가 digest로 교체). 신규 3건 등재(P3-128 NFKC/전각 — 세 볼륨 전부 distinct라 확립된 대상 FS 없음 · P3-129 NTFS 8.3 — 생성이 가변·비활성 가능, 미재현 · P3-130 터키어 I/ı — **반증된 후보**, exFAT은 볼륨 테이블이지 프로세스 로케일이 아님) → 분모 302→305, 수렴 270/305 **89%**.
 
@@ -549,6 +551,27 @@ R25). *이름이 세션 기록에만 있던 항목을 여기로 영구화했다.
   조합이나 서버측 폴딩을 하는 SMB/NFS 마운트는 미측정이다. done-when: (a) 통상 대상 파일시스템 중
   하나라도 호환 등가(또는 Cf 밖의 문자)를 한 inode로 서비스함을 실측하면 그 축을 별도 검사로 추가
   + 비공허성 fixture, (b) 아니면 측정 기록과 함께 이 행을 닫는다.
+  **[2026-08-01 R13 보강 — 이 행이 스스로 "미측정"이라 적어둔 ZFS 축에 구체적 후보가 생겼다.
+  새 행을 열지 않고 여기에 기록한다(중복 등재 방지).]** OpenZFS 데이터셋 속성
+  `normalization=formKC` / `formKD`는 파일명을 **호환(compatibility) 정규화** 형태로 비교하므로,
+  정확히 이 행이 말하는 등가류(`Ａ`/`A`, `Ⅳ`/`IV`)를 **한 이름으로 접는다** — 즉 "이 등가류를 접는
+  대상 파일시스템이 하나도 확립되지 않았다"는 R12의 판정은 *부분적으로 반증*됐다. **등급은 그래도
+  올리지 않는다, 정직하게**: (1) 이는 **기본값이 아닌 문서화된 데이터셋 옵션**이며(기본
+  `normalization=none`), 생성 시점에만 지정 가능하다 — "대상 파일시스템의 성질"이 아니라 "관리자가
+  켠 옵션"이다. (2) **라이브 ZFS를 이 머신에서 구할 수 없어 실측하지 못했다** — P3-129(NTFS 8.3)와
+  같은 미검증 등급이며, 통상 사용 재현이 없다. 따라서 코드 변경 없음: 근거 없는 fold 확대를
+  거부한다는 R12의 원칙은 그대로다. done-when (a)에 "OpenZFS `normalization=formKC` 데이터셋에서
+  `Ａ`/`A`가 한 inode임을 실측"을 구체 조건으로 승격한다. 출처: 2026-08-01 cross-family reviewer R13.
+  **[같은 보강 — R12가 남긴 astral 갭은 이제 논증으로 닫힌다.]** R12의 strip 집합 근거는 실측이
+  BMP 전수(63,486자, 16/16 fold, 전부 Cf)까지였고 `practices/DECISIONS.md`는 "누구도 쓸지 않은 것:
+  astral plane(U+10000 이상)"을 정직한 잔여로 남겨두었다. reviewer가 이를 **논증으로** 닫았다:
+  HFS+의 비교 알고리즘(TN1150 `FastUnicodeCompare`)은 **UTF-16 코드 유닛** 위에서 동작하고 fold
+  표는 유닛 단위로 색인되는데, **surrogate 유닛(U+D800–DFFF)의 표 엔트리는 identity이지 ignorable이
+  아니다** — 그러므로 astral 문자를 이루는 surrogate 쌍은 어느 쪽 유닛도 0으로 접히지 않아 **통째로
+  사라질 수 없다**. astral 문자가 HFS+의 ignorable 집합에 들어갈 경로가 구조적으로 없으므로 "Cf가
+  상위집합"은 astral을 포함해 성립한다. 즉 갭은 **미해결로 방치된 것이 아니라 논증으로 닫힌 것**이며,
+  근거는 실측이 아니라 알고리즘 구조라는 점을 명시해 둔다(실측으로 승격하려면 astral 전수 스윕이
+  필요하고, 그것은 이 행의 done-when이 아니다). 출처: 2026-08-01 cross-family reviewer R13.
   출처: 2026-08-01 P1-seal R12 (register-only, 측정 기반 out-of-scope 판정).
 - [ ] P3-129 **NTFS 8.3 단축 이름 별칭 — 생성 자체가 가변·비활성 가능이라 라이브 재현 불가**:
   NTFS는 긴 파일명에 대해 `LONGFI~1` 형태의 8.3 단축 이름을 **추가 별칭**으로 만들 수 있고, 그
@@ -573,6 +596,27 @@ R25). *이름이 세션 기록에만 있던 항목을 여기로 영구화했다.
   done-when: 로케일이 아니라 **볼륨 테이블**로 이 쌍을 한 inode로 서비스하는 실제 파일시스템을
   실측 제시하면 재개봉, 아니면 다음 그루밍에서 측정 기록과 함께 닫는다.
   출처: 2026-08-01 P1-seal R12 (register-only, refuted candidate).
+- [ ] P3-131 **절대경로 심볼릭 링크 타깃 — 별칭 검사 대상 밖(설계), 이식성은 별개 결함**:
+  R13의 심볼릭 링크 타깃 별칭 검사는 타깃을 **링크 자신의 (기록된) 디렉터리 기준으로 lexical
+  해석**한 뒤, 그 결과가 레포 안에 남고 실재하며 **등록된 prefix의 (st_dev, st_ino)** 에 걸릴 때만
+  fold 동치를 본다. **절대경로 타깃은 여기서 빠진다** — 수신자는 그 경로를 자기 루트 파일시스템
+  기준으로 푸므로 "인덱스가 기록한 스펠링"이라는 비교 대상 자체가 없다. 따라서 절대 타깃이
+  *우연히 이 체크아웃 안*을 가리키더라도 별칭으로 판정하지 않는다. **이것은 갭이 아니라 경계**다:
+  절대 타깃은 별칭과 무관하게 이미 비이식적이며, 그 결함은 이 게이트(= "R25가 검증한 트리와 푸시될
+  트리가 다른가")의 주제가 아니다. 라이브 카탈로그의 tracked symlink 2건은 전부 상대경로다(측정).
+  done-when: (a) 커밋된 절대경로 symlink 자체를 별도 이식성 검사로 거부하기로 결정하고 비공허성
+  fixture로 증명하거나, (b) fork-receiver 자율 영역으로 판정하고 측정 기록과 함께 이 행을 닫는다.
+  출처: 2026-08-01 P1-seal R13 (register-only, 설계 경계의 명시).
+- [ ] P3-132 **커밋된 DANGLING 심볼릭 링크 — 실재 결함이나 다른 계열(R13에서 의도적 비차단)**:
+  R13은 타깃이 풀리지 않는(dangling) tracked symlink를 **차단하지 않는다**. 근거는 이 게이트 계열
+  (R8~R13)의 주제가 "**R25가 검증한 트리 ≠ 푸시될 트리**"라는 데 있다 — dangling 링크는 이 쪽과
+  수신자 쪽에서 **동일하게** 깨져 있으므로 증거가 거짓말을 하지 않는다(그것을 읽으려던 단계는 여기서
+  먼저 실패한다). 반대로 차단하면 **정당한 형태를 오탐**한다: gitignore된 빌드 산출물을 가리키는
+  링크는 fresh clone에서 당연히 dangling이고, 절대경로 호스트 자원 링크도 마찬가지다. **그럼에도
+  결함이긴 하다** — 수신자는 깨진 링크를 받는다. 별도 계열(이식성/위생 검사)로 다루는 것이 옳다.
+  done-when: (a) `--strict` 계열의 별도 위생 검사로 커밋된 dangling symlink를 거부하고(빌드 산출물
+  예외의 근거를 명문화) 비공허성 fixture로 증명하거나, (b) fork-receiver 자율로 판정하고 닫는다.
+  출처: 2026-08-01 P1-seal R13 (register-only, 비차단 결정의 명시적 기록).
 - [ ] P3-123 **`.DS_Store`만 있는 gitlink 디렉터리를 usability 관점에서 거부한다** — `GIT_GITLINK_UNINITIALIZED_POPULATED`(R9/P1-2)는 "미초기화 gitlink는 부재이거나 **실제로 빈** 디렉터리여야 한다"고 요구한다. macOS Finder가 그 디렉터리를 한 번 방문하기만 해도 `.DS_Store`가 생기고, 그 순간 R25가 BLOCK된다 — 공격이 아니라 **운영 사고**이며, 메시지는 "remove the untracked content"라 복구는 가능하지만 진단 비용이 크다. 반대로 `.DS_Store`를 예외 허용하면 "빈 디렉터리" 불변식에 이름 기반 구멍이 생긴다(첫 예외가 다음 예외의 근거가 된다). 트레이드오프가 진짜이므로 결정 없이 등재한다. done-when: (a) 거부를 유지하되 메시지에 `.DS_Store`/`Thumbs.db` 같은 OS 부산물을 지목하는 힌트를 추가하거나, (b) OS 부산물 allowlist를 도입하고 그 목록이 이름 기반임을 명문화 + 비공허성 fixture로 증명. 출처: 2026-07-31 cross-family reviewer R10 P3 (register-only).
 
 ## P4 — trigger-bound scope_deferrals (수렴 분모 제외; by-design)
