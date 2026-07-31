@@ -2358,6 +2358,13 @@ refusal on its own — a verdict still requires an OBSERVED shared inode.
   HFS+ case-fold table (TN1150 publishes the algorithm but omits the table data; the table itself
   was read from the live implementation of the same table) and then CONFIRMED against the volume:
   **16/16 fold to one inode, 0/154 of the remaining Cf do.**
+  **WIDENED 2026-08-01 by the independent verification lane, and the widening matters because the
+  original evidence was narrower than this prose implied.** The probe above only ever asked the
+  170 Cf characters, so "Cf is a superset of what HFS+ folds" rested on the TN1150 table being
+  complete — an absence assertion about characters nobody had measured. The verifier swept the
+  ENTIRE BMP on the same volume — **63,486 characters, 7.9 s — and exactly 16 fold, all of them
+  Cf**. The superset property is therefore BMP-complete by measurement, not by trusting a
+  published table. What remains unswept by anyone: the astral planes (U+10000 and above).
 - **U+202E was CHECKED, not assumed.** It is a bidi control, and the reviewer warned that some
   derivations omit it. Measured: it IS category Cf, it IS `Default_Ignorable_Code_Point` in
   `DerivedCoreProperties-17.0.0`, and the live volume DOES fold it. Covered under every candidate.
@@ -2391,7 +2398,12 @@ refusal on its own — a verdict still requires an OBSERVED shared inode.
 | live tree, DIRTY — **with the recipe** | `8a91e493…` pre AND post. Recipe: at a clean checkout of the commit, `printf 'X\n' > .ax-fp-probe.txt`, then `python3 practices/scripts/lib/tree_fingerprint.py .`. Run at e5fbd0a and at this commit, each with that commit's own helper |
 | performance | 0.264 → 0.257 s/run mean over 5 runs (no measurable cost; 0 non-ASCII tracked paths, 8,276 prefixes all on the ASCII fast path) |
 
-**Why this round has no SIMULATED arm, unlike round 11.** Round 11 could not build a
+**Why this round's ATTACK and FALSE-POSITIVE arms are real, unlike round 11's.** (The heading of
+this paragraph used to read "why this round has no SIMULATED arm" — **corrected 2026-08-01**: that
+shorthand is false as written, because `(AI)` is an unconditional simulated grouping arm and its
+own log line says `SIMULATED`. The paragraph below always said so; the heading overstated it.
+A summary that contradicts the body it summarizes is the same defect this round corrected in the
+prover's banner, reappearing one level up.) Round 11 could not build a
 normalization-SENSITIVE volume and said so. Round 12 needs the opposite pair and both exist: a
 volume that FOLDS the character (case-insensitive HFS+, attached by the harness itself with
 `hdiutil create -fs HFS+`) and a volume that does NOT (both APFS variants, i.e. the ordinary
