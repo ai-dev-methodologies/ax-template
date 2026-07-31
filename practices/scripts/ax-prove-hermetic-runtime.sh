@@ -1632,8 +1632,14 @@ fi
 # normalization one is exercised here against synthetic (st_dev, st_ino) identities through the
 # SHIPPED grouping code. It is labelled SIMULATED rather than claimed as a live control.
 note "(AD/AE) fold parity + SIMULATED normalization false-positive control"
-"${AX_PY_BIN:-python3}" - "$REPO_ROOT" <<'PY' || violation "(AD/AE) round-11 fold parity or the simulated normalization false-positive control FAILED"
+# `-B`, and it is NOT cosmetic: this is the ONLY probe in this file that IMPORTS a module out of the
+# live tree, and without -B python writes practices/scripts/lib/__pycache__/ into it. Measured while
+# adding this arm: the prover left that directory untracked, so the very next `git status` reported
+# a DIRTY tree and the push-evidence chain this harness exists to defend would have been broken by
+# the harness itself. A proof that dirties the thing it measures is not a proof.
+"${AX_PY_BIN:-python3}" -B - "$REPO_ROOT" <<'PY' || violation "(AD/AE) round-11 fold parity or the simulated normalization false-positive control FAILED"
 import importlib.util, pathlib, re, subprocess, sys, unicodedata
+sys.dont_write_bytecode = True
 root = pathlib.Path(sys.argv[1])
 spec = importlib.util.spec_from_file_location("axtf", root / "practices/scripts/lib/tree_fingerprint.py")
 tf = importlib.util.module_from_spec(spec)
