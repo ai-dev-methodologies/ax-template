@@ -29,8 +29,10 @@ signature를 발견**(17/17)함으로써 경험적으로 반증되었다 — 발
 | P0 (expiry-bound / live defects) | 30 | 30 | **100%** |
 | P1 (generic signature backlog) | 73 | 73 | **100%** |
 | P2 (verification escapes) | 73 | 60 | **82%** |
-| P3 (industry-niche deferrals) | 126 | 107 | **85%** |
-| **P0–P3 합계 (수렴 분모)** | **302** | **270** | **89%** |
+| P3 (industry-niche deferrals) | 129 | 107 | **83%** |
+| **P0–P3 합계 (수렴 분모)** | **305** | **270** | **89%** |
+
+> 2026-08-01 P1-seal 라운드 12 — reviewer P1(라운드-11의 canonical caseless 키가 **ignorable format 문자를 보존**했다: HFS+ case-insensitive 비교는 지정 서식 제어문자를 ZERO로 접어 건너뛰므로 `SAFE/` ≡ `SAFE<U+200C>/`가 한 디렉터리인데 두 키가 됐다)를 `tree_fingerprint.py` + recency guard 12c 양쪽에 대칭 봉합 — fold 앞단에 **general category Cf strip** 추가, **(st_dev, st_ino) 판별자와 leaf/directory 코드 분기는 또다시 불변**(신규 코드 0). **양쪽 arm 모두 REAL**: `hdiutil create -fs HFS+`로 실제 case-insensitive HFS+ 볼륨을 만들어 측정 — TN1150 fold 표가 0으로 접는 **16자 전부 한 inode(16/16)**, 나머지 Cf **154자 전부 distinct(0/154)** 로 표와 라이브 동작이 정확히 일치. 그 볼륨에서 e5fbd0a 재현: 인덱스 `SAFE/check.sh`(`cat SAFE/helper`) + `SAFE<U+200C>/helper`, status EMPTY · `bash SAFE/check.sh` → PASS · pre-fix helper exit 0 + **클린트리 상수 `0a815065…`** → post-fix exit 14 `GIT_CASEFOLD_DIR_ALIAS`. U+202E(RLO) 형제도 동일. 오탐 control은 **SIMULATED가 아니라 LIVE** — 두 APFS 변종 모두 두 스펠링을 distinct inode로 서비스하므로 평범한 샌드박스가 곧 대조군(exit 0). strip 집합 선택은 측정 기반: Default_Ignorable은 **기각**(Python API 없음 · UCD 고정 4,174자 테이블 중 3,769자 미할당 · Cf의 상위집합도 아님 — Cf 32자를 오히려 제외), hand-list도 기각(썩는 리터럴), ASCII∩Cf=∅라 fast path는 여전히 참 등가, casefold(NFD(·))·NFC(·)가 Cf를 **도입하지 않음(전 1,114,112 스칼라 실측 0)**이라 strip 1회로 충분. 성능: 라이브 트리 digest **불변**(clean 0a815065…, dirty 재현 레시피 기준 `8a91e493…` 양쪽 동일), 0.264→0.257 s/run. 문서 결함 3건 정정(부분 정정이 같은 반증 주장을 다른 곳에 남기는 패턴 — `.py:457` 'every pair' 허위 + DECISIONS outer-normalization 미철회 + 감사 불가 digest를 **또 다른** 감사 불가 digest로 교체). 신규 3건 등재(P3-128 NFKC/전각 — 세 볼륨 전부 distinct라 확립된 대상 FS 없음 · P3-129 NTFS 8.3 — 생성이 가변·비활성 가능, 미재현 · P3-130 터키어 I/ı — **반증된 후보**, exFAT은 볼륨 테이블이지 프로세스 로케일이 아님) → 분모 302→305, 수렴 270/305 **89%**.
 
 > 2026-08-01 P1-seal 라운드 11 — reviewer P1(라운드-9/10의 prefix fold 키가 `bytes.lower()`였다: ASCII 전용 + 정규화 무지)을 `tree_fingerprint.py` + recency guard 12c 양쪽에 대칭 봉합 — 키를 **유니코드 canonical caseless** `NFC(casefold(NFD(s)))`(UAX #21 §1.3)로 교체, **(st_dev, st_ino) 판별자와 leaf/directory 코드 분기는 불변**. beee364 기계 재현: 인덱스 `é/check.sh`(NFC c3a9) + `e◌́/helper`(NFD 65cc81), APFS 한 inode → status EMPTY · 로컬 `bash é/check.sh` → PASS · **두 구현 모두 침묵** · fingerprint = 클린트리 상수 — 푸시된 트리엔 `é/helper` 부재. 비ASCII 케이스(`É`≡`é`)는 같은 구멍의 형제. 환경 통제 불필요(전부 커밋된 내용, 평범한 clone으로 도착 — 검증됨). 신규 코드 **0**(13/14의 의미만 확장, 시정 방법이 동일하므로). 성능: 라이브 트리 digest **불변**, 0.265→0.266 s/run(+0.4%, ASCII fast path가 8,276 prefix 전부 커버). 오탐: 실제 case-sensitive APFS 이미지에서 distinct-inode `A/`·`a/`(Z5)와 `É/`·`é/`(AA5) 모두 통과. 정규화 오탐 control은 **SIMULATED** — hdiutil 실측 결과 case-insensitive APFS·case-**sensitive** APFS·case-sensitive HFS+·ExFAT·FAT32가 전부 정규화-**무감각**이라 distinct-inode NFC/NFD 쌍은 이 플랫폼에 존재하지 않는다(산문 정정 포함). P3-120 closed(이 P1이 escalate한 행), 신규 2건 등재(P3-126 병리적 prefix 비용 — fail-closed이므로 우회 아님 · P3-127 Windows 후행 점·공백 — **NTFS 한정, 미검증**) → 분모 300→302, 수렴 270/302 **89%**.
 
@@ -531,6 +533,46 @@ R25). *이름이 세션 기록에만 있던 항목을 여기로 영구화했다.
   한다. done-when: Windows/NTFS 호스트에서 (1)(2)를 측정하고, 참이면 fold가 아니라 별도의 플랫폼
   스코프 검사로 추가 + 비공허성 fixture, 거짓이면 이 행을 측정 기록과 함께 닫는다.
   출처: 2026-08-01 cross-family reviewer R11 (register-only, unverified sibling).
+- [ ] P3-128 **NFKC/호환 등가(전각·로마숫자 등) — 이를 접는 통상 대상 파일시스템이 확립되지 않음**:
+  R12의 fold는 **canonical** caseless(NFC/casefold/NFD) + Cf strip이지 **compatibility**(NFKC)가
+  아니다. 따라서 `A`(U+0041)와 `Ａ`(U+FF21 FULLWIDTH), `IV`와 `Ⅳ`(U+2163)는 서로 다른 키다.
+  **정직한 등급 판정 — 지금 범위 밖인 이유는 측정이다**: 이 머신에서 hdiutil로 만든 세 볼륨 전부
+  (case-insensitive APFS · **case-sensitive APFS** · **case-insensitive HFS+**)에서 `A`/`Ａ`와
+  `IV`/`Ⅳ`는 **DISTINCT inode**다 — 즉 이 등가류를 한 inode로 서비스하는 대상 파일시스템이 하나도
+  확립되지 않았다. 확립되지 않은 등가류를 fold에 넣는 것은 R12가 Default_Ignorable을 기각한 것과
+  같은 이유로 **앵커 없는 확대**이며, (st_dev, st_ino) 판별자가 오탐을 막아주더라도 근거 없는
+  주장을 코드에 새기는 셈이다. 참고로 **호환 등가의 일부는 이미 우연히 덮여 있다**: `ﬁ`(U+FB01)는
+  full casefold가 `fi`로 풀기 때문에 R12 fold에서 EQUAL이고, case-insensitive APFS도 이 쌍을 한
+  inode로 서비스한다(측정) — 즉 갭은 "NFKC 전체"가 아니라 "casefold가 풀지 않는 나머지"다.
+  **함께 등재하는 잔여**: R12의 strip 집합(Cf)이 *모든* 파일시스템의 ignorable 집합의 상위집합임은
+  증명되지 않았다 — HFS+에 대해서만 16/16으로 실측됐다. ZFS `normalization=`/`casesensitivity=`
+  조합이나 서버측 폴딩을 하는 SMB/NFS 마운트는 미측정이다. done-when: (a) 통상 대상 파일시스템 중
+  하나라도 호환 등가(또는 Cf 밖의 문자)를 한 inode로 서비스함을 실측하면 그 축을 별도 검사로 추가
+  + 비공허성 fixture, (b) 아니면 측정 기록과 함께 이 행을 닫는다.
+  출처: 2026-08-01 P1-seal R12 (register-only, 측정 기반 out-of-scope 판정).
+- [ ] P3-129 **NTFS 8.3 단축 이름 별칭 — 생성 자체가 가변·비활성 가능이라 라이브 재현 불가**:
+  NTFS는 긴 파일명에 대해 `LONGFI~1` 형태의 8.3 단축 이름을 **추가 별칭**으로 만들 수 있고, 그
+  경우 한 파일이 두 이름으로 열린다 — 형태만 보면 R10~R12가 닫은 alias 계열과 같다. **범위 밖인
+  이유(정직)**: (1) 8.3 생성은 볼륨별 정책이며(`fsutil 8dot3name set`) 최신 Windows는 시스템
+  볼륨 외에서 기본 비활성이라 "대상 파일시스템의 성질"로 고정할 수 없다, (2) 단축 이름은 git이
+  인덱스에 **기록하는 스펠링**이 아니라 조회용 네임스페이스 별칭이므로 "인덱스 두 항목 / 파일 하나"
+  라는 이 계열의 전제 자체가 성립하는지 미확인, (3) 등재 시점에 Windows 호스트가 없어 **어느 것도
+  실측하지 못했다**. P3-127(후행 점·공백)과 같은 미검증 형제이며, 검증 없이 fold를 건드리지 않는다.
+  done-when: Windows/NTFS 호스트에서 (1)(2)를 측정하고, 참이면 fold가 아니라 플랫폼 스코프 검사로
+  추가 + 비공허성 fixture, 거짓이면 이 행을 측정 기록과 함께 닫는다.
+  출처: 2026-08-01 P1-seal R12 (register-only, unverified sibling).
+- [ ] P3-130 **터키어 I/ı — 별칭임이 *실증되지 않았고*, 오히려 반증에 가깝다(등급: 최하)**:
+  터키어 로케일에서 `I`↔`ı`, `i`↔`İ`가 대응한다는 사실이 파일시스템 별칭을 뜻하지는 않는다.
+  **측정**: 세 볼륨(case-insensitive APFS · case-sensitive APFS · case-insensitive HFS+) 전부에서
+  `I`/`ı`와 `i`/`İ`는 **DISTINCT inode**다. 또한 exFAT은 로케일이 아니라 **볼륨에 저장된 up-case
+  테이블**로 비교하고 그 권장 테이블은 U+0131을 U+0049로 접지 **않는다** — 즉 "프로세스 로케일이
+  파일명 비교를 바꾼다"는 전제가 대상 파일시스템에 성립하지 않는다. 우리 쪽도 마찬가지로
+  로케일-무관하다: Python `str.casefold()`는 로케일을 참조하지 않으므로 `tr_TR` 환경에서 R25를
+  돌려도 키가 달라지지 않는다(즉 이 축에는 환경 통제 경로도 없다). **따라서 이 행은 "미검증 갭"이
+  아니라 "반증된 후보"로 등재한다** — 위 두 형제(P3-128/129)보다 낮은 등급이며, 코드 변경 없음.
+  done-when: 로케일이 아니라 **볼륨 테이블**로 이 쌍을 한 inode로 서비스하는 실제 파일시스템을
+  실측 제시하면 재개봉, 아니면 다음 그루밍에서 측정 기록과 함께 닫는다.
+  출처: 2026-08-01 P1-seal R12 (register-only, refuted candidate).
 - [ ] P3-123 **`.DS_Store`만 있는 gitlink 디렉터리를 usability 관점에서 거부한다** — `GIT_GITLINK_UNINITIALIZED_POPULATED`(R9/P1-2)는 "미초기화 gitlink는 부재이거나 **실제로 빈** 디렉터리여야 한다"고 요구한다. macOS Finder가 그 디렉터리를 한 번 방문하기만 해도 `.DS_Store`가 생기고, 그 순간 R25가 BLOCK된다 — 공격이 아니라 **운영 사고**이며, 메시지는 "remove the untracked content"라 복구는 가능하지만 진단 비용이 크다. 반대로 `.DS_Store`를 예외 허용하면 "빈 디렉터리" 불변식에 이름 기반 구멍이 생긴다(첫 예외가 다음 예외의 근거가 된다). 트레이드오프가 진짜이므로 결정 없이 등재한다. done-when: (a) 거부를 유지하되 메시지에 `.DS_Store`/`Thumbs.db` 같은 OS 부산물을 지목하는 힌트를 추가하거나, (b) OS 부산물 allowlist를 도입하고 그 목록이 이름 기반임을 명문화 + 비공허성 fixture로 증명. 출처: 2026-07-31 cross-family reviewer R10 P3 (register-only).
 
 ## P4 — trigger-bound scope_deferrals (수렴 분모 제외; by-design)

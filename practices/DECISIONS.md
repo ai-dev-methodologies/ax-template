@@ -2301,3 +2301,148 @@ is simulated and why (the NORMALIZATION control).
   LEAF form only and does not hold for the directory form round 10 opened.
 
 - Commits: (this commit — PRD-final-4 wave, P1-seal round-11)
+
+---
+
+## TD-2026-08-01-(P1-ignorable-fold) — the fold was caseless and canonical; the filesystem also skips characters
+
+**Round 12, cross-family reviewer P1.** Rounds 10 and 11 taught the prefix map to see two of the
+three ways a filesystem can serve two spellings from one inode: CASE and CANONICAL NORMALIZATION.
+There is a THIRD, it is independent of both, and it is written down in the format specification.
+Case-insensitive HFS+ folds designated formatting controls to **zero** and skips them entirely —
+Apple TN1150, `FastUnicodeCompare`: *"All ignorable characters are folded to the value zero."*
+Round 11's key `NFC(casefold(NFD(s)))` **preserves** those code points, so `SAFE/` and
+`SAFE<U+200C>/` produced different keys and their shared inode was never compared.
+
+```
+REPRODUCTION — the reviewer's topology, on a REAL case-insensitive HFS+ volume built here
+    hdiutil create -size 48m -fs HFS+ -volname AXHFS -ov axhfs.dmg && hdiutil attach …
+
+    index: SAFE/check.sh          (committed content: cat "SAFE/helper")
+    index: SAFE<U+200C>/helper    (committed content: PASS)
+    disk:  SAFE and SAFE<U+200C> are the SAME directory inode (16777237, 404)
+
+    git status --porcelain -uall   → EMPTY
+    bash SAFE/check.sh             → PASS                    (so every gate goes green)
+    e5fbd0a tree_fingerprint.py .  → exit 0, 0a815065…       (the CLEAN-TREE CONSTANT)
+    HEAD    tree_fingerprint.py .  → exit 14, GIT_CASEFOLD_DIR_ALIAS — SAFE ≡ SAFE‌
+```
+
+The pushed tree records only `SAFE<U+200C>/helper`. A receiver that treats U+200C as significant —
+every filesystem measured here except case-insensitive HFS+ — has no `SAFE/helper`, so the
+committed check is broken on arrival and nothing measured it. **U+202E RIGHT-TO-LEFT OVERRIDE is
+the same defect through the same hole.** Committed path names only; no environment control.
+
+### THE FIX — strip general category Cf, FIRST, in both implementations
+
+`NFC(casefold(NFD(strip_Cf(s))))`. One line added to `_fold_path_key` and to its byte-identical
+twin `_ax_fold_path_key`. **The `(st_dev, st_ino)` discriminator is UNCHANGED for the third round
+running**, so this remains a MEASUREMENT of an observed alias and not an assumption about the
+filesystem; the leaf/directory code split is unchanged too, so **no new code was added** — the
+remedy for all four alias shapes is the same (settle on one spelling), and the message prints both
+spellings, so a fourth code would name a difference that does not change what the operator does.
+
+**Why category Cf and not the two alternatives — decided by measurement, and the measurement is
+now asserted in the harness (`(AI)`) so it fails here rather than in a fork-receiver's evidence.**
+The requirement is asymmetric: the strip set must be a **superset** of what a target filesystem
+ignores, because a MISSING character is a silent false-green, while an EXTRA one cannot produce a
+refusal on its own — a verdict still requires an OBSERVED shared inode.
+
+| candidate | size | covers the reproduction? | verdict |
+|---|---|---|---|
+| TN1150's 16 (`U+200C-200F`, `U+202A-202E`, `U+206A-206F`, `U+FEFF`) | 16 | yes | **rejected** — correct today, but it is a literal hand-list, i.e. the "absence assertion rot" shape this catalog has already been bitten by. Cf is the same set plus a rule. |
+| **general category Cf** | **170** | **yes** | **adopted.** Measured: all 16 of TN1150's are Cf; `Cf ∩ ASCII = ∅`; the extra 154 are inert (the same live volume gives all 154 DISTINCT inodes, so no measured filesystem folds them). |
+| `Default_Ignorable_Code_Point` | 4,174 | yes | **rejected** — Python exposes no such property, so it ships as a UCD-pinned literal table of which **3,769 are UNASSIGNED**; and it is **not a superset of Cf** — it EXCLUDES 32 Cf characters (`U+0600-0605`, `U+06DD`, `U+070F`, `U+0890-0891`, `U+08E2`, `U+FFF9-FFFB`, `U+110BD`, `U+110CD`, `U+13430-1343F`). It would ADD variation selectors and Hangul fillers, which the live volume measurably does **not** ignore (`SAFE` vs `SAFE<U+FE0F>` → distinct). |
+
+- **The published table and the live volume agree exactly.** The 16 were DERIVED by evaluating the
+  HFS+ case-fold table (TN1150 publishes the algorithm but omits the table data; the table itself
+  was read from the live implementation of the same table) and then CONFIRMED against the volume:
+  **16/16 fold to one inode, 0/154 of the remaining Cf do.**
+- **U+202E was CHECKED, not assumed.** It is a bidi control, and the reviewer warned that some
+  derivations omit it. Measured: it IS category Cf, it IS `Default_Ignorable_Code_Point` in
+  `DerivedCoreProperties-17.0.0`, and the live volume DOES fold it. Covered under every candidate.
+- **U+0000 is deliberately NOT ignorable** in TN1150 — the algorithm maps NUL to a non-zero
+  sentinel precisely so zero can mean end-of-string — and NUL cannot occur in a path anyway.
+- **The strip runs FIRST**, because removing a combining-class-0 character can unblock canonical
+  reordering of the marks around it, so stripping before NFD is strictly more canonical than after.
+  **One pass is provably enough**: over all 1,114,112 scalars, neither `casefold(NFD(·))` nor
+  `NFC(·)` ever INTRODUCES a Cf character (0 of them), so nothing downstream restores what the
+  strip removed.
+- **The ASCII fast path stays a TRUE equivalence** on all three axes: measured, no ASCII scalar is
+  Cf, so an ASCII-only prefix can contain nothing the strip would remove.
+- **Case-sensitive HFSX does NOT ignore these characters** (TN1150 says so explicitly). That is not
+  a problem — it is the false-positive side, and it is exactly what the inode discriminator handles.
+
+### Evidence
+
+| Arm | Result |
+|---|---|
+| (AF) ZWNJ directory alias, REAL HFS+ volume | pre-fix exit 0 + clean-tree constant → post-fix `GIT_CASEFOLD_DIR_ALIAS — SAFE ≡ SAFE‌`, BOTH implementations |
+| (AG) RLO directory alias, REAL HFS+ volume | same → `GIT_CASEFOLD_DIR_ALIAS — SAFE ≡ SAFE‮` |
+| (AF2)/(AG2) strip reverted in BOTH | the attacks land again — `recency_pass`, `tree_fingerprint 0a815065…` |
+| (AF3)/(AG3) sweep-only revert | the fingerprint helper still refuses (`AUDIT_FINGERPRINT_UNVERIFIABLE`, recompute exit 14) |
+| (AF4)/(AG4) helper-only revert | the 12c sweep still refuses on its own code (`GIT_CASEFOLD_DIR_ALIAS`) |
+| (AC)/(AA)/(AB)/(Z)/(W) | round-10 ASCII, round-11 NFC/NFD and non-ASCII case ALL still refused — no regression |
+| (AH) false-positive control | **LIVE, not simulated** — distinct-inode `SAFE/` + `SAFE<U+200C>/` NOT refused |
+| false-positive, REAL case-sensitive APFS | distinct inodes → post-fix helper exit 0, not refused |
+| (AD) fold parity | 8,307 inputs (8,276 live-tree prefixes + 31 adversarial incl. the ignorable corpus) — 0 disagreements |
+| (AI) strip-set claims | all 4 hold; `Cf` = 170 code points at Unicode 16.0.0; TN1150's 16 ⊆ Cf |
+| live tree, CLEAN | digest IDENTICAL pre and post: `0a815065…`, exit 0 — **weak by construction** (a clean tree hashes empty inputs) |
+| live tree, DIRTY — **with the recipe** | `8a91e493…` pre AND post. Recipe: at a clean checkout of the commit, `printf 'X\n' > .ax-fp-probe.txt`, then `python3 practices/scripts/lib/tree_fingerprint.py .`. Run at e5fbd0a and at this commit, each with that commit's own helper |
+| performance | 0.264 → 0.257 s/run mean over 5 runs (no measurable cost; 0 non-ASCII tracked paths, 8,276 prefixes all on the ASCII fast path) |
+
+**Why this round has no SIMULATED arm, unlike round 11.** Round 11 could not build a
+normalization-SENSITIVE volume and said so. Round 12 needs the opposite pair and both exist: a
+volume that FOLDS the character (case-insensitive HFS+, attached by the harness itself with
+`hdiutil create -fs HFS+`) and a volume that does NOT (both APFS variants, i.e. the ordinary
+sandbox). The harness still carries a simulated grouping check in `(AI)` so the RED direction is
+measured even on a host where no folding volume can be attached — but on this machine it ran REAL,
+and the banner reports which arm actually ran rather than asserting the stronger one.
+
+### Corrections carried in this round — and the PATTERN they share
+
+All three are the same failure mode: **a correction that fixes one instance of a disproved claim
+and leaves the same claim standing somewhere else.** Round 11's follow-up made exactly this mistake
+three times, and it is worth naming because it is not carelessness — it is what happens when the
+correction is aimed at the *line the reviewer quoted* instead of at the *claim*.
+
+1. `tree_fingerprint.py:457` still said unnormalized `casefold()` "separates **every pair** above".
+   Measured false: unnormalized `casefold()` already equates `É`/`é` AND `ſ`/`s`; only the
+   NORMALIZATION pair needs the inner NFD. **The identical sentence was also live at
+   `DECISIONS.md:2215`** — the reviewer flagged one, and fixing only that one would have repeated
+   the very defect. Both corrected.
+2. `DECISIONS.md:2216` still called the outer normalization load-bearing and repeated the disproved
+   `U+1E9B U+0323` ≡ `U+1E69` claim, months after the `.py` docstring had retracted it. Corrected,
+   with the measurement: given the inner NFD, `casefold(NFD(s))` alone already equates that pair.
+   The same bullet's parenthetical was ALSO wrong in a way nobody had flagged — it said the round-9
+   proposal `normalize('NFC', …).lower()` "misses `É`≡`é`", and measured, it does not (Python's
+   `str.lower()` is Unicode-aware; the round-9/10 bug was `bytes.lower()`). It is rejected for one
+   reason, not two: `lower()` is a round-trip operation and fails `ſ`≡`s`.
+3. `DECISIONS.md:2257` replaced one unauditable dirty digest (`751098…`) with **another**
+   (`4983b60c…`) and no reconstruction recipe. Both removed. What replaces them is a number anyone
+   can re-derive — see the `live tree, DIRTY` row above, which states the recipe next to the value.
+
+### Registered rather than done
+
+- `docs/BACKLOG.md` **P3-128** — NFKC/compatibility equivalence (fullwidth `Ａ`, roman `Ⅳ`).
+  **Graded out of scope BY MEASUREMENT, not by assertion**: all three volumes built here
+  (case-insensitive APFS, case-SENSITIVE APFS, case-insensitive HFS+) give these DISTINCT inodes, so
+  no ordinary target filesystem is established as collapsing them, and widening the fold to an
+  unestablished equivalence is the same unanchored move that got `Default_Ignorable` rejected.
+  Noted there: part of NFKC is already covered incidentally — `ﬁ` (U+FB01) folds to `fi` under full
+  casefold, and case-insensitive APFS does serve that pair from one inode. **The row also carries
+  the honest residual that Cf is proven a superset only for HFS+** — ZFS `normalization=` and
+  server-side-folding SMB/NFS mounts are unmeasured.
+- `docs/BACKLOG.md` **P3-129** — NTFS 8.3 short-name aliases. **Not live-reproduced**: generation is
+  a per-volume policy (`fsutil 8dot3name`), disabled by default off the system volume on modern
+  Windows, so it is not a fixed property of the filesystem; and a short name is a lookup alias
+  rather than a spelling git records, so it is unverified whether this class's premise (two index
+  entries, one file) can even be built. No Windows host was available. **No code change** — same
+  discipline as P3-127.
+- `docs/BACKLOG.md` **P3-130** — Turkish `I`/`ı`. **This is a REFUTED candidate, not an unverified
+  gap, and is graded below the other two.** Measured: all three volumes give `I`/`ı` and `i`/`İ`
+  DISTINCT inodes. exFAT compares through an up-case table **stored on the volume**, not the process
+  locale, and its recommended table does not fold U+0131 to U+0049 — so the premise that a locale
+  changes filename comparison does not hold for the target filesystem. Our side is locale-independent
+  too: `str.casefold()` never consults the locale, so running R25 under `tr_TR` does not move the
+  key. No code change.
