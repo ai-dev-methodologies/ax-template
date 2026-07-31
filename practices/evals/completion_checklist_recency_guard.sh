@@ -974,8 +974,16 @@ if live_git_root and not expected_head_file.is_file() and guard_repo is not None
     for rel in TOOLCHAIN_RELS:
         rc_w, want = git_out("rev-parse", "--verify", "--quiet", f"{expected_head}:{rel}",
                              root=root, check=False)
-        rc_h, have = git_out("hash-object", "--no-filters", "-t", "blob", "--", rel,
-                             root=root, check=False)
+        on_disk = (root / rel).is_file()
+        rc_h, have = (0, "")
+        if on_disk:
+            rc_h, have = git_out("hash-object", "--no-filters", "-t", "blob", "--", rel,
+                                 root=root, check=False)
+        # ABSENT ON BOTH SIDES IS NOT A VIOLATION (a tree that never carried this part of the
+        # toolchain); absent on exactly ONE side is a deletion or an unrecorded addition of a file
+        # that decides whether a release ships, and blocks.
+        if rc_w != 0 and not on_disk:
+            continue
         if rc_w != 0 or not want or rc_h != 0 or not have:
             emit_fail(
                 "RATCHET_TOOLCHAIN_UNVERIFIABLE",

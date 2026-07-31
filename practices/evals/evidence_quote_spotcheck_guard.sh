@@ -700,7 +700,11 @@ fi
 STRICT="$STRICT" ALLOW_MISSING="$ALLOW_MISSING" INCLUDE_TEMPLATES="$INCLUDE_TEMPLATES" \
 STRICT_TEMPLATES="$STRICT_TEMPLATES" TEMPLATES_ONLY_PROTECTED="$TEMPLATES_ONLY_PROTECTED" \
 LIVE_ROOT="$LIVE_ROOT" GIT_ANCHOR="$GIT_ANCHOR" GIT_ANCHOR_KIND="$GIT_ANCHOR_KIND" \
-GIT_REPO_ROOT="$SELF_REPO_ROOT" "$AX_PY_BIN" -I -S - "$REPO_ROOT" << 'PY'
+# -E, not -I -S: this body imports PyYAML from site-packages (measured: under -I -S the
+# guard reported "PyYAML unavailable — cannot run"). -E still refuses PYTHONPATH /
+# PYTHONHOME / PYTHONSTARTUP, which is the injection vector; see DECISIONS.md
+# TD-2026-07-30-P1-preflight-and-raw-bytes for the honest limit this leaves.
+GIT_REPO_ROOT="$SELF_REPO_ROOT" "$AX_PY_BIN" -E - "$REPO_ROOT" << 'PY'
 import ast, glob, html, os, re, subprocess, sys
 
 root = sys.argv[1]

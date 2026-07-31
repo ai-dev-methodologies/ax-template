@@ -688,7 +688,14 @@ ax_ratchet_toolchain_authentic() {
     ax_ratchet_filters_absent "$repo" "$label" "$@" || bad=1
     for rel in "$@"; do
         want="$(ax_git "$repo" rev-parse --verify --quiet "${rev}:${rel}" 2>/dev/null)"
-        have="$(ax_git "$repo" hash-object --no-filters -t blob -- "$rel" 2>/dev/null)"
+        have=""
+        [ -f "$repo/$rel" ] && have="$(ax_git "$repo" hash-object --no-filters -t blob -- "$rel" 2>/dev/null)"
+        # ABSENT ON BOTH SIDES IS NOT A VIOLATION. The list is the toolchain this catalog CAN
+        # carry; a minimal tree (a fork that never took the ratcheting guards, a sandbox that
+        # installs only the runner) legitimately lacks some of it, and blocking there would be a
+        # false positive with no attack behind it. ABSENT ON EXACTLY ONE SIDE blocks: that is a
+        # deletion or an unrecorded addition of a file that decides whether a release ships.
+        if [ -z "$want" ] && [ -z "$have" ]; then continue; fi
         rc=1
         if [ -z "$want" ] || [ -z "$have" ]; then rc=2; fi
         [ -n "$want" ] && [ "$want" = "$have" ] && continue

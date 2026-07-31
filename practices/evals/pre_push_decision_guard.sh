@@ -192,12 +192,17 @@ scenario_s3_multiref_ship_and_delete() {
     local log="$repo/.recency.log"
     run_hook "$repo" "refs/heads/main $ship_sha refs/heads/main $ZERO
 refs/heads/old $ZERO refs/heads/old $ship_sha" 0 "$log"; out="$OUT"
-    # exactly one recency call (the ship ref), for ship_sha; exit 0
+    # TWO recency calls for the ONE shipping ref, none for the deletion (ROUND 6): the hook now
+    # runs the PREVIOUS RELEASE'S copy of the guard before the tree's own copy, so a committed
+    # backdoor in the tree copy cannot certify itself (TD-2026-07-30-P1-preflight-and-raw-bytes).
+    # Both calls carry the same --expect-sha; what this scenario is about is that the DELETION ref
+    # contributes none and the ship sha — not HEAD — is the one passed.
     local n; n="$(wc -l < "$log" 2>/dev/null | tr -d ' ')"
-    if [[ "$RC" -eq 0 && "$n" == "1" && "$(head -1 "$log")" == "$ship_sha" ]]; then
+    local distinct; distinct="$(sort -u "$log" 2>/dev/null | wc -l | tr -d ' ')"
+    if [[ "$RC" -eq 0 && "$n" == "2" && "$distinct" == "1" && "$(head -1 "$log")" == "$ship_sha" ]]; then
         pass_case "$id"
     else
-        fail_case "$id" "rc=$RC recency-calls=$n first=$(head -1 "$log" 2>/dev/null)"
+        fail_case "$id" "rc=$RC recency-calls=$n distinct=$distinct first=$(head -1 "$log" 2>/dev/null)"
     fi
     rm -rf "$repo"
 }
@@ -370,7 +375,12 @@ scenario_primary_r25_block() {
     local tip; tip="$(cd "$repo" && git rev-parse main)"
     local base; base="$(cd "$repo" && git rev-parse HEAD~1)"
     run_hook "$repo" "refs/heads/main $tip refs/heads/main $base" 1; out="$OUT"
-    if [[ "$RC" -eq 1 && "$out" == *"completion_checklist_recency_guard FAILED"* && "$out" != *"__GRADLEW_FIRED__"* ]]; then
+    # ROUND 6: a failing recency verdict may now surface from EITHER copy — the previous
+    # release's (run first, reported as RATCHET_PRIOR_RELEASE_GUARD_FAILED) or the tree's. Both
+    # are the same R25 block; what must hold is that the regression never runs.
+    if [[ "$RC" -eq 1 && ( "$out" == *"completion_checklist_recency_guard FAILED"* \
+                        || "$out" == *"RATCHET_PRIOR_RELEASE_GUARD_FAILED"* ) \
+          && "$out" != *"__GRADLEW_FIRED__"* ]]; then
         pass_case "$id"
     else
         fail_case "$id" "rc=$RC (expected 1 + recency-FAILED, no regression) out=<<$out>>"

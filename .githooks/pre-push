@@ -407,17 +407,27 @@ pp_anchor_recency_gate() {
     # trailing newlines and would make the extracted copy differ from the blob it claims to be
     # (P2, closed here) — and then each extracted file's RAW hash is required to equal the blob id
     # git records at the anchor.
+    # The recency guard itself is MANDATORY — it is the program being run. The other three are
+    # extracted WHEN THE ANCHOR HAS THEM: the guard reads the runner only for its schema pin and
+    # the fingerprint helper only as a recompute fallback, and both are already written to degrade
+    # honestly when absent. A tree that never carried them is a legitimate shape (a fork that took
+    # the hook but not the runner); requiring them would be a false positive with no attack behind
+    # it, and the mandatory one is the one that matters.
     for rel in "practices/evals/completion_checklist_recency_guard.sh" \
                "practices/scripts/verify-completion.sh" \
                "practices/scripts/lib/tree_fingerprint.py" \
                "practices/scripts/lib/release_anchor.sh"; do
         want="$("$AX_GIT_BIN" --no-replace-objects -C "$ROOT" rev-parse --verify --quiet "${anchor_rev}:${rel}" 2>/dev/null)"
         if [ -z "$want" ]; then
-            echo "[practices] ✗ RATCHET_ANCHOR_COPY_UNVERIFIABLE — ${rel} does not exist at the" >&2
-            echo "[practices]   remote-advertised previous release ${anchor_rev:0:12}. The push gate" >&2
-            echo "[practices]   authenticates the toolchain by RUNNING that release's copy; without" >&2
-            echo "[practices]   it there is nothing to run but the copy under audit. BLOCKED." >&2
-            rm -rf "$tmp"; return 1
+            case "$rel" in
+                "practices/evals/completion_checklist_recency_guard.sh")
+                    echo "[practices] ✗ RATCHET_ANCHOR_COPY_UNVERIFIABLE — ${rel} does not exist at the" >&2
+                    echo "[practices]   previous release ${anchor_rev:0:12}. The push gate authenticates the" >&2
+                    echo "[practices]   toolchain by RUNNING that release's copy; without it there is nothing" >&2
+                    echo "[practices]   to run but the copy under audit. BLOCKED." >&2
+                    rm -rf "$tmp"; return 1 ;;
+                *) continue ;;
+            esac
         fi
         mkdir -p "$tmp/$(dirname "$rel")" || { rm -rf "$tmp"; return 1; }
         if ! "$AX_GIT_BIN" --no-replace-objects -C "$ROOT" cat-file blob "$want" > "$tmp/$rel" 2>/dev/null; then
@@ -492,15 +502,33 @@ while read -r _local_ref local_sha _remote_ref remote_sha; do
         ANCHOR_REV="$("$AX_GIT_BIN" --no-replace-objects -C "$ROOT" rev-parse --verify --quiet 'refs/remotes/origin/main^{commit}' 2>/dev/null)"
         [ -n "$ANCHOR_REV" ] && echo "[practices] R25 — no remote advertisement for $_remote_ref; prior-release copy taken from local refs/remotes/origin/main ${ANCHOR_REV:0:12} (weaker)"
     fi
-    # P1-3: the PRIOR RELEASE'S guard runs FIRST, before the tree's copy has a chance to
-    # short-circuit on an argument. Fail-closed when no prior release can be resolved at all.
+    # The remote can advertise a sha this clone does not have (someone else pushed). That is a
+    # legitimate state and it is ALREADY caught, by the anchor binding inside the recency guard
+    # itself (--expect-anchor-sha vs the recorded anchor_sha); it must not additionally make the
+    # EXTRACTION impossible-and-therefore-blocking for a reason unrelated to the attack. So the
+    # extraction rev is required to be an object we hold, and degrades if it is not.
+    if [ -n "$ANCHOR_REV" ] \
+       && ! "$AX_GIT_BIN" --no-replace-objects -C "$ROOT" rev-parse --verify --quiet "${ANCHOR_REV}^{commit}" >/dev/null 2>&1; then
+        echo "[practices] R25 — the advertised previous release ${ANCHOR_REV:0:12} is not an object in this"
+        echo "[practices]   clone; the prior-release copy falls back (run \`git fetch origin\` for the strong form)"
+        ANCHOR_REV="$("$AX_GIT_BIN" --no-replace-objects -C "$ROOT" rev-parse --verify --quiet 'refs/remotes/origin/main^{commit}' 2>/dev/null)"
+    fi
+    # Last resort: HEAD. The extracted copy is then the copy under audit, so this adds nothing —
+    # it is the SAME honest degradation the round-5 fingerprint binding already documents
+    # (remote advertisement → origin/main → HEAD), kept rather than turned into a block because a
+    # repository with no remote-tracking branch is an ordinary fresh fork, not an attack. It is
+    # printed, so a run that got the weak form says so.
     if [ -z "$ANCHOR_REV" ]; then
-        echo "[practices] ✗ RATCHET_ANCHOR_COPY_UNVERIFIABLE — no previous release could be resolved" >&2
-        echo "[practices]   (neither the remote's advertisement nor refs/remotes/origin/main), so the" >&2
-        echo "[practices]   push gate would be authenticating the toolchain against the very commit" >&2
-        echo "[practices]   being pushed. Run \`git fetch origin\` and re-attempt. BLOCKED." >&2
+        ANCHOR_REV="$("$AX_GIT_BIN" --no-replace-objects -C "$ROOT" rev-parse --verify --quiet 'HEAD^{commit}' 2>/dev/null)"
+        [ -n "$ANCHOR_REV" ] && echo "[practices] R25 — no previous release resolvable; prior-release copy degrades to HEAD ${ANCHOR_REV:0:12} (adds nothing — stated, not hidden)"
+    fi
+    if [ -z "$ANCHOR_REV" ]; then
+        echo "[practices] ✗ RATCHET_ANCHOR_COPY_UNVERIFIABLE — not even HEAD resolves, so this gate" >&2
+        echo "[practices]   cannot obtain any copy of the recency guard to run. BLOCKED." >&2
         exit 1
     fi
+    # P1-3: the PRIOR RELEASE'S guard runs FIRST, before the tree's copy has a chance to
+    # short-circuit on an argument.
     pp_anchor_recency_gate "$ANCHOR_REV" "$local_sha" || exit 1
     echo "[practices] R25 — completion checklist recency check for ${local_sha:0:12}"
     if ! bash practices/evals/completion_checklist_recency_guard.sh --expect-sha "$local_sha" "${ANCHOR_ARGS[@]+"${ANCHOR_ARGS[@]}"}"; then
