@@ -1,0 +1,14 @@
+version: 1
+defaults:
+  working_directory: "."
+  timeout_seconds: 900
+checklist:
+  - id: probe
+    title: "one command, one working directory"
+    parallel: false
+    commands:
+      - command: "bash practices/evals/probe_guard.sh"
+        working_directory: "BACKEND"
+        expected_exit: 0
+    fix_playbook: |
+      Spell the path the way the record does.

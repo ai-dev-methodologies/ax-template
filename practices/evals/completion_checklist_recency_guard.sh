@@ -1513,13 +1513,44 @@ if live_git_root and not expected_head_file.is_file() and guard_repo is not None
         for _rel, _pst in _statcache.items():
             if _pst is not None:
                 _inodes.setdefault((_pst.st_dev, _pst.st_ino), set()).add(_rel)
+        # ROUND 14 / P1-A (TD-2026-08-01-(P1-posix-resolution-and-runtime-paths)): the resolution
+        # above was LEXICAL — it collapsed `..` textually, BEFORE following anything, while the
+        # kernel pops `..` AFTER following an intermediate symlink. Measured with the reviewer's
+        # committed topology (backend/jump -> real/sub, backend/gradlew -> jump/../GRADLEW-REAL
+        # over a tracked backend/real/gradlew-real): POSIX reaches backend/real/GRADLEW-REAL,
+        # which case-insensitive APFS serves as the TRACKED file, so R25 executes the wrapper and
+        # goes green — while the lexical candidate backend/GRADLEW-REAL is ABSENT, so this sweep
+        # and the fingerprint helper BOTH took the dangling exit and reported nothing, and a
+        # case-SENSITIVE receiver gets a dangling backend/gradlew. The walk below is the kernel's:
+        # a component is followed iff something remains after it (lstat never follows the FINAL
+        # one), following replaces the component so a later `..` pops the RESOLVED stack, an
+        # absolute intermediate leaves for the receiver's root filesystem, and a missing or
+        # unreadable intermediate is left alone so the final lstat still decides "dangling".
+        # The two budgets BLOCK on exhaustion (R25_SYMLINK_RESOLUTION_UNBOUNDED) instead of going
+        # silent: an unfinished walk has not answered the alias question, and 40 follows is the
+        # LARGER of the two kernel limits (Linux MAXSYMLINKS 40 / macOS SYMLOOP_MAX 32), so a
+        # chain any receiver's kernel would resolve is never refused. Written twice on purpose —
+        # the fingerprint helper's `_resolve_link_target` is the same rule.
+        _FOLLOW_BUDGET = 40
+        _STEP_BUDGET = 4096
         _symaliased = []
+        _symunbounded = []
         for _lpath, _tgt in _symlinks:
             if _tgt.startswith(b"/"):
                 continue                        # absolute: a location on the receiver's root fs
             _stack = _lpath.split(b"/")[:-1]
+            _queue = list(_tgt.split(b"/"))
             _escaped = False
-            for _comp in _tgt.split(b"/"):
+            _unbounded = ""
+            _follows = 0
+            _steps = 0
+            while _queue:
+                _comp = _queue.pop(0)
+                _steps += 1
+                if _steps > _STEP_BUDGET:
+                    _unbounded = ("resolution consumed more than %d path components"
+                                  % _STEP_BUDGET)
+                    break
                 if _comp in (b"", b"."):
                     continue
                 if _comp == b"..":
@@ -1527,8 +1558,39 @@ if live_git_root and not expected_head_file.is_file() and guard_repo is not None
                         _escaped = True
                         break
                     _stack.pop()
-                else:
-                    _stack.append(_comp)
+                    continue
+                _stack.append(_comp)
+                if not _queue:
+                    break                       # FINAL component: lstat does not follow it
+                _cur = b"/".join(_stack)
+                try:
+                    _ist = os.lstat(os.path.join(_rootb, _cur))
+                except OSError:
+                    continue                    # missing intermediate: the final lstat decides
+                if not stat.S_ISLNK(_ist.st_mode):
+                    continue
+                _follows += 1
+                if _follows > _FOLLOW_BUDGET:
+                    _unbounded = ("resolution followed more than %d symlinks (no kernel resolves "
+                                  "this: Linux MAXSYMLINKS is 40, macOS SYMLOOP_MAX is 32)"
+                                  % _FOLLOW_BUDGET)
+                    break
+                try:
+                    _nxt = os.readlink(os.path.join(_rootb, _cur))
+                except OSError:
+                    continue                    # unreadable intermediate: as above
+                if not isinstance(_nxt, bytes):
+                    _nxt = os.fsencode(_nxt)
+                if _nxt.startswith(b"/"):
+                    _escaped = True             # leaves for the receiver's root filesystem
+                    break
+                _stack.pop()                    # step back into the LINK'S OWN directory
+                _queue = _nxt.split(b"/") + _queue
+            if _unbounded:
+                _symunbounded.append("%s -> %s (%s)"
+                                     % (_lpath.decode(errors="replace"),
+                                        _tgt.decode(errors="replace"), _unbounded))
+                continue
             if _escaped or not _stack:
                 continue                        # leaves the repository, or IS the repository root
             _cand = b"/".join(_stack)
@@ -1550,6 +1612,7 @@ if live_git_root and not expected_head_file.is_file() and guard_repo is not None
                    _cand.decode(errors="replace"),
                    " / ".join(_n.decode(errors="replace") for _n in _alias)))
         _symaliased.sort()
+        _symunbounded.sort()
         if _execbits:
             emit_fail(
                 "GIT_EXEC_BIT_DIVERGENCE",
@@ -1612,6 +1675,19 @@ if live_git_root and not expected_head_file.is_file() and guard_repo is not None
                 "target that leaves the repository, names an untracked path, dangles, or spells "
                 "the record EXACTLY is NOT refused. Spell the target the way the index records "
                 "the path (`ln -sf <recorded-spelling>`) and re-run R25."
+            )
+        if _symunbounded:
+            emit_fail(
+                "GIT_SYMLINK_RESOLUTION_UNBOUNDED",
+                "tracked SYMLINKS whose target could not be resolved within the budget every "
+                "kernel imposes: " + ", ".join(_symunbounded[:8]) + ". Resolving a target the way "
+                "the kernel does means FOLLOWING intermediate symlinks, and a committed chain "
+                "that cycles or expands without bound leaves the alias question UNANSWERED — "
+                "which this family never converts into silence (that conversion is the defect "
+                "every round since 8 has been closing). It is also a defect in its own right: "
+                "the receiver's kernel returns ELOOP. The budget is the LARGER of the two kernel "
+                "limits (Linux MAXSYMLINKS 40, macOS SYMLOOP_MAX 32), so a chain any receiver "
+                "would resolve is never refused here. Unbreak the chain and re-run R25."
             )
         if _flagged:
             emit_fail(

@@ -102,6 +102,27 @@ WHAT IT HASHES, deterministically:
     GIT_SYMLINK_TARGET_ALIAS (exit 15); the full disposition table for absolute / `..` / chained /
     directory / dangling / untracked targets is in SymlinkTargetAlias.__doc__.
 
+ROUND 14 / P1-A (TD-2026-08-01-(P1-posix-resolution-and-runtime-paths)) — ROUND 13 RESOLVED THE
+    TARGET LEXICALLY, AND A LEXICAL `..` IS NOT A POSIX `..`. The kernel pops `..` AFTER following
+    an intermediate symlink; round 13 popped it textually FIRST, so any target whose `..` sits
+    behind a symlinked component resolved to a DIFFERENT path than the one the receiver's kernel
+    reaches. MEASURED — the reviewer's topology, committed content only:
+        backend/real/gradlew-real     (tracked)      backend/jump -> real/sub   (tracked symlink)
+        backend/real/sub/.keep        (tracked)      backend/gradlew -> jump/../GRADLEW-REAL
+    POSIX: `jump` → `backend/real/sub`, `..` → `backend/real`, so the target is
+    `backend/real/GRADLEW-REAL` = the tracked `backend/real/gradlew-real` on case-insensitive
+    APFS — R25 runs the wrapper and goes green, while a case-SENSITIVE receiver gets a DANGLING
+    `backend/gradlew`. Lexical: `backend/GRADLEW-REAL`, absent, so BOTH implementations took the
+    dangling exit and reported NOTHING. (The same divergence is visible with no filesystem writes
+    at all through macOS's stock `/var` link: `/var/../TFTPBOOT` and `/private/tftpboot` are one
+    inode while lexical `/TFTPBOOT` does not exist.) `_resolve_link_target` now walks COMPONENT BY
+    COMPONENT — follows intermediate links, never the final one, pops `..` after the follow — and
+    carries two budgets (40 follows / 4096 components) whose exhaustion BLOCKS under a new code
+    GIT_SYMLINK_RESOLUTION_UNBOUNDED (exit 16) rather than going silent. This SUPERSEDES BACKLOG
+    P3-133, whose own remedy ("go silent when lexical and realpath diverge") would have PRESERVED
+    this P1; the round-13 over-inclusive counterexample is re-measured under the new resolver in
+    DECISIONS.md and no longer over-blocks.
+
 HONEST LIMIT, and it matters for how much the recompute proves:
     ON A CLEAN TREE both inputs are EMPTY, so the digest is a CONSTANT — the same value for every
     clean tree of every commit. It is a DIRT fingerprint, not a tree identity. That is exactly
@@ -325,6 +346,25 @@ class CasefoldDirectoryAlias(GitFiltersPresent):
     """
 
 
+class SymlinkResolutionUnbounded(GitFiltersPresent):
+    """A tracked symlink whose target cannot be resolved within the budgets any kernel imposes.
+
+    ROUND 14 / P1-A (TD-2026-08-01-(P1-posix-resolution-and-runtime-paths)). Resolving a target
+    the way the kernel does means FOLLOWING intermediate symlinks, and following can cycle
+    (`a -> b/x`, `b -> a`) or expand without bound. Round 13's lexical collapse could not cycle,
+    so it needed no budget; a correct resolver does.
+
+    THE BUDGET BLOCKS RATHER THAN GOING SILENT, deliberately. When the walk stops early the
+    alias question is UNANSWERED, and converting "unanswered" into "nothing found" is the exact
+    defect every round of this family since round 8 has been closing. It is also not merely
+    conservative: Linux resolves at most 40 link traversals (MAXSYMLINKS) and macOS 32
+    (SYMLOOP_MAX), so a chain that exhausts the larger of the two is one NO receiver's kernel
+    will resolve — the receiver gets ELOOP, which is a defect in its own right.
+    The budget is the LARGER of the two kernel limits precisely so that a chain some receiver
+    would resolve is never refused here.
+    """
+
+
 class SymlinkTargetAlias(GitFiltersPresent):
     """A tracked SYMLINK whose TARGET spells a tracked path with an ALIAS of its recorded spelling.
 
@@ -372,17 +412,19 @@ class SymlinkTargetAlias(GitFiltersPresent):
       · `..` TRAVERSAL that stays inside the repo — resolved, then compared. The two live tracked
         symlinks in this catalog are exactly this shape (`../../.ledger-target.txt` and
         `../../.receipts-target.yaml`), both land on the EXACT recorded spelling, and both pass.
-        Lexical `..` is not POSIX `..` when a component is a symlink; the candidate is then a path
-        the kernel would resolve elsewhere, and USUALLY its lstat lands on a different inode (or
-        none) and the check goes silent — under-inclusive.
-        CORRECTED 2026-08-01 (independent verification lane, with a reproduction): the words
-        "never over-inclusive" were FALSE. A link whose POSIX resolution ESCAPES the repo and
-        dangles can still have its LEXICAL candidate land on a registered, fold-equal inode —
-        measured with `ln -s outdirlink/../SECRET.txt` where `outdirlink -> ../outside`: the kernel
-        routes it outside and it does not exist, yet the lexical candidate folds onto tracked
-        `secret.txt` and this check BLOCKS it. That direction is fail-closed (a false refusal, not
-        a missed alias) and the shape is pathological, so it is registered rather than fixed —
-        see BACKLOG P3-133. What is retracted is the absolute claim, not the mechanism.
+        ROUND 14 replaced the LEXICAL `..` with the kernel's: intermediate components are followed
+        FIRST and `..` pops the RESOLVED stack. Round 13's text here conceded only an "under-
+        inclusive" divergence and then a "fail-closed, pathological" over-inclusive one; both
+        concessions were describing a resolver that answered a different question than the
+        receiver's kernel asks, and BOTH directions are now gone by construction rather than by
+        argument. The round-13 P1 was found through the under-inclusive direction — see
+        `_resolve_link_target.__doc__` for the reviewer's `jump/../GRADLEW-REAL` topology, where
+        the lexical candidate was ABSENT and both implementations reported nothing while the
+        kernel reached a tracked file. The round-13 over-inclusive counterexample
+        (`ln -s outdirlink/../SECRET.txt`, `outdirlink -> ../outside`) now takes the "escapes"
+        exit on its first `..`, because the follow has already returned the stack to the root.
+        A budget bounds the follow (40, the larger of the two kernel limits) and its exhaustion
+        BLOCKS under GIT_SYMLINK_RESOLUTION_UNBOUNDED — never silence.
       · ABSOLUTE target — NOT BLOCKED. It names a location on the receiver's root filesystem; the
         index cannot record it, so there is no recorded spelling to be an alias OF. (An absolute
         target that happens to point back into this checkout is unportable for reasons that have
@@ -392,10 +434,13 @@ class SymlinkTargetAlias(GitFiltersPresent):
         `lstat` does not follow the FINAL component, so the candidate's inode is the second link's
         own inode, which the prefix walk registered. An exact spelling passes; an aliased spelling
         of the second link BLOCKS, which is the same defect one level up.
-      · TARGET THROUGH AN INTERMEDIATE SYMLINK DIRECTORY — NOT BLOCKED. `lstat` follows the
-        intermediate components, so the inode is the real file's, but the candidate spelling does
-        not fold-equal the record (the directory is named differently), so step 6 declines. That is
-        correct: the intermediate link is itself committed and resolves at the receiver too.
+      · TARGET THROUGH AN INTERMEDIATE SYMLINK DIRECTORY — NOT BLOCKED, and ROUND 14 changed WHY.
+        Round 13 kept the link's own name in the candidate, so the spelling failed to fold-equal
+        the record and step 6 declined — the right verdict for the wrong reason. Step 1 now
+        FOLLOWS the intermediate, so the candidate is the real file's own path and step 5 passes
+        it on an EXACT spelling match. The verdict is unchanged (exit 0) and it is now reached by
+        agreeing with the record instead of by failing to recognise it — which is what makes the
+        final component's spelling, the thing that actually breaks at the receiver, decisive.
       · TARGET RESOLVING TO A DIRECTORY THAT IS A TRACKED PREFIX — COMPARED, because the registry
         is the PREFIX map, not the leaf set. `link -> BACKEND` where the index records `backend`
         BLOCKS; `link -> backend` passes.
@@ -706,50 +751,140 @@ def _register_prefixes(casefold, statcache, rootb, path, foldcache=None):
             (st.st_dev, st.st_ino), set()).add(prefix)
 
 
-def _resolve_link_target(linkpath, target):
-    """ROUND 13 / P1: lexically resolve <target> against the DIRECTORY OF <linkpath>. Bytes only.
+# ROUND 14 / P1-A. Two budgets, both stated as the RECEIVER'S kernel would state them.
+# Linux caps a single resolution at 40 link traversals (MAXSYMLINKS, `man 7 path_resolution`);
+# macOS/BSD caps it at 32 (SYMLOOP_MAX). The LARGER of the two is used on purpose: a chain that
+# some receiver's kernel would happily resolve must never be refused here, so the budget refuses
+# only what EVERY kernel refuses. The component budget is a second, independent stop for a target
+# that grows without ever re-following the same link.
+_SYMLINK_FOLLOW_BUDGET = 40
+_SYMLINK_STEP_BUDGET = 4096
+
+
+def _resolve_link_target(rootb, linkpath, target):
+    """ROUND 14 / P1-A: resolve <target> THE WAY THE KERNEL DOES — component by component.
 
     <linkpath> is an INDEX path, so the base directory is the spelling the repository records —
-    the resolution starts from an authentic base rather than from anything on disk.
+    the resolution starts from an authentic base rather than from anything on disk. (git cannot
+    record a path THROUGH a symlink, so every directory component of an index path is a real
+    directory; the base therefore needs no resolution of its own.)
     Returns (kind, candidate):
       ("absolute", None) · ("escapes", None) · ("root", None) · ("inside", b"a/b")
-    Lexical, not POSIX: `..` is popped textually, whereas the kernel pops AFTER following a
-    symlinked component. The candidate is then lstat'd, so a divergence between the two USUALLY
-    makes the lookup land on a different inode (or none) and the check goes SILENT — under-
-    inclusive. "Never over-inclusive" was claimed here and is RETRACTED (2026-08-01, reproduced by
-    an independent lane): a POSIX-escaping, dangling link can have its lexical candidate land on a
-    registered fold-equal inode and be refused. Fail-closed, pathological, registered as P3-133.
-    It is also exactly what a receiver types when it opens the committed path component by
-    component.
+      ("unbounded", b"<reason>")  — the walk exceeded a budget; the CALLER BLOCKS, see below.
+
+    WHY THIS IS NOT LEXICAL ANY MORE. Round 13 collapsed `..` TEXTUALLY, before following
+    anything. The kernel pops `..` AFTER following an intermediate symlink, and the two answers
+    are different paths whenever a component before the `..` is a link. Reviewer's topology
+    (round 14), all four paths committed:
+        backend/real/gradlew-real     (tracked regular file)
+        backend/real/sub/.keep        (tracked)
+        backend/jump -> real/sub      (tracked symlink)
+        backend/gradlew -> jump/../GRADLEW-REAL
+    POSIX follows `jump` first, so `jump/..` is `backend/real` and the target is
+    `backend/real/GRADLEW-REAL` — which on case-insensitive APFS IS the tracked
+    `backend/real/gradlew-real`, so R25 executes the wrapper and goes green, while a
+    case-SENSITIVE receiver gets a DANGLING `backend/gradlew`. The lexical resolver produced
+    `backend/GRADLEW-REAL`, which does not exist, so BOTH implementations took their dangling
+    exit and reported nothing. The same divergence is observable with no filesystem writes at all
+    on macOS via the stock `/var` symlink: `/var/../TFTPBOOT` and `/private/tftpboot` are one
+    inode while the lexical `/TFTPBOOT` is absent.
+    The rules below are the kernel's, and only the kernel's:
+      · a component is FOLLOWED iff something remains after it — `lstat` does not follow the
+        final component, which is what keeps the chained-symlink disposition correct (and what
+        a trailing slash legitimately overrides, because then something DOES remain);
+      · following replaces the component with the link's target, so `..` afterwards pops from the
+        RESOLVED stack;
+      · an intermediate link with an ABSOLUTE target leaves for the receiver's root filesystem —
+        "absolute", not this class;
+      · a missing or unreadable intermediate is left alone: the final lstat then fails and the
+        caller takes the dangling exit, exactly as before.
+
+    THE BUDGET BLOCKS, IT DOES NOT GO SILENT. Exceeding either budget means this walk cannot
+    answer whether the target aliases a tracked spelling, and "cannot answer" is the one state
+    this family never converts into silence (that conversion is the defect every round since 8
+    has been closing). A committed link chain that no kernel will resolve is also a defect in its
+    own right — the receiver gets ELOOP — so the refusal is not merely conservative.
+
+    P3-133 IS SUPERSEDED BY THIS FUNCTION, not by its proposed remedy. That row asked for
+    "cross-check the lexical candidate against realpath and go SILENT on divergence"; silence on
+    divergence is precisely what the round-14 topology exploits, so adopting it would have
+    PRESERVED the P1. Resolving correctly removes the divergence instead of tolerating it, and
+    the round-13 over-inclusive counterexample (`ln -s outdirlink/../SECRET.txt` with
+    `outdirlink -> ../outside`) now takes the "escapes" exit on the FIRST `..`, because the
+    follow has already returned the stack to the repository root.
     """
     if target.startswith(b"/"):
         return ("absolute", None)
     stack = linkpath.split(b"/")[:-1]
-    for comp in target.split(b"/"):
+    queue = list(target.split(b"/"))
+    follows = 0
+    steps = 0
+    while queue:
+        comp = queue.pop(0)
+        steps += 1
+        if steps > _SYMLINK_STEP_BUDGET:
+            return ("unbounded",
+                    b"resolution consumed more than %d path components"
+                    % _SYMLINK_STEP_BUDGET)
         if comp in (b"", b"."):
             continue
         if comp == b"..":
             if not stack:
                 return ("escapes", None)
             stack.pop()
-        else:
-            stack.append(comp)
+            continue
+        stack.append(comp)
+        if not queue:
+            break                               # FINAL component: lstat does not follow it
+        cur = b"/".join(stack)
+        try:
+            st = os.lstat(os.path.join(rootb, cur))
+        except OSError:
+            continue                            # missing intermediate: the final lstat decides
+        if not stat.S_ISLNK(st.st_mode):
+            continue
+        follows += 1
+        if follows > _SYMLINK_FOLLOW_BUDGET:
+            return ("unbounded",
+                    b"resolution followed more than %d symlinks (no kernel resolves this: "
+                    b"Linux MAXSYMLINKS is 40, macOS SYMLOOP_MAX is 32)"
+                    % _SYMLINK_FOLLOW_BUDGET)
+        try:
+            nxt = os.readlink(os.path.join(rootb, cur))
+        except OSError:
+            continue                            # unreadable intermediate: as above
+        if not isinstance(nxt, bytes):
+            nxt = os.fsencode(nxt)
+        if nxt.startswith(b"/"):
+            return ("absolute", None)           # leaves for the receiver's root filesystem
+        stack.pop()                             # step back into the LINK'S OWN directory
+        queue = nxt.split(b"/") + queue
     if not stack:
         return ("root", None)
     return ("inside", b"/".join(stack))
 
 
 def _symlink_target_verdicts(rootb, symlinks, inodes, foldcache):
-    """ROUND 13 / P1: the alias census, applied to what a tracked symlink POINTS AT.
+    """ROUND 13 / P1 + ROUND 14 / P1-A: the alias census, applied to what a symlink POINTS AT.
 
     <inodes> maps (st_dev, st_ino) -> {registered spellings}; it is built from the SAME prefix
     walk that feeds the casefold map, so "registered" means "a tracked path or a directory
     component of one". The full disposition table — and why each non-blocking case is not blocked
     — is in SymlinkTargetAlias.__doc__; this function is the seven steps stated there.
+    Returns (alias_reports, unbounded_reports): the second list is the round-14 budget refusal,
+    reported under its OWN code because its remedy is different (unbreak the chain, not respell
+    the target).
     """
     out = []
+    unbounded = []
     for path, target in symlinks:
-        kind, cand = _resolve_link_target(path, target)
+        kind, cand = _resolve_link_target(rootb, path, target)
+        if kind == "unbounded":
+            unbounded.append("%s -> %s (%s)"
+                             % (path.decode(errors="replace"),
+                                target.decode(errors="replace"),
+                                cand.decode(errors="replace")))
+            continue
         if kind != "inside":
             continue                            # absolute / escapes the repo / the root itself
         try:
@@ -769,7 +904,7 @@ def _symlink_target_verdicts(rootb, symlinks, inodes, foldcache):
                    % (path.decode(errors="replace"), target.decode(errors="replace"),
                       cand.decode(errors="replace"),
                       " / ".join(n.decode(errors="replace") for n in alias)))
-    return sorted(out)
+    return sorted(out), sorted(unbounded)
 
 
 def _alias_verdicts(casefold, fullpaths):
@@ -961,9 +1096,10 @@ def _raw_index_sweep(repo, gbin, genv, dirty):
     for rel, st in statcache.items():
         if st is not None:
             inodes.setdefault((st.st_dev, st.st_ino), set()).add(rel)
-    symaliased = _symlink_target_verdicts(rootb, symlinks, inodes, foldcache)
+    symaliased, symunbounded = _symlink_target_verdicts(rootb, symlinks, inodes, foldcache)
     return (diverged[:8], mistyped[:8], unreadable[:8], flagged[:8], gitlinks[:8],
-            execbits[:8], gldirt[:8], aliased[:8], diraliased[:8], symaliased[:8])
+            execbits[:8], gldirt[:8], aliased[:8], diraliased[:8], symaliased[:8],
+            symunbounded[:8])
 
 
 def fingerprint(repo):
@@ -1039,7 +1175,7 @@ def fingerprint(repo):
     # only INDEX PATHS, and a symlink's TARGET is not one — it is blob content, read as bytes and
     # never resolved, so the four-round census did not apply to it on ANY axis. It does now.
     (diverged, mistyped, unreadable, flagged, gitlinks,
-     execbits, gldirt, aliased, diraliased, symaliased) = _raw_index_sweep(
+     execbits, gldirt, aliased, diraliased, symaliased, symunbounded) = _raw_index_sweep(
         repo, gbin, genv, set(modified) | set(untracked))
     if flagged:
         raise IndexFlagsSet(
@@ -1120,6 +1256,16 @@ def fingerprint(repo):
               "equality — a target that leaves the repository, names an untracked path, dangles, "
               "or spells the record EXACTLY is not refused. Spell the target the way the index "
               "records the path (`ln -sf <recorded-spelling>`) and re-run.")
+    if symunbounded:
+        raise SymlinkResolutionUnbounded(
+            "tracked SYMLINKS whose target could not be resolved within the budget every kernel "
+            "imposes: " + ", ".join(symunbounded)
+            + ". Resolving a target the way the kernel does means following intermediate "
+              "symlinks, and a committed chain that cycles or expands without bound leaves the "
+              "alias question UNANSWERED — which this family never converts into silence. The "
+              "receiver gets ELOOP from such a chain anyway (Linux MAXSYMLINKS 40, macOS "
+              "SYMLOOP_MAX 32; the larger is used here, so a chain any kernel would resolve is "
+              "never refused). Unbreak the chain and re-run.")
     if gitlinks:
         raise GitlinkDivergence(
             "initialized submodules whose work tree is not at the commit the superproject "
@@ -1231,6 +1377,9 @@ if __name__ == "__main__":
     except SymlinkTargetAlias as exc:
         print(f"tree_fingerprint: GIT_SYMLINK_TARGET_ALIAS — {exc}", file=sys.stderr)
         sys.exit(15)
+    except SymlinkResolutionUnbounded as exc:
+        print(f"tree_fingerprint: GIT_SYMLINK_RESOLUTION_UNBOUNDED — {exc}", file=sys.stderr)
+        sys.exit(16)
     except RawIndexDivergence as exc:
         # Ordered BEFORE GitFiltersPresent: RawIndexDivergence subclasses it so that callers
         # written against the older type still block, but the code printed must be the specific

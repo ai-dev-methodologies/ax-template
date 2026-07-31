@@ -2605,3 +2605,174 @@ has not moved across two rounds of added refusals.
   enumeration, which is not claimed here. Recorded in P3-128 alongside the OpenZFS note.
 
 - Commits: (this commit — PRD-final-4 wave, P1-seal round-13)
+
+---
+
+## TD-2026-08-01-(P1-posix-resolution-and-runtime-paths) — a lexical `..` is not a POSIX `..`, and R25 executes its own inputs verbatim
+
+**Round 14, cross-family reviewer, TWO P1s that need two different treatments.** One is a precise
+fix; the other is a bounded fix plus a statement of what is not decidable. They are recorded
+together because they are the same doctrine at two levels: *the thing R25 verified is not the
+thing the push ships*.
+
+### P1-A — the resolver answered a different question than the receiver's kernel asks
+
+Round 13 resolved a tracked symlink's target **lexically**: it popped `..` textually, before
+following anything. The kernel pops `..` **after** following an intermediate symlink. Whenever a
+component before the `..` is itself a link, the two answers are different paths — and round 13's
+own docstring called that divergence "usually … under-inclusive", which is a description of a
+hole, not a bound on one.
+
+**The reviewer's topology, committed content only, no environment control:**
+
+```
+backend/real/gradlew-real     (tracked regular file)
+backend/real/sub/.keep        (tracked)
+backend/jump    -> real/sub                 (tracked symlink)
+backend/gradlew -> jump/../GRADLEW-REAL     (tracked symlink)
+```
+
+POSIX follows `jump` first, so `jump/..` is `backend/real` and the target is
+`backend/real/GRADLEW-REAL` — which case-insensitive APFS serves as the **tracked**
+`backend/real/gradlew-real`. So R25 **executes** the wrapper and goes green, `git status
+--porcelain -uall` is EMPTY, and the fingerprint is the clean-tree constant. A case-**sensitive**
+receiver gets a **dangling** `backend/gradlew`. The lexical resolver produced
+`backend/GRADLEW-REAL`, which does not exist, so **both** implementations took their dangling exit
+and reported nothing. Measured at `b259b25`:
+
+| implementation | pre-fix (round 13) | post-fix (round 14) |
+|---|---|---|
+| `tree_fingerprint.py` | **exit 0**, digest `0a815065…` (the clean-tree constant) | **exit 15** `GIT_SYMLINK_TARGET_ALIAS` |
+| recency guard 12c sweep | silent (same sweep, same walk) | `GIT_SYMLINK_TARGET_ALIAS` |
+
+The reviewer also demonstrated the kernel behaviour with **no filesystem writes at all**, using
+macOS's stock `/var` link: `/var/../TFTPBOOT` and `/private/tftpboot` are one inode, the lexical
+`/TFTPBOOT` is absent, and both detectors returned `[]`.
+
+**The fix.** `_resolve_link_target` now walks **component by component**, exactly as the kernel
+does: a component is followed iff something remains after it (`lstat` never follows the final one,
+which is what keeps the chained-symlink disposition correct, and what a trailing slash legitimately
+overrides); following replaces the component, so a later `..` pops the **resolved** stack; an
+intermediate link with an absolute target leaves for the receiver's root filesystem
+(`absolute`, not this class); a missing or unreadable intermediate is left alone so the final
+`lstat` still decides "dangling". Every round-13 not-this-class exit is preserved verbatim
+(absolute / escapes the root / the root itself / dangling / untracked inode / exact spelling).
+
+**Two budgets, and they BLOCK rather than going silent.** A resolver that follows can cycle, so
+the walk is bounded at 40 link follows and 4096 components. Exhaustion raises the new
+`SymlinkResolutionUnbounded` (**fingerprint exit 16**, guard code
+`GIT_SYMLINK_RESOLUTION_UNBOUNDED`). Two reasons it blocks: an unfinished walk has **not answered**
+the alias question, and converting "unanswered" into "nothing found" is the exact defect every
+round since 8 has been closing; and a committed chain that exhausts the budget is one **no**
+kernel resolves — the receiver gets `ELOOP`. The budget is the **larger** of the two kernel limits
+(Linux `MAXSYMLINKS` 40, macOS `SYMLOOP_MAX` 32) precisely so that a chain some receiver would
+resolve is never refused here. Measured: `loopa -> loopb/x` + `loopb -> loopa`, kernel `ELOOP`,
+pre-fix **exit 0** → post-fix **exit 16**.
+
+**P3-133 is superseded, and its own remedy is rejected.** That row proposed "cross-check the
+lexical candidate against realpath and go **silent** on divergence". Silence on divergence is
+precisely what the topology above exploits, so adopting it **would have preserved this P1**. The
+row is closed as REJECTED-AND-SUPERSEDED with the reviewer's reasoning quoted, and its
+over-inclusive counterexample was **re-measured** under the new resolver rather than assumed away:
+
+| `ln -s outdirlink/../SECRET.txt`, `outdirlink -> ../outside`, tracked `secret.txt` | verdict |
+|---|---|
+| round 13 (lexical) | **exit 15** — a FALSE refusal (the row's complaint) |
+| round 14 (component-wise) | **exit 0**, digest `0a815065…` — "escapes" on the first `..`, because the follow has already returned the stack to the root |
+
+The over-inclusion is **gone**, not tolerated. Both directions of divergence are now closed by
+construction instead of by argument.
+
+**Controls, all re-run rather than inherited.**
+- The **nine legitimate shapes** were rebuilt in one tree (exact spelling · `..` onto the exact
+  record — the shape both live tracked symlinks in this catalog have · absolute · escapes the root
+  · untracked/gitignored target · dangling · chain through another tracked symlink · tracked
+  directory target · target through an intermediate symlinked directory): **exit 0 under HEAD and
+  under round 14**. Non-vacuity: adding one FINAL-component alias (`-> sub/REAL.TXT`) to the same
+  tree is named and refused, **exit 15**.
+- The round-13 direct shapes still block: (AJ) case `-> GRADLEW-REAL` **exit 15**, (AK)
+  normalization (index NFC `é-real`, target blob NFD) **exit 15**, under both HEAD and round 14.
+- Live tree: 2 tracked symlinks pass, digest **unchanged** on the auditable recipe (clean
+  `0a815065…` / dirty `8a91e493…`, byte-identical between the HEAD copy and this one), and 5-run
+  means 0.2738 → 0.2758 s/run (+0.7%, measurement noise).
+- Prover: (AN) the jump topology, (AN2) the pre-round-14 twin whose neuter **restores the lexical
+  walk** in both implementations (refusing to follow any intermediate component IS lexical
+  semantics — one condition-constant edit, leaving the round-13 report, the fold and the
+  discriminator live, so what lands again is attributable to the resolution algorithm alone),
+  (AN3)/(AN4) the per-implementation splits, (AO) the cycle budget. Each carries a premise
+  assertion; (AN)'s premise additionally requires that the POSIX resolution **reach the tracked
+  inode** and that the **lexical candidate be absent**, so the case cannot silently degenerate
+  into round 13's.
+
+**Residual, measured and registered (P3-134):** the alias verdict is taken on the **final**
+candidate only, so an aliased **intermediate** spelling (`-> DIRLINK/real.txt` where the record is
+`legit/dirlink`) is refused by **neither** resolver — round 13 declined it at step 6, round 14
+follows it and lands on the exact record. That link dangles at a case-sensitive receiver, so it is
+the same defect class one component to the left. The remedy is known and cheap (apply steps 5/6 to
+every component walked; the registry is already in hand) and was deliberately **not** shipped here:
+it is a surface expansion outside the delegated scope of P1-A/P1-B, and mixing it in would blur
+the attribution of both.
+
+### P1-B — R25 executes its own inputs verbatim, and nobody checked their spelling
+
+`verify-completion.sh` takes `command` and `working_directory` out of
+`practices/verification-checklist.yaml` verbatim (`:1086`) and executes them through
+`cd "$exec_wd"` + `bash -c` (`:1561`). **Reproduction, committed content only:** rewrite one
+command's `practices/evals/spec_policy_ref_guard.sh` as `PRACTICES/evals/…`. On case-insensitive
+APFS the command **exits 0**; `git cat-file -e HEAD:PRACTICES/evals/…` **exits 128** (the recorded
+tree has no such path); `git status --porcelain -uall` is EMPTY with the tamper committed;
+`tree_fingerprint.py` returns the clean-tree constant `0a815065…`; guard [58]
+(`verification_checklist_task_coverage`) exits 0; and all ten R25 violation buckets stay empty. R25
+publishes **green evidence for a command that fails immediately on a case-sensitive receiver**.
+
+**(1) The tractable, mandatory part — the gate's OWN inputs.** New guard [104]
+`checklist_command_path_spelling_guard.sh`. Every path-like token of every `command`, plus every
+effective `working_directory`, is resolved repo-relative against its working directory and must
+**be a recorded spelling** — a tracked path or a directory component of one. A token that is not
+recorded but **folds equal** to one blocks as `CHECKLIST_PATH_ALIAS`. The fold is **imported** from
+`practices/scripts/lib/tree_fingerprint.py` (`_fold_path_key`), not re-implemented: a third copy of
+a rule that already exists twice is a third chance to drift, and importing means this guard gains
+every axis the fold gains (case, normalization, non-ASCII case, ignorable Cf — and whatever comes
+next).
+
+**No `(st_dev, st_ino)` discriminator here, deliberately.** The tree sweep compares two spellings
+that the **verifying** filesystem serves from one file, so it must measure that identity. This
+guard's subject is a **string inside a committed file**: there is no local resolution to measure,
+and the filesystem that decides is the **receiver's**. A token that is not a recorded spelling but
+folds onto one is broken on any faithful filesystem and silently green on an aliasing one — both
+verdicts say BLOCK. The consequence is that this guard, and its fixtures, are **filesystem-
+independent**.
+
+**Why a new guard and not a fold-in** (the choice is load-bearing): the recency guard owns the fold
+and the tree sweep, but it runs at **pre-push**, only after a full audit-log chain, and its fixture
+roots are non-git trees where check 12 never runs — folding there would make the reproduction
+detectable only at push time and not fixture-provable. Guard [58] parses the same file but answers
+a different question and has its own fixtures. `run-all-guards.sh` **is an R25 step**, so a guard
+registered there fails the very R25 run that contains the aliased command.
+
+**Candidate rules, enumerated** (an extractor that is not enumerated is a false-positive
+generator). A token is a candidate iff: it survives `shlex.split(..., posix=True)`; it is not a
+shell operator; it does not start with `-`; it contains no `=`; it is not absolute and contains no
+`://`; it is not `.`/`..`; and it contains no unexpanded shell metacharacter (`$ \` * ? [ ] ~`).
+`working_directory` is a candidate unconditionally (minus `.`), because it is a repo path by
+schema. **Zero false positives, measured** on the live checklist: **367 tokens → 240 recorded /
+125 unrelated / 2 skipped flags / 0 aliases**, printable with `--show`. Fixtures:
+`pass_recorded_spellings`, `fail_command_case_alias` (the reproduction), `fail_working_directory_alias`.
+
+**(2) The honest limit — the general class stays OPEN as `docs/BACKLOG.md` P2-72.** Arbitrary committed content names paths in strings: shell `source`, gradle `apply from:`,
+npm/node specifiers, python imports, JSON/YAML file references, Dockerfile `COPY`, CI workflow
+paths. Deciding which substrings of an arbitrary file are paths is **undecidable by inspection**
+(concatenation, variable expansion, runtime composition). A heuristic scanner that claimed to close
+the class would be exactly the green-but-hollow shape this catalog keeps catching, so none is
+shipped. **The only complete remedy is to verify on a filesystem that does not alias** — a
+case-sensitive and normalization-sensitive checkout, which this project has already proven
+constructible (`hdiutil create -fs "Case-sensitive APFS"`, used by the round-10..13 prover).
+Graded honestly: **in scope** (no environment control, false-green capable), **not closed**, and
+the remedy is **infrastructural** — an R25 opt-in mode or a periodic job that checks out onto such
+a volume and runs the suite there. Cost and adoption conditions are stated in the row. A cheap
+mitigation ships and is **labelled advisory**: `--advisory-scripts` applies the same verdict to
+path-like literals in the shell scripts the checklist **itself names** (one level), printing
+`ADVISORY` lines that never touch the exit code (live: 3 scripts, 0 aliases; non-vacuity: a planted
+alias is reported). **The row stays open.**
+
+- Commits: (this commit — PRD-final-4 wave, P1-seal round-14)

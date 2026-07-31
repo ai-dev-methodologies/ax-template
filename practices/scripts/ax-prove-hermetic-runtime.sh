@@ -1119,7 +1119,7 @@ fi
 # from disk, which on a case-insensitive filesystem HEALS a casefold premise (the two entries
 # collapse onto the one file's bytes) and makes the twin pass for a reason that is not the neuter.
 round9_neuter() {   # round9_neuter <sb> <what>
-                    # what ∈ all|guard|fp|r1Nall|r1Nguard|r1Nfp for N ∈ 10..13
+                    # what ∈ all|guard|fp|r1Nall|r1Nguard|r1Nfp for N ∈ 10..14
     "${AX_PY_BIN:-python3}" - "$1/repo" "$2" <<'PY'
 import sys, pathlib
 repo, what = pathlib.Path(sys.argv[1]), sys.argv[2]
@@ -1156,6 +1156,18 @@ R12_FP = [(FP, IGNORABLE_STRIP, IGNORABLE_DEAD)]
 # symlink-target census and to nothing else.
 R13_GUARD = [(GUARD, "        if _symaliased:")]
 R13_FP = [(FP, "    if symaliased:")]
+# ROUND 14's fix is a COMPUTATION (the resolution itself), so the honest neuter is the round-11/12
+# shape: put the LEXICAL walk back while leaving the round-13 report, the fold, the (dev, ino)
+# discriminator and the budgets live. Refusing to follow ANY intermediate component is exactly the
+# lexical semantics — the queue is then consumed left to right and `..` pops textually — so a
+# single condition-constant edit restores round 13 without touching anything else. What lands
+# again under it is therefore attributable to the POSIX resolution and to nothing else.
+R14_GUARD = [(GUARD,
+              "                if not stat.S_ISLNK(_ist.st_mode):",
+              "                if True:  # ROUND-14 NEUTER: never follow an intermediate link")]
+R14_FP = [(FP,
+           "        if not stat.S_ISLNK(st.st_mode):",
+           "        if True:  # ROUND-14 NEUTER: never follow an intermediate link")]
 pairs = {
     "all": R9_GUARD + R9_FP,
     "guard": R9_GUARD,
@@ -1172,9 +1184,12 @@ pairs = {
     "r13all": R13_GUARD + R13_FP,
     "r13guard": R13_GUARD,
     "r13fp": R13_FP,
+    "r14all": R14_GUARD + R14_FP,
+    "r14guard": R14_GUARD,
+    "r14fp": R14_FP,
 }
 if what not in pairs:
-    print(f"unknown round9/10/11/12/13 neuter: {what}", file=sys.stderr)
+    print(f"unknown round9/10/11/12/13/14 neuter: {what}", file=sys.stderr)
     sys.exit(3)
 for entry in pairs[what]:
     path, anchor = entry[0], entry[1]
@@ -1472,6 +1487,35 @@ r9_setup() {
                    && ln -s GRADLEW-REAL backend/gradlew \
                    && git add backend/gradlew backend/gradlew-real \
                    && git "${GIT_ID[@]}" commit -q -m symcase ) >/dev/null 2>&1 || return 2 ;;
+        symjump) # ROUND 14 / P1-A — THE REVIEWER'S TOPOLOGY, VERBATIM. Round 13 resolved the
+                 # target LEXICALLY: it collapsed `..` textually BEFORE following anything, while
+                 # the kernel pops `..` AFTER following an intermediate symlink.
+                 #   backend/real/gradlew-real  (tracked)   backend/jump -> real/sub  (tracked)
+                 #   backend/real/sub/.keep     (tracked)   backend/gradlew -> jump/../GRADLEW-REAL
+                 # POSIX: jump → backend/real/sub, `..` → backend/real, so the target is
+                 # backend/real/GRADLEW-REAL — which case-insensitive APFS serves as the TRACKED
+                 # backend/real/gradlew-real, so R25 executes the wrapper and goes green. The
+                 # LEXICAL candidate is backend/GRADLEW-REAL, which does not exist, so BOTH
+                 # implementations took their dangling exit and reported NOTHING. A case-SENSITIVE
+                 # receiver gets a DANGLING backend/gradlew.
+                 ( builtin cd "$sb/repo" \
+                   && mkdir -p backend/real/sub \
+                   && git mv backend/gradlew backend/real/gradlew-real \
+                   && printf 'keep\n' > backend/real/sub/.keep \
+                   && ln -s real/sub backend/jump \
+                   && ln -s jump/../GRADLEW-REAL backend/gradlew \
+                   && git add backend/real backend/jump backend/gradlew \
+                   && git "${GIT_ID[@]}" commit -q -m symjump ) >/dev/null 2>&1 || return 2 ;;
+        symloop) # ROUND 14 / P1-A — the budget. A correct resolver FOLLOWS intermediate links, so
+                 # it can cycle; the round-13 lexical collapse could not. `loopa -> loopb/x` and
+                 # `loopb -> loopa` is a committed chain no kernel resolves (ELOOP), and an
+                 # unfinished walk has NOT answered the alias question — so it BLOCKS rather than
+                 # going silent.
+                 ( builtin cd "$sb/repo" \
+                   && ln -s loopb/x loopa \
+                   && ln -s loopa loopb \
+                   && git add loopa loopb \
+                   && git "${GIT_ID[@]}" commit -q -m symloop ) >/dev/null 2>&1 || return 2 ;;
         symnfcnfd) # the SAME class through NORMALIZATION rather than case: the index records
                  # `symdir/é-real` (NFC c3a9) and the link's blob spells it NFD (65cc81). It is
                  # what proves the fix reuses the SHARED fold — a case-only comparison is silent
@@ -1516,7 +1560,7 @@ r9_attack() {
         gldirt)   printf 'echo owned\n' > "$sb/repo/vendor/sub/check.sh" || return 2 ;;
         casefold|dircase|csdistinct|shareprefix|nfcnfd|nacase|csnacase|ignzwnj|ignrlo|csignorable) : ;;
                   # the alias (or its absence) IS the index state; nothing further to do on disk
-        symcase|symnfcnfd|symign|symlegit) : ;;
+        symcase|symnfcnfd|symign|symlegit|symjump|symloop) : ;;
                   # ROUND 13: likewise — the symlink and its target are COMMITTED by the setup, so
                   # there is nothing to do on disk afterwards and `git status` stays EMPTY
         symreg)   git -C "$sb/repo" update-index --assume-unchanged linkpath.txt || return 2
@@ -1671,6 +1715,84 @@ PY
                           "whose TARGET spells a tracked path with an alias of the recorded" \
                           "spelling, resolving to ONE inode on this filesystem. Without that" \
                           "topology the refusal under test is not the one being measured."
+                return 1
+            fi ;;
+        symjump)
+            # ROUND 14 / P1-A. FIVE facts, and the fourth and fifth are what make this class
+            # distinct from round 13's: (1) backend/gradlew is a tracked mode-120000 entry whose
+            # target bytes are `jump/../GRADLEW-REAL`; (2) backend/jump is a tracked symlink to
+            # `real/sub`; (3) backend/real/gradlew-real is a tracked path; (4) the POSIX
+            # resolution of backend/gradlew reaches THAT FILE'S INODE — i.e. the link works here
+            # and R25 really can execute it; (5) the LEXICAL candidate backend/GRADLEW-REAL does
+            # NOT exist, which is exactly why round 13 was silent. Without (4) and (5) this is
+            # just the round-13 case again.
+            if ! "${AX_PY_BIN:-python3}" - "$sb/repo" <<'PY'
+import os, subprocess, sys
+repo = sys.argv[1]
+rootb = os.fsencode(repo)
+idx = subprocess.run(["git", "-C", repo, "ls-files", "-s", "-z"],
+                     stdout=subprocess.PIPE, check=True).stdout.split(b"\0")
+entries = {}
+for rec in idx:
+    if not rec:
+        continue
+    meta, _, path = rec.partition(b"\t")
+    entries[path] = meta.split(b" ")[0]
+why = []
+if entries.get(b"backend/gradlew") != b"120000":
+    why.append(f"backend/gradlew index mode is {entries.get(b'backend/gradlew')!r}, want 120000")
+if entries.get(b"backend/jump") != b"120000":
+    why.append(f"backend/jump index mode is {entries.get(b'backend/jump')!r}, want 120000")
+if b"backend/real/gradlew-real" not in entries:
+    why.append("backend/real/gradlew-real is not a tracked path")
+tgt = os.readlink(os.path.join(rootb, b"backend/gradlew"))
+if tgt != b"jump/../GRADLEW-REAL":
+    why.append(f"the link target is {tgt!r}, want b'jump/../GRADLEW-REAL'")
+try:
+    posix = os.stat(os.path.join(rootb, b"backend/gradlew"))
+    real = os.stat(os.path.join(rootb, b"backend/real/gradlew-real"))
+    if (posix.st_dev, posix.st_ino) != (real.st_dev, real.st_ino):
+        why.append("the POSIX resolution does NOT reach the tracked file's inode — this "
+                   "filesystem does not fold the case axis, so the topology is gone")
+except OSError as exc:
+    why.append(f"the committed link does not resolve here ({exc.strerror}), so R25 could not "
+               f"have executed it and the false-green premise is absent")
+if os.path.lexists(os.path.join(rootb, b"backend/GRADLEW-REAL")):
+    why.append("the LEXICAL candidate backend/GRADLEW-REAL EXISTS, so round 13 would have seen "
+               "it and this case is not measuring the lexical-vs-POSIX divergence")
+if why:
+    print("; ".join(why), file=sys.stderr)
+sys.exit(1 if why else 0)
+PY
+            then
+                violation "premise broken (symjump): this class needs a committed link whose POSIX" \
+                          "resolution reaches a tracked inode by an ALIASED spelling while its" \
+                          "LEXICAL candidate is absent. Without that divergence the case measures" \
+                          "the round-13 refusal, not the round-14 resolver."
+                return 1
+            fi ;;
+        symloop)
+            # ROUND 14 / P1-A. The premise is simply that the committed chain really is one the
+            # kernel refuses — if os.stat resolved it, there would be no unbounded walk to bound.
+            if ! "${AX_PY_BIN:-python3}" - "$sb/repo" <<'PY'
+import errno, os, sys
+rootb = os.fsencode(sys.argv[1])
+why = []
+if os.readlink(os.path.join(rootb, b"loopa")) != b"loopb/x":
+    why.append("loopa does not point at loopb/x")
+try:
+    os.stat(os.path.join(rootb, b"loopa"))
+    why.append("loopa RESOLVES here, so the chain is not a cycle")
+except OSError as exc:
+    if exc.errno != errno.ELOOP:
+        why.append(f"loopa failed with {exc.errno} ({exc.strerror}), want ELOOP")
+if why:
+    print("; ".join(why), file=sys.stderr)
+sys.exit(1 if why else 0)
+PY
+            then
+                violation "premise broken (symloop): the committed chain must be one the kernel" \
+                          "answers with ELOOP, or the budget refusal is measuring nothing."
                 return 1
             fi ;;
         symlegit)
@@ -2072,6 +2194,38 @@ r9_case AK3 symnfcnfd empty "normalization target, SWEEP neutered      " \
 r9_case AK4 symnfcnfd empty "normalization target, HELPER neutered     " \
     "GIT_SYMLINK_TARGET_ALIAS" r13fp "$CLEAN_FP_R13"
 r9_case AM  symlegit  empty "NINE legitimate symlinks must NOT block   " ""
+
+# ══ ROUND 14 (TD-2026-08-01-(P1-posix-resolution-and-runtime-paths)) / P1-A ═══════════
+# Round 13 widened the SUBJECT of the census to symlink targets and then resolved those targets
+# with the WRONG ALGORITHM: it collapsed `..` LEXICALLY, before following anything, while the
+# kernel pops `..` AFTER following an intermediate symlink. Any target whose `..` sits behind a
+# symlinked component therefore resolved to a path the receiver's kernel never visits.
+#   (AN) is the reviewer's topology, committed content only, no environment control:
+#        backend/jump -> real/sub · backend/gradlew -> jump/../GRADLEW-REAL over a tracked
+#        backend/real/gradlew-real. POSIX reaches backend/real/GRADLEW-REAL = the tracked file on
+#        case-insensitive APFS, so R25 EXECUTES the wrapper and goes green; the lexical candidate
+#        backend/GRADLEW-REAL is ABSENT, so both implementations took the dangling exit and
+#        reported nothing, and a case-SENSITIVE receiver gets a dangling backend/gradlew.
+#   (AN2) is the pre-round-14 twin: the neuter restores the LEXICAL walk in BOTH implementations
+#        (it refuses to follow any intermediate component, which IS lexical semantics) and leaves
+#        the round-13 report, the fold and the discriminator live — so what lands again is
+#        attributable to the resolution algorithm alone. (AN3)/(AN4) split it per implementation.
+#   (AO) is the BUDGET: a correct resolver follows, so it can cycle. A committed `loopa -> loopb/x`
+#        + `loopb -> loopa` is ELOOP at the receiver and an UNANSWERED alias question here, so it
+#        BLOCKS on its own code rather than going silent.
+#   (AM) above is re-run unchanged and is the round-14 false-positive control as well: the nine
+#        legitimate shapes include a target reached THROUGH an intermediate symlinked directory,
+#        whose verdict the new resolver reaches by AGREEING with the record instead of by failing
+#        to recognise it. Both verdicts are exit 0; the reason changed, the answer did not.
+r9_case AN  symjump   empty "POSIX `..` behind a symlink (jump/../)    " \
+    "GIT_SYMLINK_TARGET_ALIAS" "" "$CLEAN_FP_R13"
+r9_case AN2 symjump   empty "same, LEXICAL resolution restored (both)  " "" r14all "$CLEAN_FP_R13"
+r9_case AN3 symjump   empty "jump topology, only the SWEEP neutered    " \
+    "AUDIT_FINGERPRINT_UNVERIFIABLE" r14guard "$CLEAN_FP_R13"
+r9_case AN4 symjump   empty "jump topology, only the HELPER neutered   " \
+    "GIT_SYMLINK_TARGET_ALIAS" r14fp "$CLEAN_FP_R13"
+r9_case AO  symloop   empty "committed symlink CYCLE blocks, not silent" \
+    "GIT_SYMLINK_RESOLUTION_UNBOUNDED" "" "$CLEAN_FP_R13"
 
 # (AD) ROUND 11 — THE TWO IMPLEMENTATIONS MUST AGREE ON THE FOLD, and (AE) the NORMALIZATION
 # false-positive control, which is SIMULATED and says so.
