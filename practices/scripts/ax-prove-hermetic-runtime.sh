@@ -181,6 +181,31 @@
 #   BOTH SIDES OF THIS ROUND ARE REAL: the harness ATTACHES a case-insensitive HFS+ image
 #   (`hdiutil create -fs HFS+`) for the folding side, and measures the non-folding side in place.
 #
+# ROUND 13 (TD-2026-08-01-(P1-symlink-target-alias)) attacks the alias census from OUTSIDE the set
+# it was ever taken over. Rounds 9-12 widened the KEY three times and never widened the SUBJECT:
+# every one of them registered INDEX PATHS. A symlink's TARGET is not an index path — it is BLOB
+# CONTENT, read as bytes and hashed and never resolved — so the whole four-round census did not
+# apply to it on ANY axis. Committed content, no environment control.
+#   (AJ) `git mv backend/gradlew backend/gradlew-real` + `ln -s GRADLEW-REAL backend/gradlew`. On
+#       case-insensitive APFS the link resolves, R25 EXECUTES the wrapper and goes green, status is
+#       EMPTY and the fingerprint is the clean-tree constant — while a case-SENSITIVE receiver gets
+#       a DANGLING backend/gradlew                    → GIT_SYMLINK_TARGET_ALIAS.
+#   (AK) the same class through NORMALIZATION (index `symdir/é-real` NFC, target blob NFD), which
+#       is what proves the fix reuses the SHARED fold rather than adding a case-only check; (AL) is
+#       the third variant, through an IGNORABLE FORMAT CHARACTER, and runs on the (AF)/(AG) volume.
+#   (AJ2)/(AK2)/(AL2) pre-round-13 twins: the neuter kills ONLY the new report, so what lands again
+#       is attributable to the symlink-target census alone. (AJ3)/(AJ4)/(AK3)/(AK4) split it per
+#       implementation.
+#   (AM) THE FALSE-POSITIVE CONTROL: nine legitimate tracked symlinks — exact spelling, `..`
+#       traversal onto the exact record (the live catalog's own shape), an ABSOLUTE target, a `..`
+#       target that ESCAPES the repository, an UNTRACKED target, a DANGLING target, a CHAIN through
+#       another tracked symlink, a target resolving to a tracked DIRECTORY, and one reached THROUGH
+#       an intermediate symlinked directory — all PASS. A bare "the target must equal the record"
+#       rule would refuse six of the nine; the shipped rule gates on FOLD-EQUALITY, so it refuses
+#       exactly the aliases. DELIBERATELY NOT REFUSED, and stated rather than hidden: a DANGLING
+#       committed symlink is a real defect but a DIFFERENT class — identically broken here and at
+#       the receiver, so the evidence does not lie about it (docs/BACKLOG.md P3-132).
+#
 # Nothing outside the throwaway directory is touched; the live tree is only ever READ.
 # Exit: 0 all attacks blocked · 1 at least one attack open · 2 harness error.
 set -uo pipefail
@@ -1094,7 +1119,7 @@ fi
 # from disk, which on a case-insensitive filesystem HEALS a casefold premise (the two entries
 # collapse onto the one file's bytes) and makes the twin pass for a reason that is not the neuter.
 round9_neuter() {   # round9_neuter <sb> <what>
-                    # what ∈ all|guard|fp|r10all|r10guard|r10fp|r11all|r11guard|r11fp
+                    # what ∈ all|guard|fp|r1Nall|r1Nguard|r1Nfp for N ∈ 10..13
     "${AX_PY_BIN:-python3}" - "$1/repo" "$2" <<'PY'
 import sys, pathlib
 repo, what = pathlib.Path(sys.argv[1]), sys.argv[2]
@@ -1125,6 +1150,12 @@ IGNORABLE_STRIP = '            s = "".join(ch for ch in s if unicodedata.categor
 IGNORABLE_DEAD = "            s = s  # ROUND-12 NEUTER: the ignorable strip is removed"
 R12_GUARD = [(GUARD, IGNORABLE_STRIP, IGNORABLE_DEAD)]
 R12_FP = [(FP, IGNORABLE_STRIP, IGNORABLE_DEAD)]
+# ROUND 13's fix is a NEW REPORT (a class the census did not have at all), not a re-keying, so the
+# honest neuter is the round-9/10 shape: kill the `if`. Everything else — the prefix walk, the
+# fold, the (dev, ino) discriminator — stays live, so what lands again is attributable to the
+# symlink-target census and to nothing else.
+R13_GUARD = [(GUARD, "        if _symaliased:")]
+R13_FP = [(FP, "    if symaliased:")]
 pairs = {
     "all": R9_GUARD + R9_FP,
     "guard": R9_GUARD,
@@ -1138,9 +1169,12 @@ pairs = {
     "r12all": R12_GUARD + R12_FP,
     "r12guard": R12_GUARD,
     "r12fp": R12_FP,
+    "r13all": R13_GUARD + R13_FP,
+    "r13guard": R13_GUARD,
+    "r13fp": R13_FP,
 }
 if what not in pairs:
-    print(f"unknown round9/10/11/12 neuter: {what}", file=sys.stderr)
+    print(f"unknown round9/10/11/12/13 neuter: {what}", file=sys.stderr)
     sys.exit(3)
 for entry in pairs[what]:
     path, anchor = entry[0], entry[1]
@@ -1238,6 +1272,73 @@ subprocess.run(["git", "update-index", "--refresh", "-q"], env=ENV,
                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 PY
     return $?
+}
+
+# r13_plant <sb> <record-hex> <target-hex> — ROUND 13 / P1. Commit a tracked regular file whose
+# leaf name is <record-hex> under `symdir/`, plus a tracked SYMLINK `symdir/link` whose TARGET
+# BYTES are <target-hex>. The two spellings fold equal and, on a filesystem that folds the axis
+# under test, name ONE file — so the link resolves locally while the pushed tree records only the
+# <record-hex> spelling.
+# NO HAND-WRITTEN TREE OBJECT IS NEEDED HERE, and that is the point of the class: unlike r11_plant,
+# the alias does NOT live in a path name. It lives in the symlink's BLOB, which git stores as
+# opaque bytes and does not precompose — MEASURED, `ln -s $'e\xcc\x81-real'` over an NFC-recorded
+# `é-real` survives `git add` with its NFD bytes intact. Ordinary plumbing therefore expresses the
+# whole topology, which is exactly why four rounds of index-path auditing could not see it.
+r13_plant() {
+    local sb="$1" ah="$2" bh="$3"
+    "${AX_PY_BIN:-python3}" - "$sb/repo" "$ah" "$bh" <<'PY'
+import os, subprocess, sys
+repo, ah, bh = sys.argv[1], sys.argv[2], sys.argv[3]
+A, B = bytes.fromhex(ah), bytes.fromhex(bh)
+os.chdir(repo)
+ENV = {**os.environ,
+       "GIT_AUTHOR_NAME": "ax", "GIT_AUTHOR_EMAIL": "ax@example.invalid",
+       "GIT_COMMITTER_NAME": "ax", "GIT_COMMITTER_EMAIL": "ax@example.invalid",
+       "GIT_AUTHOR_DATE": "2026-08-01T00:00:00Z",
+       "GIT_COMMITTER_DATE": "2026-08-01T00:00:00Z"}
+d = b"symdir"
+os.makedirs(d, exist_ok=True)
+with open(os.path.join(d, A), "wb") as fh:
+    fh.write(b"REAL\n")
+link = os.path.join(d, b"link")
+if os.path.lexists(link):
+    os.remove(link)
+os.symlink(B, link)
+subprocess.run(["git", "add", "--", "symdir"], check=True, env=ENV)
+subprocess.run(["git", "commit", "-q", "-m", "symlink target alias"], check=True, env=ENV)
+PY
+    return $?
+}
+
+# r13_legit <sb> — ROUND 13 / P1, THE FALSE-POSITIVE CONTROL. Nine tracked symlinks, every
+# legitimate shape the disposition table declines to refuse, in ONE tree that must exit 0:
+#   exact spelling · `..` traversal onto the exact record (the shape BOTH live tracked symlinks in
+#   this catalog have) · an ABSOLUTE target outside the repository · a `..` target that ESCAPES the
+#   root · a target to an UNTRACKED (gitignored) path · a DANGLING target · a CHAIN through another
+#   tracked symlink · a target that resolves to a tracked DIRECTORY · a target reached THROUGH an
+#   intermediate symlinked directory. If the refusal were "the spelling must equal the record"
+#   rather than "the spelling must not be a FOLD-EQUAL alias of it", six of these nine would block.
+r13_legit() {
+    local sb="$1"
+    mkdir -p "$sb/outside" || return 2
+    printf 'OUT\n' > "$sb/outside/host.txt" || return 2
+    mkdir -p "$sb/repo/legit/sub" "$sb/repo/legit/build" || return 2
+    printf 'REAL\n' > "$sb/repo/legit/sub/real.txt" || return 2
+    printf 'ART\n' > "$sb/repo/legit/build/artifact.txt" || return 2
+    printf 'build/\n' > "$sb/repo/legit/.gitignore" || return 2
+    ( builtin cd "$sb/repo/legit" \
+      && ln -s real.txt sub/exact \
+      && ln -s ../legit/sub/real.txt dotdot \
+      && ln -s "$sb/outside/host.txt" absolute \
+      && ln -s ../../outside/host.txt escapes \
+      && ln -s build/artifact.txt untracked \
+      && ln -s nowhere-at-all.txt dangling \
+      && ln -s sub/exact chain \
+      && ln -s sub dirlink \
+      && ln -s dirlink/real.txt viadir ) || return 2
+    ( builtin cd "$sb/repo" && git add -- legit \
+      && git "${GIT_ID[@]}" commit -q -m "legitimate symlinks" ) >/dev/null 2>&1 || return 2
+    return 0
 }
 
 # r9_setup <sb> <kind> — runs BEFORE write_audit because it COMMITS (the index state IS the setup).
@@ -1360,6 +1461,28 @@ r9_setup() {
                  printf 'PASS\n' > "$sb/repo/A/helper" || return 2
                  ( builtin cd "$sb/repo" && git add A \
                    && git "${GIT_ID[@]}" commit -q -m shareprefix ) >/dev/null 2>&1 || return 2 ;;
+        symcase) # ROUND 13 / P1 — THE REVIEWER'S REPRODUCTION, VERBATIM. Four rounds of alias
+                 # census registered only INDEX PATHS; a symlink's TARGET is BLOB CONTENT, so none
+                 # of them applied to it. On case-insensitive APFS `GRADLEW-REAL` resolves to the
+                 # tracked `backend/gradlew-real`, so R25 EXECUTES the wrapper and goes green,
+                 # `git status --porcelain -uall` is EMPTY and the fingerprint is the clean-tree
+                 # constant — while a case-SENSITIVE receiver gets a DANGLING backend/gradlew.
+                 ( builtin cd "$sb/repo" \
+                   && git mv backend/gradlew backend/gradlew-real \
+                   && ln -s GRADLEW-REAL backend/gradlew \
+                   && git add backend/gradlew backend/gradlew-real \
+                   && git "${GIT_ID[@]}" commit -q -m symcase ) >/dev/null 2>&1 || return 2 ;;
+        symnfcnfd) # the SAME class through NORMALIZATION rather than case: the index records
+                 # `symdir/é-real` (NFC c3a9) and the link's blob spells it NFD (65cc81). It is
+                 # what proves the fix reuses the SHARED fold — a case-only comparison is silent
+                 # here, and the target bytes are a blob, so git does not precompose them.
+                 r13_plant "$sb" c3a92d7265616c 65cc812d7265616c || return 2 ;;
+        symign)  # and through an IGNORABLE FORMAT CHARACTER (U+200C ZWNJ appended to the target):
+                 # `safe-real` vs `safe-real<U+200C>`. Needs a volume that FOLDS it — case-
+                 # insensitive HFS+ — which is why this kind runs only under the (AF/AG) arm.
+                 r13_plant "$sb" 736166652d7265616c 736166652d7265616ce2808c || return 2 ;;
+        symlegit) # ROUND 13 FALSE-POSITIVE CONTROL: nine legitimate tracked symlinks, exit 0.
+                 r13_legit "$sb" || return 2 ;;
         symreg)  # an index-SYMLINK path (mode 120000), consistent on disk
             ( builtin cd "$sb/repo" && ln -s benign-target.txt linkpath.txt \
               && git add linkpath.txt \
@@ -1393,6 +1516,9 @@ r9_attack() {
         gldirt)   printf 'echo owned\n' > "$sb/repo/vendor/sub/check.sh" || return 2 ;;
         casefold|dircase|csdistinct|shareprefix|nfcnfd|nacase|csnacase|ignzwnj|ignrlo|csignorable) : ;;
                   # the alias (or its absence) IS the index state; nothing further to do on disk
+        symcase|symnfcnfd|symign|symlegit) : ;;
+                  # ROUND 13: likewise — the symlink and its target are COMMITTED by the setup, so
+                  # there is nothing to do on disk afterwards and `git status` stays EMPTY
         symreg)   git -C "$sb/repo" update-index --assume-unchanged linkpath.txt || return 2
                   rm -f "$sb/repo/linkpath.txt" || return 2
                   printf 'a regular file where the index says symlink\n' \
@@ -1416,7 +1542,7 @@ r9_attack() {
 # blobs). The neuter now stages only the toolchain, and every alias case asserts the premise here.
 # Returns 1 after calling violation(); a case with no premise to assert returns 0.
 r9_premise() {
-    local sb="$1" kind="$2" n b ia ib ah bh
+    local sb="$1" kind="$2" n b ia ib ah bh ch
     case "$kind" in
         casefold)
             n="$(git -C "$sb/repo" ls-files -s | awk -F'\t' '{print tolower($2)}' \
@@ -1487,6 +1613,93 @@ PY
                 violation "premise broken ($kind): this class needs BOTH spellings in the index as" \
                           "DISTINCT BYTES and ONE directory inode on disk. Without that topology" \
                           "the refusal under test is not the one being measured."
+                return 1
+            fi ;;
+        symcase|symnfcnfd|symign)
+            # ROUND 13 / P1. The premise is: the index holds a mode-120000 entry, its TARGET bytes
+            # are the ALIAS spelling (NOT the record — if a future git ever normalized blob content
+            # the topology would be gone), the index ALSO holds the RECORD spelling as a tracked
+            # path, and this filesystem serves the two spellings from ONE inode. Without all four
+            # the refusal under test is not the one being measured.
+            case "$kind" in
+                symcase)   ah=backend/gradlew;      bh=backend/gradlew-real
+                           ch=GRADLEW-REAL ;;
+                symnfcnfd) ah=symdir/link;          bh="symdir/$(printf '\303\251')-real"
+                           ch="$(printf 'e\314\201')-real" ;;
+                symign)    ah=symdir/link;          bh=symdir/safe-real
+                           ch="safe-real$(printf '\342\200\214')" ;;
+            esac
+            if ! "${AX_PY_BIN:-python3}" - "$sb/repo" "$ah" "$bh" "$ch" <<'PY'
+import os, subprocess, sys
+repo, link, record, target = (sys.argv[1], os.fsencode(sys.argv[2]),
+                              os.fsencode(sys.argv[3]), os.fsencode(sys.argv[4]))
+rootb = os.fsencode(repo)
+idx = subprocess.run(["git", "-C", repo, "ls-files", "-s", "-z"],
+                     stdout=subprocess.PIPE, check=True).stdout.split(b"\0")
+entries = {}
+for rec in idx:
+    if not rec:
+        continue
+    meta, _, path = rec.partition(b"\t")
+    entries[path] = meta.split(b" ")[0]
+why = []
+if entries.get(link) != b"120000":
+    why.append(f"index mode for {link!r} is {entries.get(link)!r}, want 120000")
+if record not in entries:
+    why.append(f"the RECORD spelling {record!r} is not a tracked path")
+on_disk = os.readlink(os.path.join(rootb, link))
+if on_disk != target:
+    why.append(f"the link target is {on_disk!r}, want {target!r}")
+if on_disk == os.path.basename(record) or on_disk == record:
+    why.append("the target IS the recorded spelling, so there is no alias to refuse")
+base = os.path.dirname(os.path.join(rootb, link))
+try:
+    sa = os.lstat(os.path.join(base, target))
+except OSError as exc:
+    sa = None
+    why.append(f"the aliased target does not resolve on this filesystem ({exc.strerror})")
+sb_ = os.lstat(os.path.join(rootb, record))
+if sa is not None and (sa.st_dev, sa.st_ino) != (sb_.st_dev, sb_.st_ino):
+    why.append(f"the two spellings are DISTINCT inodes ({(sa.st_dev, sa.st_ino)} vs "
+               f"{(sb_.st_dev, sb_.st_ino)}) — this filesystem does not fold the axis under test")
+if why:
+    print("; ".join(why), file=sys.stderr)
+sys.exit(1 if why else 0)
+PY
+            then
+                violation "premise broken ($kind): this class needs a tracked mode-120000 entry" \
+                          "whose TARGET spells a tracked path with an alias of the recorded" \
+                          "spelling, resolving to ONE inode on this filesystem. Without that" \
+                          "topology the refusal under test is not the one being measured."
+                return 1
+            fi ;;
+        symlegit)
+            # ROUND 13 false-positive control. It must not be VACUOUS: all nine shapes have to be
+            # present AND at least one of them has to actually reach a tracked path, or "exit 0"
+            # would only mean "there was nothing to look at".
+            if ! "${AX_PY_BIN:-python3}" - "$sb/repo" <<'PY'
+import os, subprocess, sys
+repo = sys.argv[1]
+want = {b"legit/sub/exact", b"legit/dotdot", b"legit/absolute", b"legit/escapes",
+        b"legit/untracked", b"legit/dangling", b"legit/chain", b"legit/dirlink",
+        b"legit/viadir"}
+idx = subprocess.run(["git", "-C", repo, "ls-files", "-s", "-z"],
+                     stdout=subprocess.PIPE, check=True).stdout.split(b"\0")
+links = {rec.partition(b"\t")[2] for rec in idx
+         if rec and rec.split(b" ")[0] == b"120000"}
+missing = want - links
+rootb = os.fsencode(repo)
+resolves = os.path.realpath(os.path.join(rootb, b"legit/dotdot")) == \
+    os.path.realpath(os.path.join(rootb, b"legit/sub/real.txt"))
+if missing or not resolves:
+    print(f"missing tracked symlinks: {sorted(missing)}; dotdot reaches the tracked file: "
+          f"{resolves}", file=sys.stderr)
+sys.exit(1 if (missing or not resolves) else 0)
+PY
+            then
+                violation "premise broken (symlegit): the nine legitimate tracked symlinks are not" \
+                          "all present, or none of them reaches a tracked path — a false-positive" \
+                          "control that has nothing to look at proves nothing."
                 return 1
             fi ;;
         csignorable)
@@ -1789,6 +2002,13 @@ if [ -n "$IGN_ROOT" ]; then
         "AUDIT_FINGERPRINT_UNVERIFIABLE" r12guard "$CLEAN_FP"
     r9_case AG4 ignrlo  empty "RLO, only the HELPER reverted             " \
         "GIT_CASEFOLD_DIR_ALIAS" r12fp "$CLEAN_FP"
+    # (AL) ROUND 13 on the IGNORABLE axis — the third of the three variants that prove the symlink
+    # -target census reuses the SHARED fold rather than adding a case-only check. The link's blob
+    # spells `safe-real<U+200C>`; the index records `safe-real`. It needs the same folding volume
+    # as (AF)/(AG), which is why it lives in this arm.
+    r9_case AL  symign  empty "SYMLINK TARGET aliased by IGNORABLE ZWNJ  " \
+        "GIT_SYMLINK_TARGET_ALIAS" "" "$CLEAN_FP"
+    r9_case AL2 symign  empty "same, round-13 census removed (both)      " "" r13all "$CLEAN_FP"
     R9_ROOT=""
 else
     note "(AF/AG) filesystem arm: NO IGNORABLE-FOLDING VOLUME — could not attach a case-insensitive" \
@@ -1807,6 +2027,51 @@ else
     note "(AH) skipped: \$WORK itself folds ignorable characters, so a distinct-inode pair cannot" \
          "be built there (this is the inverse of the (AF/AG) fallback and is reported, not hidden)"
 fi
+
+# ══ ROUND 13 (TD-2026-08-01-(P1-symlink-target-alias)) ══════════════════════════════
+# (AJ)/(AK) THE HOLE ROUNDS 9-12 COULD NOT REACH: every one of those rounds registered INDEX PATHS.
+# A symlink's TARGET is not an index path — it is BLOB CONTENT, read as bytes and hashed and never
+# RESOLVED — so the four-round alias census (case, normalization, non-ASCII case, ignorable Cf)
+# simply did not apply to it. Committed content, no environment control.
+#   (AJ) is the reviewer's reproduction VERBATIM: `git mv backend/gradlew backend/gradlew-real` +
+#        `ln -s GRADLEW-REAL backend/gradlew`. On case-insensitive APFS the link resolves, so R25
+#        EXECUTES the wrapper and goes green, `git status --porcelain -uall` is EMPTY and the
+#        fingerprint is the clean-tree constant — while a case-SENSITIVE receiver gets a DANGLING
+#        backend/gradlew and our evidence says the tree is clean and the build passed.
+#   (AK) is the SAME class through NORMALIZATION: the index records `symdir/é-real` (NFC c3a9) and
+#        the link's blob spells it NFD (65cc81). It is what proves the fix reuses the SHARED fold —
+#        a case-only comparison is silent on it. (AL), under the (AF)/(AG) folding volume above,
+#        is the third variant, through an IGNORABLE FORMAT CHARACTER.
+#   (AJ2)/(AK2) are the pre-round-13 twins: the neuter kills ONLY the new report, leaving the prefix
+#        walk, the fold and the (dev, ino) discriminator live, so what lands again is attributable
+#        to the symlink-target census alone. (AJ3)/(AJ4)/(AK3)/(AK4) are the per-implementation
+#        splits — sweep-only must leave the HELPER refusing (as AUDIT_FINGERPRINT_UNVERIFIABLE,
+#        since the recompute runs the prior release's copy), helper-only must leave the 12c SWEEP
+#        refusing on its own code.
+#   (AM) is the FALSE-POSITIVE control, and it is the one that decides whether this round is
+#        shippable: NINE legitimate tracked symlinks in one tree — exact spelling, `..` traversal
+#        onto the exact record (the shape BOTH live tracked symlinks in this catalog have), an
+#        ABSOLUTE target outside the repository, a `..` target that ESCAPES the root, a target to an
+#        UNTRACKED (gitignored) path, a DANGLING target, a CHAIN through another tracked symlink, a
+#        target resolving to a tracked DIRECTORY, and a target reached THROUGH an intermediate
+#        symlinked directory. All nine must PASS. A rule of "the target must equal the record"
+#        would refuse six of them; gating the refusal on FOLD-EQUALITY refuses exactly the aliases.
+CLEAN_FP_R13="$CLEAN_FP"
+r9_case AJ  symcase   empty "SYMLINK TARGET aliased by CASE (gradlew)  " \
+    "GIT_SYMLINK_TARGET_ALIAS" "" "$CLEAN_FP_R13"
+r9_case AK  symnfcnfd empty "SYMLINK TARGET aliased by NORMALIZATION   " \
+    "GIT_SYMLINK_TARGET_ALIAS" "" "$CLEAN_FP_R13"
+r9_case AJ2 symcase   empty "same, round-13 census removed (both)      " "" r13all "$CLEAN_FP_R13"
+r9_case AK2 symnfcnfd empty "same, round-13 census removed (both)      " "" r13all "$CLEAN_FP_R13"
+r9_case AJ3 symcase   empty "case target, only the SWEEP neutered      " \
+    "AUDIT_FINGERPRINT_UNVERIFIABLE" r13guard "$CLEAN_FP_R13"
+r9_case AJ4 symcase   empty "case target, only the HELPER neutered     " \
+    "GIT_SYMLINK_TARGET_ALIAS" r13fp "$CLEAN_FP_R13"
+r9_case AK3 symnfcnfd empty "normalization target, SWEEP neutered      " \
+    "AUDIT_FINGERPRINT_UNVERIFIABLE" r13guard "$CLEAN_FP_R13"
+r9_case AK4 symnfcnfd empty "normalization target, HELPER neutered     " \
+    "GIT_SYMLINK_TARGET_ALIAS" r13fp "$CLEAN_FP_R13"
+r9_case AM  symlegit  empty "NINE legitimate symlinks must NOT block   " ""
 
 # (AD) ROUND 11 — THE TWO IMPLEMENTATIONS MUST AGREE ON THE FOLD, and (AE) the NORMALIZATION
 # false-positive control, which is SIMULATED and says so.
@@ -1960,6 +2225,17 @@ echo "  NOT refused on this filesystem;"
 else
 echo "  the ignorable false-positive control was SKIPPED — \$WORK itself folds the character;"
 fi
+echo "  a tracked SYMLINK whose TARGET spells a tracked path with an alias of the recorded spelling"
+echo "  is refused on CASE (ln -s GRADLEW-REAL over backend/gradlew-real) and on NORMALIZATION"
+if [ -n "${IGN_ROOT:-}" ]; then
+echo "  (NFC record, NFD target) and on an IGNORABLE FORMAT CHARACTER (real HFS+ volume), each with"
+else
+echo "  (NFC record, NFD target) — the IGNORABLE variant needs the folding volume above, which this"
+echo "  run did not have — each with"
+fi
+echo "  pre-round-13 and per-implementation twins, while NINE legitimate tracked symlinks (exact,"
+echo "  \`..\`, absolute, escaping, untracked, dangling, chained, directory, via-symlinked-dir) all"
+echo "  PASS in one tree;"
 echo "  the unattacked control passes, an uninitialized gitlink is NOT refused, the"
 if [ -n "${CS_ROOT:-}" ]; then
 echo "  false-positive controls pass ON A REAL CASE-SENSITIVE FILESYSTEM (distinct inodes for A/·a/"
