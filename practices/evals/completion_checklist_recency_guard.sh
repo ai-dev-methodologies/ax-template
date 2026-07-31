@@ -677,14 +677,20 @@ def _no_dup_pairs(pairs):
     return dict(pairs)
 
 
-# ROUND 11 / P1 (TD-2026-08-01-(P1-unicode-prefix-fold)) — THE CANONICAL CASELESS PATH KEY, and it
-# is BYTE-FOR-BYTE the same function as practices/scripts/lib/tree_fingerprint.py `_fold_path_key`.
+# ROUND 11 / P1 (TD-2026-08-01-(P1-unicode-prefix-fold)) + ROUND 12 / P1 (TD-2026-08-01-(P1-
+# ignorable-fold)) — THE CANONICAL CASELESS PATH KEY OVER IGNORABLE-STRIPPED INPUT, and its body is
+# BYTE-FOR-BYTE the same as practices/scripts/lib/tree_fingerprint.py `_fold_path_key`.
 # The two implementations must reach the SAME verdict on the same input; the full rationale (why
-# NFD inside, why NFC outside, why casefold and not lower, why the ASCII fast path is not an
-# approximation, and the non-UTF-8 disposition) lives in that docstring and is not duplicated here.
+# the Cf strip runs FIRST, why general category Cf rather than TN1150's 16-character hand-list or
+# Default_Ignorable_Code_Point, why NFD inside, why NFC outside, why casefold and not lower, why
+# the ASCII fast path is not an approximation, and the non-UTF-8 disposition) lives in that
+# docstring and is not duplicated here.
 # In one line: rounds 9-10 keyed with `bytes.lower()`, which is ASCII-only and normalization-blind,
 # so `é`(c3a9) ≡ `e◌́`(65cc81) and `É`(c389) ≡ `é`(c3a9) — both ONE inode on APFS — were never
-# compared, and 12c's nine violation buckets came back EMPTY on the reviewer's topology.
+# compared, and 12c's nine violation buckets came back EMPTY on the reviewer's topology; round 11
+# closed those two axes and still PRESERVED ignorable format characters, so `SAFE/` ≡
+# `SAFE<U+200C>/` — ONE inode on case-insensitive HFS+, measured on a real volume — went the same
+# way, with the same empty buckets.
 def _ax_fold_path_key(pfx, cache=None):
     if cache is not None:
         try:
@@ -696,6 +702,7 @@ def _ax_fold_path_key(pfx, cache=None):
     else:
         try:
             s = pfx.decode("utf-8", "surrogateescape")
+            s = "".join(ch for ch in s if unicodedata.category(ch) != "Cf")
             s = unicodedata.normalize("NFC", unicodedata.normalize("NFD", s).casefold())
             key = s.encode("utf-8", "surrogateescape")
         except (UnicodeError, ValueError):

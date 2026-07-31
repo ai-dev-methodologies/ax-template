@@ -1618,6 +1618,31 @@ run_guard "release_anchor/helper_injection_blocked" 0 \
 # control this platform cannot build — measured with hdiutil, case-insensitive APFS, CASE-SENSITIVE
 # APFS, case-sensitive HFS+, ExFAT and FAT32 are ALL normalization-INSENSITIVE, so a distinct-inode
 # NFC/NFD pair does not exist here; (AE) prints SIMULATED rather than claiming a live control.
+# ROUND 12 (TD-2026-08-01-(P1-ignorable-fold) / P1) closes the THIRD equivalence axis the round-11
+# fold still preserved: IGNORABLE FORMAT CHARACTERS. Case-insensitive HFS+ folds designated
+# formatting controls to ZERO and skips them entirely (Apple TN1150, `FastUnicodeCompare`: "All
+# ignorable characters are folded to the value zero"), so `SAFE/check.sh` (running
+# `cat SAFE/helper`) plus `SAFE<U+200C ZWNJ>/helper` is ONE directory — clean checkout, local check
+# PASSES, and the pushed tree carries no literal `SAFE/helper` for a receiver that treats U+200C as
+# significant. Round 11's canonical caseless key PRESERVED those code points, so the shared inode
+# was never compared and 12c's buckets came back EMPTY, exactly as in rounds 10 and 11. The fold
+# now STRIPS general category Cf before normalizing, in both implementations; the (st_dev, st_ino)
+# discriminator and the leaf/directory code split are AGAIN unchanged, so no new code was needed.
+# WHY Cf AND NOT A HAND-LIST — measured, not chosen by taste: HFS+'s ignorable set is exactly 16
+# code points (U+200C-200F, U+202A-202E, U+206A-206F, U+FEFF), all of them Cf; the strip must be a
+# SUPERSET because a missing character is a silent false-green while an extra one cannot produce a
+# refusal without an OBSERVED shared inode; no ASCII scalar is Cf, so the ASCII fast path stays a
+# TRUE equivalence; and neither casefold(NFD(·)) nor NFC(·) ever introduces a Cf character, so one
+# strip pass placed FIRST is provably sufficient. Default_Ignorable_Code_Point was rejected — no
+# Python API, it would ship as a 4,174-code-point UCD-pinned table (3,769 unassigned), and it is
+# not even a superset of Cf. (AI) asserts all four claims so they fail here rather than in a
+# fork-receiver's push evidence. BOTH ARMS ARE REAL: (AF)/(AG) refuse the ZWNJ and RLO topologies
+# on a case-insensitive HFS+ volume this harness ATTACHES (`hdiutil create -fs HFS+`), where the
+# live volume folds exactly those 16 and none of the other 154 Cf characters; (AH) is the
+# false-positive control and needs no special volume, because both APFS variants serve the two
+# spellings from DISTINCT inodes and must NOT be refused. (AF2)/(AG2) revert ONLY the strip in both
+# implementations and the attacks land again; (AF3)/(AF4)/(AG3)/(AG4) are the per-implementation
+# splits. If no folding volume can be attached the RED direction runs SIMULATED in (AI) and says so.
 run_guard "hermetic_runtime/inherited_runtime_blocked" 0 \
     bash "$REPO_ROOT/practices/scripts/ax-prove-hermetic-runtime.sh"
 # ── P1-2/P1-4 ROUND-4: the recency guard's FIXTURE SWEEP ───────────────────────────

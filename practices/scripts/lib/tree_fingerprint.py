@@ -254,6 +254,12 @@ class CasefoldAlias(GitFiltersPresent):
     this class covers a leaf pair that differs by UNICODE NORMALIZATION (`é` ≡ `e◌́`) or by
     NON-ASCII case (`É` ≡ `é`) exactly as it covers `A.sh` ≡ `a.sh`. The inode discriminator is
     unchanged, so the cost to a case- or normalization-SENSITIVE fork-receiver is still zero.
+    ROUND 12 SCOPE CORRECTION: a THIRD axis, and the same shape of miss. Case-insensitive HFS+
+    folds designated formatting controls to ZERO (Apple TN1150), so `safe.sh` ≡ `safe<U+200C>.sh`
+    is ONE file — MEASURED on a real HFS+ volume — while round 11's key preserved them. The fold
+    now strips general category Cf first, so this class covers that pair too; the discriminator is
+    STILL unchanged, so a filesystem that distinguishes them (measured: both APFS variants) yields
+    two inodes and is not refused.
     """
 
 
@@ -287,6 +293,15 @@ class CasefoldDirectoryAlias(GitFiltersPresent):
     write). So that arm runs against synthetic (st_dev, st_ino) identities and says so; it is the
     same discriminator the real arms exercise, and it is labelled SIMULATED in the harness output
     rather than claimed as a live control.
+    ROUND 12 — THE IGNORABLE AXIS, AND BOTH ITS ARMS ARE REAL. `SAFE/check.sh` (running
+    `cat SAFE/helper`) plus `SAFE<U+200C>/helper` is the same topology with the two directory
+    spellings differing only by an invisible formatting control. It is refused on a REAL
+    case-insensitive HFS+ volume created with `hdiutil create -fs HFS+` — MEASURED there:
+    `SAFE` and `SAFE<U+200C>` (and `<U+202E>`, and `<U+FEFF>`) are ONE inode, exactly the 16 code
+    points TN1150's fold table maps to zero and no others (154 further Cf characters measured
+    DISTINCT on the same volume). The false-positive control needs no special volume at all: both
+    APFS variants serve those two spellings from DISTINCT inodes, so the ordinary sandbox is
+    itself the live control, and it is NOT refused.
     HONEST RESIDUE: two spellings that fold equal AND are hardlinks of one inode on a case- or
     normalization-SENSITIVE filesystem would be flagged. That requires deliberately hardlinking
     `A.txt` to `a.txt`; the same property was already true of the leaf check in round 9.
@@ -452,10 +467,27 @@ def _fold_path_key(pfx, cache=None):
       · NON-ASCII CASE. `bytes.lower()` maps A-Z and nothing else, so `É/` (c389) and `é/` (c3a9)
         folded apart even though APFS serves them from one directory. Same defect, same silence.
 
-    THE KEY IS UNICODE CANONICAL CASELESS MATCHING: NFC(casefold(NFD(s))).
+      · IGNORABLE FORMAT CHARACTERS — ADDED ROUND 12, a THIRD equivalence axis, independent of
+        both of the above. Case-insensitive HFS+ folds designated formatting controls to ZERO and
+        skips them entirely (Apple TN1150, `FastUnicodeCompare`: "All ignorable characters are
+        folded to the value zero"), so `SAFE/` and `SAFE<U+200C>/` are ONE directory. Rounds 9-11
+        preserved those code points, so the two spellings keyed apart and their shared inode was
+        never compared. MEASURED on a real case-insensitive HFS+ volume built here with
+        `hdiutil create -fs HFS+`: `SAFE` and `SAFE<U+200C ZWNJ>` are ONE inode, as are
+        `SAFE<U+202E RLO>` and `SAFE<U+FEFF>` — while the pushed tree records only the spelling
+        with the invisible character, which a receiver that treats it as significant does not
+        serve as `SAFE/helper`.
+
+    THE KEY IS UNICODE CANONICAL CASELESS MATCHING OVER IGNORABLE-STRIPPED INPUT:
+    NFC(casefold(NFD(strip_Cf(s)))).
       · The INNER NFD is UAX #21 §1.3 ("Default Caseless Matching" is defined over NFD forms).
         It is load-bearing, not ceremony — MEASURED here: `casefold()` with no normalization at
-        all separates every pair above, and the outer step alone is not enough either.
+        all separates the NORMALIZATION pair (`é` NFC vs `e`+U+0301 NFD). CORRECTED 2026-08-01:
+        this sentence used to say it separates "every pair above", which is FALSE — unnormalized
+        `casefold()` already equates `É`/`é` AND `ſ`/`s`; only the normalization pair needs the
+        NFD. The correction that introduced the previous sentence fixed one overclaim and left
+        this one standing three lines away, which is the recurring defect: a partial correction
+        that leaves the same disproved claim alive elsewhere.
       · The OUTER normalization is NOT load-bearing — CORRECTED 2026-08-01 by an independent
         verification lane that measured it. The original sentence here claimed U+1E9B U+0323 vs
         U+1E69 folds EQUAL only WITH an outer normalization; that comparison was against
@@ -474,11 +506,39 @@ def _fold_path_key(pfx, cache=None):
       · `casefold()` and not `lower()`: full case folding. `lower()` is a locale/round-trip
         operation (U+017F ſ lowercases to itself but folds to `s`; U+212A K folds to `k`), and
         caseless MATCHING is what a filesystem does.
+      · WHY GENERAL CATEGORY Cf AND NOT A HAND-LIST — decided by measurement, not by taste. The
+        strip set must be a SUPERSET of what a target filesystem ignores: a MISSING character is a
+        silent false-green, while an EXTRA one cannot produce a refusal on its own, because the
+        (st_dev, st_ino) discriminator below still requires an OBSERVED shared inode. Measured:
+          — HFS+'s ignorable set is EXACTLY 16 code points (U+200C-200F, U+202A-202E, U+206A-206F,
+            U+FEFF), derived from the published fold table and then CONFIRMED 16/16 against the
+            live volume. All 16 are general category Cf.
+          — Cf is 170 code points (Unicode 16.0 runtime). The extra 154 are inert: the same live
+            HFS+ volume gives all 154 DISTINCT inodes, i.e. no measured filesystem folds them.
+          — Default_Ignorable_Code_Point was REJECTED. Python exposes no such property, so it
+            would have to ship as a 4,174-code-point table pinned to a UCD release (3,769 of them
+            UNASSIGNED), and it is not even a superset of Cf — it EXCLUDES 32 Cf characters (the
+            prepended concatenation marks, U+FFF9-FFFB, U+13430-1343F). It would ADD variation
+            selectors and Hangul fillers, which the live volume measurably does NOT ignore.
+          — U+202E was CHECKED rather than assumed (it is a bidi control, and some derivations
+            are said to omit it): it IS Cf, it IS Default_Ignorable in DerivedCoreProperties
+            17.0.0, and the live volume DOES fold it. Covered under every candidate.
+          — U+0000 is deliberately NOT ignorable in TN1150 (the algorithm maps NUL to a non-zero
+            sentinel so it can serve as the end-of-string marker), and NUL cannot occur in a path.
+        A category predicate also cannot go stale the way a literal list can.
+      · WHY THE STRIP RUNS FIRST. Removing a combining-class-0 character can unblock canonical
+        reordering of the marks around it, so stripping before NFD yields a strictly more
+        canonical result than stripping after. One pass is provably enough: MEASURED over all
+        1,114,112 scalars, neither `casefold(NFD(·))` nor `NFC(·)` ever INTRODUCES a Cf character
+        (0 of them), so nothing downstream can put back what the strip removed.
+
     The ASCII fast path is not an approximation: for pure-ASCII input NFD and NFC are the
-    identity and full casefold coincides exactly with `lower()`, so it returns the same bytes the
-    slow path would. It exists so the live catalog's ~6.8k distinct prefixes — all ASCII — cost
-    what they cost before. Note it does NOT create a seam: a non-ASCII prefix that folds INTO
-    ASCII (`ſ` → `s`) still meets the ASCII spelling, because the slow path produces the same key.
+    identity, full casefold coincides exactly with `lower()`, and — MEASURED — no ASCII scalar is
+    category Cf, so an ASCII-only prefix can contain nothing the strip would remove. It therefore
+    returns the same bytes the slow path would, on all three axes. It exists so the live catalog's
+    ~6.8k distinct prefixes — all ASCII — cost what they cost before. Note it does NOT create a
+    seam: a non-ASCII prefix that folds INTO ASCII (`ſ` → `s`, or `SAFE<U+200C>` → `safe`) still
+    meets the ASCII spelling, because the slow path produces the same key.
 
     NON-UTF-8 PATHS ARE NOT A CRASH AND NOT A BLOCK. Paths are bytes; Linux permits any non-NUL
     byte, and a fork-receiver whose tree holds a latin-1 filename is not doing anything wrong.
@@ -499,6 +559,7 @@ def _fold_path_key(pfx, cache=None):
     else:
         try:
             s = pfx.decode("utf-8", "surrogateescape")
+            s = "".join(ch for ch in s if unicodedata.category(ch) != "Cf")
             s = unicodedata.normalize("NFC", unicodedata.normalize("NFD", s).casefold())
             key = s.encode("utf-8", "surrogateescape")
         except (UnicodeError, ValueError):

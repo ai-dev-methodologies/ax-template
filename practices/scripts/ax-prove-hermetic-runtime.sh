@@ -160,6 +160,27 @@
 #       APFS, case-sensitive HFS+, ExFAT and FAT32 are ALL normalization-INSENSITIVE, so a
 #       distinct-inode NFC/NFD pair does not exist here. (AE) says SIMULATED in its own output.
 #
+# ROUND 12 (TD-2026-08-01-(P1-ignorable-fold)) attacks the THIRD equivalence axis the round-11 fold
+# still preserved: IGNORABLE FORMAT CHARACTERS. Case-insensitive HFS+ folds designated formatting
+# controls to ZERO and skips them (Apple TN1150, `FastUnicodeCompare`), so two spellings differing
+# only by an INVISIBLE character are one directory — and round 11's canonical caseless key kept
+# them apart. Committed path names only; no environment control.
+#   (AF) index `SAFE/check.sh` (running `cat SAFE/helper`) + index `SAFE<U+200C ZWNJ>/helper`. The
+#       checkout is clean, the local check PASSES, and the pushed tree carries no literal
+#       `SAFE/helper` for a receiver that treats U+200C as significant
+#                                                    → GIT_CASEFOLD_DIR_ALIAS.
+#   (AG) the same hole with U+202E RIGHT-TO-LEFT OVERRIDE — a BIDI control, checked rather than
+#       assumed to be ignorable                       → GIT_CASEFOLD_DIR_ALIAS.
+#   (AF2)/(AG2) pre-round-12 twins: the neuter removes ONLY the ignorable strip and leaves the
+#       round-11 fold live, so what lands again is attributable to the STRIP alone.
+#       (AF3)/(AF4)/(AG3)/(AG4) are the per-implementation splits.
+#   (AH) the round-12 FALSE-POSITIVE control, and it is LIVE, not simulated: both APFS variants
+#       serve the two spellings from DISTINCT inodes, so the ordinary sandbox IS the control and
+#       must NOT be refused. (AI) asserts the four measurable claims the strip set rests on and
+#       drives the shipped grouping code with synthetic inodes as the RED arm's fallback.
+#   BOTH SIDES OF THIS ROUND ARE REAL: the harness ATTACHES a case-insensitive HFS+ image
+#   (`hdiutil create -fs HFS+`) for the folding side, and measures the non-folding side in place.
+#
 # Nothing outside the throwaway directory is touched; the live tree is only ever READ.
 # Exit: 0 all attacks blocked · 1 at least one attack open · 2 harness error.
 set -uo pipefail
@@ -192,7 +213,18 @@ WORK="$(mktemp -d)"
 # It changes nothing the harness measures; the default remains "leave nothing behind".
 ax_cleanup() { [ -n "${AX_PROVE_KEEP:-}" ] && { echo "  (sandboxes kept: $*)"; return 0; }
                rm -rf "$@"; }
-trap 'ax_cleanup "$WORK"' EXIT
+# ROUND 12: one arm may run on a filesystem this harness ATTACHES (a case-insensitive HFS+ image —
+# the only filesystem measured to fold ignorable format characters). Detaching must happen BEFORE
+# the rm, or the rm walks a mounted volume. AX_PROVE_KEEP keeps the mount too, and says where.
+CS_ROOT=""; IGN_MNT=""
+ax_teardown() {
+    if [ -n "$IGN_MNT" ]; then
+        if [ -n "${AX_PROVE_KEEP:-}" ]; then echo "  (ignorable-folding volume left mounted: $IGN_MNT)"
+        else hdiutil detach -force "$IGN_MNT" >/dev/null 2>&1; fi
+    fi
+    ax_cleanup "$WORK" ${CS_ROOT:+"$CS_ROOT"}
+}
+trap ax_teardown EXIT
 FAIL=0
 note() { echo "  $*"; }
 violation() { echo "  VIOLATION: $*" >&2; FAIL=1; }
@@ -1085,6 +1117,14 @@ R11_GUARD = [(GUARD,
 R11_FP = [(FP,
            "        casefold.setdefault(_fold_path_key(prefix, foldcache), {}).setdefault(",
            "        casefold.setdefault(prefix.lower(), {}).setdefault(")]
+# ROUND 12's fix is a COMPUTATION too, and the honest neuter is the SAME shape: put the round-11
+# key back EXACTLY as it was — canonical caseless, but with ignorable format characters PRESERVED.
+# It removes ONLY the strip, so anything that lands again is attributable to the strip and to
+# nothing else (the round-10 report and the round-11 fold both stay live).
+IGNORABLE_STRIP = '            s = "".join(ch for ch in s if unicodedata.category(ch) != "Cf")'
+IGNORABLE_DEAD = "            s = s  # ROUND-12 NEUTER: the ignorable strip is removed"
+R12_GUARD = [(GUARD, IGNORABLE_STRIP, IGNORABLE_DEAD)]
+R12_FP = [(FP, IGNORABLE_STRIP, IGNORABLE_DEAD)]
 pairs = {
     "all": R9_GUARD + R9_FP,
     "guard": R9_GUARD,
@@ -1095,9 +1135,12 @@ pairs = {
     "r11all": R11_GUARD + R11_FP,
     "r11guard": R11_GUARD,
     "r11fp": R11_FP,
+    "r12all": R12_GUARD + R12_FP,
+    "r12guard": R12_GUARD,
+    "r12fp": R12_FP,
 }
 if what not in pairs:
-    print(f"unknown round9/10/11 neuter: {what}", file=sys.stderr)
+    print(f"unknown round9/10/11/12 neuter: {what}", file=sys.stderr)
     sys.exit(3)
 for entry in pairs[what]:
     path, anchor = entry[0], entry[1]
@@ -1269,6 +1312,33 @@ r9_setup() {
                  # `é` is c3a9; `bytes.lower()` maps A-Z and nothing else, so these folded apart
                  # while APFS served them from one directory.
                  r11_plant "$sb" c389 c3a9 || return 2 ;;
+        ignzwnj) # ROUND 12 / P1 — THE IGNORABLE-FORMAT AXIS, independent of case AND of canonical
+                 # normalization. Case-insensitive HFS+ folds designated formatting controls to
+                 # ZERO and skips them (Apple TN1150, `FastUnicodeCompare`), so `SAFE/` and
+                 # `SAFE<U+200C ZWNJ>/` are ONE directory. Round 11's canonical caseless key
+                 # PRESERVED U+200C, so the two spellings keyed apart and the shared inode was
+                 # never compared: the checkout is clean, `bash SAFE/check.sh` PASSES, and the
+                 # PUSHED tree carries no literal `SAFE/helper` for a receiver that treats U+200C
+                 # as significant. Committed path names only — no environment control.
+                 r11_plant "$sb" 53414645 53414645e2808c || return 2 ;;
+        ignrlo)  # the same hole with U+202E RIGHT-TO-LEFT OVERRIDE, which is a BIDI control rather
+                 # than a zero-width joiner control — checked, not assumed: it is general category
+                 # Cf, it IS Default_Ignorable_Code_Point in DerivedCoreProperties 17.0.0, and the
+                 # live HFS+ volume folds it to zero exactly like U+200C.
+                 r11_plant "$sb" 53414645 53414645e280ae || return 2 ;;
+        csignorable) # ROUND 12 NEGATIVE CONTROL, and unlike the round-10/11 ones it needs NO
+                 # special volume: MEASURED, BOTH APFS variants (case-insensitive and
+                 # case-sensitive) serve `SAFE/` and `SAFE<U+200C>/` from DISTINCT inodes. The
+                 # round-12 fold makes these ONE key, so without the (st_dev, st_ino)
+                 # discriminator this tree would now be refused — which would brick every
+                 # fork-receiver whose filesystem treats the character as significant, i.e. every
+                 # filesystem except case-insensitive HFS+. Two inodes ⇒ two singleton groups.
+                 mkdir -p "$sb/repo/SAFE" "$sb/repo/SAFE$(printf '\342\200\214')" || return 2
+                 printf 'cat SAFE/helper\n' > "$sb/repo/SAFE/check.sh" || return 2
+                 printf 'ALSO\n' > "$sb/repo/SAFE/helper" || return 2
+                 printf 'PASS\n' > "$sb/repo/SAFE$(printf '\342\200\214')/helper" || return 2
+                 ( builtin cd "$sb/repo" && git add SAFE "SAFE$(printf '\342\200\214')" \
+                   && git "${GIT_ID[@]}" commit -q -m csignorable ) >/dev/null 2>&1 || return 2 ;;
         csnacase) # ROUND 11 NEGATIVE CONTROL on a REAL case-sensitive volume: `É/` and `é/` as
                  # GENUINELY DISTINCT directories. The round-11 fold makes these one key, so
                  # without the (st_dev, st_ino) discriminator this tree would now be refused —
@@ -1321,7 +1391,7 @@ r9_attack() {
         execA)    chmod +x "$sb/repo/backend/gradlew" || return 2 ;;
         execB)    chmod -x "$sb/repo/backend/gradlew" || return 2 ;;
         gldirt)   printf 'echo owned\n' > "$sb/repo/vendor/sub/check.sh" || return 2 ;;
-        casefold|dircase|csdistinct|shareprefix|nfcnfd|nacase|csnacase) : ;;
+        casefold|dircase|csdistinct|shareprefix|nfcnfd|nacase|csnacase|ignzwnj|ignrlo|csignorable) : ;;
                   # the alias (or its absence) IS the index state; nothing further to do on disk
         symreg)   git -C "$sb/repo" update-index --assume-unchanged linkpath.txt || return 2
                   rm -f "$sb/repo/linkpath.txt" || return 2
@@ -1385,12 +1455,18 @@ r9_premise() {
                           "false-positive control would be vacuous."
                 return 1
             fi ;;
-        nfcnfd|nacase)
-            # ROUND 11 / P1. The premise is: BOTH spellings are in the index AS DISTINCT BYTES,
-            # and the filesystem serves them from ONE inode. If a future git precomposes the index
-            # entry (or the volume becomes normalization-sensitive), the topology is gone and this
-            # case must say so rather than pass on some other refusal.
-            if [ "$kind" = nfcnfd ]; then ah=c3a9; bh=65cc81; else ah=c389; bh=c3a9; fi
+        nfcnfd|nacase|ignzwnj|ignrlo)
+            # ROUND 11 / P1 (+ ROUND 12 for the two ignorable kinds). The premise is: BOTH
+            # spellings are in the index AS DISTINCT BYTES, and the filesystem serves them from ONE
+            # inode. If a future git precomposes the index entry (or the volume stops folding the
+            # axis under test), the topology is gone and this case must say so rather than pass on
+            # some other refusal.
+            case "$kind" in
+                nfcnfd)  ah=c3a9;    bh=65cc81 ;;
+                nacase)  ah=c389;    bh=c3a9 ;;
+                ignzwnj) ah=53414645; bh=53414645e2808c ;;
+                ignrlo)  ah=53414645; bh=53414645e280ae ;;
+            esac
             if ! "${AX_PY_BIN:-python3}" - "$sb/repo" "$ah" "$bh" <<'PY'
 import os, subprocess, sys
 repo, ah, bh = sys.argv[1], sys.argv[2], sys.argv[3]
@@ -1411,6 +1487,18 @@ PY
                 violation "premise broken ($kind): this class needs BOTH spellings in the index as" \
                           "DISTINCT BYTES and ONE directory inode on disk. Without that topology" \
                           "the refusal under test is not the one being measured."
+                return 1
+            fi ;;
+        csignorable)
+            # ROUND 12 negative control: the two spellings must be DISTINCT inodes here, or the
+            # false-positive test is vacuous (it would be measuring a folding volume).
+            ia="$(stat -f '%d %i' "$sb/repo/SAFE" 2>/dev/null || stat -c '%d %i' "$sb/repo/SAFE")"
+            ib="$(stat -f '%d %i' "$sb/repo/SAFE$(printf '\342\200\214')" 2>/dev/null \
+                  || stat -c '%d %i' "$sb/repo/SAFE$(printf '\342\200\214')")"
+            if [ -z "$ia" ] || [ "$ia" = "$ib" ]; then
+                violation "premise broken (csignorable): SAFE/=[$ia] SAFE<U+200C>/=[$ib] are NOT" \
+                          "distinct, so this filesystem folds ignorable format characters and the" \
+                          "round-12 false-positive control would be vacuous."
                 return 1
             fi ;;
         csnacase)
@@ -1601,11 +1689,9 @@ cs_probe() {   # cs_probe <dir> → 0 when <dir> is on a CASE-SENSITIVE filesyst
     if [ -e "$d/caseprobe" ]; then rm -rf "$d"; return 1; fi
     rm -rf "$d"; return 0
 }
-CS_ROOT=""
 if [ -n "${AX_PROVE_CS_DIR:-}" ] && [ -d "${AX_PROVE_CS_DIR}" ] && cs_probe "$AX_PROVE_CS_DIR"; then
     CS_ROOT="$AX_PROVE_CS_DIR/axprove.$$"
     mkdir -p "$CS_ROOT" || CS_ROOT=""
-    [ -n "$CS_ROOT" ] && trap 'ax_cleanup "$WORK" "$CS_ROOT"' EXIT
 elif cs_probe "$WORK"; then
     CS_ROOT="$WORK"
 fi
@@ -1620,6 +1706,106 @@ else
          "here; running the shared-prefix arm instead (export AX_PROVE_CS_DIR=<case-sensitive dir>" \
          "for the real one)"
     r9_case Z5 shareprefix empty "shared directory prefix must NOT be refused " ""
+fi
+
+# ══ ROUND 12 (TD-2026-08-01-(P1-ignorable-fold)) ═════════════════════════════════════
+# (AF)/(AG) THE THIRD EQUIVALENCE AXIS: IGNORABLE FORMAT CHARACTERS. Case-insensitive HFS+ folds
+# designated formatting controls to ZERO and skips them entirely (Apple TN1150, `FastUnicodeCompare`
+# — "All ignorable characters are folded to the value zero"), so `SAFE/` and `SAFE<U+200C>/` are ONE
+# directory. Round 11's canonical caseless key PRESERVED those code points, so the two spellings
+# keyed apart, the shared inode was never compared, and 12c's violation buckets came back EMPTY on
+# exactly the topology round 10 closed for case and round 11 closed for normalization.
+#
+# UNLIKE ROUND 11's NORMALIZATION ARM, BOTH SIDES OF THIS ONE ARE REAL:
+#   · the RED arm needs a volume that FOLDS the character. `hdiutil create -fs HFS+` builds one,
+#     and this harness builds it rather than declaring the arm unbuildable. MEASURED on it: the 16
+#     code points TN1150's fold table maps to zero are ALL served from one inode (16/16) and the
+#     other 154 general-category-Cf characters are all DISTINCT (0/154) — the live volume and the
+#     published table agree exactly.
+#   · the FALSE-POSITIVE arm needs a volume that does NOT fold it, which is every ordinary one:
+#     MEASURED, both case-insensitive and case-sensitive APFS give the two spellings DISTINCT
+#     inodes. So (AH) runs in the plain sandbox and is a live control, not a simulated one.
+# If no folding volume can be attached (no hdiutil, a future macOS that refuses to create HFS+, a
+# non-macOS host), the RED arm falls back to the SIMULATED grouping check in (AI) below and SAYS
+# SO — it is never silently skipped.
+ign_probe() {   # ign_probe <dir> → 0 when <dir> folds IGNORABLE format characters away
+    "${AX_PY_BIN:-python3}" - "$1" <<'PY'
+import os, shutil, sys
+root = os.fsencode(sys.argv[1])
+d = os.path.join(root, b".axignprobe")
+shutil.rmtree(d, ignore_errors=True)
+ok = False
+try:
+    os.makedirs(d)
+    a, b = os.path.join(d, b"SAFE"), os.path.join(d, b"SAFE\xe2\x80\x8c")
+    os.mkdir(a)
+    try:
+        os.mkdir(b)
+    except FileExistsError:
+        pass
+    sa, sb = os.lstat(a), os.lstat(b)
+    ok = (sa.st_dev, sa.st_ino) == (sb.st_dev, sb.st_ino)
+except OSError:
+    ok = False
+finally:
+    shutil.rmtree(d, ignore_errors=True)
+sys.exit(0 if ok else 1)
+PY
+}
+IGN_ROOT=""; WORK_FOLDS_IGN=0
+if [ -n "${AX_PROVE_IGN_DIR:-}" ] && [ -d "${AX_PROVE_IGN_DIR}" ] && ign_probe "$AX_PROVE_IGN_DIR"; then
+    IGN_ROOT="$AX_PROVE_IGN_DIR/axprove.$$"
+    mkdir -p "$IGN_ROOT" || IGN_ROOT=""
+elif ign_probe "$WORK"; then
+    IGN_ROOT="$WORK"; WORK_FOLDS_IGN=1
+elif command -v hdiutil >/dev/null 2>&1; then
+    # 48 MiB is ample: a sandbox is a fresh `git init` holding ten copied files and a bare remote.
+    if hdiutil create -quiet -size 48m -fs "HFS+" -volname AXHFSIGN -ov "$WORK/axhfs.dmg" \
+           >/dev/null 2>&1 \
+       && hdiutil attach -quiet -nobrowse -mountpoint "$WORK/axhfsmnt" "$WORK/axhfs.dmg" \
+           >/dev/null 2>&1; then
+        IGN_MNT="$WORK/axhfsmnt"                     # set even on probe failure, so teardown detaches
+        ign_probe "$IGN_MNT" && IGN_ROOT="$IGN_MNT"
+    fi
+fi
+if [ -n "$IGN_ROOT" ]; then
+    note "(AF/AG) filesystem arm: REAL — $IGN_ROOT folds ignorable format characters (TN1150)"
+    R9_ROOT="$IGN_ROOT"
+    r9_case AF ignzwnj empty "DIRECTORY aliased by IGNORABLE U+200C ZWNJ " \
+        "GIT_CASEFOLD_DIR_ALIAS" "" "$CLEAN_FP"
+    r9_case AG ignrlo  empty "DIRECTORY aliased by IGNORABLE U+202E RLO  " \
+        "GIT_CASEFOLD_DIR_ALIAS" "" "$CLEAN_FP"
+    # (AF2)/(AG2) the pre-round-12 twins. The neuter removes ONLY the ignorable strip and leaves
+    # the round-11 canonical caseless fold in place, so what lands again is attributable to the
+    # STRIP and to nothing else.
+    r9_case AF2 ignzwnj empty "same, round-12 strip reverted (both)      " "" r12all "$CLEAN_FP"
+    r9_case AG2 ignrlo  empty "same, round-12 strip reverted (both)      " "" r12all "$CLEAN_FP"
+    # (AF3)/(AF4)/(AG3)/(AG4) — EACH IMPLEMENTATION ON ITS OWN, the round-10/11 split pattern.
+    r9_case AF3 ignzwnj empty "ZWNJ, only the SWEEP reverted             " \
+        "AUDIT_FINGERPRINT_UNVERIFIABLE" r12guard "$CLEAN_FP"
+    r9_case AF4 ignzwnj empty "ZWNJ, only the HELPER reverted            " \
+        "GIT_CASEFOLD_DIR_ALIAS" r12fp "$CLEAN_FP"
+    r9_case AG3 ignrlo  empty "RLO, only the SWEEP reverted              " \
+        "AUDIT_FINGERPRINT_UNVERIFIABLE" r12guard "$CLEAN_FP"
+    r9_case AG4 ignrlo  empty "RLO, only the HELPER reverted             " \
+        "GIT_CASEFOLD_DIR_ALIAS" r12fp "$CLEAN_FP"
+    R9_ROOT=""
+else
+    note "(AF/AG) filesystem arm: NO IGNORABLE-FOLDING VOLUME — could not attach a case-insensitive" \
+         "HFS+ image (\`hdiutil create -fs HFS+\`); the RED arm runs SIMULATED in (AI) and says so." \
+         "Export AX_PROVE_IGN_DIR=<dir on a folding volume> for the live one."
+fi
+# (AH) THE FALSE-POSITIVE CONTROL, live: on any filesystem that treats U+200C as significant — both
+# APFS variants, measured — the two spellings are DISTINCT inodes and must NOT be refused, even
+# though the round-12 fold puts them under ONE key. This is the arm that keeps the widened fold from
+# bricking every fork-receiver, and it is the reason the strip set may safely be WIDER than TN1150's
+# 16 characters: an extra character can only ever merge KEYS, and a verdict still requires an
+# OBSERVED shared inode.
+if [ "$WORK_FOLDS_IGN" -eq 0 ]; then
+    r9_case AH csignorable empty "DISTINCT SAFE/ and SAFE<U+200C>/ NOT refused" ""
+else
+    note "(AH) skipped: \$WORK itself folds ignorable characters, so a distinct-inode pair cannot" \
+         "be built there (this is the inverse of the (AF/AG) fallback and is reported, not hidden)"
 fi
 
 # (AD) ROUND 11 — THE TWO IMPLEMENTATIONS MUST AGREE ON THE FOLD, and (AE) the NORMALIZATION
@@ -1664,7 +1850,10 @@ live = len(set(corpus))
 corpus = sorted(set(corpus)) + [
     b'\xc3\xa9', b'e\xcc\x81', b'\xc3\x89', b'E\xcc\x81', b'A', b'a', b'\xc5\xbf', b's',
     b'\xe2\x84\xaa', b'k', b'\xc3\x9f', b'ss', b'\xe1\xba\x9b\xcc\xa3', b'\xe1\xb9\xa9',
-    b'\xc4\xb0', b'i', b'\xff', b'A\xffB', b'a\xffb', b'\xed\xa0\x80', b'', b'a/\xff/B']
+    b'\xc4\xb0', b'i', b'\xff', b'A\xffB', b'a\xffb', b'\xed\xa0\x80', b'', b'a/\xff/B',
+    # ROUND 12: the ignorable axis, plus the characters HFS+ measurably does NOT ignore.
+    b'SAFE', b'SAFE\xe2\x80\x8c', b'SAFE\xe2\x80\xae', b'SAFE\xef\xbb\xbf', b'\xe2\x80\x8c',
+    b'SAFE\xc2\xad', b'SAFE\xef\xb8\x8f', b'SAFE\xe2\x81\xa0', b'\xe2\x80\x8cA/\xe2\x80\x8eB']
 drift = [x for x in corpus if gfold(x) != ffold(x)]
 if drift:
     print(f"  (AD) the two folds DISAGREE on {len(drift)} input(s), e.g. {drift[:3]}",
@@ -1693,6 +1882,52 @@ if not dir_o:
     sys.exit(1)
 print("  (AE) SIMULATED normalization control: distinct inodes → 0 reports; "
       f"one inode → {dir_o} (the discriminator, not the fold, decides)")
+
+# ── (AI) ROUND 12: THE STRIP SET, ASSERTED RATHER THAN ASSERTED-IN-PROSE. The docstring's choice
+# (general category Cf) rests on four measurable claims. If a future Unicode release, a future
+# Python, or a future edit breaks any of them, this must fail here instead of in a fork-receiver's
+# push evidence. TN1150's set is the 16 code points its fold table maps to zero; it is quoted here
+# as a LITERAL only to be checked AGAINST the predicate — the shipped code holds no such list.
+TN1150 = [0x200C, 0x200D, 0x200E, 0x200F, 0x202A, 0x202B, 0x202C, 0x202D, 0x202E,
+          0x206A, 0x206B, 0x206C, 0x206D, 0x206E, 0x206F, 0xFEFF]
+cf = {c for c in range(0x110000) if unicodedata.category(chr(c)) == "Cf"}
+claims = []
+claims.append(("TN1150's 16 ignorables are all category Cf (the strip is a SUPERSET of what the "
+               "filesystem folds — a missing character is a silent false-green)",
+               all(c in cf for c in TN1150)))
+claims.append(("no ASCII scalar is Cf, so the ASCII fast path stays a TRUE equivalence",
+               not any(c < 128 for c in cf)))
+claims.append(("neither casefold(NFD(.)) nor NFC(.) ever INTRODUCES a Cf character, so ONE strip "
+               "pass placed first is provably sufficient",
+               not any(any(unicodedata.category(x) == "Cf"
+                           for x in unicodedata.normalize("NFD", chr(c)).casefold()
+                           + unicodedata.normalize("NFC", chr(c)))
+                       for c in range(0x110000)
+                       if unicodedata.category(chr(c)) not in ("Cs", "Cf"))))
+claims.append(("the fold MERGES the ignorable pairs (otherwise (AF)/(AG) and the simulated arm "
+               "below are vacuous)",
+               ffold(b"SAFE") == ffold(b"SAFE\xe2\x80\x8c") == ffold(b"SAFE\xe2\x80\xae")
+               == ffold(b"SAFE\xef\xbb\xbf")))
+for text, ok in claims:
+    if not ok:
+        print(f"  (AI) STRIP-SET CLAIM BROKEN: {text}", file=sys.stderr)
+        sys.exit(1)
+print(f"  (AI) strip set = general category Cf ({len(cf)} code points, Unicode "
+      f"{unicodedata.unidata_version}); all 4 claims hold, TN1150's 16 ⊆ Cf")
+# The SIMULATED counterpart of (AF)/(AG), which runs unconditionally so the RED direction is never
+# unmeasured even on a host with no ignorable-folding filesystem: the SHIPPED grouping code, with
+# the two spellings assigned ONE synthetic inode, must report — and with TWO, must not.
+Z, ZW = b"SAFE", b"SAFE\xe2\x80\x8c"
+zkey, zfull = ffold(Z), {Z + b"/check.sh", ZW + b"/helper"}
+zl_t, zd_t = tf._alias_verdicts({zkey: {(1, 20): {Z}, (1, 21): {ZW}}}, zfull)
+zl_o, zd_o = tf._alias_verdicts({zkey: {(1, 20): {Z, ZW}}}, zfull)
+if zl_t or zd_t:
+    print(f"  (AI) FALSE POSITIVE: distinct inodes were reported {zl_t} {zd_t}", file=sys.stderr)
+    sys.exit(1)
+if not zd_o:
+    print("  (AI) vacuous: one inode under one folded key produced no report", file=sys.stderr)
+    sys.exit(1)
+print(f"  (AI) SIMULATED ignorable control: distinct inodes → 0 reports; one inode → {zd_o}")
 PY
 
 echo ""
@@ -1709,7 +1944,23 @@ echo "  index-regular path swapped for a SYMLINK under --assume-unchanged, a --s
 echo "  DELETION, an executable-bit divergence in both directions, a POPULATED uninitialized"
 echo "  gitlink, a LEAF casefold alias, a DIRECTORY-component casefold alias, a directory aliased by"
 echo "  UNICODE NORMALIZATION (é ≡ e◌́) and one aliased by NON-ASCII CASE (É ≡ é) are each refused by"
-echo "  the live gates; the unattacked control passes, an uninitialized gitlink is NOT refused, the"
+if [ -n "${IGN_ROOT:-}" ]; then
+echo "  the live gates; a directory aliased by an IGNORABLE FORMAT CHARACTER (SAFE ≡ SAFE<U+200C>,"
+echo "  and ≡ SAFE<U+202E>) is refused ON A REAL CASE-INSENSITIVE HFS+ VOLUME attached by this run,"
+echo "  with sweep-only and helper-only twins for each;"
+else
+echo "  the live gates; the IGNORABLE-FORMAT arm found NO folding filesystem on this host, so its"
+echo "  RED direction ran SIMULATED in (AI) against the shipped grouping code and the live (AF)/(AG)"
+echo "  volume arms were NOT exercised on this run (export AX_PROVE_IGN_DIR, or run where"
+echo "  \`hdiutil create -fs HFS+\` works, for the real one);"
+fi
+if [ "${WORK_FOLDS_IGN:-0}" -eq 0 ]; then
+echo "  the ignorable false-positive control is LIVE — distinct-inode SAFE/ and SAFE<U+200C>/ are"
+echo "  NOT refused on this filesystem;"
+else
+echo "  the ignorable false-positive control was SKIPPED — \$WORK itself folds the character;"
+fi
+echo "  the unattacked control passes, an uninitialized gitlink is NOT refused, the"
 if [ -n "${CS_ROOT:-}" ]; then
 echo "  false-positive controls pass ON A REAL CASE-SENSITIVE FILESYSTEM (distinct inodes for A/·a/"
 echo "  AND for É/·é/, and a shared prefix, are not aliases), the two implementations' path folds"
@@ -1723,9 +1974,9 @@ echo "  case-INSENSITIVE, so the distinct-inode A/·a/ and É/·é/ controls wer
 echo "  run (export AX_PROVE_CS_DIR=<case-sensitive dir> for those); the two implementations' folds"
 fi
 echo "  agree over every prefix of every"
-echo "  tracked path, and every round-5/6/7/8/9/10/11 addition has a neutered twin in which its"
+echo "  tracked path, and every round-5/6/7/8/9/10/11/12 addition has a neutered twin in which its"
 echo "  attack lands again — including a bits-only twin for the round-8 representation backstop"
-echo "  and, for every round-9, round-10 and round-11 refusal, SEPARATE sweep-only and helper-only"
+echo "  and, for every round-9, round-10, round-11 and round-12 refusal, SEPARATE sweep-only and helper-only"
 echo "  twins proving each implementation load-bearing on its own — so the refusals are"
 echo "  attributable to the fixes, not the sandbox."
 exit 0

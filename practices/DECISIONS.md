@@ -2212,12 +2212,24 @@ arriving state, not an unreachable one.
 `_fold_path_key` (helper) and `_ax_fold_path_key` (12c sweep) are the same function.
 
 - **inner NFD** — UAX #21 §1.3 defines default caseless matching over NFD forms. Load-bearing, not
-  ceremony: measured, `casefold()` with no normalization separates every pair above.
-- **outer normalization** — load-bearing because casefold is **not closed** under canonical
-  equivalence. Measured: `U+1E9B U+0323` vs `U+1E69` fold EQUAL with an outer normalization and
-  UNEQUAL without one. (This is why the round-9 row's proposed `normalize('NFC', …).lower()` was
-  **not** adopted: it is wrong twice — `lower()` misses `É`≡`é`, and normalize-then-fold with no
-  outer step misses the U+1E9B case.)
+  ceremony: measured, `casefold()` with no normalization separates the NORMALIZATION pair.
+  **CORRECTED 2026-08-01 (round 12)**: this bullet said "separates **every pair** above", which is
+  FALSE — unnormalized `casefold()` already equates `É`/`é` and `ſ`/`s`; only the normalization
+  pair needs the NFD. The round-11-follow-up correction fixed the identical sentence in
+  `tree_fingerprint.py` and left this copy standing, which is the same partial-correction defect
+  it was itself correcting.
+- **outer normalization** — **NOT load-bearing. CORRECTED 2026-08-01 (round 12).** This bullet
+  claimed it was, on the grounds that `U+1E9B U+0323` vs `U+1E69` "fold EQUAL with an outer
+  normalization and UNEQUAL without one". Measured, that is false: the comparison was against
+  `casefold()` with NO normalization at all, and given the inner NFD, `casefold(NFD(s))` alone
+  already equates that pair (and every other pair cited here). The prior round corrected only the
+  `.py` docstring and left this copy — the exact defect named in the bullet above. The outer step
+  is retained as redundant-but-harmless key canonicalization (this value is only ever compared for
+  EQUALITY, and a canonical spelling is cheaper to reason about), **not** as a correctness lever.
+  The round-9 row's proposed `normalize('NFC', …).lower()` is still **not** adopted, but for one
+  reason and not two: measured, it DOES equate `É`≡`é` (Python's `str.lower()` is Unicode-aware —
+  the round-9/10 bug was `bytes.lower()`), and it fails on `ſ`≡`s` and on `U+1E9B U+0323`≡`U+1E69`
+  because `lower()` is a round-trip operation and caseless MATCHING needs full case folding.
 - **outer form = NFC, not the standard's NFD** — the value is only ever compared for EQUALITY, and
   two strings are canonically equivalent iff their NFC forms are equal iff their NFD forms are
   equal. NFC is the shorter key and the conventional canonical target here (git spells it
@@ -2254,7 +2266,7 @@ spelling), so a fourth code would name a difference that does not exist.
 | (AA5) real case-sensitive APFS volume | distinct-inode `É/`+`é/` NOT refused |
 | (AD) fold parity | 8,298 inputs in-harness (8,276 live-tree prefixes + 22 adversarial) — 0 disagreements; a wider standalone run of 11,299 (the same corpus + 3,000 random byte strings) also disagreed 0 times and raised no exception |
 | (AE) normalization false-positive | **SIMULATED** — distinct synthetic inodes → 0 reports; one inode → reported |
-| live tree | digest IDENTICAL pre and post, exit 0 — **corrected 2026-08-01**: this row first printed `751098…`, which is NOT re-derivable. A clean tree yields the clean-tree constant `0a815065…` by construction, so `751098…` was a snapshot of a transient DIRTY in-progress worktree, not of HEAD. An independent lane reproduced the substance twice (clean HEAD: both `0a815065…`; a reconstructed dirty tree: both `4983b60c…`) — the claim "identical pre and post" holds; the unauditable number does not, so it is removed rather than left to be trusted |
+| live tree | digest IDENTICAL pre and post, exit 0. **Corrected TWICE, and the second correction was the same defect as the first (round 12).** The row first printed `751098…`, not re-derivable; the round-11 follow-up replaced it with `4983b60c…` from "a reconstructed dirty tree" and gave no reconstruction — swapping one unauditable number for another. Both are removed. What survives is the claim plus a recipe anyone can run: at a clean checkout of ANY of these commits `python3 practices/scripts/lib/tree_fingerprint.py .` returns the clean-tree constant `0a815065…` **by construction** (the digest covers status + `diff HEAD` + untracked bytes, all empty on a clean tree), so the clean comparison is real but weak; the round-12 entry below therefore states a dirty-tree control with the exact recipe that re-derives its number |
 | performance | 0.265 → 0.266 s/run over 5 runs (+0.4%, within noise; 0 non-ASCII tracked paths) |
 
 **Why (AE) is simulated, stated rather than hidden:** a distinct-inode `é/`+`e◌́/` pair needs a
