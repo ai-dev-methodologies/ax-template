@@ -487,7 +487,9 @@ RESOLVED_ROOT="$(cd "$REPO_ROOT" 2>/dev/null && pwd -P)" || {
 LIVE_ROOT=0
 [ "$RESOLVED_ROOT" = "$SELF_REPO_ROOT" ] && LIVE_ROOT=1
 
-# ROUND 6 / P2: the AUTHENTICATED interpreter, probed with the flags the call site below uses
+# ROUND 6 / P2: the interpreter that ANSWERED THE SMOKE TEST (not "authenticated" — the challenge
+# is public and fixed, so a wrapper forwards it; see the bootstrap header), probed with the flags
+# the call site below uses
 # (-E, because the body imports PyYAML). `command -v python3` said only that some file existed.
 [ -n "${AX_PY_BIN:-}" ] && "$AX_PY_BIN" -E -c 'import sys' >/dev/null 2>&1 || {
     echo "manifest_snapshot_integrity_guard: HERMETIC_TOOL_UNUSABLE — no python3 that answered the smoke test" >&2
