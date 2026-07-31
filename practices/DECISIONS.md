@@ -1508,6 +1508,15 @@ recorded the residual "`$BASH_ENV` whose first line is `exit 0`", and these four
 class taken further.
 
 **The cheap strengthening was evaluated and DECLINED, with a reason rather than a shrug.**
+> **SUPERSEDED (2026-07-30, round 9 — read the round-9 entry before trusting the paragraph
+> below).** A cross-family reviewer refuted this rationale point by point and the refutation was
+> measured and accepted: an ALLOWLISTED `env -i` does preserve all four `AX_RELEASE_ANCHOR_*`
+> fields, `STRICT`/`LIVE_ROOT`/`GIT_ANCHOR` are established later and need not be lost, and
+> `BASH_ENV`/`ENV` can be passed through VISIBLY so the loud refusal still fires without ever
+> being sourced. The decision not to implement it stands on a DIFFERENT and narrower ground
+> recorded in `TD-2026-07-30-(P1-representation-parity)` and tracked as BACKLOG P2-70 — not on
+> the three points below, which are wrong. The text is kept unedited because this trail is
+> append-only: a refuted argument that is silently deleted teaches nothing.
 Re-executing through `/usr/bin/env -i` with a minimal allowlist would keep `BASH_ENV`/`ENV` out
 of the child's environ entirely. It is refused because it BREAKS TWO THINGS THIS CATALOG
 DEPENDS ON, and buys nothing against the class it would be sold as closing:
@@ -1999,9 +2008,15 @@ attack could not even be applied into a SILENT PASS — the scenario never ran, 
 and the harness still printed its green summary. Setup failure is now LOUD: `exit 2` (harness
 error) for an inapplicable attack, `return 1` only for the premise-broken path that already called
 `violation()`. Every other `ax-prove-*.sh` was checked for the same shape;
-`ax-prove-gate-blocks-agent.sh:38` and `ax-prove-evidence-gate-blocks-agent.sh:43` are the only
-other `|| true` sites and are NOT this class (they are `grep -c` arithmetic, already commented,
-under `set -euo pipefail`).
+`ax-prove-gate-blocks-agent.sh:38` and `ax-prove-evidence-gate-blocks-agent.sh:43` are `grep -c`
+arithmetic, already commented, under `set -euo pipefail` — NOT this class. **Correction
+(2026-07-30, independent verification lane): those two are not the ONLY other `|| true` sites.**
+Four more exist — `ax-prove-evidence-gate-blocks-agent.sh:86,116` and
+`ax-prove-gate-blocks-agent.sh:82,117` — trailing `|| true` on ledger-log calls that run AFTER
+their assertions, so they also are not the silent-skip class. The claim that was wrong is the
+word "only"; the classification of each site stands. Recorded rather than quietly edited: a
+census sentence that overstates its own completeness is the same defect this catalog keeps
+finding in its guards.
 
 **(e) APFS CASEFOLD-ALIAS — IMPLEMENTED, with an honest scope.** Two index entries differing only
 in case are ONE file on APFS/NTFS: the filesystem can hold one, the push ships two blobs, and every
