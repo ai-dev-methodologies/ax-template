@@ -472,6 +472,13 @@ checklist:
   - id: hard-guards
     title: "Live mechanical hard guards (run-all-guards.sh --include-fixtures)"
     parallel: false
+    # 900s default was exceeded on 2026-07-30: the sweep is now 346 registered
+    # invocations (fixtures included) and carries PIT mutation runs plus the
+    # multi-sandbox hermetic/injection proofs, so it SIGTERMed at the cap
+    # (exit 143) while the same sweep run standalone finished 346/0 PASS.
+    # Same class as the backend step's 1800→2700 bump above — a catalog-mechanics
+    # adjustment, not a guard regression. The registry only grows.
+    timeout_seconds: 2700
     commands:
       - command: "bash practices/evals/run-all-guards.sh --include-fixtures"
         expected_exit: 0
