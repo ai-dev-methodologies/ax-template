@@ -1139,7 +1139,9 @@ if live_git_root and not expected_head_file.is_file() and guard_repo is not None
     #      protocol (present or future) can answer it.
     #      COVERAGE, stated exactly: all of `git ls-files -s -v` MINUS paths git already reports
     #      dirty (their raw bytes are hashed into the fingerprint anyway). Measured cost on this
-    #      catalog: 5,745 paths / 5.4 MB / ~0.2 s.
+    #      catalog: 5,745 index entries (5,740 regular / 2 symlinks / 3 gitlinks) / 31.6 MB of
+    #      regular-file bytes / ~0.2 s. (This read 5.4 MB until ROUND 9; re-measured then — the sum
+    #      of st_size over tracked regular files is 31,648,540 bytes.)
     #      A mismatch also fires for eol conversion (core.autocrlf/core.eol/`text`), which is not
     #      an attack but is equally fatal to a byte claim; the message names both causes.
     #      ROUND 8 / P1-A — THE TWO EXEMPTIONS ABOVE WERE THE HOLE, IN BOTH IMPLEMENTATIONS.

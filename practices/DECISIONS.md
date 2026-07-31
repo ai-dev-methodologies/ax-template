@@ -1959,9 +1959,18 @@ So the stated rationale is WITHDRAWN. What replaces it is a measurement and a sc
 a shrug:
 - Measured: the recency guard runs to its honest verdict under
   `/usr/bin/env -i PATH=… /bin/bash -p <guard>` (exit 0, `recency_pass`, same fingerprint), and the
-  **entire** 192-check suite runs under `/usr/bin/env -i PATH=… HOME=… TMPDIR=… /bin/bash -p
-  practices/evals/run-all-guards.sh` with the same result as an inherited environment — including
-  `vacuity_class_proof_guard.sh`, which shells out to `./gradlew pitest` (both mutants KILLED).
+  **entire** guard suite does too. Measured BACK TO BACK at this commit, on a clean tree, with
+  nothing else editing the repository (an earlier pair of runs was taken while this lane was still
+  editing the files under test, and is discarded as confounded):
+
+  ```
+  bash practices/evals/run-all-guards.sh                             → Total: 192 passed, 0 failed
+  /usr/bin/env -i PATH=… HOME=… TMPDIR=… /bin/bash -p  (same script) → Total: 192 passed, 0 failed
+  identical FAIL set (empty)
+  ```
+
+  That includes `vacuity_class_proof_guard.sh`, which shells out to `./gradlew pitest` (both
+  mutants KILLED under the stripped environment).
   The allowlist is therefore **small and tractable for the guard surface**: `PATH`, `HOME`,
   `TMPDIR`, `JAVA_HOME`, `BASH_ENV`, `ENV`, and the `AX_*` family. The only non-`AX_` variables
   read anywhere on that surface are `PATH`, `TMPDIR` (always with a `:-/tmp` default) and

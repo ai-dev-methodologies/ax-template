@@ -377,8 +377,10 @@ def _raw_index_sweep(repo, gbin, genv, dirty):
     plus a direct read of the index BITS that produce them. Returns five lists; the caller raises.
 
     WHAT IS COVERED: all of `git ls-files -s -v` minus paths git already reports dirty (their raw
-    bytes are hashed into the digest below anyway). Measured on this catalog: 5,745 tracked paths
-    / 5.4 MB / ~0.2 s, so whole-tree coverage is affordable and is what runs — nothing is scoped
+    bytes are hashed into the digest below anyway). Measured on this catalog: 5,745 tracked index
+    entries (5,740 regular / 2 symlinks / 3 gitlinks), 31.6 MB of regular-file bytes, ~0.2 s (the
+    figure read 5.4 MB until ROUND 9; re-measured then — sum of st_size over tracked regular files
+    is 31,648,540 bytes), so whole-tree coverage is affordable and is what runs — nothing is scoped
     out for cost. One `ls-files` invocation carries both the mode/blob (`-s`) and the
     assume-unchanged / skip-worktree tag (`-v`).
     WHAT IS STILL NOT COVERED, stated: untracked and ignored files (no index blob to disagree
