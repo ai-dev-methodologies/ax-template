@@ -1110,3 +1110,149 @@ the trigger event, do not relitigate.
   · The pre-push hook remains opt-in per clone (`install-hooks.sh`), unchanged from every other
     push-time gate here.
 - Commits: (this commit — PRD-final-4 wave, P1-seal round-4)
+
+## TD-2026-07-30-(P1-hermetic-runtime) — the ratchet stops inheriting its own runtime, and every "unknown" becomes a BLOCK
+
+- Date: 2026-07-30
+- Status: accepted
+- Trigger: cross-family reviewer, ROUND 5. Round 4's seals were verified dead IN AN UNCONTAMINATED
+  RUNTIME. The round-5 finding is that the runtime itself is contaminable: the gate is made of
+  `git`, `python3`, `cd`, `pwd` and a handful of its own files, and ALL of those are supplied from
+  outside. **UNIFYING PRINCIPLE, stated once and applied everywhere: the ratchet must execute
+  HERMETICALLY — it may not inherit git context, shell functions, PATH, or a mutable
+  implementation of its own evidence — and every verification must FAIL CLOSED, never fall open on
+  an empty or unknown result.**
+
+  **P1-1 — THE GIT REPOSITORY IDENTITY WAS NOT BOUND TO REPO_ROOT.**
+  `git -C <path>` says where to start LOOKING; it does not say which repository to USE.
+  `GIT_DIR`, `GIT_WORK_TREE`, `GIT_COMMON_DIR`, `GIT_OBJECT_DIRECTORY`,
+  `GIT_ALTERNATE_OBJECT_DIRECTORIES`, `GIT_INDEX_FILE`, `GIT_NAMESPACE`, `GIT_CEILING_DIRECTORIES`
+  and the `GIT_CONFIG*` family all override discovery and configuration from the environment, and
+  `AX_RELEASE_ANCHOR_ROOT` scoped only the PATHNAME. RED, measured in a throwaway clone with a
+  DIRTY tree and a CLEAN shadow checkout of the same commit:
+
+      honest_fp     = c764531c8f18…      honest toplevel = …/probe/S   honest clean = false
+      GIT_DIR=<shadow>/.git GIT_WORK_TREE=<shadow>:
+      redirected_fp = 0a815065ebf5…      toplevel        = …/probe/C   clean        = true
+      clean-tree constant of the shadow = 0a815065ebf5…   (identical — the dirty tree vanished)
+
+  R25 would run its tests against the dirty tree while every head / status / fingerprint / anchor /
+  cleanliness read describes the clean one; revert the dirty fix afterwards and the pushed commit
+  keeps valid-looking clean evidence. FIX: a HERMETIC BOOTSTRAP, duplicated verbatim into every
+  entry (`release_anchor.sh`, `verify-completion.sh`, both ratcheting guards, the recency guard,
+  `run-all-guards.sh`, `.githooks/pre-push`, `.githooks/pre-push-lib.sh`) because it must precede
+  the first git call, any `source`, and even the `cd`/`pwd` that computes the script's own
+  directory: the WHOLE `GIT_*` family is unset (`GIT_NO_REPLACE_OBJECTS` included — inherited as
+  `0` it RE-ENABLES replacement refs — and re-established as `1` by us), then the real toplevel is
+  derived from the trusted root and REQUIRED to equal it (**GIT_CONTEXT_REDIRECTED**, blocking),
+  and the derived gitdir/worktree are passed EXPLICITLY on every call for that root (`ax_git`,
+  `pp_git`) so nothing downstream depends on discovery. `tree_fingerprint.py` scrubs the same
+  family from its own subprocess environment and raises rather than returning a value when the
+  work tree answering it is not the repo it was asked about (exit 3, never "nogit").
+  POST-FIX: the same redirection now exits 1 at the push gate; `tree_fingerprint.py` on a
+  subdirectory exits 3 with GIT_CONTEXT_REDIRECTED. Fixture: `fail_git_context_redirected`.
+
+  **P1-2 — EXPORTED-FUNCTION INJECTION THROUGH COMMAND DEPENDENCIES.**
+  Round 4 reserved this catalog's own names (`ax_anchor_*`, `ax_git`, `pp_*`). It did not reserve
+  the COMMANDS those functions call, and bash imports exported functions across `bash script.sh`.
+  RED, all measured:
+
+      exported `git`      → PIN_BEFORE 5e1f5a9c8c4d → PIN_AFTER 00c9e2c000…, every rc 0
+      exported `pwd`      → ax_anchor_export_pin records PIN_ROOT=/foreign/repo (the pin is keyed
+                            on that value, so the root scoping is defeated at its own key)
+      exported `python3`  → recency guard on a root with NO audit log: baseline exit 1
+                            (AUDIT_LOG_MISSING) → exit 0. An entire python gate skipped.
+      exported `bash`     → same shape one level up, at the run-all-guards dispatch: exit 0.
+
+  FIX, in the same bootstrap: every command name the ratchet actually invokes is enumerated
+  (git, bash, sh, python/python3, env, cd, pwd, command, builtin, printf, echo, eval, exec, read,
+  test, declare, unset, export, local, source, grep, sed, awk, cut, tr, sort, uniq, head, tail, wc,
+  find, ls, cat, cp, mv, rm, mkdir, mktemp, dirname, basename, date, shasum, sha256sum, xargs, tee,
+  true, false); an inherited definition of any of them is **HELPER_FUNCTION_INJECTED** (blocking)
+  and they are `unset -f`'d anyway (which also strips them from every child's environment);
+  `BASH_ENV`/`ENV`/any surviving `BASH_FUNC_*` is **HERMETIC_ENV_HOSTILE** (blocking); `git` and
+  `python3` are resolved ONCE to absolute paths from a PATH stripped of relative entries and
+  validated to be executable regular files outside the repository
+  (**HERMETIC_TOOL_UNUSABLE**), after which every call site uses `"$AX_GIT_BIN"` / `"$AX_PY_BIN"`,
+  `builtin cd` and `builtin pwd`. POST-FIX: each of the four exports above exits non-zero with
+  HELPER_FUNCTION_INJECTED before any check runs.
+  DELIBERATE NON-CHOICE, stated because it is a real trade: the PATH is NOT replaced with system
+  directories. On this maintainer's machine that would swap `/opt/homebrew/bin/python3` for
+  `/usr/bin/python3` and silently change which interpreter carries PyYAML — hardening that turns
+  guards into skips is a fail-open wearing a helmet.
+
+  **P1-3 — THE FINGERPRINT RECOMPUTE FAILED OPEN AND AUTHENTICATED ITS OWN MUTABLE
+  IMPLEMENTATION.** Three defects, one shape: the gate trusted a file it had only checked the MODE
+  of, and treated "no answer" as "no problem".
+  RED, measured with a hand-authored audit line whose `tree_fingerprint` is a bogus constant:
+
+      honest helper                          → exit 1  AUDIT_FINGERPRINT_MISMATCH
+      helper rewritten to `print("nogit")`   → exit 0   (recompute disabled: the comparison was
+                                                        `if recomputed and recomputed != "nogit"…`)
+      helper rewritten to print the recorded constant → exit 0  (writer and verifier are the same
+                                                        compromised implementation)
+
+  and in the second case the tree was DIRTY at the time, so the clean-tree binding died with it.
+  FIX, three parts:
+  (a) FAIL CLOSED — the recorded value must BE a 64-hex digest (`"x"` satisfied the old
+      "non-empty, not nogit" test — fixture `fail_tree_fingerprint_not_a_digest`), the recomputed
+      value likewise, and any other outcome is **AUDIT_FINGERPRINT_UNVERIFIABLE**. On a live root
+      an unusable git context is itself blocking (**GIT_CONTEXT_UNUSABLE**) instead of the old
+      "not a git repo and no fixture marker ⇒ PASS". The runner blocks the same way
+      (FINGERPRINT_UNVERIFIABLE) rather than degrading to an `unverifiable-…` placeholder.
+  (b) AUTHENTICATE THE TOOLCHAIN BLOB BEFORE FIRST USE — the six files that ARE the gate
+      (`release_anchor.sh`, `tree_fingerprint.py`, `verify-completion.sh`,
+      `completion_checklist_recency_guard.sh`, `.githooks/pre-push`, `.githooks/pre-push-lib.sh`)
+      must be byte-identical to what git records for them at the sha under audit
+      (**RATCHET_TOOLCHAIN_MODIFIED**, blocking in the runner, both ratcheting guards and the push
+      gate), and the push gate performs the recompute with the PREVIOUS RELEASE'S copy of
+      `tree_fingerprint.py`, read out of git into a temp file OUTSIDE the tree — so the verifier no
+      longer shares the runner's implementation.
+      **HONEST CONSEQUENCE, and it is a real cost, so it is stated rather than buried:** this binds
+      the toolchain to the previous release. An uncommitted edit to any of those six files now
+      BLOCKS R25 (toolchain work becomes "commit, then verify" — there is no `--dry-run` exemption,
+      because an exemption keyed on a CLI flag is an exemption an attacker also passes). A REFACTOR
+      ships freely (the prior implementation computes the same digest). A change to what the
+      fingerprint algorithm OUTPUTS cannot pass this gate at all: shipping one is a deliberate
+      human decision requiring the maintainer to land it with the hook uninstalled and to record
+      that here. No override flag is shipped for it.
+      Anchor strength, disclosed: the anchor is the sha the REMOTE advertises when the hook
+      supplies it (unforgeable locally), else `origin/main`, else HEAD — and with HEAD the
+      implementation is the one being audited, so the binding degrades to (a) alone. The push path,
+      which is the one that matters, always supplies the remote's sha.
+  (c) DIRTY SAMPLES ARE PERMANENT — `tree_clean_end` is now the ACCUMULATED value across every
+      step-boundary sample, not the last reading, and the anchor is sampled at every boundary too
+      (`anchor_stable` is an accumulator that the closing read can no longer reset). Crucially both
+      accumulators read `git status` / `rev-parse` DIRECTLY, so they survive a compromised
+      fingerprint helper. The push gate additionally reads `git status` itself
+      (**AUDIT_TREE_DIRTY_NOW**) instead of believing the record's `tree_clean`.
+
+  **FAIL-OPEN SWEEP (the same two shapes, everywhere they were touched).** Closed additionally:
+  `ax_anchor_check_replace_refs` treated an enumeration FAILURE as "no replacement refs";
+  `ax_anchor_check_ancestry` treated an unreadable HEAD as "nothing to compare";
+  `_ax_anchor_bootstrap_implausible` treated a failed `rev-list` (either of the two probes) as
+  "the path was never here" — i.e. the one branch that switches a ratchet OFF was reachable by
+  making a git command fail; the recency guard treated a failed `for-each-ref refs/replace/` and a
+  failed `git status` as clean; the pre-push hook skipped its helper-mode and replacement-ref
+  probes entirely when `git rev-parse` failed. All now block on a live root.
+  Also closed while in the same code (registered P2): `AX_RELEASE_ANCHOR_REF` was exported as part
+  of the pin and never validated — it is now one clause of the pin comparison.
+
+- Evidence: `practices/scripts/ax-prove-hermetic-runtime.sh` (registered in run-all-guards) runs
+  every attack above against the LIVE push gate in a throwaway sandbox: (A) git-context
+  redirection, (B) exported `git`, (C) exported `cd`+`pwd`, (D) exported `python3`, (E1) an
+  UNCOMMITTED tampered fingerprint helper, (E2) the same tamper COMMITTED — plus (F) a NEGATIVE
+  CONTROL that must PASS, and (A′) the identical attack in a sandbox built with the round-5
+  additions removed, which must REPRODUCE (measured: A′ exit 0, A exit 1). Both halves are
+  therefore non-vacuous by construction, and the neuter anchors are asserted unique so the harness
+  goes stale LOUDLY. The two mutation matrices ([97] push-evidence, [98] mid-run) were extended
+  with the new independent layers for the reason already recorded there: a matrix that reports
+  itself broken whenever a layer is ADDED would penalise defence in depth.
+- Residual, stated plainly: the bootstrap is written in bash, so a sufficiently exotic inherited
+  definition of the very builtins it uses to detect definitions (`declare`, `unset`) is not
+  something bash lets any script fully escape — the enumeration + the `BASH_FUNC_*` refusal is the
+  practical bound, not a proof. Sampling remains at step boundaries (one step wide, not zero).
+  And nothing here makes forgery IMPOSSIBLE: a party with write access who runs the same commands
+  the runner runs can still fabricate a record. Without a key there is no ceremony that changes
+  that, and a key committed beside the data authenticates nothing.
+- Commits: (this commit — PRD-final-4 wave, P1-seal round-5)

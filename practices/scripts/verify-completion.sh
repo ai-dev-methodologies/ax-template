@@ -134,8 +134,144 @@
 #   bash practices/scripts/verify-completion.sh --no-collapse # disable per-domain collapse
 set -uo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+# ── ROUND 5 / P1-1+P1-2: HERMETIC RUNTIME BOOTSTRAP (A) — DELIBERATELY DUPLICATED ────
+# (TD-2026-07-30-P1-hermetic-runtime; the full argument lives in the header of
+#  practices/scripts/lib/release_anchor.sh.) THE RATCHET MAY NOT INHERIT ITS OWN RUNTIME.
+# Measured: an exported `git` function rewrote the anchor pin; an exported `pwd` moved the pin's
+# root to a foreign repo; an exported `python3` turned a FAILING guard into exit 0; GIT_DIR/
+# GIT_WORK_TREE made every read describe a CLEAN shadow checkout of a DIRTY tree. All of it
+# arrives through the environment, so it must die BEFORE the first git call, BEFORE any `source`,
+# and BEFORE this script computes its own directory with `cd`/`pwd` — which is exactly why these
+# lines cannot live in a sourced file. The duplication IS the bootstrap.
+_AX_HRM_LABEL="verify-completion"; _AX_HRM_EXIT=2; _AX_HRM_NEED_PY=1
+_AX_HRM_DEPS="git bash sh python python3 env cd pwd command builtin printf echo eval exec read \
+test declare unset export local source grep egrep sed awk cut tr sort uniq head tail wc find ls \
+cat cp mv rm mkdir mktemp dirname basename date shasum sha256sum xargs tee true false"
+_AX_HRM_BAD=""
+for _ax_hn in $_AX_HRM_DEPS; do
+    declare -F "$_ax_hn" >/dev/null 2>&1 && _AX_HRM_BAD="$_ax_hn"
+done
+if [ -n "$_AX_HRM_BAD" ]; then
+    { echo "$_AX_HRM_LABEL: HELPER_FUNCTION_INJECTED — this shell already defines a function named"
+      echo "  '$_AX_HRM_BAD', and that is a COMMAND THIS GATE INVOKES. bash imports exported"
+      echo "  functions across \`bash script.sh\`, so the definition silently replaces the program"
+      echo "  every check below runs — measured: an exported \`git\` rewrote the release-anchor pin,"
+      echo "  an exported \`python3\` turned a failing guard into exit 0, an exported \`pwd\` moved the"
+      echo "  pin's root to a foreign repository. Unset it (\`unset -f $_AX_HRM_BAD\`) and re-run."; } >&2
+    exit $_AX_HRM_EXIT
+fi
+for _ax_hn in $_AX_HRM_DEPS; do unset -f "$_ax_hn" 2>/dev/null || true; done
+# Any exported shell function that SURVIVED the scrub above is refused too — the enumeration is a
+# list of what we know we call, and an unknown runtime is not a safe one. Names in this catalog's
+# own namespaces are reported as HELPER_FUNCTION_INJECTED instead, because that is what they are
+# and because the round-4 policy checks own that vocabulary.
+_AX_HRM_FUNCS="$(/usr/bin/env | sed -n 's/^BASH_FUNC_\([A-Za-z_][A-Za-z0-9_]*\).*/\1/p' | tr '\n' ' ')"
+if [ -n "${BASH_ENV:-}${ENV:-}" ]; then
+    { echo "$_AX_HRM_LABEL: HERMETIC_ENV_HOSTILE — the environment sets BASH_ENV/ENV, which EVERY"
+      echo "  non-interactive bash this gate starts would source before running the gate's own"
+      echo "  code. That is code the gate never read, executing inside the gate. Unset it and"
+      echo "  re-run — fail-closed on purpose: an unknown runtime is not a safe one."; } >&2
+    exit $_AX_HRM_EXIT
+elif [ -n "$_AX_HRM_FUNCS" ]; then
+    case " $_AX_HRM_FUNCS " in
+        *" ax_"*|*" _ax_"*|*" pp_"*)
+            { echo "$_AX_HRM_LABEL: HELPER_FUNCTION_INJECTED — the environment carries an exported"
+              echo "  shell function in this catalog's own namespace: ${_AX_HRM_FUNCS}"
+              echo "  Those names ARE the ratchet policy — which commit the anchor is, whether an"
+              echo "  absence is an honest bootstrap, which refs ship work. A definition arriving"
+              echo "  from outside replaces the policy with the caller's."; } >&2 ;;
+        *)
+            { echo "$_AX_HRM_LABEL: HERMETIC_ENV_HOSTILE — the environment carries exported shell"
+              echo "  function(s): ${_AX_HRM_FUNCS}"
+              echo "  An exported function replaces a command this gate calls, after every check it"
+              echo "  performs. The enumerated dependency list above is what we know we invoke; a"
+              echo "  runtime carrying definitions we did not enumerate is refused rather than"
+              echo "  assumed harmless. Unset them and re-run."; } >&2 ;;
+    esac
+    exit $_AX_HRM_EXIT
+fi
+# The WHOLE GIT_* family, not a denylist of the ones we thought of: every one of GIT_DIR,
+# GIT_WORK_TREE, GIT_COMMON_DIR, GIT_OBJECT_DIRECTORY, GIT_ALTERNATE_OBJECT_DIRECTORIES,
+# GIT_INDEX_FILE, GIT_NAMESPACE, GIT_CEILING_DIRECTORIES, GIT_CONFIG*, GIT_EXEC_PATH redirects
+# what `git -C <path>` actually reads. GIT_NO_REPLACE_OBJECTS is scrubbed too and re-set below:
+# inherited as 0 it RE-ENABLES replacement refs.
+for _ax_hn in ${!GIT_@}; do unset "$_ax_hn" 2>/dev/null || true; done
+unset BASH_ENV ENV GIT_DIR GIT_WORK_TREE GIT_COMMON_DIR GIT_OBJECT_DIRECTORY GIT_INDEX_FILE \
+    GIT_ALTERNATE_OBJECT_DIRECTORIES GIT_NAMESPACE GIT_CEILING_DIRECTORIES GIT_CONFIG \
+    GIT_CONFIG_GLOBAL GIT_CONFIG_SYSTEM GIT_CONFIG_NOSYSTEM GIT_CONFIG_COUNT GIT_EXEC_PATH \
+    GIT_DISCOVERY_ACROSS_FILESYSTEM 2>/dev/null || true
+export GIT_NO_REPLACE_OBJECTS=1
+# git and python3 are resolved ONCE, to absolute paths, from a PATH stripped of relative entries
+# (a `.` on PATH is a shim in whatever directory the gate happens to run from). The inherited
+# order is otherwise preserved, because forcing system directories here would silently swap the
+# interpreter that carries PyYAML and make whole guards skip — a fail-open dressed as hardening.
+unset AX_GIT_BIN AX_PY_BIN
+_AX_HRM_PATH=""; _ax_hifs="$IFS"; IFS=:
+for _ax_hd in $PATH; do
+    case "$_ax_hd" in /*) ;; *) continue ;; esac
+    [ -d "$_ax_hd" ] || continue
+    _AX_HRM_PATH="${_AX_HRM_PATH:+$_AX_HRM_PATH:}$_ax_hd"
+done
+IFS="$_ax_hifs"; unset _ax_hifs _ax_hd
+AX_GIT_BIN="$(PATH="$_AX_HRM_PATH" command -v git 2>/dev/null || true)"
+AX_PY_BIN="$(PATH="$_AX_HRM_PATH" command -v python3 2>/dev/null || true)"
+for _ax_hn in "git=$AX_GIT_BIN" "python3=$AX_PY_BIN"; do
+    if [ "${_ax_hn%%=*}" = "python3" ] && [ "$_AX_HRM_NEED_PY" != "1" ]; then continue; fi
+    _ax_hb="${_ax_hn#*=}"
+    if [ -z "$_ax_hb" ] || [ "${_ax_hb#/}" = "$_ax_hb" ] || [ ! -f "$_ax_hb" ] || [ ! -x "$_ax_hb" ]; then
+        { echo "$_AX_HRM_LABEL: HERMETIC_TOOL_UNUSABLE — ${_ax_hn%%=*} did not resolve to an"
+          echo "  executable regular file on an absolute path (got '${_ax_hb:-<nothing>}')."
+          echo "  This gate runs that program to decide whether a release may ship; it will not"
+          echo "  guess, and it will not fall back to whatever the inherited PATH offers."; } >&2
+        exit $_AX_HRM_EXIT
+    fi
+done
+export AX_GIT_BIN AX_PY_BIN
+unset _ax_hn _ax_hb _AX_HRM_BAD _AX_HRM_PATH
+
+SCRIPT_DIR="$(builtin cd "$(dirname "${BASH_SOURCE[0]}")" && builtin pwd)"
+REPO_ROOT="$(builtin cd "$SCRIPT_DIR/../.." && builtin pwd)"
+# ── HERMETIC RUNTIME BOOTSTRAP (B): bind the git identity to the trusted root ────────
+# Part A removed the inherited git context; this derives the real one and REQUIRES it to be the
+# root this entry resolved for itself. `git -C <root>` WALKS UP when <root> is not itself a work
+# tree, so without this a gate can authenticate a repository that merely CONTAINS the directory it
+# is scanning. The derived gitdir/worktree are then passed EXPLICITLY on every call for this root
+# (see ax_git), so nothing downstream depends on discovery at all.
+# NOT exported, and unset first: a binding that could arrive from the environment would be a
+# NEW redirection channel of exactly the kind part A just closed. Every entry derives its own.
+unset AX_GIT_BOUND_ROOT AX_GIT_BOUND_DIR
+if "$AX_GIT_BIN" -C "$REPO_ROOT" rev-parse --git-dir >/dev/null 2>&1; then
+    _ax_hcan="$(builtin cd "$REPO_ROOT" 2>/dev/null && builtin pwd -P)"
+    _ax_htop="$("$AX_GIT_BIN" -C "$REPO_ROOT" rev-parse --show-toplevel 2>/dev/null)"
+    _ax_htop="$(builtin cd "${_ax_htop:-/nonexistent}" 2>/dev/null && builtin pwd -P)"
+    if [ -z "$_ax_hcan" ] || [ "$_ax_htop" != "$_ax_hcan" ]; then
+        { echo "$_AX_HRM_LABEL: GIT_CONTEXT_REDIRECTED — the git work tree answering this gate's"
+          echo "  reads is '${_ax_htop:-<unresolvable>}', not the root it was invoked for"
+          echo "  ('${_ax_hcan:-$REPO_ROOT}'). Every head / status / fingerprint / anchor answer would"
+          echo "  then describe a different tree than the one being verified — measured: with the"
+          echo "  context aimed at a clean shadow checkout, a DIRTY tree reported the clean-tree"
+          echo "  fingerprint constant and a clean status."; } >&2
+        exit $_AX_HRM_EXIT
+    fi
+    AX_GIT_BOUND_ROOT="$_ax_hcan"
+    AX_GIT_BOUND_DIR="$("$AX_GIT_BIN" -C "$AX_GIT_BOUND_ROOT" rev-parse --absolute-git-dir 2>/dev/null)"
+    if [ -z "$AX_GIT_BOUND_DIR" ]; then
+        echo "$_AX_HRM_LABEL: GIT_CONTEXT_REDIRECTED — the gitdir of '$AX_GIT_BOUND_ROOT' could not" >&2
+        echo "  be derived, so no explicit git context can be pinned. Blocking rather than falling" >&2
+        echo "  back to discovery, which is the thing being pinned." >&2
+        exit $_AX_HRM_EXIT
+    fi
+    case "$AX_GIT_BIN" in "$AX_GIT_BOUND_ROOT"/*) _ax_htop=repo ;; *) _ax_htop="" ;; esac
+    case "$AX_PY_BIN" in "$AX_GIT_BOUND_ROOT"/*) _ax_htop=repo ;; esac
+    if [ -n "$_ax_htop" ]; then
+        echo "$_AX_HRM_LABEL: HERMETIC_TOOL_UNUSABLE — git/python3 resolved to a binary INSIDE the" >&2
+        echo "  repository being verified ($AX_GIT_BIN / $AX_PY_BIN). The tree under audit does not" >&2
+        echo "  get to supply the programs that audit it." >&2
+        exit $_AX_HRM_EXIT
+    fi
+    unset _ax_hcan _ax_htop
+fi
+
 CHECKLIST="$REPO_ROOT/practices/verification-checklist.yaml"
 AUDIT_DIR="$REPO_ROOT/.ax-verify"
 AUDIT_LOG="$AUDIT_DIR/runs.jsonl"
@@ -204,7 +340,7 @@ mkdir -p "$AUDIT_DIR"
 # (The shared helper exports it too; that is for guards started without this runner.)
 export GIT_NO_REPLACE_OBJECTS=1
 
-CURRENT_HEAD="$(git --no-replace-objects -C "$REPO_ROOT" rev-parse HEAD 2>/dev/null || echo "unknown")"
+CURRENT_HEAD="$("$AX_GIT_BIN" --no-replace-objects -C "$REPO_ROOT" rev-parse HEAD 2>/dev/null || echo "unknown")"
 
 # ── Which RELEASE did the ratcheting guards measure against? (P1-X layer 3) ──
 # (cross-family reviewer ROUND 3, 2026-07-30; TD-2026-07-30-P1-anchor-authenticity.)
@@ -238,9 +374,8 @@ for _ax_pf_part in practices scripts lib release_anchor.sh; do
         exit 2
     fi
 done
-if command -v git >/dev/null 2>&1 \
-   && git --no-replace-objects -C "$REPO_ROOT" rev-parse --git-dir >/dev/null 2>&1; then
-    _ax_pf_mode="$(git --no-replace-objects -C "$REPO_ROOT" ls-tree HEAD -- "$_ax_pf_rel" 2>/dev/null | head -1)"
+if "$AX_GIT_BIN" --no-replace-objects -C "$REPO_ROOT" rev-parse --git-dir >/dev/null 2>&1; then
+    _ax_pf_mode="$("$AX_GIT_BIN" --no-replace-objects -C "$REPO_ROOT" ls-tree HEAD -- "$_ax_pf_rel" 2>/dev/null | head -1)"
     _ax_pf_mode="${_ax_pf_mode%% *}"
     case "${_ax_pf_mode:-}" in
         100644|100755|"") ;;
@@ -277,6 +412,20 @@ ANCHOR_SHA="${AX_ANCHOR_SHA:-unavailable}"
 ANCHOR_KIND="${AX_ANCHOR_KIND:-unavailable}"
 ANCHOR_REF_AT_START="${AX_ANCHOR_REF:-}"
 
+# ── ROUND 5 / P1-3: THE RATCHET'S OWN IMPLEMENTATION MUST BE THE COMMITTED ONE ───────
+# Every check this run makes about these six files asks whether they are REGULAR FILES. None
+# asked what they SAY — and the measured attack is a regular-file tree_fingerprint.py rewritten
+# to print a constant, after which the runner that WRITES the evidence and the verifier that
+# RECOMPUTES it are the same compromised implementation. Comparing the working-tree bytes against
+# what git records at HEAD closes the uncommitted half here (the push gate closes the committed
+# half by recomputing with the PREVIOUS RELEASE's copy).
+# Deliberate cost: editing the ratchet's own code now blocks R25 until the edit is committed.
+if ! ax_ratchet_toolchain_authentic "$REPO_ROOT" "verify-completion" "HEAD" \
+        $(ax_ratchet_toolchain_paths); then
+    echo "verify-completion: R25 BLOCK: RATCHET_TOOLCHAIN_MODIFIED (see above)" >&2
+    exit 2
+fi
+
 # ── Working-tree fingerprint — what a resume record is actually bound to ─────
 # head_sha alone does NOT identify the code that ran. R25 is routinely invoked on a DIRTY
 # tree, so at one head H the tree can differ arbitrarily between two invocations:
@@ -305,27 +454,50 @@ ANCHOR_REF_AT_START="${AX_ANCHOR_REF:-}"
 # recency guard can RECOMPUTE this value instead of trusting the number this script wrote. Two
 # copies of a hash would be two chances to drift, and a drifted recompute fails honest runs.
 # The behaviour is unchanged: prints the digest, or the constant "nogit" for a non-git tree.
+# ROUND 5 / P1-3: FAIL CLOSED, and say WHY out loud. The helper now distinguishes three states by
+# exit code — 0 a digest (or the honest "nogit" of a non-git tree), 3 GIT_CONTEXT_REDIRECTED, 4 a
+# git tree it could not read — and on a repository that IS git anything but a 64-hex digest is a
+# BLOCK. The old shape degraded silently to a per-run "unverifiable-" placeholder, which merely
+# moved the failure to the push gate and, in the meantime, let a run report a tree it never
+# identified.
 compute_tree_fingerprint() {
-    python3 "$SCRIPT_DIR/lib/tree_fingerprint.py" "$REPO_ROOT"
+    "$AX_PY_BIN" "$SCRIPT_DIR/lib/tree_fingerprint.py" "$REPO_ROOT"
 }
+# ax_fp_is_digest <value> — the SHAPE is checked, not merely non-emptiness: "x" and "nogit" both
+# satisfied "the tree was identified" before this round.
+ax_fp_is_digest() {
+    case "${1:-}" in
+        *[!0-9a-f]*|"") return 1 ;;
+        *) [ "${#1}" -eq 64 ] ;;
+    esac
+}
+IS_GIT_TREE=0
+[ -n "${AX_GIT_BOUND_ROOT:-}" ] && IS_GIT_TREE=1
+# Prints the fingerprint; returns 1 when it is unusable ON A GIT TREE. The BLOCK itself lives in
+# ax_fp_block, called by the caller — an `exit` inside `$( … )` would kill only the subshell and
+# leave the run going with an empty value, which is the fail-open shape in miniature.
 compute_tree_fingerprint_checked() {
-    local fp
-    fp="$(compute_tree_fingerprint 2>/dev/null)"
-    if [ -z "$fp" ]; then
-        fp="unverifiable-$$-$(date -u +%s)"
+    local fp rc
+    fp="$(compute_tree_fingerprint 2>/dev/null)"; rc=$?
+    if [ "$IS_GIT_TREE" -eq 1 ] && { [ "$rc" -ne 0 ] || ! ax_fp_is_digest "$fp"; }; then
+        printf '%s' "${fp:-<nothing>} (exit ${rc})"
+        return 1
     fi
+    [ -n "$fp" ] || fp="unverifiable-$$-$(date -u +%s)"
     printf '%s' "$fp"
 }
-CURRENT_TREE_FP="$(compute_tree_fingerprint 2>/dev/null)"
-if [ -z "$CURRENT_TREE_FP" ]; then
-    # The helper failed unexpectedly (it prints "nogit" for the KNOWN non-git case, so an
-    # empty result is not that). Fail closed rather than silently degrade to head-only
-    # binding: a per-run unique value matches no stored record, so nothing is resume-skipped
-    # and this run's own records are unusable later — we could not verify what tree ran.
-    CURRENT_TREE_FP="unverifiable-$$-$(date -u +%s)"
-    echo "verify-completion: WARN: could not fingerprint the working tree — resume is disabled" \
-         "for this run (records can be bound only to a tree we can identify)." >&2
-fi
+ax_fp_block() {
+    {
+        echo "verify-completion: R25 BLOCK: FINGERPRINT_UNVERIFIABLE — the working-tree fingerprint"
+        echo "  helper returned '${1:-<nothing>}' on a git work tree (observed ${2:-at start})."
+        echo "  That value is the only thing binding this run's evidence to the code it ran on, and"
+        echo "  an unusable one used to degrade into a placeholder instead of stopping. A redirected"
+        echo "  git context (helper exit 3) is the shape that matters: it makes a DIRTY tree report"
+        echo "  the clean-tree constant, i.e. a certificate for code nobody has."
+    } >&2
+    exit 2
+}
+CURRENT_TREE_FP="$(compute_tree_fingerprint_checked)" || ax_fp_block "$CURRENT_TREE_FP"
 
 # ── Was this run performed on the COMMITTED tree of head_sha? ────────────────
 # The fingerprint above says WHICH tree ran; this says whether that tree is the one a
@@ -346,8 +518,8 @@ fi
 # load-bearing when it is not.
 observe_tree_clean() {
     local clean=false
-    if git -C "$REPO_ROOT" rev-parse --verify HEAD >/dev/null 2>&1 \
-        && [ -z "$(git -C "$REPO_ROOT" status --porcelain -uall 2>/dev/null)" ]; then
+    if "$AX_GIT_BIN" --no-replace-objects -C "$REPO_ROOT" rev-parse --verify HEAD >/dev/null 2>&1 \
+        && [ -z "$("$AX_GIT_BIN" --no-replace-objects -C "$REPO_ROOT" status --porcelain -uall 2>/dev/null)" ]; then
         clean=true
     fi
     printf '%s' "$clean"
@@ -373,19 +545,52 @@ CURRENT_TREE_CLEAN="$(observe_tree_clean)"
 # this narrows the window from "the whole run" to "one step", it does not eliminate it.
 # Closing it completely would need the tree to be immutable for the duration (a read-only
 # snapshot / container), which is a fork-receiver infrastructure decision, not a shell check.
+#
+# ROUND 5 / P1-3(c) — A DIRTY SAMPLE IS PERMANENT. The closing endpoint used to be simply the LAST
+# sample, so an intermediate observation of a dirty tree (or of a moved anchor) could be erased by
+# a clean ending. Worse, the only thing that made an intermediate dirt visible was the FINGERPRINT
+# differing — i.e. it depended on the very helper P1-3 shows can be replaced. The two accumulators
+# below are therefore independent of the fingerprint: ANY sample that observes `git status`
+# non-empty makes tree_clean_end false FOR THE WHOLE RUN, and any sample that observes the anchor
+# ref elsewhere makes anchor_stable false for the whole run. They only ever move one way.
 START_TREE_FP="$CURRENT_TREE_FP"
 START_TREE_CLEAN="$CURRENT_TREE_CLEAN"
 TREE_SAMPLES=1
 TREE_STABLE=true
+TREE_EVER_DIRTY=false
+[ "$CURRENT_TREE_CLEAN" = true ] || TREE_EVER_DIRTY=true
+ANCHOR_STABLE=true
+ANCHOR_MOVED_SEEN=""
 
 # observe_tree <where> — take a sample, bind subsequent resume records to it, and record any
 # drift from the start sample. Costs one `git status` + one `git diff HEAD` (~60ms here).
 observe_tree() {
-    local where="$1" fp clean head
-    fp="$(compute_tree_fingerprint_checked)"
+    local where="$1" fp clean head anchor_now
+    fp="$(compute_tree_fingerprint_checked)" || ax_fp_block "$fp" "$where"
     clean="$(observe_tree_clean)"
-    head="$(git -C "$REPO_ROOT" rev-parse HEAD 2>/dev/null || echo "unknown")"
+    head="$("$AX_GIT_BIN" --no-replace-objects -C "$REPO_ROOT" rev-parse HEAD 2>/dev/null || echo "unknown")"
     TREE_SAMPLES=$((TREE_SAMPLES + 1))
+    if [ "$clean" != true ] && [ "$TREE_EVER_DIRTY" = false ]; then
+        TREE_EVER_DIRTY=true
+        echo "  ⚠ the working tree was DIRTY when sampled $where — this run can no longer" >&2
+        echo "    certify a push, and no later clean sample will erase that." >&2
+    fi
+    # The anchor gets the same treatment as the tree, and for the same reason: the ref is an
+    # ordinary local one, so between two endpoint reads it can be aimed at a commit that lacks the
+    # ratcheting files (every ratchet bootstrap-skips) and put back. Sampling at every step
+    # boundary narrows that window to one step, exactly like the tree.
+    if [ -n "$ANCHOR_REF_AT_START" ] && [ "$ANCHOR_SHA" != "unavailable" ]; then
+        anchor_now="$("$AX_GIT_BIN" --no-replace-objects -C "$REPO_ROOT" rev-parse --verify --quiet \
+            "${ANCHOR_REF_AT_START}^{commit}" 2>/dev/null)"
+        if [ "$anchor_now" != "$ANCHOR_SHA" ]; then
+            if [ "$ANCHOR_STABLE" = true ]; then
+                echo "  ⚠ the release anchor ${ANCHOR_REF_AT_START} MOVED during this run (observed" >&2
+                echo "    $where): ${ANCHOR_SHA} → ${anchor_now:-<unresolvable>}. Recorded permanently." >&2
+            fi
+            ANCHOR_STABLE=false
+            ANCHOR_MOVED_SEEN="$where"
+        fi
+    fi
     if [ "$fp" != "$START_TREE_FP" ] || [ "$head" != "$CURRENT_HEAD" ]; then
         if [ "$TREE_STABLE" = true ]; then
             echo "  ⚠ the working tree CHANGED during this run (observed $where)." >&2
@@ -422,7 +627,7 @@ cleanup() {
 }
 trap cleanup EXIT
 
-python3 - "$CHECKLIST" "$STEP_FILTER" "$PLAN_FILE" "$PLAYBOOK_DIR" <<'PYEOF'
+"$AX_PY_BIN" - "$CHECKLIST" "$STEP_FILTER" "$PLAN_FILE" "$PLAYBOOK_DIR" <<'PYEOF'
 import sys, pathlib, re
 
 try:
@@ -794,7 +999,7 @@ declare_resume_pass() {
     grep -F "$1" "$RESUME_TMP" >/dev/null 2>&1
 }
 if [ "$RESUME" -eq 1 ] && [ -f "$RESUME_LOG" ]; then
-    python3 - "$RESUME_LOG" "$CURRENT_HEAD" "$RESUME_TMP" "$CURRENT_TREE_FP" <<'PYEOF'
+    "$AX_PY_BIN" - "$RESUME_LOG" "$CURRENT_HEAD" "$RESUME_TMP" "$CURRENT_TREE_FP" <<'PYEOF'
 import sys, pathlib, json
 resume_path, head, out_path, tree_fp = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4]
 keep = []
@@ -1053,7 +1258,7 @@ for sid in $STEP_ORDER; do
     # Try collapse for this step.
     COLLAPSED_PLAN=$(mktemp)
     if [ "$COLLAPSE" -eq 1 ]; then
-        python3 "$COLLAPSE_HELPER" "$PLAN_FILE" "$sid" > "$COLLAPSED_PLAN" 2>/dev/null || true
+        "$AX_PY_BIN" "$COLLAPSE_HELPER" "$PLAN_FILE" "$sid" > "$COLLAPSED_PLAN" 2>/dev/null || true
     fi
 
     STEP_HARD_FAIL_BEFORE=$HARD_FAIL
@@ -1234,9 +1439,15 @@ done
 # Paired with the start snapshot this is what the push gate compares. Both endpoints go into
 # the audit line so the consumer can check start == end itself rather than trust one flag.
 observe_tree "end of run"
-END_HEAD="$(git -C "$REPO_ROOT" rev-parse HEAD 2>/dev/null || echo "unknown")"
+END_HEAD="$("$AX_GIT_BIN" --no-replace-objects -C "$REPO_ROOT" rev-parse HEAD 2>/dev/null || echo "unknown")"
 END_TREE_FP="$CURRENT_TREE_FP"
+# ROUND 5 / P1-3(c): the closing value is the ACCUMULATED one, not the last reading. A run that
+# was ever observed dirty ends dirty, whatever the final sample says — otherwise "make the fix,
+# let the step pass, revert it" survives as long as the endpoints happen to look clean, and the
+# only thing that noticed the middle was a fingerprint difference produced by the very helper this
+# round shows can be replaced.
 END_TREE_CLEAN="$CURRENT_TREE_CLEAN"
+[ "$TREE_EVER_DIRTY" = true ] && END_TREE_CLEAN=false
 
 # ── Closing endpoint for the ANCHOR (P1-2, ROUND 4, TD-2026-07-30-P1-anchor-runtime) ──
 # The tree was sampled across the run because A RUN IS NOT AN INSTANT. The anchor REF has
@@ -1253,12 +1464,14 @@ END_TREE_CLEAN="$CURRENT_TREE_CLEAN"
 # HONEST LIMIT, inherited from the same shape as tree sampling: this is two observations, not
 # continuous custody. A ref moved and restored entirely between the two reads is unobserved —
 # though the guards' own pin checks add further observation points inside the window.
+# ROUND 5: ANCHOR_STABLE is NOT re-initialised here — it is the accumulator observe_tree has been
+# maintaining at every step boundary, so an anchor that moved in the middle and was put back
+# before the end can no longer be erased by this closing read agreeing with the start.
 ANCHOR_SHA_END="$ANCHOR_SHA"
-ANCHOR_STABLE=true
 if [ -n "$ANCHOR_REF_AT_START" ] && [ "$ANCHOR_SHA" != "unavailable" ]; then
-    ANCHOR_SHA_END="$(git -C "$REPO_ROOT" rev-parse --verify --quiet "${ANCHOR_REF_AT_START}^{commit}" 2>/dev/null)"
+    ANCHOR_SHA_END="$("$AX_GIT_BIN" --no-replace-objects -C "$REPO_ROOT" rev-parse --verify --quiet "${ANCHOR_REF_AT_START}^{commit}" 2>/dev/null)"
     [ -n "$ANCHOR_SHA_END" ] || ANCHOR_SHA_END="unresolvable"
-    if [ "$ANCHOR_SHA_END" != "$ANCHOR_SHA" ]; then
+    if [ "$ANCHOR_SHA_END" != "$ANCHOR_SHA" ] || [ "$ANCHOR_STABLE" != true ]; then
         ANCHOR_STABLE=false
         HARD_FAIL=$((HARD_FAIL + 1))
         {
@@ -1266,6 +1479,10 @@ if [ -n "$ANCHOR_REF_AT_START" ] && [ "$ANCHOR_SHA" != "unavailable" ]; then
             echo "  ⛔ ANCHOR_REF_MOVED_MIDRUN — ${ANCHOR_REF_AT_START} changed during this run."
             echo "     at start: ${ANCHOR_SHA}"
             echo "     at end  : ${ANCHOR_SHA_END}"
+            [ -n "$ANCHOR_MOVED_SEEN" ] && \
+            echo "     first seen elsewhere at: ${ANCHOR_MOVED_SEEN} (an intermediate sample; a"
+            [ -n "$ANCHOR_MOVED_SEEN" ] && \
+            echo "     matching pair of endpoints does not undo it)"
             echo "     The ratcheting guards measure 'the previous release' through that ref. A"
             echo "     reference point that moves while the run is in progress was not a reference"
             echo "     point: aiming it at a commit that merely LACKS the ratcheting files makes"

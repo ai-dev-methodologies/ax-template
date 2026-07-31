@@ -173,6 +173,61 @@
 #   caller state to map onto yet (the functions do not exist), and an injected policy surface
 #   must not be allowed to return into a caller that would then call the injected functions.
 #
+# ── ROUND 5 / P1-1: THE GIT REPOSITORY IS AN INHERITED IDENTITY ─────────────────────
+# `git -C <path>` says WHERE to start looking. It does NOT say WHICH REPOSITORY to use: GIT_DIR,
+# GIT_WORK_TREE, GIT_COMMON_DIR, GIT_OBJECT_DIRECTORY, GIT_ALTERNATE_OBJECT_DIRECTORIES,
+# GIT_INDEX_FILE, GIT_NAMESPACE, GIT_CEILING_DIRECTORIES and the GIT_CONFIG* family all override
+# discovery and configuration from the ENVIRONMENT, and every one of them is inherited.
+# MEASURED, in a throwaway clone: with GIT_DIR/GIT_WORK_TREE aimed at a CLEAN shadow checkout of
+# the same commit, the fingerprint of a DIRTY tree came back as `0a815065ebf5…` — the clean-tree
+# constant — while the honest value was `c764531c8f18…`; `rev-parse --show-toplevel` reported the
+# shadow, and the cleanliness probe reported true. R25 would then run its tests against the dirty
+# tree while every head/status/fingerprint/anchor/cleanliness read describes the clean one; revert
+# the dirty fix afterwards and the pushed commit keeps a perfect-looking audit line.
+# AX_RELEASE_ANCHOR_ROOT does not help: it scopes the PATHNAME, never the git context.
+# ANSWER, applied at the earliest bootstrap point of every entry (see the block below, which is
+# duplicated verbatim into every consumer because it must precede the first git call and any
+# `source`): the entire GIT_* discovery + config-injection family is UNSET, GIT_NO_REPLACE_OBJECTS
+# is re-established by us, the real toplevel is derived from the trusted REPO_ROOT and REQUIRED to
+# equal it (GIT_CONTEXT_REDIRECTED, blocking), and the derived gitdir/worktree are passed
+# EXPLICITLY on every invocation for the bound root — no implicit discovery anywhere, including
+# inside tree_fingerprint.py.
+#
+# ── ROUND 5 / P1-2: THE COMMANDS THEMSELVES ARE INHERITED ───────────────────────────
+# Round 4 reserved this file's own names (ax_anchor_*/ax_git). It did not reserve the COMMANDS
+# those functions call. bash imports exported functions across `bash script.sh`, so `export -f
+# git` puts the caller's code inside every anchor read. MEASURED: an exported `git` function
+# rewrote the runner-owned pin (PIN_BEFORE 5e1f5a9 → PIN_AFTER 00c9e2c, every rc 0); an exported
+# `pwd` moved the pin's canonical root to a foreign repo (PIN_ROOT=/foreign/repo, and the
+# root-scoped pin comparison then fires against the wrong repo); an exported `python3` turned the
+# recency guard from exit 1 (AUDIT_LOG_MISSING) into exit 0, i.e. an entire python guard skipped.
+# ANSWER: every command name the ratchet actually invokes is (a) refused when it arrives already
+# defined — HELPER_FUNCTION_INJECTED — and (b) `unset -f`'d anyway; BASH_ENV/ENV/BASH_FUNC_*
+# remnants are refused outright (HERMETIC_ENV_HOSTILE); and `git`/`python3` are resolved ONCE to
+# ABSOLUTE paths from a sanitized PATH and validated to be executable regular files outside the
+# repository (HERMETIC_TOOL_UNUSABLE). Callers use "$AX_GIT_BIN"/"$AX_PY_BIN" and `builtin cd` /
+# `builtin pwd`, so neither the PATH nor a function can re-point them afterwards.
+#
+# ── ROUND 5 / P1-3: THE RATCHET AUTHENTICATED ITS OWN MUTABLE IMPLEMENTATION ────────
+# The toolchain lists checked filesystem/git MODE, never BYTES, so a REGULAR-FILE
+# tree_fingerprint.py edited to print a constant passed every path check and was then used by BOTH
+# the runner (writing the record) and the verifier (recomputing it) — one compromised
+# implementation authenticating itself. MEASURED: with a hand-authored audit line carrying a bogus
+# fingerprint the recency guard exits 1 (AUDIT_FINGERPRINT_MISMATCH); replace the helper with
+# `print("nogit")` and it exits 0, because the recompute only objected when the output was
+# non-empty AND not `nogit` — unknown fell OPEN.
+# ANSWER, two halves: `ax_ratchet_toolchain_authentic` below requires each toolchain file's
+# WORKING-TREE BYTES to equal what git records for it at the sha under audit
+# (RATCHET_TOOLCHAIN_MODIFIED, blocking — an uncommitted edit to the ratchet's own code can never
+# certify anything), and the recency guard recomputes the fingerprint with the PREVIOUS RELEASE'S
+# copy of the helper, extracted from git outside the tree, so the verifier no longer shares the
+# runner's implementation. HONEST CONSEQUENCE, stated because it is a real cost: this binds the
+# toolchain to the previous release, so a change to these files must ship in a release whose own
+# gate ran with the PRIOR implementation. A refactor is free (the prior implementation computes
+# the same digest); a change to what the algorithm OUTPUTS cannot pass this gate at all and is a
+# deliberate, documented, human decision — see practices/DECISIONS.md
+# (TD-2026-07-30-P1-hermetic-runtime).
+#
 # Usage:
 #   source practices/scripts/lib/release_anchor.sh
 #   ax_anchor_resolve "$REPO_ROOT"                    # → AX_ANCHOR_REF/_KIND/_SHA
@@ -183,11 +238,111 @@
 #   ax_anchor_worktree_paths_regular "$BASE" "<label>" <rel>...
 #   ax_anchor_verify_unmoved "$REPO_ROOT" "<label>"   # → 1 on ANCHOR_REF_MOVED_MIDRUN (vs own read)
 #   ax_anchor_export_pin "$REPO_ROOT"                 # runner only: publish the single resolution
+#   ax_ratchet_toolchain_authentic "$REPO_ROOT" "<label>" <rev> <rel>...   # → 1 on tampering
+#   ax_anchor_bind_repo "$REPO_ROOT" "<label>"        # → 1 on GIT_CONTEXT_REDIRECTED
 
 # ── P1-1: git must interpret objects as they are, not as refs/replace/* says ──────────
 # Exported (not merely set) so that it reaches the python subprocesses in the guards, which is
-# where most of the anchor reads actually happen.
+# where most of the anchor reads actually happen. ROUND 5: the whole GIT_* family is scrubbed by
+# the hermetic bootstrap in every entry FIRST — including this variable, because
+# `GIT_NO_REPLACE_OBJECTS=0` inherited from the environment RE-ENABLES replacement refs — and this
+# line re-establishes the value we actually want.
 export GIT_NO_REPLACE_OBJECTS=1
+
+# ── ROUND 5 / P1-1+P1-2: HERMETIC RUNTIME BOOTSTRAP (A) — DELIBERATELY DUPLICATED ────
+# (TD-2026-07-30-P1-hermetic-runtime; the full argument lives in the header of
+#  practices/scripts/lib/release_anchor.sh.) THE RATCHET MAY NOT INHERIT ITS OWN RUNTIME.
+# Measured: an exported `git` function rewrote the anchor pin; an exported `pwd` moved the pin's
+# root to a foreign repo; an exported `python3` turned a FAILING guard into exit 0; GIT_DIR/
+# GIT_WORK_TREE made every read describe a CLEAN shadow checkout of a DIRTY tree. All of it
+# arrives through the environment, so it must die BEFORE the first git call, BEFORE any `source`,
+# and BEFORE this script computes its own directory with `cd`/`pwd` — which is exactly why these
+# lines cannot live in a sourced file. The duplication IS the bootstrap.
+_AX_HRM_LABEL="release_anchor.sh"; _AX_HRM_EXIT=2; _AX_HRM_NEED_PY=0
+_AX_HRM_DEPS="git bash sh python python3 env cd pwd command builtin printf echo eval exec read \
+test declare unset export local source grep egrep sed awk cut tr sort uniq head tail wc find ls \
+cat cp mv rm mkdir mktemp dirname basename date shasum sha256sum xargs tee true false"
+_AX_HRM_BAD=""
+for _ax_hn in $_AX_HRM_DEPS; do
+    declare -F "$_ax_hn" >/dev/null 2>&1 && _AX_HRM_BAD="$_ax_hn"
+done
+if [ -n "$_AX_HRM_BAD" ]; then
+    { echo "$_AX_HRM_LABEL: HELPER_FUNCTION_INJECTED — this shell already defines a function named"
+      echo "  '$_AX_HRM_BAD', and that is a COMMAND THIS GATE INVOKES. bash imports exported"
+      echo "  functions across \`bash script.sh\`, so the definition silently replaces the program"
+      echo "  every check below runs — measured: an exported \`git\` rewrote the release-anchor pin,"
+      echo "  an exported \`python3\` turned a failing guard into exit 0, an exported \`pwd\` moved the"
+      echo "  pin's root to a foreign repository. Unset it (\`unset -f $_AX_HRM_BAD\`) and re-run."; } >&2
+    exit $_AX_HRM_EXIT
+fi
+for _ax_hn in $_AX_HRM_DEPS; do unset -f "$_ax_hn" 2>/dev/null || true; done
+# Any exported shell function that SURVIVED the scrub above is refused too — the enumeration is a
+# list of what we know we call, and an unknown runtime is not a safe one. Names in this catalog's
+# own namespaces are reported as HELPER_FUNCTION_INJECTED instead, because that is what they are
+# and because the round-4 policy checks own that vocabulary.
+_AX_HRM_FUNCS="$(/usr/bin/env | sed -n 's/^BASH_FUNC_\([A-Za-z_][A-Za-z0-9_]*\).*/\1/p' | tr '\n' ' ')"
+if [ -n "${BASH_ENV:-}${ENV:-}" ]; then
+    { echo "$_AX_HRM_LABEL: HERMETIC_ENV_HOSTILE — the environment sets BASH_ENV/ENV, which EVERY"
+      echo "  non-interactive bash this gate starts would source before running the gate's own"
+      echo "  code. That is code the gate never read, executing inside the gate. Unset it and"
+      echo "  re-run — fail-closed on purpose: an unknown runtime is not a safe one."; } >&2
+    exit $_AX_HRM_EXIT
+elif [ -n "$_AX_HRM_FUNCS" ]; then
+    case " $_AX_HRM_FUNCS " in
+        *" ax_"*|*" _ax_"*|*" pp_"*)
+            { echo "$_AX_HRM_LABEL: HELPER_FUNCTION_INJECTED — the environment carries an exported"
+              echo "  shell function in this catalog's own namespace: ${_AX_HRM_FUNCS}"
+              echo "  Those names ARE the ratchet policy — which commit the anchor is, whether an"
+              echo "  absence is an honest bootstrap, which refs ship work. A definition arriving"
+              echo "  from outside replaces the policy with the caller's."; } >&2 ;;
+        *)
+            { echo "$_AX_HRM_LABEL: HERMETIC_ENV_HOSTILE — the environment carries exported shell"
+              echo "  function(s): ${_AX_HRM_FUNCS}"
+              echo "  An exported function replaces a command this gate calls, after every check it"
+              echo "  performs. The enumerated dependency list above is what we know we invoke; a"
+              echo "  runtime carrying definitions we did not enumerate is refused rather than"
+              echo "  assumed harmless. Unset them and re-run."; } >&2 ;;
+    esac
+    exit $_AX_HRM_EXIT
+fi
+# The WHOLE GIT_* family, not a denylist of the ones we thought of: every one of GIT_DIR,
+# GIT_WORK_TREE, GIT_COMMON_DIR, GIT_OBJECT_DIRECTORY, GIT_ALTERNATE_OBJECT_DIRECTORIES,
+# GIT_INDEX_FILE, GIT_NAMESPACE, GIT_CEILING_DIRECTORIES, GIT_CONFIG*, GIT_EXEC_PATH redirects
+# what `git -C <path>` actually reads. GIT_NO_REPLACE_OBJECTS is scrubbed too and re-set below:
+# inherited as 0 it RE-ENABLES replacement refs.
+for _ax_hn in ${!GIT_@}; do unset "$_ax_hn" 2>/dev/null || true; done
+unset BASH_ENV ENV GIT_DIR GIT_WORK_TREE GIT_COMMON_DIR GIT_OBJECT_DIRECTORY GIT_INDEX_FILE \
+    GIT_ALTERNATE_OBJECT_DIRECTORIES GIT_NAMESPACE GIT_CEILING_DIRECTORIES GIT_CONFIG \
+    GIT_CONFIG_GLOBAL GIT_CONFIG_SYSTEM GIT_CONFIG_NOSYSTEM GIT_CONFIG_COUNT GIT_EXEC_PATH \
+    GIT_DISCOVERY_ACROSS_FILESYSTEM 2>/dev/null || true
+export GIT_NO_REPLACE_OBJECTS=1
+# git and python3 are resolved ONCE, to absolute paths, from a PATH stripped of relative entries
+# (a `.` on PATH is a shim in whatever directory the gate happens to run from). The inherited
+# order is otherwise preserved, because forcing system directories here would silently swap the
+# interpreter that carries PyYAML and make whole guards skip — a fail-open dressed as hardening.
+unset AX_GIT_BIN AX_PY_BIN
+_AX_HRM_PATH=""; _ax_hifs="$IFS"; IFS=:
+for _ax_hd in $PATH; do
+    case "$_ax_hd" in /*) ;; *) continue ;; esac
+    [ -d "$_ax_hd" ] || continue
+    _AX_HRM_PATH="${_AX_HRM_PATH:+$_AX_HRM_PATH:}$_ax_hd"
+done
+IFS="$_ax_hifs"; unset _ax_hifs _ax_hd
+AX_GIT_BIN="$(PATH="$_AX_HRM_PATH" command -v git 2>/dev/null || true)"
+AX_PY_BIN="$(PATH="$_AX_HRM_PATH" command -v python3 2>/dev/null || true)"
+for _ax_hn in "git=$AX_GIT_BIN" "python3=$AX_PY_BIN"; do
+    if [ "${_ax_hn%%=*}" = "python3" ] && [ "$_AX_HRM_NEED_PY" != "1" ]; then continue; fi
+    _ax_hb="${_ax_hn#*=}"
+    if [ -z "$_ax_hb" ] || [ "${_ax_hb#/}" = "$_ax_hb" ] || [ ! -f "$_ax_hb" ] || [ ! -x "$_ax_hb" ]; then
+        { echo "$_AX_HRM_LABEL: HERMETIC_TOOL_UNUSABLE — ${_ax_hn%%=*} did not resolve to an"
+          echo "  executable regular file on an absolute path (got '${_ax_hb:-<nothing>}')."
+          echo "  This gate runs that program to decide whether a release may ship; it will not"
+          echo "  guess, and it will not fall back to whatever the inherited PATH offers."; } >&2
+        exit $_AX_HRM_EXIT
+    fi
+done
+export AX_GIT_BIN AX_PY_BIN
+unset _ax_hn _ax_hb _AX_HRM_BAD _AX_HRM_PATH
 
 # ── P1-3(a): LOAD-TIME INJECTION CHECK ───────────────────────────────────────────────
 # Runs BEFORE any definition, and the definitions below run UNCONDITIONALLY afterwards. Two
@@ -201,7 +356,8 @@ export GIT_NO_REPLACE_OBJECTS=1
 # marker first, so it is not mistaken for injection — and it still re-runs every definition.
 _AX_ANCHOR_FN_NAMES="ax_git ax_anchor_resolve ax_anchor_export_pin ax_anchor_check_pin \
 ax_anchor_check_replace_refs ax_anchor_check_ancestry ax_anchor_release_paths_regular \
-ax_anchor_worktree_paths_regular ax_anchor_verify_unmoved _ax_anchor_bootstrap_implausible"
+ax_anchor_worktree_paths_regular ax_anchor_verify_unmoved _ax_anchor_bootstrap_implausible \
+ax_anchor_bind_repo ax_ratchet_toolchain_authentic ax_ratchet_toolchain_paths"
 
 _ax_anchor_injection_report() {
     {
@@ -266,9 +422,111 @@ AX_ANCHOR_ZERO_SHA="0000000000000000000000000000000000000000"
 #   addition to the exported GIT_NO_REPLACE_OBJECTS above: the environment is what python
 #   subprocesses and forgetful call sites inherit, the flag is what survives a wrapper that
 #   scrubs the environment. Neither alone covers both.
+#   ROUND 5 (P1-1/P1-2): the BINARY is "$AX_GIT_BIN" — an absolute path validated by the hermetic
+#   bootstrap — because the bare word `git` resolves through PATH and, worse, through an inherited
+#   exported FUNCTION (measured: one rewrote the anchor pin). And when the repo is the root this
+#   entry BOUND, the git context is passed EXPLICITLY (--git-dir/--work-tree derived from that
+#   root and validated against it) instead of being discovered: `-C` alone would still walk up,
+#   and discovery is exactly what GIT_DIR/GIT_WORK_TREE hijack. `-C` is kept FIRST so relative
+#   pathspecs keep resolving inside the work tree.
 ax_git() {
     local repo="$1"; shift
-    git --no-replace-objects -C "$repo" "$@"
+    if [ -n "${AX_GIT_BOUND_ROOT:-}" ] && [ "$repo" = "$AX_GIT_BOUND_ROOT" ] \
+       && [ -n "${AX_GIT_BOUND_DIR:-}" ]; then
+        "${AX_GIT_BIN:-git}" -C "$repo" --git-dir="$AX_GIT_BOUND_DIR" \
+            --work-tree="$AX_GIT_BOUND_ROOT" --no-replace-objects "$@"
+    else
+        "${AX_GIT_BIN:-git}" --no-replace-objects -C "$repo" "$@"
+    fi
+}
+
+# ax_anchor_bind_repo <repo_root> <label>
+#   ROUND 5 / P1-1, the function form of hermetic-bootstrap part B, for callers that discover a
+#   root LATER than their own bootstrap (a sandbox, a --root override that turns out to be a real
+#   work tree). 0 = bound (or not a git tree at all, which is the relocated-copy sandbox);
+#   1 = GIT_CONTEXT_REDIRECTED, blocking for the caller.
+#   The bound pair is a PLAIN shell variable on purpose — exporting it would recreate the
+#   environment-supplied git context this whole round removes.
+ax_anchor_bind_repo() {
+    local repo="$1" label="$2" can top
+    AX_GIT_BOUND_ROOT=""
+    AX_GIT_BOUND_DIR=""
+    "${AX_GIT_BIN:-git}" --no-replace-objects -C "$repo" rev-parse --git-dir >/dev/null 2>&1 || return 0
+    can="$(builtin cd "$repo" 2>/dev/null && builtin pwd -P)" || can=""
+    top="$("${AX_GIT_BIN:-git}" --no-replace-objects -C "$repo" rev-parse --show-toplevel 2>/dev/null)"
+    top="$(builtin cd "${top:-/nonexistent}" 2>/dev/null && builtin pwd -P)" || top=""
+    if [ -z "$can" ] || [ "$can" != "$top" ]; then
+        {
+            echo "${label}: GIT_CONTEXT_REDIRECTED — the git work tree answering reads for"
+            echo "    ${repo}"
+            echo "  is '${top:-<unresolvable>}'. A gate that reads one repository while verifying"
+            echo "  another has verified nothing: with the context aimed at a clean shadow checkout"
+            echo "  of the same commit, a DIRTY tree reports the clean-tree fingerprint constant."
+        } >&2
+        return 1
+    fi
+    AX_GIT_BOUND_ROOT="$can"
+    AX_GIT_BOUND_DIR="$("${AX_GIT_BIN:-git}" --no-replace-objects -C "$can" rev-parse --absolute-git-dir 2>/dev/null)"
+    [ -n "$AX_GIT_BOUND_DIR" ] || { AX_GIT_BOUND_ROOT=""; return 1; }
+    return 0
+}
+
+# ax_ratchet_toolchain_paths — the ratchet's OWN implementation files, in one place so the runner,
+# both ratcheting guards and the push gate cannot disagree about what "the toolchain" is.
+ax_ratchet_toolchain_paths() {
+    printf '%s\n' \
+        "practices/scripts/lib/release_anchor.sh" \
+        "practices/scripts/lib/tree_fingerprint.py" \
+        "practices/scripts/verify-completion.sh" \
+        "practices/evals/completion_checklist_recency_guard.sh" \
+        ".githooks/pre-push" \
+        ".githooks/pre-push-lib.sh"
+}
+
+# ax_ratchet_toolchain_authentic <repo_root> <label> <rev> <rel>...
+#   ROUND 5 / P1-3. THE MODE OF A FILE IS NOT ITS CONTENTS. Every existing check on these paths
+#   asks whether they are regular files (lstat + git mode); none asked what they SAY. A
+#   regular-file tree_fingerprint.py edited to `print("nogit")` satisfied all of them, and the
+#   runner and the verifier then shared that one compromised implementation — measured: the push
+#   gate went from exit 1 (AUDIT_FINGERPRINT_MISMATCH on a hand-authored line) to exit 0.
+#   So the working-tree BYTES of each toolchain file must equal what git records for that path at
+#   <rev> (the sha under audit). `git diff --quiet <rev> -- <path>` is used rather than a hash
+#   comparison so that git's own filters/eol handling are applied on both sides.
+#   0 = every path authentic; 1 = RATCHET_TOOLCHAIN_MODIFIED / _UNVERIFIABLE (blocking).
+#   No-op when <repo_root> is not a git work tree (the relocated-copy sandbox [87] runs there and
+#   has no history to compare against; such a tree is also unpushable).
+#   COST, disclosed: an UNCOMMITTED edit to the ratchet's own code now blocks the gate that would
+#   certify it. That is the intended shape — the ratchet may not authenticate itself from an
+#   implementation nobody has committed — and it means toolchain work is "commit, then verify".
+ax_ratchet_toolchain_authentic() {
+    local repo="$1" label="$2" rev="$3"; shift 3
+    local rel bad=0 rc
+    "${AX_GIT_BIN:-git}" --no-replace-objects -C "$repo" rev-parse --git-dir >/dev/null 2>&1 || return 0
+    for rel in "$@"; do
+        ax_git "$repo" diff --quiet "$rev" -- "$rel" >/dev/null 2>&1
+        rc=$?
+        [ "$rc" -eq 0 ] && continue
+        {
+            if [ "$rc" -eq 1 ]; then
+                echo "${label}: RATCHET_TOOLCHAIN_MODIFIED — ${rel} in the working tree is NOT the"
+                echo "  ${rel} that git records at ${rev}."
+            else
+                echo "${label}: RATCHET_TOOLCHAIN_UNVERIFIABLE — ${rel} could not be compared against"
+                echo "  ${rev} (git exited ${rc}), so the gate cannot tell which implementation it is"
+                echo "  about to run. Unknown never passes."
+            fi
+            echo "  THESE ARE THE FILES THAT DECIDE WHETHER A RELEASE MAY SHIP: the anchor policy,"
+            echo "  the tree fingerprint, the runner, the push gate and the hook. Every other check"
+            echo "  on them asks whether they are REGULAR FILES; this one asks what they SAY,"
+            echo "  because a regular-file tree_fingerprint.py rewritten to print a constant passed"
+            echo "  all of the former and was then used by BOTH the runner that writes the evidence"
+            echo "  and the verifier that recomputes it — one implementation authenticating itself."
+            echo "  Commit the change (or restore the file) and re-run: the ratchet does not"
+            echo "  certify anything from an implementation that exists only in someone's tree."
+        } >&2
+        bad=1
+    done
+    return "$bad"
 }
 
 # ax_anchor_resolve <repo_root>
@@ -290,7 +548,7 @@ ax_anchor_resolve() {
     AX_ANCHOR_SHA="unavailable"
     AX_ANCHOR_PIN_MISMATCH=""
     AX_ANCHOR_PIN_APPLIED=0
-    command -v git >/dev/null 2>&1 || return 0
+    [ -n "${AX_GIT_BIN:-}" ] || command -v git >/dev/null 2>&1 || return 0
     ax_git "$repo" rev-parse --git-dir >/dev/null 2>&1 || return 0
     if ax_git "$repo" rev-parse --verify --quiet "$AX_ANCHOR_TRACKING_REF" >/dev/null 2>&1; then
         AX_ANCHOR_REF="$AX_ANCHOR_TRACKING_REF"
@@ -311,13 +569,20 @@ ax_anchor_resolve() {
     # Pin comparison — only for the repo the pin was taken in. A nested sandbox run (guards [87]
     # /[97]/[98] build throwaway repos) inherits the outer environment; keying on the root keeps
     # an unrelated repo's pin from firing there, and the sandbox's own runner re-publishes.
-    canon="$(cd "$repo" 2>/dev/null && pwd -P)" || canon=""
+    # `builtin cd`/`builtin pwd` (ROUND 5 / P1-2): an exported `pwd` function decided this value
+    # in the reviewer's measurement (PIN_ROOT=/foreign/repo), which is what the pin is keyed on.
+    canon="$(builtin cd "$repo" 2>/dev/null && builtin pwd -P)" || canon=""
     if [ -n "${AX_RELEASE_ANCHOR_SHA:-}" ] && [ -n "$canon" ] \
        && [ "${AX_RELEASE_ANCHOR_ROOT:-}" = "$canon" ]; then
         AX_ANCHOR_PIN_APPLIED=1
+        # AX_RELEASE_ANCHOR_REF is part of the pin and was previously exported but never checked
+        # (registered P2, closed here because it is one clause of the same comparison): the pin
+        # names WHICH REF was resolved, and a pin that agrees on the sha while disagreeing on the
+        # ref is not the resolution this run was held to.
         if [ "${AX_RELEASE_ANCHOR_SHA}" != "$AX_ANCHOR_SHA" ] \
-           || [ "${AX_RELEASE_ANCHOR_KIND:-}" != "$AX_ANCHOR_KIND" ]; then
-            AX_ANCHOR_PIN_MISMATCH="pinned ${AX_RELEASE_ANCHOR_KIND:-?}=${AX_RELEASE_ANCHOR_SHA} but the ref now resolves to ${AX_ANCHOR_KIND}=${AX_ANCHOR_SHA}"
+           || [ "${AX_RELEASE_ANCHOR_KIND:-}" != "$AX_ANCHOR_KIND" ] \
+           || [ "${AX_RELEASE_ANCHOR_REF:-}" != "$AX_ANCHOR_REF" ]; then
+            AX_ANCHOR_PIN_MISMATCH="pinned ${AX_RELEASE_ANCHOR_KIND:-?}[${AX_RELEASE_ANCHOR_REF:-?}]=${AX_RELEASE_ANCHOR_SHA} but the ref now resolves to ${AX_ANCHOR_KIND}[${AX_ANCHOR_REF}]=${AX_ANCHOR_SHA}"
         else
             # Equal by construction now — use the PINNED value, so the sha this guard ratchets
             # against is literally the object the runner recorded.
@@ -333,7 +598,7 @@ ax_anchor_resolve() {
 #   into the audit line and the value the children are held to.
 ax_anchor_export_pin() {
     local repo="$1" canon
-    canon="$(cd "$repo" 2>/dev/null && pwd -P)" || canon=""
+    canon="$(builtin cd "$repo" 2>/dev/null && builtin pwd -P)" || canon=""
     [ -n "$canon" ] || return 0
     [ -n "${AX_ANCHOR_SHA:-}" ] && [ "$AX_ANCHOR_SHA" != "unavailable" ] || return 0
     export AX_RELEASE_ANCHOR_SHA="$AX_ANCHOR_SHA"
@@ -370,10 +635,25 @@ ax_anchor_check_pin() {
 #   Uses for-each-ref rather than `git replace -l` so the listing itself cannot be affected by
 #   the replacement machinery it is inspecting.
 ax_anchor_check_replace_refs() {
-    local repo="$1" label="$2" refs
-    command -v git >/dev/null 2>&1 || return 0
+    local repo="$1" label="$2" refs rc
+    [ -n "${AX_GIT_BIN:-}" ] || command -v git >/dev/null 2>&1 || return 0
     ax_git "$repo" rev-parse --git-dir >/dev/null 2>&1 || return 0
+    # ROUND 5 fail-closed sweep: `refs=$(… 2>/dev/null)` made an ENUMERATION FAILURE
+    # indistinguishable from "there are none" — i.e. the one state an attacker can manufacture
+    # (break the ref store, or make the command fail) read as clean. An unanswerable question is
+    # not an answer.
     refs="$(ax_git "$repo" for-each-ref --format='%(refname)' refs/replace/ 2>/dev/null)"
+    rc=$?
+    if [ "$rc" -ne 0 ]; then
+        {
+            echo "${label}: ANCHOR_REPLACE_REFS_PRESENT — the replacement-ref enumeration itself"
+            echo "  FAILED (git exited ${rc}), so this run cannot tell whether refs/replace/* is"
+            echo "  empty. That question decides whether every ancestry / bootstrap / sha comparison"
+            echo "  below is being answered out of a fabricated object graph, and an unanswerable"
+            echo "  question fails closed."
+        } >&2
+        return 1
+    fi
     [ -n "$refs" ] || return 0
     {
         echo "${label}: ANCHOR_REPLACE_REFS_PRESENT — this repository carries git REPLACEMENT REFS:"
@@ -400,7 +680,19 @@ ax_anchor_check_ancestry() {
     local repo="$1" label="$2" head
     [ -n "${AX_ANCHOR_REF:-}" ] || return 0
     head="$(ax_git "$repo" rev-parse --verify --quiet HEAD 2>/dev/null)" || head=""
-    [ -n "$head" ] || return 0
+    # ROUND 5 fail-closed sweep: an unreadable HEAD used to mean "nothing to compare, carry on".
+    # On a repository that HAS an anchor, a HEAD that cannot be read is not an empty repo — it is
+    # a repository whose state we could not establish, and the ancestry layer is the one that
+    # refuses a forged anchor. Unknown blocks.
+    if [ -z "$head" ]; then
+        {
+            echo "${label}: ANCHOR_NOT_ANCESTOR — an anchor resolved (${AX_ANCHOR_KIND} ="
+            echo "  ${AX_ANCHOR_SHA}) but HEAD could not be read, so 'does this release descend from"
+            echo "  the release it claims to ratchet against' has no answer. The ancestry layer is"
+            echo "  what refuses an anchor aimed at a synthetic commit, so it fails closed."
+        } >&2
+        return 1
+    fi
     if ax_git "$repo" merge-base --is-ancestor "$AX_ANCHOR_SHA" "$head" 2>/dev/null; then
         return 0
     fi
@@ -428,12 +720,35 @@ ax_anchor_check_ancestry() {
 #   Layer (2). Called ONLY when <rel> is absent at the anchor. 0 = the absence is a plausible
 #   first-release bootstrap; 1 = ANCHOR_BOOTSTRAP_IMPLAUSIBLE (blocking).
 _ax_anchor_bootstrap_implausible() {
-    local repo="$1" label="$2" rel="$3" hist last_touch reason=""
+    local repo="$1" label="$2" rel="$3" hist last_touch reason="" rc
     hist="$(ax_git "$repo" rev-list --max-count=1 "$AX_ANCHOR_SHA" -- "$rel" 2>/dev/null)"
+    rc=$?
+    # ROUND 5 fail-closed sweep: a FAILED rev-list produced an empty `hist`, which this function
+    # reads as "the anchor's history never contained the path" — the bootstrap SKIP. The one
+    # branch that lets a ratchet stand down was reachable by making a git command fail.
+    if [ "$rc" -ne 0 ]; then
+        {
+            echo "${label}: ANCHOR_BOOTSTRAP_IMPLAUSIBLE — ${rel} is absent at the release anchor"
+            echo "  (${AX_ANCHOR_KIND} = ${AX_ANCHOR_SHA}) and the history walk that decides whether"
+            echo "  that absence is honest FAILED (git exited ${rc}). The honest-absence branch is"
+            echo "  the one that switches a ratchet off, so it is never taken on a failed probe."
+        } >&2
+        return 1
+    fi
     if [ -n "$hist" ]; then
         reason="the anchor's OWN history contains ${rel} (last touched by ${hist}), so its"$'\n'"    absence at ${AX_ANCHOR_SHA} is a DELETION, not a never-existed"
     else
         last_touch="$(ax_git "$repo" rev-list --max-count=1 HEAD -- "$rel" 2>/dev/null)"
+        # Same fail-closed rule for the redundant probe: a failed walk is not a clean one.
+        if [ $? -ne 0 ]; then
+            {
+                echo "${label}: ANCHOR_BOOTSTRAP_IMPLAUSIBLE — ${rel} is absent at the anchor and the"
+                echo "  second, redundant history probe (from HEAD's walk) FAILED. Two probes exist so"
+                echo "  a trick that fools one still has to fool the other; a probe that cannot run"
+                echo "  has not been fooled, it has been silenced, and silence is not absence."
+            } >&2
+            return 1
+        fi
         if [ -n "$last_touch" ] \
            && ax_git "$repo" merge-base --is-ancestor "$last_touch" "$AX_ANCHOR_SHA" 2>/dev/null; then
             reason="the commit that last touched ${rel} on HEAD's history (${last_touch}) is an"$'\n'"    ANCESTOR of the anchor, so the anchor's tree cannot honestly lack it"

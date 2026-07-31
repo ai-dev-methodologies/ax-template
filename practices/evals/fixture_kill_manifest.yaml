@@ -37,7 +37,7 @@
 # distinct ids and distinct (guard, fixture) pairs are all equal to the value below.
 # fixture_kill_proof_guard.sh pins the same number as LIVE_MIN_ITEMS, so lowering the gate takes
 # two coordinated edits rather than one silent deletion.
-min_items: 69
+min_items: 71
 
 items:
 
@@ -1094,4 +1094,38 @@ items:
     fixture: practices/evals/fixtures/completion_checklist_recency/fail_run_ledger_status_conflict
     fixture_arg: '--root'
     anchor: 'rec["status"] not in ("PASS",)'
+    neuter: 'False'
+
+  # ── completion_checklist_recency/fail_tree_fingerprint_not_a_digest ───────────
+  # (ROUND 5, TD-2026-07-30-P1-hermetic-runtime.)
+  # fixture: runs.jsonl latest line is green on every other axis but records
+  #          tree_fingerprint: "x". Before round 5 the "the tree was identified" test asked
+  #          only for a non-empty string that is neither "nogit" nor "unverifiable-*", so ANY
+  #          string passed — and on a fixture root nothing else ever looked at the value → the
+  #          recorded fingerprint must now BE a 64-hex digest → exit 1.
+  # anchor:  the digest-shape clause of check #6.
+  # neuter:  make the clause vacuously true → "x" identifies a tree again → exit 0.
+  - id: completion_checklist_recency/fail_tree_fingerprint_not_a_digest
+    guard: practices/evals/completion_checklist_recency_guard.sh
+    fixture: practices/evals/fixtures/completion_checklist_recency/fail_tree_fingerprint_not_a_digest
+    fixture_arg: '--root'
+    anchor: 'not DIGEST_RE.match(tree_fp)'
+    neuter: 'False'
+
+  # ── completion_checklist_recency/fail_git_context_redirected ──────────────────
+  # (ROUND 5, TD-2026-07-30-P1-hermetic-runtime.)
+  # fixture: a well-formed audit line and NO expected_head.txt, in a directory that sits
+  #          INSIDE a git repository without being the top of it — so every `git -C <root>`
+  #          answer is about a different tree. That is the same shape a redirected
+  #          GIT_DIR/GIT_WORK_TREE produces (measured: a dirty tree reported the clean-tree
+  #          fingerprint constant of a shadow checkout). Before round 5 the guard audited the
+  #          record against the ENCLOSING repository's HEAD, and exited 0 outright if git
+  #          failed → exit 1 now.
+  # anchor:  the not-the-toplevel branch of check #3.
+  # neuter:  condition-constant False → the record is audited against a foreign HEAD → exit 0.
+  - id: completion_checklist_recency/fail_git_context_redirected
+    guard: practices/evals/completion_checklist_recency_guard.sh
+    fixture: practices/evals/fixtures/completion_checklist_recency/fail_git_context_redirected
+    fixture_arg: '--root'
+    anchor: 'inside_git and not live_git_root and not expected_head_file.is_file() and not expect_sha_arg'
     neuter: 'False'

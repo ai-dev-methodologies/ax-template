@@ -19,8 +19,103 @@
 #   bash practices/evals/run-all-guards.sh --include-fixtures
 set -uo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+# ── ROUND 5 / P1-1+P1-2: HERMETIC RUNTIME BOOTSTRAP (A) — DELIBERATELY DUPLICATED ────
+# (TD-2026-07-30-P1-hermetic-runtime; the full argument lives in the header of
+#  practices/scripts/lib/release_anchor.sh.) THE RATCHET MAY NOT INHERIT ITS OWN RUNTIME.
+# Measured: an exported `git` function rewrote the anchor pin; an exported `pwd` moved the pin's
+# root to a foreign repo; an exported `python3` turned a FAILING guard into exit 0; GIT_DIR/
+# GIT_WORK_TREE made every read describe a CLEAN shadow checkout of a DIRTY tree. All of it
+# arrives through the environment, so it must die BEFORE the first git call, BEFORE any `source`,
+# and BEFORE this script computes its own directory with `cd`/`pwd` — which is exactly why these
+# lines cannot live in a sourced file. The duplication IS the bootstrap.
+_AX_HRM_LABEL="run-all-guards"; _AX_HRM_EXIT=2; _AX_HRM_NEED_PY=1
+_AX_HRM_DEPS="git bash sh python python3 env cd pwd command builtin printf echo eval exec read \
+test declare unset export local source grep egrep sed awk cut tr sort uniq head tail wc find ls \
+cat cp mv rm mkdir mktemp dirname basename date shasum sha256sum xargs tee true false"
+_AX_HRM_BAD=""
+for _ax_hn in $_AX_HRM_DEPS; do
+    declare -F "$_ax_hn" >/dev/null 2>&1 && _AX_HRM_BAD="$_ax_hn"
+done
+if [ -n "$_AX_HRM_BAD" ]; then
+    { echo "$_AX_HRM_LABEL: HELPER_FUNCTION_INJECTED — this shell already defines a function named"
+      echo "  '$_AX_HRM_BAD', and that is a COMMAND THIS GATE INVOKES. bash imports exported"
+      echo "  functions across \`bash script.sh\`, so the definition silently replaces the program"
+      echo "  every check below runs — measured: an exported \`git\` rewrote the release-anchor pin,"
+      echo "  an exported \`python3\` turned a failing guard into exit 0, an exported \`pwd\` moved the"
+      echo "  pin's root to a foreign repository. Unset it (\`unset -f $_AX_HRM_BAD\`) and re-run."; } >&2
+    exit $_AX_HRM_EXIT
+fi
+for _ax_hn in $_AX_HRM_DEPS; do unset -f "$_ax_hn" 2>/dev/null || true; done
+# Any exported shell function that SURVIVED the scrub above is refused too — the enumeration is a
+# list of what we know we call, and an unknown runtime is not a safe one. Names in this catalog's
+# own namespaces are reported as HELPER_FUNCTION_INJECTED instead, because that is what they are
+# and because the round-4 policy checks own that vocabulary.
+_AX_HRM_FUNCS="$(/usr/bin/env | sed -n 's/^BASH_FUNC_\([A-Za-z_][A-Za-z0-9_]*\).*/\1/p' | tr '\n' ' ')"
+if [ -n "${BASH_ENV:-}${ENV:-}" ]; then
+    { echo "$_AX_HRM_LABEL: HERMETIC_ENV_HOSTILE — the environment sets BASH_ENV/ENV, which EVERY"
+      echo "  non-interactive bash this gate starts would source before running the gate's own"
+      echo "  code. That is code the gate never read, executing inside the gate. Unset it and"
+      echo "  re-run — fail-closed on purpose: an unknown runtime is not a safe one."; } >&2
+    exit $_AX_HRM_EXIT
+elif [ -n "$_AX_HRM_FUNCS" ]; then
+    case " $_AX_HRM_FUNCS " in
+        *" ax_"*|*" _ax_"*|*" pp_"*)
+            { echo "$_AX_HRM_LABEL: HELPER_FUNCTION_INJECTED — the environment carries an exported"
+              echo "  shell function in this catalog's own namespace: ${_AX_HRM_FUNCS}"
+              echo "  Those names ARE the ratchet policy — which commit the anchor is, whether an"
+              echo "  absence is an honest bootstrap, which refs ship work. A definition arriving"
+              echo "  from outside replaces the policy with the caller's."; } >&2 ;;
+        *)
+            { echo "$_AX_HRM_LABEL: HERMETIC_ENV_HOSTILE — the environment carries exported shell"
+              echo "  function(s): ${_AX_HRM_FUNCS}"
+              echo "  An exported function replaces a command this gate calls, after every check it"
+              echo "  performs. The enumerated dependency list above is what we know we invoke; a"
+              echo "  runtime carrying definitions we did not enumerate is refused rather than"
+              echo "  assumed harmless. Unset them and re-run."; } >&2 ;;
+    esac
+    exit $_AX_HRM_EXIT
+fi
+# The WHOLE GIT_* family, not a denylist of the ones we thought of: every one of GIT_DIR,
+# GIT_WORK_TREE, GIT_COMMON_DIR, GIT_OBJECT_DIRECTORY, GIT_ALTERNATE_OBJECT_DIRECTORIES,
+# GIT_INDEX_FILE, GIT_NAMESPACE, GIT_CEILING_DIRECTORIES, GIT_CONFIG*, GIT_EXEC_PATH redirects
+# what `git -C <path>` actually reads. GIT_NO_REPLACE_OBJECTS is scrubbed too and re-set below:
+# inherited as 0 it RE-ENABLES replacement refs.
+for _ax_hn in ${!GIT_@}; do unset "$_ax_hn" 2>/dev/null || true; done
+unset BASH_ENV ENV GIT_DIR GIT_WORK_TREE GIT_COMMON_DIR GIT_OBJECT_DIRECTORY GIT_INDEX_FILE \
+    GIT_ALTERNATE_OBJECT_DIRECTORIES GIT_NAMESPACE GIT_CEILING_DIRECTORIES GIT_CONFIG \
+    GIT_CONFIG_GLOBAL GIT_CONFIG_SYSTEM GIT_CONFIG_NOSYSTEM GIT_CONFIG_COUNT GIT_EXEC_PATH \
+    GIT_DISCOVERY_ACROSS_FILESYSTEM 2>/dev/null || true
+export GIT_NO_REPLACE_OBJECTS=1
+# git and python3 are resolved ONCE, to absolute paths, from a PATH stripped of relative entries
+# (a `.` on PATH is a shim in whatever directory the gate happens to run from). The inherited
+# order is otherwise preserved, because forcing system directories here would silently swap the
+# interpreter that carries PyYAML and make whole guards skip — a fail-open dressed as hardening.
+unset AX_GIT_BIN AX_PY_BIN
+_AX_HRM_PATH=""; _ax_hifs="$IFS"; IFS=:
+for _ax_hd in $PATH; do
+    case "$_ax_hd" in /*) ;; *) continue ;; esac
+    [ -d "$_ax_hd" ] || continue
+    _AX_HRM_PATH="${_AX_HRM_PATH:+$_AX_HRM_PATH:}$_ax_hd"
+done
+IFS="$_ax_hifs"; unset _ax_hifs _ax_hd
+AX_GIT_BIN="$(PATH="$_AX_HRM_PATH" command -v git 2>/dev/null || true)"
+AX_PY_BIN="$(PATH="$_AX_HRM_PATH" command -v python3 2>/dev/null || true)"
+for _ax_hn in "git=$AX_GIT_BIN" "python3=$AX_PY_BIN"; do
+    if [ "${_ax_hn%%=*}" = "python3" ] && [ "$_AX_HRM_NEED_PY" != "1" ]; then continue; fi
+    _ax_hb="${_ax_hn#*=}"
+    if [ -z "$_ax_hb" ] || [ "${_ax_hb#/}" = "$_ax_hb" ] || [ ! -f "$_ax_hb" ] || [ ! -x "$_ax_hb" ]; then
+        { echo "$_AX_HRM_LABEL: HERMETIC_TOOL_UNUSABLE — ${_ax_hn%%=*} did not resolve to an"
+          echo "  executable regular file on an absolute path (got '${_ax_hb:-<nothing>}')."
+          echo "  This gate runs that program to decide whether a release may ship; it will not"
+          echo "  guess, and it will not fall back to whatever the inherited PATH offers."; } >&2
+        exit $_AX_HRM_EXIT
+    fi
+done
+export AX_GIT_BIN AX_PY_BIN
+unset _ax_hn _ax_hb _AX_HRM_BAD _AX_HRM_PATH
+
+SCRIPT_DIR="$(builtin cd "$(dirname "${BASH_SOURCE[0]}")" && builtin pwd)"
+REPO_ROOT="$(builtin cd "$SCRIPT_DIR/../.." && builtin pwd)"
 
 INCLUDE_FIXTURES=0
 while [ $# -gt 0 ]; do
@@ -1267,6 +1362,22 @@ run_guard "evidence_quote_spotcheck/fixture_protected_ledger_symlink" 2 \
 # not vacuous.
 run_guard "release_anchor/helper_injection_blocked" 0 \
     bash "$REPO_ROOT/practices/scripts/ax-prove-helper-injection-blocked.sh"
+# ── ROUND-5 (2026-07-30, TD-2026-07-30-P1-hermetic-runtime) ────────────────────────
+# Round 4 proved the helper's own NAMES cannot be injected. Round 5 attacks one level down: the
+# RUNTIME the gate is made of. The git REPOSITORY is chosen by the environment (GIT_DIR /
+# GIT_WORK_TREE — measured: a DIRTY tree fingerprinted as the clean-tree constant of a shadow
+# checkout, and reported a clean status and the shadow's toplevel); the COMMANDS are chosen by the
+# environment (an exported `git` rewrote the anchor pin, an exported `pwd` moved the pin's root to
+# a foreign repo, an exported `python3` turned a FAILING guard into exit 0); and the gate's own
+# IMPLEMENTATION is a mutable file (a regular-file tree_fingerprint.py rewritten to print "nogit"
+# turned a refused forgery into a passing push, because the recompute only objected when the
+# output was non-empty and not "nogit" — unknown fell OPEN, and the runner and the verifier shared
+# the compromised copy). None of that is directory-shaped, so it is a scripted proof rather than a
+# `--root` fixture: it carries its own NEGATIVE CONTROL (the unattacked sandbox PASSES) and its
+# own pre-fix reproduction (a sandbox built with the round-5 additions removed accepts the
+# redirection attack), so neither half can be vacuous.
+run_guard "hermetic_runtime/inherited_runtime_blocked" 0 \
+    bash "$REPO_ROOT/practices/scripts/ax-prove-hermetic-runtime.sh"
 # ── P1-2/P1-4 ROUND-4: the recency guard's FIXTURE SWEEP ───────────────────────────
 # This script deliberately does not run completion_checklist_recency_guard against the LIVE tree
 # (it audits the log verify-completion writes, and this script runs INSIDE that run — the cycle

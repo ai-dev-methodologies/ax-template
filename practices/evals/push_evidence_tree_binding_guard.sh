@@ -136,8 +136,23 @@ NEUTER_C_VALUE='if False:'
 # otherwise the matrix would report the harness as broken every time a layer is ADDED, which is
 # the opposite of what it is for. Defence in depth and single-layer mutation proofs pull against
 # each other, and this is where that tension is paid: the neuter set grows with the layer set.
-NEUTER_C2_ANCHOR='if recomputed and recomputed != "nogit" and recomputed != tree_fp:'
-NEUTER_C2_VALUE='if False:'
+# ROUND 5 (TD-2026-07-30-P1-hermetic-runtime): the recompute's anchor changed because the check
+# itself did — `if recomputed and recomputed != "nogit" and …` WAS the fail-open (an empty or
+# "nogit" result skipped the comparison, so a helper rewritten to print "nogit" turned a rejected
+# forgery into a passing push). It is now an unconditional comparison against a digest computed
+# with the PREVIOUS RELEASE's copy of the helper.
+NEUTER_C2_ANCHOR='    if recomputed != tree_fp:'
+NEUTER_C2_VALUE='    if False:'
+# Two further INDEPENDENT layers arrived in round 5, each of which blocks this attack on its own,
+# so each is neutered in every mutation mode for exactly the reason spelled out for C2 above:
+#   (C3) the consumer now reads `git status` ITSELF instead of believing the record's tree_clean,
+#        so a dirty tree is refused even when the producer lies about it; and
+#   (P2) the producer now accumulates dirt across the run — tree_clean_end can never be walked
+#        back to true by a clean final sample.
+NEUTER_C3_ANCHOR='    if st_out:'
+NEUTER_C3_VALUE='    if False:'
+NEUTER_P2_ANCHOR='[ "$TREE_EVER_DIRTY" = true ] && END_TREE_CLEAN=false'
+NEUTER_P2_VALUE='[ "$TREE_EVER_DIRTY" = neutered-for-the-mutation-matrix ] && END_TREE_CLEAN=false'
 
 # neuter_copy <src> <dest> <anchor> <value> <apply:0|1>
 neuter_copy() {
@@ -182,6 +197,10 @@ make_subject() {
     local want_f=0; [ "$want_p" -eq 1 ] || [ "$want_c" -eq 1 ] && want_f=1
     neuter_copy "$dest/completion_checklist_recency_guard.sh" "$dest/completion_checklist_recency_guard.sh" \
         "$NEUTER_C2_ANCHOR" "$NEUTER_C2_VALUE" "$want_f" || return 3
+    neuter_copy "$dest/completion_checklist_recency_guard.sh" "$dest/completion_checklist_recency_guard.sh" \
+        "$NEUTER_C3_ANCHOR" "$NEUTER_C3_VALUE" "$want_f" || return 3
+    neuter_copy "$dest/verify-completion.sh" "$dest/verify-completion.sh" \
+        "$NEUTER_P2_ANCHOR" "$NEUTER_P2_VALUE" "$want_f" || return 3
     return 0
 }
 

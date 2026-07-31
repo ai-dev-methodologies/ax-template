@@ -1,0 +1,3 @@
+{"step_id": "step-0", "status": "PASS", "ts": "2026-07-30T00:00:00Z", "head_sha": "abc123def456abc123def456abc123def456abcd", "provenance": "executed", "tree_fingerprint": "x"}
+{"step_id": "step-1", "status": "PASS", "ts": "2026-07-30T00:00:00Z", "head_sha": "abc123def456abc123def456abc123def456abcd", "provenance": "executed", "tree_fingerprint": "x"}
+{"step_id": "step-2", "status": "PASS", "ts": "2026-07-30T00:00:00Z", "head_sha": "abc123def456abc123def456abc123def456abcd", "provenance": "executed", "tree_fingerprint": "x"}

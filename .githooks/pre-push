@@ -35,6 +35,101 @@
 # remains the second line of defense for whichever git policy the fork-받은 팀 picks.
 set -uo pipefail
 
+# ── ROUND 5 / P1-1+P1-2: HERMETIC RUNTIME BOOTSTRAP (A) — DELIBERATELY DUPLICATED ────
+# (TD-2026-07-30-P1-hermetic-runtime; the full argument lives in the header of
+#  practices/scripts/lib/release_anchor.sh.) THE RATCHET MAY NOT INHERIT ITS OWN RUNTIME.
+# Measured: an exported `git` function rewrote the anchor pin; an exported `pwd` moved the pin's
+# root to a foreign repo; an exported `python3` turned a FAILING guard into exit 0; GIT_DIR/
+# GIT_WORK_TREE made every read describe a CLEAN shadow checkout of a DIRTY tree. All of it
+# arrives through the environment, so it must die BEFORE the first git call, BEFORE any `source`,
+# and BEFORE this script computes its own directory with `cd`/`pwd` — which is exactly why these
+# lines cannot live in a sourced file. The duplication IS the bootstrap.
+_AX_HRM_LABEL="pre-push"; _AX_HRM_EXIT=1; _AX_HRM_NEED_PY=0
+_AX_HRM_DEPS="git bash sh python python3 env cd pwd command builtin printf echo eval exec read \
+test declare unset export local source grep egrep sed awk cut tr sort uniq head tail wc find ls \
+cat cp mv rm mkdir mktemp dirname basename date shasum sha256sum xargs tee true false"
+_AX_HRM_BAD=""
+for _ax_hn in $_AX_HRM_DEPS; do
+    declare -F "$_ax_hn" >/dev/null 2>&1 && _AX_HRM_BAD="$_ax_hn"
+done
+if [ -n "$_AX_HRM_BAD" ]; then
+    { echo "$_AX_HRM_LABEL: HELPER_FUNCTION_INJECTED — this shell already defines a function named"
+      echo "  '$_AX_HRM_BAD', and that is a COMMAND THIS GATE INVOKES. bash imports exported"
+      echo "  functions across \`bash script.sh\`, so the definition silently replaces the program"
+      echo "  every check below runs — measured: an exported \`git\` rewrote the release-anchor pin,"
+      echo "  an exported \`python3\` turned a failing guard into exit 0, an exported \`pwd\` moved the"
+      echo "  pin's root to a foreign repository. Unset it (\`unset -f $_AX_HRM_BAD\`) and re-run."; } >&2
+    exit $_AX_HRM_EXIT
+fi
+for _ax_hn in $_AX_HRM_DEPS; do unset -f "$_ax_hn" 2>/dev/null || true; done
+# Any exported shell function that SURVIVED the scrub above is refused too — the enumeration is a
+# list of what we know we call, and an unknown runtime is not a safe one. Names in this catalog's
+# own namespaces are reported as HELPER_FUNCTION_INJECTED instead, because that is what they are
+# and because the round-4 policy checks own that vocabulary.
+_AX_HRM_FUNCS="$(/usr/bin/env | sed -n 's/^BASH_FUNC_\([A-Za-z_][A-Za-z0-9_]*\).*/\1/p' | tr '\n' ' ')"
+if [ -n "${BASH_ENV:-}${ENV:-}" ]; then
+    { echo "$_AX_HRM_LABEL: HERMETIC_ENV_HOSTILE — the environment sets BASH_ENV/ENV, which EVERY"
+      echo "  non-interactive bash this gate starts would source before running the gate's own"
+      echo "  code. That is code the gate never read, executing inside the gate. Unset it and"
+      echo "  re-run — fail-closed on purpose: an unknown runtime is not a safe one."; } >&2
+    exit $_AX_HRM_EXIT
+elif [ -n "$_AX_HRM_FUNCS" ]; then
+    case " $_AX_HRM_FUNCS " in
+        *" ax_"*|*" _ax_"*|*" pp_"*)
+            { echo "$_AX_HRM_LABEL: HELPER_FUNCTION_INJECTED — the environment carries an exported"
+              echo "  shell function in this catalog's own namespace: ${_AX_HRM_FUNCS}"
+              echo "  Those names ARE the ratchet policy — which commit the anchor is, whether an"
+              echo "  absence is an honest bootstrap, which refs ship work. A definition arriving"
+              echo "  from outside replaces the policy with the caller's."; } >&2 ;;
+        *)
+            { echo "$_AX_HRM_LABEL: HERMETIC_ENV_HOSTILE — the environment carries exported shell"
+              echo "  function(s): ${_AX_HRM_FUNCS}"
+              echo "  An exported function replaces a command this gate calls, after every check it"
+              echo "  performs. The enumerated dependency list above is what we know we invoke; a"
+              echo "  runtime carrying definitions we did not enumerate is refused rather than"
+              echo "  assumed harmless. Unset them and re-run."; } >&2 ;;
+    esac
+    exit $_AX_HRM_EXIT
+fi
+# The WHOLE GIT_* family, not a denylist of the ones we thought of: every one of GIT_DIR,
+# GIT_WORK_TREE, GIT_COMMON_DIR, GIT_OBJECT_DIRECTORY, GIT_ALTERNATE_OBJECT_DIRECTORIES,
+# GIT_INDEX_FILE, GIT_NAMESPACE, GIT_CEILING_DIRECTORIES, GIT_CONFIG*, GIT_EXEC_PATH redirects
+# what `git -C <path>` actually reads. GIT_NO_REPLACE_OBJECTS is scrubbed too and re-set below:
+# inherited as 0 it RE-ENABLES replacement refs.
+for _ax_hn in ${!GIT_@}; do unset "$_ax_hn" 2>/dev/null || true; done
+unset BASH_ENV ENV GIT_DIR GIT_WORK_TREE GIT_COMMON_DIR GIT_OBJECT_DIRECTORY GIT_INDEX_FILE \
+    GIT_ALTERNATE_OBJECT_DIRECTORIES GIT_NAMESPACE GIT_CEILING_DIRECTORIES GIT_CONFIG \
+    GIT_CONFIG_GLOBAL GIT_CONFIG_SYSTEM GIT_CONFIG_NOSYSTEM GIT_CONFIG_COUNT GIT_EXEC_PATH \
+    GIT_DISCOVERY_ACROSS_FILESYSTEM 2>/dev/null || true
+export GIT_NO_REPLACE_OBJECTS=1
+# git and python3 are resolved ONCE, to absolute paths, from a PATH stripped of relative entries
+# (a `.` on PATH is a shim in whatever directory the gate happens to run from). The inherited
+# order is otherwise preserved, because forcing system directories here would silently swap the
+# interpreter that carries PyYAML and make whole guards skip — a fail-open dressed as hardening.
+unset AX_GIT_BIN AX_PY_BIN
+_AX_HRM_PATH=""; _ax_hifs="$IFS"; IFS=:
+for _ax_hd in $PATH; do
+    case "$_ax_hd" in /*) ;; *) continue ;; esac
+    [ -d "$_ax_hd" ] || continue
+    _AX_HRM_PATH="${_AX_HRM_PATH:+$_AX_HRM_PATH:}$_ax_hd"
+done
+IFS="$_ax_hifs"; unset _ax_hifs _ax_hd
+AX_GIT_BIN="$(PATH="$_AX_HRM_PATH" command -v git 2>/dev/null || true)"
+AX_PY_BIN="$(PATH="$_AX_HRM_PATH" command -v python3 2>/dev/null || true)"
+for _ax_hn in "git=$AX_GIT_BIN" "python3=$AX_PY_BIN"; do
+    if [ "${_ax_hn%%=*}" = "python3" ] && [ "$_AX_HRM_NEED_PY" != "1" ]; then continue; fi
+    _ax_hb="${_ax_hn#*=}"
+    if [ -z "$_ax_hb" ] || [ "${_ax_hb#/}" = "$_ax_hb" ] || [ ! -f "$_ax_hb" ] || [ ! -x "$_ax_hb" ]; then
+        { echo "$_AX_HRM_LABEL: HERMETIC_TOOL_UNUSABLE — ${_ax_hn%%=*} did not resolve to an"
+          echo "  executable regular file on an absolute path (got '${_ax_hb:-<nothing>}')."
+          echo "  This gate runs that program to decide whether a release may ship; it will not"
+          echo "  guess, and it will not fall back to whatever the inherited PATH offers."; } >&2
+        exit $_AX_HRM_EXIT
+    fi
+done
+export AX_GIT_BIN AX_PY_BIN
+unset _ax_hn _ax_hb _AX_HRM_BAD _AX_HRM_PATH
+
 # ── P1-1 (ROUND 4, TD-2026-07-30-P1-anchor-runtime) ──────────────────────────────────
 # `git replace <real> <fabricated>` keeps every sha identical while swapping the OBJECT that
 # rev-parse / merge-base / diff read. This hook is the last gate before publication and every
@@ -46,7 +141,49 @@ export GIT_NO_REPLACE_OBJECTS=1
 # execute it. The check must precede the source, which means it cannot live in the lib — that
 # would be the object under test certifying itself. The same ~15 lines appear in both ratcheting
 # guards and in verify-completion.sh; the duplication IS the bootstrap.
-_PP_LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+_PP_LIB_DIR="$(builtin cd "$(dirname "${BASH_SOURCE[0]}")" && builtin pwd)"
+_PP_SELF_ROOT="$(builtin cd "$_PP_LIB_DIR/.." && builtin pwd -P)"
+# ── HERMETIC RUNTIME BOOTSTRAP (B): bind the git identity to the trusted root ────────
+# Part A removed the inherited git context; this derives the real one and REQUIRES it to be the
+# root this entry resolved for itself. `git -C <root>` WALKS UP when <root> is not itself a work
+# tree, so without this a gate can authenticate a repository that merely CONTAINS the directory it
+# is scanning. The derived gitdir/worktree are then passed EXPLICITLY on every call for this root
+# (see ax_git), so nothing downstream depends on discovery at all.
+# NOT exported, and unset first: a binding that could arrive from the environment would be a
+# NEW redirection channel of exactly the kind part A just closed. Every entry derives its own.
+unset AX_GIT_BOUND_ROOT AX_GIT_BOUND_DIR
+if "$AX_GIT_BIN" -C "$_PP_SELF_ROOT" rev-parse --git-dir >/dev/null 2>&1; then
+    _ax_hcan="$(builtin cd "$_PP_SELF_ROOT" 2>/dev/null && builtin pwd -P)"
+    _ax_htop="$("$AX_GIT_BIN" -C "$_PP_SELF_ROOT" rev-parse --show-toplevel 2>/dev/null)"
+    _ax_htop="$(builtin cd "${_ax_htop:-/nonexistent}" 2>/dev/null && builtin pwd -P)"
+    if [ -z "$_ax_hcan" ] || [ "$_ax_htop" != "$_ax_hcan" ]; then
+        { echo "$_AX_HRM_LABEL: GIT_CONTEXT_REDIRECTED — the git work tree answering this gate's"
+          echo "  reads is '${_ax_htop:-<unresolvable>}', not the root it was invoked for"
+          echo "  ('${_ax_hcan:-$_PP_SELF_ROOT}'). Every head / status / fingerprint / anchor answer would"
+          echo "  then describe a different tree than the one being verified — measured: with the"
+          echo "  context aimed at a clean shadow checkout, a DIRTY tree reported the clean-tree"
+          echo "  fingerprint constant and a clean status."; } >&2
+        exit $_AX_HRM_EXIT
+    fi
+    AX_GIT_BOUND_ROOT="$_ax_hcan"
+    AX_GIT_BOUND_DIR="$("$AX_GIT_BIN" -C "$AX_GIT_BOUND_ROOT" rev-parse --absolute-git-dir 2>/dev/null)"
+    if [ -z "$AX_GIT_BOUND_DIR" ]; then
+        echo "$_AX_HRM_LABEL: GIT_CONTEXT_REDIRECTED — the gitdir of '$AX_GIT_BOUND_ROOT' could not" >&2
+        echo "  be derived, so no explicit git context can be pinned. Blocking rather than falling" >&2
+        echo "  back to discovery, which is the thing being pinned." >&2
+        exit $_AX_HRM_EXIT
+    fi
+    case "$AX_GIT_BIN" in "$AX_GIT_BOUND_ROOT"/*) _ax_htop=repo ;; *) _ax_htop="" ;; esac
+    case "$AX_PY_BIN" in "$AX_GIT_BOUND_ROOT"/*) _ax_htop=repo ;; esac
+    if [ -n "$_ax_htop" ]; then
+        echo "$_AX_HRM_LABEL: HERMETIC_TOOL_UNUSABLE — git/python3 resolved to a binary INSIDE the" >&2
+        echo "  repository being verified ($AX_GIT_BIN / $AX_PY_BIN). The tree under audit does not" >&2
+        echo "  get to supply the programs that audit it." >&2
+        exit $_AX_HRM_EXIT
+    fi
+    unset _ax_hcan _ax_htop
+fi
+
 if [[ -L "$_PP_LIB_DIR/pre-push-lib.sh" ]]; then
     echo "[practices] ✗ HELPER_PATH_NOT_REGULAR — .githooks/pre-push-lib.sh is a SYMLINK." >&2
     echo "[practices]   It decides which refs ship work and whether the R25 recency guard is" >&2
@@ -58,9 +195,24 @@ if [[ ! -f "$_PP_LIB_DIR/pre-push-lib.sh" ]]; then
     echo "[practices]   anything without it, so it BLOCKS rather than degrading silently." >&2
     exit 1
 fi
-_PP_ROOT_PROBE="$(git rev-parse --show-toplevel 2>/dev/null || true)"
-if [[ -n "$_PP_ROOT_PROBE" ]]; then
-    _PP_LIB_MODE="$(git ls-tree HEAD -- .githooks/pre-push-lib.sh 2>/dev/null | head -1)"
+# ROUND 5 / P1-1: the root is NOT taken from `git rev-parse` any more — that read is exactly what
+# GIT_DIR/GIT_WORK_TREE redirect. It is derived from this hook's own location (core.hooksPath is
+# .githooks INSIDE the repository) and the hermetic bootstrap above has already REQUIRED git to
+# agree that this is the toplevel (GIT_CONTEXT_REDIRECTED otherwise). A push whose gate ran
+# against a different repository is the whole point of that check.
+# Fail-closed: on a root that git cannot answer for, the mode/replace probes below cannot run —
+# and "could not check" must not be spelled the same way as "checked, fine".
+if [[ -z "${AX_GIT_BOUND_ROOT:-}" ]]; then
+    echo "[practices] ✗ GIT_CONTEXT_UNUSABLE — $_PP_SELF_ROOT is not a git work tree git can" >&2
+    echo "[practices]   answer for, so the push gate cannot verify its own helper, the absence of" >&2
+    echo "[practices]   replacement refs, or which commits ship. Push BLOCKED." >&2
+    exit 1
+fi
+# (The probes below used to be conditional on a `git rev-parse` succeeding — the fail-open this
+# round removed. They are unconditional now: reaching this line already means git answered for
+# this root, because the check above BLOCKS when it did not.)
+if true; then
+    _PP_LIB_MODE="$("$AX_GIT_BIN" --no-replace-objects -C "$AX_GIT_BOUND_ROOT" ls-tree HEAD -- .githooks/pre-push-lib.sh 2>/dev/null | head -1)"
     _PP_LIB_MODE="${_PP_LIB_MODE%% *}"
     case "${_PP_LIB_MODE:-}" in
         100644|100755|"") ;;
@@ -71,7 +223,14 @@ if [[ -n "$_PP_ROOT_PROBE" ]]; then
     # A repository carrying git REPLACEMENT REFS can answer every history question above out of a
     # fabricated object graph while every sha stays authentic. The ratcheting guards refuse to
     # run on such a tree; the push gate refuses to publish from one.
-    _PP_REPLACE="$(git for-each-ref --format='%(refname)' refs/replace/ 2>/dev/null)"
+    # ROUND 5: an enumeration FAILURE is no longer spelled as "none present".
+    _PP_REPLACE="$("$AX_GIT_BIN" --no-replace-objects -C "$AX_GIT_BOUND_ROOT" for-each-ref --format='%(refname)' refs/replace/ 2>/dev/null)"
+    if [[ $? -ne 0 ]]; then
+        echo "[practices] ✗ ANCHOR_REPLACE_REFS_PRESENT — the replacement-ref enumeration FAILED, so" >&2
+        echo "[practices]   this gate cannot tell whether refs/replace/* is empty. That decides" >&2
+        echo "[practices]   whether every sha below is read from a fabricated graph. Push BLOCKED." >&2
+        exit 1
+    fi
     if [[ -n "$_PP_REPLACE" ]]; then
         echo "[practices] ✗ ANCHOR_REPLACE_REFS_PRESENT — this repository carries replacement refs:" >&2
         echo "$_PP_REPLACE" | sed 's/^/[practices]     /' >&2
@@ -86,8 +245,8 @@ fi
 # shellcheck source=.githooks/pre-push-lib.sh
 source "$_PP_LIB_DIR/pre-push-lib.sh"
 
-ROOT="$(git rev-parse --show-toplevel)"
-cd "$ROOT"
+ROOT="$AX_GIT_BOUND_ROOT"
+builtin cd "$ROOT"
 
 # Git feeds (local_ref local_sha remote_ref remote_sha) on stdin per `man
 # githooks`. Capture it once — every stage below consumes it. An empty stdin

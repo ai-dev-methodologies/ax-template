@@ -154,6 +154,17 @@ NEUTER_T_VALUE='if False:'
 # layer is ADDED — penalising defence in depth, which is backwards.
 NEUTER_L_ANCHOR='rec["tree_fingerprint"] != tree_fp'
 NEUTER_L_VALUE='False'
+# ROUND 5 (TD-2026-07-30-P1-hermetic-runtime): the producer gained a THIRD independent detector,
+# and it is the one that matters for THIS attack. Dirt observed at ANY sample is now permanent —
+# tree_clean_end is the ACCUMULATED value, not the last reading — so a tree that was dirty in the
+# middle and clean at both ends can no longer report tree_clean_end=true, and the consumer's
+# ordinary clean-tree rule (check 7) refuses the push with S and T both neutered. Measured while
+# building round 5: modes s/t/st all stopped reproducing.
+# Same reasoning as (L) above: it is neutered in EVERY mutation mode, because the honest claim is
+# "each of S and T is load-bearing GIVEN the other independent layers are off". A matrix that
+# reported itself broken whenever a layer is ADDED would penalise defence in depth.
+NEUTER_D_ANCHOR='[ "$TREE_EVER_DIRTY" = true ] && END_TREE_CLEAN=false'
+NEUTER_D_VALUE='[ "$TREE_EVER_DIRTY" = neutered-for-the-mutation-matrix ] && END_TREE_CLEAN=false'
 
 # neuter_copy <src> <dest> <anchor> <value> <apply:0|1>
 neuter_copy() {
@@ -189,6 +200,8 @@ make_subject() {
     local want_l=0; [ "$want_s" -eq 1 ] || [ "$want_t" -eq 1 ] && want_l=1
     neuter_copy "$dest/completion_checklist_recency_guard.sh" "$dest/completion_checklist_recency_guard.sh" \
         "$NEUTER_L_ANCHOR" "$NEUTER_L_VALUE" "$want_l" || return 3
+    neuter_copy "$dest/verify-completion.sh" "$dest/verify-completion.sh" \
+        "$NEUTER_D_ANCHOR" "$NEUTER_D_VALUE" "$want_l" || return 3
     return 0
 }
 

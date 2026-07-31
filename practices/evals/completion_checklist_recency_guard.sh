@@ -115,8 +115,144 @@
 
 set -uo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+# ── ROUND 5 / P1-1+P1-2: HERMETIC RUNTIME BOOTSTRAP (A) — DELIBERATELY DUPLICATED ────
+# (TD-2026-07-30-P1-hermetic-runtime; the full argument lives in the header of
+#  practices/scripts/lib/release_anchor.sh.) THE RATCHET MAY NOT INHERIT ITS OWN RUNTIME.
+# Measured: an exported `git` function rewrote the anchor pin; an exported `pwd` moved the pin's
+# root to a foreign repo; an exported `python3` turned a FAILING guard into exit 0; GIT_DIR/
+# GIT_WORK_TREE made every read describe a CLEAN shadow checkout of a DIRTY tree. All of it
+# arrives through the environment, so it must die BEFORE the first git call, BEFORE any `source`,
+# and BEFORE this script computes its own directory with `cd`/`pwd` — which is exactly why these
+# lines cannot live in a sourced file. The duplication IS the bootstrap.
+_AX_HRM_LABEL="completion_checklist_recency_guard"; _AX_HRM_EXIT=2; _AX_HRM_NEED_PY=1
+_AX_HRM_DEPS="git bash sh python python3 env cd pwd command builtin printf echo eval exec read \
+test declare unset export local source grep egrep sed awk cut tr sort uniq head tail wc find ls \
+cat cp mv rm mkdir mktemp dirname basename date shasum sha256sum xargs tee true false"
+_AX_HRM_BAD=""
+for _ax_hn in $_AX_HRM_DEPS; do
+    declare -F "$_ax_hn" >/dev/null 2>&1 && _AX_HRM_BAD="$_ax_hn"
+done
+if [ -n "$_AX_HRM_BAD" ]; then
+    { echo "$_AX_HRM_LABEL: HELPER_FUNCTION_INJECTED — this shell already defines a function named"
+      echo "  '$_AX_HRM_BAD', and that is a COMMAND THIS GATE INVOKES. bash imports exported"
+      echo "  functions across \`bash script.sh\`, so the definition silently replaces the program"
+      echo "  every check below runs — measured: an exported \`git\` rewrote the release-anchor pin,"
+      echo "  an exported \`python3\` turned a failing guard into exit 0, an exported \`pwd\` moved the"
+      echo "  pin's root to a foreign repository. Unset it (\`unset -f $_AX_HRM_BAD\`) and re-run."; } >&2
+    exit $_AX_HRM_EXIT
+fi
+for _ax_hn in $_AX_HRM_DEPS; do unset -f "$_ax_hn" 2>/dev/null || true; done
+# Any exported shell function that SURVIVED the scrub above is refused too — the enumeration is a
+# list of what we know we call, and an unknown runtime is not a safe one. Names in this catalog's
+# own namespaces are reported as HELPER_FUNCTION_INJECTED instead, because that is what they are
+# and because the round-4 policy checks own that vocabulary.
+_AX_HRM_FUNCS="$(/usr/bin/env | sed -n 's/^BASH_FUNC_\([A-Za-z_][A-Za-z0-9_]*\).*/\1/p' | tr '\n' ' ')"
+if [ -n "${BASH_ENV:-}${ENV:-}" ]; then
+    { echo "$_AX_HRM_LABEL: HERMETIC_ENV_HOSTILE — the environment sets BASH_ENV/ENV, which EVERY"
+      echo "  non-interactive bash this gate starts would source before running the gate's own"
+      echo "  code. That is code the gate never read, executing inside the gate. Unset it and"
+      echo "  re-run — fail-closed on purpose: an unknown runtime is not a safe one."; } >&2
+    exit $_AX_HRM_EXIT
+elif [ -n "$_AX_HRM_FUNCS" ]; then
+    case " $_AX_HRM_FUNCS " in
+        *" ax_"*|*" _ax_"*|*" pp_"*)
+            { echo "$_AX_HRM_LABEL: HELPER_FUNCTION_INJECTED — the environment carries an exported"
+              echo "  shell function in this catalog's own namespace: ${_AX_HRM_FUNCS}"
+              echo "  Those names ARE the ratchet policy — which commit the anchor is, whether an"
+              echo "  absence is an honest bootstrap, which refs ship work. A definition arriving"
+              echo "  from outside replaces the policy with the caller's."; } >&2 ;;
+        *)
+            { echo "$_AX_HRM_LABEL: HERMETIC_ENV_HOSTILE — the environment carries exported shell"
+              echo "  function(s): ${_AX_HRM_FUNCS}"
+              echo "  An exported function replaces a command this gate calls, after every check it"
+              echo "  performs. The enumerated dependency list above is what we know we invoke; a"
+              echo "  runtime carrying definitions we did not enumerate is refused rather than"
+              echo "  assumed harmless. Unset them and re-run."; } >&2 ;;
+    esac
+    exit $_AX_HRM_EXIT
+fi
+# The WHOLE GIT_* family, not a denylist of the ones we thought of: every one of GIT_DIR,
+# GIT_WORK_TREE, GIT_COMMON_DIR, GIT_OBJECT_DIRECTORY, GIT_ALTERNATE_OBJECT_DIRECTORIES,
+# GIT_INDEX_FILE, GIT_NAMESPACE, GIT_CEILING_DIRECTORIES, GIT_CONFIG*, GIT_EXEC_PATH redirects
+# what `git -C <path>` actually reads. GIT_NO_REPLACE_OBJECTS is scrubbed too and re-set below:
+# inherited as 0 it RE-ENABLES replacement refs.
+for _ax_hn in ${!GIT_@}; do unset "$_ax_hn" 2>/dev/null || true; done
+unset BASH_ENV ENV GIT_DIR GIT_WORK_TREE GIT_COMMON_DIR GIT_OBJECT_DIRECTORY GIT_INDEX_FILE \
+    GIT_ALTERNATE_OBJECT_DIRECTORIES GIT_NAMESPACE GIT_CEILING_DIRECTORIES GIT_CONFIG \
+    GIT_CONFIG_GLOBAL GIT_CONFIG_SYSTEM GIT_CONFIG_NOSYSTEM GIT_CONFIG_COUNT GIT_EXEC_PATH \
+    GIT_DISCOVERY_ACROSS_FILESYSTEM 2>/dev/null || true
+export GIT_NO_REPLACE_OBJECTS=1
+# git and python3 are resolved ONCE, to absolute paths, from a PATH stripped of relative entries
+# (a `.` on PATH is a shim in whatever directory the gate happens to run from). The inherited
+# order is otherwise preserved, because forcing system directories here would silently swap the
+# interpreter that carries PyYAML and make whole guards skip — a fail-open dressed as hardening.
+unset AX_GIT_BIN AX_PY_BIN
+_AX_HRM_PATH=""; _ax_hifs="$IFS"; IFS=:
+for _ax_hd in $PATH; do
+    case "$_ax_hd" in /*) ;; *) continue ;; esac
+    [ -d "$_ax_hd" ] || continue
+    _AX_HRM_PATH="${_AX_HRM_PATH:+$_AX_HRM_PATH:}$_ax_hd"
+done
+IFS="$_ax_hifs"; unset _ax_hifs _ax_hd
+AX_GIT_BIN="$(PATH="$_AX_HRM_PATH" command -v git 2>/dev/null || true)"
+AX_PY_BIN="$(PATH="$_AX_HRM_PATH" command -v python3 2>/dev/null || true)"
+for _ax_hn in "git=$AX_GIT_BIN" "python3=$AX_PY_BIN"; do
+    if [ "${_ax_hn%%=*}" = "python3" ] && [ "$_AX_HRM_NEED_PY" != "1" ]; then continue; fi
+    _ax_hb="${_ax_hn#*=}"
+    if [ -z "$_ax_hb" ] || [ "${_ax_hb#/}" = "$_ax_hb" ] || [ ! -f "$_ax_hb" ] || [ ! -x "$_ax_hb" ]; then
+        { echo "$_AX_HRM_LABEL: HERMETIC_TOOL_UNUSABLE — ${_ax_hn%%=*} did not resolve to an"
+          echo "  executable regular file on an absolute path (got '${_ax_hb:-<nothing>}')."
+          echo "  This gate runs that program to decide whether a release may ship; it will not"
+          echo "  guess, and it will not fall back to whatever the inherited PATH offers."; } >&2
+        exit $_AX_HRM_EXIT
+    fi
+done
+export AX_GIT_BIN AX_PY_BIN
+unset _ax_hn _ax_hb _AX_HRM_BAD _AX_HRM_PATH
+
+SCRIPT_DIR="$(builtin cd "$(dirname "${BASH_SOURCE[0]}")" && builtin pwd)"
+REPO_ROOT="$(builtin cd "$SCRIPT_DIR/../.." && builtin pwd)"
+# ── HERMETIC RUNTIME BOOTSTRAP (B): bind the git identity to the trusted root ────────
+# Part A removed the inherited git context; this derives the real one and REQUIRES it to be the
+# root this entry resolved for itself. `git -C <root>` WALKS UP when <root> is not itself a work
+# tree, so without this a gate can authenticate a repository that merely CONTAINS the directory it
+# is scanning. The derived gitdir/worktree are then passed EXPLICITLY on every call for this root
+# (see ax_git), so nothing downstream depends on discovery at all.
+# NOT exported, and unset first: a binding that could arrive from the environment would be a
+# NEW redirection channel of exactly the kind part A just closed. Every entry derives its own.
+unset AX_GIT_BOUND_ROOT AX_GIT_BOUND_DIR
+if "$AX_GIT_BIN" -C "$REPO_ROOT" rev-parse --git-dir >/dev/null 2>&1; then
+    _ax_hcan="$(builtin cd "$REPO_ROOT" 2>/dev/null && builtin pwd -P)"
+    _ax_htop="$("$AX_GIT_BIN" -C "$REPO_ROOT" rev-parse --show-toplevel 2>/dev/null)"
+    _ax_htop="$(builtin cd "${_ax_htop:-/nonexistent}" 2>/dev/null && builtin pwd -P)"
+    if [ -z "$_ax_hcan" ] || [ "$_ax_htop" != "$_ax_hcan" ]; then
+        { echo "$_AX_HRM_LABEL: GIT_CONTEXT_REDIRECTED — the git work tree answering this gate's"
+          echo "  reads is '${_ax_htop:-<unresolvable>}', not the root it was invoked for"
+          echo "  ('${_ax_hcan:-$REPO_ROOT}'). Every head / status / fingerprint / anchor answer would"
+          echo "  then describe a different tree than the one being verified — measured: with the"
+          echo "  context aimed at a clean shadow checkout, a DIRTY tree reported the clean-tree"
+          echo "  fingerprint constant and a clean status."; } >&2
+        exit $_AX_HRM_EXIT
+    fi
+    AX_GIT_BOUND_ROOT="$_ax_hcan"
+    AX_GIT_BOUND_DIR="$("$AX_GIT_BIN" -C "$AX_GIT_BOUND_ROOT" rev-parse --absolute-git-dir 2>/dev/null)"
+    if [ -z "$AX_GIT_BOUND_DIR" ]; then
+        echo "$_AX_HRM_LABEL: GIT_CONTEXT_REDIRECTED — the gitdir of '$AX_GIT_BOUND_ROOT' could not" >&2
+        echo "  be derived, so no explicit git context can be pinned. Blocking rather than falling" >&2
+        echo "  back to discovery, which is the thing being pinned." >&2
+        exit $_AX_HRM_EXIT
+    fi
+    case "$AX_GIT_BIN" in "$AX_GIT_BOUND_ROOT"/*) _ax_htop=repo ;; *) _ax_htop="" ;; esac
+    case "$AX_PY_BIN" in "$AX_GIT_BOUND_ROOT"/*) _ax_htop=repo ;; esac
+    if [ -n "$_ax_htop" ]; then
+        echo "$_AX_HRM_LABEL: HERMETIC_TOOL_UNUSABLE — git/python3 resolved to a binary INSIDE the" >&2
+        echo "  repository being verified ($AX_GIT_BIN / $AX_PY_BIN). The tree under audit does not" >&2
+        echo "  get to supply the programs that audit it." >&2
+        exit $_AX_HRM_EXIT
+    fi
+    unset _ax_hcan _ax_htop
+fi
+
 
 FIXTURES_MODE=0
 ROOT_OVERRIDE=""
@@ -185,9 +321,12 @@ fi
 # P1-1 (ROUND 4, TD-2026-07-30-P1-anchor-runtime): every git read below — including the ones in
 # the python subprocesses — must see the real object graph. `git replace` keeps shas identical
 # while swapping the objects, and this guard's whole job is to compare recorded shas to git.
+# ROUND 5: the whole GIT_* family is scrubbed by the hermetic bootstrap at the top of this file
+# (GIT_DIR/GIT_WORK_TREE made every read below describe a clean shadow checkout), and the python
+# block receives the VALIDATED ABSOLUTE git binary rather than the word `git`.
 export GIT_NO_REPLACE_OBJECTS=1
 
-python3 - "$SCAN_ROOT" "$EXPECT_SHA" "$EXPECT_ANCHOR_SHA" "$REPO_ROOT" <<'PYEOF'
+"$AX_PY_BIN" - "$SCAN_ROOT" "$EXPECT_SHA" "$EXPECT_ANCHOR_SHA" "$REPO_ROOT" "$AX_GIT_BIN" <<'PYEOF'
 import sys
 import pathlib
 import json
@@ -205,6 +344,27 @@ expect_anchor_arg = sys.argv[3] if len(sys.argv) > 3 else ""
 # writer + fingerprint helper for the schema cross-check and the recompute, so that a fixture
 # root cannot supply its own definition of what a genuine audit line looks like.
 guard_repo = pathlib.Path(sys.argv[4]) if len(sys.argv) > 4 else None
+# ROUND 5 / P1-1+P1-2: the absolute, validated git binary published by the hermetic bootstrap.
+# The bare word "git" resolves through PATH and, worse, through an inherited exported FUNCTION;
+# and every git call below runs with a SCRUBBED environment, because GIT_DIR/GIT_WORK_TREE
+# silently answer these questions out of a different repository.
+GIT_BIN = sys.argv[5] if len(sys.argv) > 5 and sys.argv[5] else "git"
+GIT_ENV = {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
+GIT_ENV["GIT_NO_REPLACE_OBJECTS"] = "1"
+DIGEST_RE = re.compile(r"\A[0-9a-f]{64}\Z")
+
+
+def git_out(*args, root=None, check=True):
+    """Run git hermetically. Returns (rc, stdout). `check=False` lets the caller decide what a
+    failure means — but no caller may treat it as 'nothing found' (ROUND 5 fail-closed sweep)."""
+    cmd = [GIT_BIN, "--no-replace-objects"]
+    if root is not None:
+        cmd += ["-C", str(root)]
+    cmd += list(args)
+    p = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, env=GIT_ENV)
+    return p.returncode, p.stdout.decode(errors="replace").strip()
+
+
 ZERO_SHA = "0" * 40
 audit_log = root / ".ax-verify" / "runs.jsonl"
 expected_head_file = root / ".ax-verify" / "expected_head.txt"
@@ -281,23 +441,46 @@ if missing:
 # 3. head_sha must match the sha under audit (audit ran AFTER the last commit).
 #    Priority: fixture expected_head.txt > --expect-sha (pre-push per-ref
 #    verification of the EXACT pushed sha) > this root's git HEAD.
+#    ROUND 5 / P1-1: "is this root a live git work tree" is answered by requiring the toplevel git
+#    reports to BE this root. `git -C <dir>` walks UP, so a fixture directory that merely SITS
+#    INSIDE this repository used to answer with the enclosing repository's HEAD — and a redirected
+#    GIT_DIR answered with somebody else's. Neither is this root.
+rc_top, top_out = git_out("rev-parse", "--show-toplevel", root=root, check=False)
+live_git_root = False
+if rc_top == 0 and top_out:
+    live_git_root = os.path.realpath(top_out) == os.path.realpath(str(root))
+inside_git = rc_top == 0
+
 expected_head = None
 if expected_head_file.is_file():
     expected_head = expected_head_file.read_text().strip()
 elif expect_sha_arg:
     expected_head = expect_sha_arg
-else:
-    # Try git in this root.
-    try:
-        out = subprocess.check_output(
-            ["git", "--no-replace-objects", "-C", str(root), "rev-parse", "HEAD"],
-            stderr=subprocess.DEVNULL,
-        ).decode().strip()
-        expected_head = out
-    except Exception:
-        expected_head = None
+elif live_git_root:
+    rc_head, head_out = git_out("rev-parse", "HEAD", root=root, check=False)
+    if rc_head != 0 or not head_out:
+        # ROUND 5 fail-closed sweep: this used to fall through to "not a git repo ⇒ PASS". A git
+        # work tree whose HEAD cannot be read is not a tarball — it is a repository whose state we
+        # could not establish, and the whole point of this guard is to compare a record to it.
+        emit_fail(
+            "GIT_CONTEXT_UNUSABLE",
+            f'{root} is a git work tree but its HEAD could not be read, so there is nothing to '
+            f'check the audit record against. The pre-round-5 shape treated that as "no git, no '
+            f'fixture ⇒ PASS", which turns a broken (or deliberately broken) git context into a '
+            f'green push gate. Unknown does not pass.'
+        )
+    expected_head = head_out
 
 if expected_head is None:
+    if inside_git and not live_git_root and not expected_head_file.is_file() and not expect_sha_arg:
+        # Inside SOME repository but not the top of it, and carrying no fixture marker: every
+        # answer we could give would be about a different tree.
+        emit_fail(
+            "GIT_CONTEXT_REDIRECTED",
+            f'{root} is not the top of the git work tree that answers reads for it '
+            f'({top_out or "<unresolvable>"}), and it declares no expected_head.txt. A record '
+            f'audited against a different repository\'s HEAD is not evidence about this one.'
+        )
     # Not a git repo and no fixture marker — treat as PASS (e.g. tarball release).
     print(f'{{"signal":"completion_checklist.recency_skip","reason":"no_git_no_fixture","ts":"{ts}"}}')
     sys.exit(0)
@@ -335,6 +518,10 @@ if latest.get("full_run") is not True:
 #    fingerprint predates this binding, or came from a run that could not tell what it
 #    was looking at ("nogit" = no git working tree, "unverifiable-*" = the fingerprint
 #    helper failed). Fail closed: re-running the contract is always available.
+#    ROUND 5: the recorded value must BE a fingerprint — 64 lowercase hex characters — not merely
+#    a non-empty string that is neither "nogit" nor "unverifiable-*". "x" satisfied the old test,
+#    and on a fixture root (where the recompute below does not run) nothing else ever looked at it.
+#    This is a property of the LINE, so it is checked on every root, live or fixture.
 tree_fp = latest.get("tree_fingerprint")
 tree_fp_usable = (isinstance(tree_fp, str) and bool(tree_fp)
                   and tree_fp != "nogit" and not tree_fp.startswith("unverifiable-"))
@@ -347,6 +534,25 @@ if not tree_fp_usable:
         f'Re-run `bash practices/scripts/verify-completion.sh` at the commit you are pushing.'
     )
 
+#    ROUND 5: and the value must BE a fingerprint — 64 lowercase hex characters. The test above
+#    asks only that it is not one of two KNOWN degraded spellings, so "x" passed it, and on a
+#    fixture root nothing downstream ever looked at the value again. Kept as its own rejection
+#    rather than folded into the predicate above so that each half is separately falsifiable —
+#    and guarded by tree_fp_usable so it REFINES that verdict instead of duplicating it: a line
+#    with no fingerprint at all is check 6's finding, not this one's. (Without the guard this
+#    check would also fire on the absent-fingerprint fixture, making [87]'s kill proof for THAT
+#    item report a vacuity that is really just two layers overlapping — and it would call
+#    DIGEST_RE.match(None).)
+if tree_fp_usable and not DIGEST_RE.match(tree_fp):
+    emit_fail(
+        "AUDIT_TREE_UNIDENTIFIED",
+        f'the recorded tree_fingerprint ({str(tree_fp)[:40]!r}) is not a fingerprint at all: it '
+        f'must be 64 lowercase hex characters. Until round 5 the test was "non-empty, not nogit, '
+        f'not unverifiable-*", so ANY string identified a tree — and the recompute that would '
+        f'have caught it could itself be switched off by replacing the helper. Re-run '
+        f'`bash practices/scripts/verify-completion.sh` at the commit you are pushing.'
+    )
+
 # 7. That tree must have been the COMMITTED tree of head_sha. This is the push-evidence
 #    rule: a commit is what ships, so evidence gathered from a working tree that differs
 #    from the commit is evidence about code the receiver will never get.
@@ -357,17 +563,12 @@ tree_clean_both = (latest.get("tree_clean") is True
                    and latest.get("tree_clean_end") is True)
 if not tree_clean_both:
     hint = ""
-    try:
-        dirty = subprocess.check_output(
-            ["git", "--no-replace-objects", "-C", str(root), "status", "--porcelain", "-uall"],
-            stderr=subprocess.DEVNULL,
-        ).decode().splitlines()
-        if dirty:
-            shown = "\n    ".join(dirty[:10])
-            more = f"\n    … and {len(dirty) - 10} more" if len(dirty) > 10 else ""
-            hint = f"\n  Currently uncommitted/untracked here:\n    {shown}{more}"
-    except Exception:
-        pass
+    rc_st, st_out = git_out("status", "--porcelain", "-uall", root=root, check=False)
+    if rc_st == 0 and st_out:
+        dirty = st_out.splitlines()
+        shown = "\n    ".join(dirty[:10])
+        more = f"\n    … and {len(dirty) - 10} more" if len(dirty) > 10 else ""
+        hint = f"\n  Currently uncommitted/untracked here:\n    {shown}{more}"
     emit_fail(
         "AUDIT_DIRTY_TREE_EVIDENCE",
         f'the latest verify-completion.sh run was performed on a DIRTY working tree '
@@ -578,46 +779,147 @@ if guard_repo is not None:
 #     into the very tree being fingerprinted, so the recompute would report a mismatch it caused
 #     itself — observed the first time this check ran (the sandbox tree went dirty with a .pyc
 #     and every honest push was refused). Running the file as a script leaves no cache.
-if not expected_head_file.is_file() and guard_repo is not None:
-    fp_helper = guard_repo / "practices" / "scripts" / "lib" / "tree_fingerprint.py"
-    # FAIL CLOSED on a missing helper (P1-3(c) applied to this file too): deleting
-    # tree_fingerprint.py would otherwise turn the recompute into a silent skip, which is the
-    # same "delete the thing that checks you" shape the anchor-critical path lists close. It is
-    # ON those lists, so its deletion is separately blocking at the anchor; here it blocks at the
-    # push. Guarded by the git test so the non-git roots ([87]'s relocated copies) still run.
-    if not fp_helper.is_file() and (guard_repo / ".git").exists():
+#     ROUND 5 / P1-3 — THE VERIFIER MAY NOT SHARE THE RUNNER'S IMPLEMENTATION, AND UNKNOWN MAY
+#     NOT PASS. Two defects, both measured:
+#       (a) FAIL-OPEN: the comparison was `if recomputed and recomputed != "nogit" and …` — so an
+#           EMPTY or "nogit" result DISABLED the check. With a hand-authored line carrying a bogus
+#           fingerprint this guard exits 1 (AUDIT_FINGERPRINT_MISMATCH); replace the helper with
+#           `print("nogit")` and it exits 0. The recorded value is now required to BE a digest and
+#           the recomputed one likewise, with every other outcome blocking.
+#       (b) SELF-AUTHENTICATION: the helper was checked for MODE, never for CONTENT, so the runner
+#           that wrote the record and this verifier ran the SAME mutable file — a helper edited to
+#           print the recorded constant passed. The recompute is therefore performed with the
+#           PREVIOUS RELEASE'S copy of the helper, read out of git (`<anchor>:<path>`) into a
+#           temporary file OUTSIDE the tree, and the toolchain's working-tree bytes must equal what
+#           git records at the sha being pushed.
+#     WHAT THAT BINDS, honestly: the anchor is the sha the REMOTE advertises when the hook supplies
+#     it (unforgeable locally), else origin/main, else HEAD — and with HEAD as the anchor the
+#     implementation is the same one being audited, so the binding degrades to (a) alone. It is
+#     stated rather than hidden; the push path, which is the one that matters, always supplies the
+#     remote's sha.
+#     MIGRATION, because this binds to the PREVIOUS release: a refactor of tree_fingerprint.py is
+#     free (the prior copy computes the same digest); a change to what the algorithm OUTPUTS cannot
+#     pass this gate and is a deliberate human decision — see practices/DECISIONS.md
+#     (TD-2026-07-30-P1-hermetic-runtime).
+#     A MEASUREMENT MUST NOT DISTURB WHAT IT MEASURES: the helper is executed as a SUBPROCESS,
+#     never imported. `import tree_fingerprint` writes practices/scripts/lib/__pycache__/*.pyc
+#     into the very tree being fingerprinted, so the recompute would report a mismatch it caused
+#     itself — observed the first time this check ran. Running a file as a script leaves no cache.
+TOOLCHAIN_RELS = (
+    "practices/scripts/lib/release_anchor.sh",
+    "practices/scripts/lib/tree_fingerprint.py",
+    "practices/scripts/verify-completion.sh",
+    "practices/evals/completion_checklist_recency_guard.sh",
+    ".githooks/pre-push",
+    ".githooks/pre-push-lib.sh",
+)
+
+if live_git_root and not expected_head_file.is_file() and guard_repo is not None:
+    # 12b. THE RATCHET'S OWN CODE MUST BE THE COMMITTED CODE (at the sha being pushed).
+    for rel in TOOLCHAIN_RELS:
+        rc_d, _ = git_out("diff", "--quiet", expected_head, "--", rel, root=root, check=False)
+        if rc_d != 0:
+            emit_fail(
+                "RATCHET_TOOLCHAIN_MODIFIED",
+                f'{rel} in this working tree is not what git records at {expected_head[:12]} '
+                f'(git diff exited {rc_d}). These six files ARE the gate: the anchor policy, the '
+                f'fingerprint, the runner, this guard and the hook. Every other check on them asks '
+                f'whether they are regular files; a regular-file tree_fingerprint.py rewritten to '
+                f'print a constant passed all of those and then served as BOTH the writer and the '
+                f'verifier of the evidence. Commit or restore the file and re-run.'
+            )
+
+    # 12a. THE TREE MUST BE CLEAN NOW, read from git rather than from the record. Check 7 reads
+    #      tree_clean/tree_clean_end OUT OF THE LINE — values supplied by whoever wrote it. This
+    #      is the same fact, established independently, and it survives a compromised fingerprint
+    #      helper (measured: with the helper stubbed, a hand-authored line certified a DIRTY tree).
+    rc_st, st_out = git_out("status", "--porcelain", "-uall", root=root, check=False)
+    if rc_st != 0:
         emit_fail(
-            "AUDIT_FINGERPRINT_UNVERIFIABLE",
-            f'practices/scripts/lib/tree_fingerprint.py is absent, so the recorded '
-            f'tree_fingerprint cannot be recomputed and the push gate would be trusting a value '
-            f'it never checked. The helper is anchor-critical: a gate that cannot verify its own '
-            f'evidence blocks rather than skipping.'
+            "GIT_CONTEXT_UNUSABLE",
+            f'`git status` failed in {root}, so this gate cannot establish whether the tree being '
+            f'pushed is the committed one. The record\'s own tree_clean field is written by the '
+            f'party being audited; an independent read that cannot be taken is not a clean bill.'
         )
-    if fp_helper.is_file():
-        try:
-            recomputed = subprocess.check_output(
-                [sys.executable, str(fp_helper), str(root)],
-                stderr=subprocess.DEVNULL,
-            ).decode().strip()
-        except Exception as e:
+    if st_out:
+        shown = "\n    ".join(st_out.splitlines()[:10])
+        emit_fail(
+            "AUDIT_TREE_DIRTY_NOW",
+            f'the audit line claims a clean tree, but this working tree is dirty RIGHT NOW:\n'
+            f'    {shown}\n'
+            f'  A push ships the COMMIT, so evidence gathered from a tree that differs from it '
+            f'certifies code the receiver will never get. Until this round the only independent '
+            f'check of that was the fingerprint recompute, which a replaced helper disabled. '
+            f'Commit, stash or ignore these paths and re-run verify-completion.sh.'
+        )
+
+    # 12c. RECOMPUTE — with the PREVIOUS RELEASE'S implementation, not this tree's.
+    fp_rel = "practices/scripts/lib/tree_fingerprint.py"
+    anchor_rev = None
+    if expect_anchor_arg and expect_anchor_arg != ZERO_SHA:
+        anchor_rev = expect_anchor_arg           # the remote's own advertisement — authoritative
+    else:
+        for cand in ("refs/remotes/origin/main", "HEAD"):
+            rc_c, out_c = git_out("rev-parse", "--verify", "--quiet", cand + "^{commit}",
+                                  root=root, check=False)
+            if rc_c == 0 and out_c:
+                anchor_rev = out_c
+                break
+    impl_path, impl_kind, tmpdir = None, None, None
+    if anchor_rev:
+        rc_b, blob = git_out("cat-file", "-p", f"{anchor_rev}:{fp_rel}", root=root, check=False)
+        if rc_b == 0 and blob:
+            import tempfile
+            tmpdir = tempfile.mkdtemp(prefix="ax-fpimpl-")
+            impl_path = os.path.join(tmpdir, "tree_fingerprint.py")
+            with open(impl_path, "w") as fh:
+                fh.write(blob + "\n")
+            impl_kind = f"release {anchor_rev[:12]}"
+    if impl_path is None:
+        # No prior copy (first release carrying this file, or an anchor that predates it). Fall
+        # back to the working-tree helper — which 12b has just proven identical to the pushed
+        # commit's — and say so, rather than skipping the recompute altogether.
+        fp_helper = guard_repo / "practices" / "scripts" / "lib" / "tree_fingerprint.py"
+        if not fp_helper.is_file():
             emit_fail(
                 "AUDIT_FINGERPRINT_UNVERIFIABLE",
-                f'practices/scripts/lib/tree_fingerprint.py could not be run ({e}), so the '
-                f'recorded tree_fingerprint cannot be recomputed. The helper is anchor-critical; '
-                f'a push gate that cannot recompute its evidence blocks rather than trusting it.'
+                f'{fp_rel} is absent and no release copy of it could be read, so the recorded '
+                f'tree_fingerprint cannot be recomputed at all. A gate that cannot verify its own '
+                f'evidence blocks rather than skipping — deleting the checker is not a way to pass.'
             )
-        if recomputed and recomputed != "nogit" and recomputed != tree_fp:
-            emit_fail(
-                "AUDIT_FINGERPRINT_MISMATCH",
-                f'the recorded tree_fingerprint ({str(tree_fp)[:12]}) is not the fingerprint of '
-                f'the tree that is here now ({recomputed[:12]}). Either the line was written by '
-                f'hand — .ax-verify/runs.jsonl is an ordinary text file, and until this check '
-                f'existed any non-empty string satisfied the "tree identified" test — or the tree '
-                f'has changed since the run that certified it, in which case the certificate is '
-                f'about code that is no longer here. Both resolve the same way: re-run '
-                f'`bash practices/scripts/verify-completion.sh` at the commit you are pushing '
-                f'(or put the tree back the way the run found it).'
-            )
+        impl_path, impl_kind = str(fp_helper), "the working tree (no release copy available)"
+    try:
+        proc = subprocess.run([sys.executable, impl_path, str(root)],
+                              stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=GIT_ENV)
+        recomputed = proc.stdout.decode(errors="replace").strip()
+        rec_rc = proc.returncode
+    except Exception as e:
+        recomputed, rec_rc = "", -1
+        proc = None
+    finally:
+        if tmpdir:
+            import shutil as _sh
+            _sh.rmtree(tmpdir, ignore_errors=True)
+    if rec_rc != 0 or not DIGEST_RE.match(recomputed or ""):
+        emit_fail(
+            "AUDIT_FINGERPRINT_UNVERIFIABLE",
+            f'recomputing the tree fingerprint with {impl_kind} produced '
+            f'{recomputed[:40]!r} (exit {rec_rc}) instead of a digest. THIS IS THE CHECK THAT '
+            f'FAILED OPEN before round 5: an empty or "nogit" result simply skipped the '
+            f'comparison, so replacing the helper with `print("nogit")` turned a rejected forgery '
+            f'(exit 1) into a passing push (exit 0). Unknown blocks.'
+        )
+    if recomputed != tree_fp:
+        emit_fail(
+            "AUDIT_FINGERPRINT_MISMATCH",
+            f'the recorded tree_fingerprint ({str(tree_fp)[:12]}) is not the fingerprint of the '
+            f'tree that is here now ({recomputed[:12]}), as computed by {impl_kind}. Either the '
+            f'line was written by hand — .ax-verify/runs.jsonl is an ordinary text file — or the '
+            f'tree has changed since the run that certified it, in which case the certificate is '
+            f'about code that is no longer here. Both resolve the same way: re-run '
+            f'`bash practices/scripts/verify-completion.sh` at the commit you are pushing '
+            f'(or put the tree back the way the run found it).'
+        )
 
 # 13. Git REPLACEMENT REFS make every sha comparison above meaningless (P1-1, ROUND 4).
 #     `git replace <real> <fabricated>` keeps shas identical and swaps the object every ordinary
@@ -626,13 +928,20 @@ if not expected_head_file.is_file() and guard_repo is not None:
 #     here runs with GIT_NO_REPLACE_OBJECTS=1, and a tree carrying such refs at all is refused —
 #     a released tree has no reason to have them, and "we read past them" is a claim about every
 #     call site forever.
-try:
-    _replace = subprocess.check_output(
-        ["git", "--no-replace-objects", "-C", str(root), "for-each-ref",
-         "--format=%(refname)", "refs/replace/"],
-        stderr=subprocess.DEVNULL,
-    ).decode().strip()
-except Exception:
+#     ROUND 5 fail-closed sweep: `except Exception: _replace = ""` made an ENUMERATION FAILURE
+#     indistinguishable from "there are none" — the one state that can be manufactured read as
+#     clean. On a live git root a failed enumeration now blocks.
+_rc_rep, _replace = git_out("for-each-ref", "--format=%(refname)", "refs/replace/",
+                            root=root, check=False)
+if _rc_rep != 0:
+    if live_git_root:
+        emit_fail(
+            "AUDIT_REPLACE_REFS_PRESENT",
+            f'the replacement-ref enumeration itself failed (git exited {_rc_rep}) in {root}, so '
+            f'this gate cannot tell whether refs/replace/* is empty. That question decides whether '
+            f'every sha comparison above was answered out of a fabricated object graph, and an '
+            f'unanswerable question fails closed.'
+        )
     _replace = ""
 if _replace:
     emit_fail(
