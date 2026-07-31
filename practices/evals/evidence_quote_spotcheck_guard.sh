@@ -466,11 +466,13 @@ for _ax_hn in "git=$AX_GIT_BIN" "python3=$AX_PY_BIN"; do
 done
 export AX_GIT_BIN AX_PY_BIN
 # Ratchet-internal python ALWAYS runs isolated: -I ignores PYTHON* env + user site + cwd on
-# sys.path, -S skips site entirely, which is what kills a sitecustomize.py payload. Exported so
-# every call site in this catalog spells it the same way. NOT usable for the checklist parser,
-# which needs PyYAML out of site-packages — that one call site uses -E and is preceded by an
-# explicit `import yaml` capability probe that BLOCKS (never skips). See DECISIONS.md
-# TD-2026-07-30-P1-preflight-and-raw-bytes.
+# sys.path, -S skips site entirely, which is what kills a sitecustomize.py payload. NOT usable for
+# the three call sites that need PyYAML out of site-packages (the checklist parser and the two
+# ratcheting guards' bodies) — those use -E, which still refuses PYTHONPATH/PYTHONHOME/
+# PYTHONSTARTUP, and are preceded by an `import yaml` capability probe that BLOCKS (never skips).
+# See DECISIONS.md TD-2026-07-30-P1-preflight-and-raw-bytes for the honest limit that leaves.
+# PUBLISHED, NOT CONSUMED IN-TREE: every in-tree call site spells the flags LITERALLY so that
+# `grep -n ' -I -S '` finds all of them; this export exists for fork-receiver call sites.
 export AX_PY_ISO="-I -S"
 unset _ax_hn _ax_hb _ax_hdir _ax_hver _AX_HRM_BAD _AX_HRM_PATH
 

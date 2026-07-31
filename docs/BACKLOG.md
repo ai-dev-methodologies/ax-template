@@ -28,9 +28,9 @@ signature를 발견**(17/17)함으로써 경험적으로 반증되었다 — 발
 |---|---|---|---|
 | P0 (expiry-bound / live defects) | 30 | 30 | **100%** |
 | P1 (generic signature backlog) | 73 | 73 | **100%** |
-| P2 (verification escapes) | 65 | 58 | **89%** |
+| P2 (verification escapes) | 68 | 60 | **88%** |
 | P3 (industry-niche deferrals) | 116 | 103 | **89%** |
-| **P0–P3 합계 (수렴 분모)** | **284** | **264** | **93%** |
+| **P0–P3 합계 (수렴 분모)** | **287** | **266** | **93%** |
 
 > 2026-07-28 ledger-zero wave (4 lanes, 대상 22행 중 **21행** 봉합) — (P2-28)·(P2-33)·(P2-34)·(P2-35)·(P2-36)·(P2-37)·(P2-38)·(P2-39)·(P2-40)·(P2-41) + (P3-54)·(P3-55)·(P3-58)~(P3-66), (P3-56)은 sub-item (c) main-source 미착수로 open 유지. 신규 가드 3개(contract enum parity [92] · L2 frontmatter deps [93] · L4 presentational view [94]), 적대검증이 신규 19건 정직 등재((P2-42)~(P2-44), (P3-67)~(P3-82)) → 분모 208→227, 수렴 208/227 **~92%** — **산문 정정(2026-07-28)**: 이 줄은 한때 207로 적혔으나, (P2-36)을 리뷰 후속 패스에서 실제로 닫으면서 208이 됐다(표는 integrity guard가 체크박스 truth와 대조하므로 항상 옴았고, 산문만 stale했다). 이후 신규 3건((P2-45)·(P3-83)·(P3-84)) 등재로 분모는 230이 됐다.. **정정 (cross-family 리뷰 후속, 2026-07-28)**: 최초 요약은 21행 봉합을 주장했으나 실제로 랜딩한 것은 20행이었다 — (P2-36)의 W8은 미구현이었고 backlog 행도 open이었다. 리뷰 후속 패스에서 W8을 PRD 명세대로 실제 구현해 (P2-36)을 닫음으로써 21행 주장이 사후에 참이 되었다. 아울러 같은 리뷰가 지적한 coverage-map S2.AUTHZ.XB의 partial→covered flip은 **미획득**으로 판정해 되돌렸다(step-scoped `allowedActions` 부재 — (P3-76) 참조), 따라서 이 wave는 coverage 셀 flip 0건이며 C_total은 0.7786 그대로다.
 
@@ -332,6 +332,9 @@ R25). *이름이 세션 기록에만 있던 항목을 여기로 영구화했다.
 
 - [ ] P2-62 신규 락 테스트가 템플릿이 아닌 백엔드 쌍둥이를 실행 — DatabaseAdvisoryLockReleaseTest는 프로덕션 DatabaseAdvisoryLock(taskName-keyed)을 검증하나, 정작 (P3-102)에서 고친 templates/backend/scheduled-task의 DbRowLockingPolicy(row-UUID keyed)는 컴파일 대상이 아니라 행위 테스트가 구조적으로 불가(템플릿=스켈레톤). 현재 증명은 grep+구조 단언뿐. done-when: 템플릿 검증 하네스(스켈레톤 컴파일 픽스처 or 템플릿→테스트 트리 복사 검증) 신설 or 한계를 템플릿 meta에 명문화. 출처: 2026-07-30 codex 게이트(final-4, 7f4b616) P2.
 - [ ] P2-63 next-themes 인용 템플릿이 refreshed 스냅숏이 부인하는 cookie 전략을 여전히 서술 — (P3-93) requote가 인용문은 verbatim으로 교정했으나 citing 템플릿의 주변 산문/설계 서술은 스냅숏과 모순 잔존. done-when: 해당 템플릿 산문을 localStorage 전략으로 정정(스냅숏 대조). 출처: 2026-07-30 codex 게이트(final-4) P2.
+- [ ] P2-64 8중복 hermetic 부트스트랩의 drift를 막는 parity 가드가 없음 — 부트스트랩은 의도적으로 8개 entry에 복제돼 있다(스크럽은 자기가 선행해야 하는 파일 안에 살 수 없다). 바로 그래서 drift가 위험이다: 한 사본만 갱신되면 나머지 7개 게이트는 조용히 구형 스크럽으로 돈다. done-when: 8 사본의 부트스트랩 블록이 바이트 동일(라벨/EXIT/NEED_PY 3개 파라미터 제외)임을 기계 검증하는 가드 신설. 출처: 2026-07-30 codex R6 P2 (register-only).
+- [x] P2-65 이전-릴리스 추출이 TMPDIR을 신뢰하고 blob을 변형 — `TMPDIR`은 공격자 설정 가능이고, work tree 안을 가리키면 추출된 헬퍼가 git 컨텍스트를 얻는다. 또 `git cat-file -p`를 텍스트로 캡처해 `.strip()` + 개행 추가로 기록 → "이전 릴리스의 구현"이 이전 릴리스의 바이트가 아니었다. done-when: 베이스를 /tmp로 고정(심볼릭·work-tree 내부 거부), blob은 바이트로 읽어 verbatim 기록 + 출처 blob id로 역해시 검증. 출처: 2026-07-30 codex R6 P2. closure: 2026-07-30 (final-4 P1-seal round-6, TD-2026-07-30-P1-preflight-and-raw-bytes) — pre-push `pp_anchor_recency_gate` + recency 12c 양쪽에서 종결.
+- [x] P2-66 부트스트랩 이후에도 bare `git`/`python3` 호출 지점 잔존 — 라운드-5의 "모든 호출 지점이 검증된 절대경로를 쓴다" 주장과 모순(evidence 가드 2곳 + 파이썬 본문, manifest 가드 2곳 + 파이썬 본문, `command -v python3` 프리플라이트). bare word는 PATH로 해석되고, 프리플라이트 이전이라면 함수로도 해석된다. done-when: 해당 지점을 `"$AX_GIT_BIN"`/`"$AX_PY_BIN"`으로 교체 + 인터프리터 프리플라이트를 인증된 바이너리 기준으로. 출처: 2026-07-30 codex R6 P2. closure: 2026-07-30 (final-4 P1-seal round-6 — 도구 신원 수정의 일부로 종결).
 
 ## P3 — industry-niche deferrals (generic 아님 — 낮은 우선순위)
 
