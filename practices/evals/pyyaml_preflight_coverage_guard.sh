@@ -313,6 +313,21 @@ PROBE_EXEMPT = {
     "practices/evals/adversarial/run.sh":
         "adversarial case runner: temporarily injects a crafted rule into practices/rules/ "
         "and needs --case, so executing it from a guard would mutate the live catalog",
+    # ROUND 6 / P1-2 (TD-2026-07-30-P1-preflight-and-raw-bytes): these two run their python
+    # body with `-E`, which IGNORES PYTHONPATH — and this probe simulates PyYAML absence with a
+    # PYTHONPATH shim. The simulation is therefore inert against them, and an inert probe that
+    # reports PASS is exactly the vacuity this guard exists to catch (measured: both exited 0
+    # with the shim in place, having verified everything). `-E` is not negotiable — it is what
+    # refuses the sitecustomize.py injection that turned a whole guard into exit 0 — so the
+    # honest move is to say the probe cannot reach them and assert the preflight statically,
+    # the same treatment adversarial/run.sh already gets. Their preflights are
+    # `except ImportError: print("… PyYAML unavailable — cannot run"); sys.exit(2)`.
+    "practices/evals/evidence_quote_spotcheck_guard.sh":
+        "ROUND 6: runs its python body under `-E` (no PYTHONPATH), so this probe's PYTHONPATH "
+        "shim cannot simulate PyYAML absence; asserted statically instead",
+    "practices/evals/manifest_snapshot_integrity_guard.sh":
+        "ROUND 6: runs its python body under `-E` (no PYTHONPATH), so this probe's PYTHONPATH "
+        "shim cannot simulate PyYAML absence; asserted statically instead",
 }
 FAILCLOSED_MARK = re.compile(r"cannot verify.*PyYAML|PyYAML.*cannot (?:verify|run)|"
                              r"PyYAML is required|PyYAML not installed", re.I)
@@ -334,7 +349,9 @@ for path in all_deps:
     reason = PROBE_EXEMPT.get(rel)
     if reason:
         src = read(path)
-        if not (FAILCLOSED_MARK.search(src) and re.search(r"exit 2", src)):
+        # `sys.exit(2)` counts as `exit 2`: the preflight of an embedded python body is written
+        # in python, and requiring the shell spelling would reject the very shape being asserted.
+        if not (FAILCLOSED_MARK.search(src) and re.search(r"exit 2|sys\.exit\(2\)", src)):
             violations.append(
                 f"{rel} is probe-exempt but carries no fail-closed preflight "
                 f"(expected a 'cannot verify … PyYAML' message + exit 2)")
