@@ -83,11 +83,42 @@ cd "$1" && bash "$2"
 ATTACK
 bash "$WORK/attack_a.sh" "$SB_A" "$SB_A/$GUARD_REL" > "$WORK/a.log" 2>&1; A_RC=$?
 note "(a) exported ax_anchor_* + forged marker : exit=$A_RC"
-if ! grep -q "HELPER_FUNCTION_INJECTED" "$WORK/a.log" || [ "$A_RC" -eq 0 ]; then
+# ROUND 6: the pure-keyword preflight refuses ANY exported function before the round-4 namespace
+# check can name it, so this case now reports HERMETIC_PREFLIGHT_HOSTILE. Either code is a
+# refusal — and (a2) below keeps the round-4 check itself non-vacuous by removing the preflight.
+if ! grep -qE "HELPER_FUNCTION_INJECTED|HERMETIC_PREFLIGHT_HOSTILE" "$WORK/a.log" || [ "$A_RC" -eq 0 ]; then
     violation "an exported ax_anchor_* function was NOT refused (exit=$A_RC). The helper is the" \
               "single decider for which commit the anchor is and whether an absence is honest;" \
               "if the caller can supply those functions it supplies the policy."
     head -5 "$WORK/a.log" >&2
+fi
+
+# ── (a2) THE ROUND-4 NAMESPACE CHECK, WITH THE ROUND-6 PREFLIGHT REMOVED ─────────────
+# (a) is now answered by the round-6 preflight, which would make the round-4 check invisible —
+# and an invisible check rots. Here the preflight is stripped from the sandbox's copies (the
+# anchor is asserted to occur exactly once in each, so this goes stale LOUDLY), leaving the
+# round-4 helper-namespace refusal as the only thing that can block the same attack.
+SB_A2="$WORK/inject-nopreflight"; build_sb "$SB_A2" || { echo "harness setup failed (a2)" >&2; exit 2; }
+python3 - "$SB_A2/$GUARD_REL" "$SB_A2/$HELPER_REL" <<'PYSTRIP'
+import sys, pathlib
+anchor = '_AX_PF_ENV="$(/usr/bin/env)"'
+for path in sys.argv[1:]:
+    p = pathlib.Path(path); t = p.read_text(encoding="utf-8")
+    n = t.count(anchor)
+    if n != 1:
+        print(f"preflight anchor occurs {n}x (expected 1) in {path}", file=sys.stderr)
+        sys.exit(3)
+    p.write_text(t.replace(anchor, '_AX_PF_ENV="AX_NEUTERED"'), encoding="utf-8")
+PYSTRIP
+if [ $? -ne 0 ]; then echo "harness setup failed (a2 — preflight anchor stale)" >&2; exit 2; fi
+( cd "$SB_A2" && git add -A && git -c user.email=p@x -c user.name=p commit -q -m "no preflight" ) >/dev/null 2>&1
+bash "$WORK/attack_a.sh" "$SB_A2" "$SB_A2/$GUARD_REL" > "$WORK/a2.log" 2>&1; A2_RC=$?
+note "(a2) same attack, ROUND-6 preflight removed: exit=$A2_RC"
+if ! grep -q "HELPER_FUNCTION_INJECTED" "$WORK/a2.log" || [ "$A2_RC" -eq 0 ]; then
+    violation "with the round-6 preflight removed, the round-4 helper-NAMESPACE refusal did not" \
+              "fire (exit=$A2_RC). (a) would then be proving only that the preflight works, and" \
+              "the namespace check would be dead code nobody notices."
+    head -5 "$WORK/a2.log" >&2
 fi
 
 # ── (e) PRE-FIX REPRODUCTION of (a) ──────────────────────────────────────────────────

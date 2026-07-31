@@ -1381,4 +1381,24 @@ the trigger event, do not relitigate.
   NOT fixture-covered, and why: these four attack surfaces are the ENVIRONMENT and the git CONFIG,
   neither of which a `fixtures/<guard>/fail_*` DIRECTORY can express — the proof harness is the
   registered mechanism, and it runs inside `run-all-guards.sh`.
+- Harness reconciliations forced by the fix, recorded because each is a real weakening or a real
+  cost: (i) the pure-keyword preflight now refuses exported functions BEFORE the round-4 namespace
+  check can name them, so `ax-prove-helper-injection-blocked.sh` case (a) reports
+  HERMETIC_PREFLIGHT_HOSTILE — a new case **(a2)** runs the same attack with the preflight stripped
+  from the sandbox copies, so the round-4 refusal stays non-vacuous instead of becoming dead code
+  nobody notices; (ii) `pre_push_decision_guard.sh` now expects the hook to consult the recency
+  guard TWICE per shipping ref (prior release, then tree) and accepts either R25 block message;
+  (iii) `pyyaml_preflight_coverage_guard.sh` simulates PyYAML absence with a PYTHONPATH shim, which
+  `-E` ignores — measured, both ratcheting guards exited 0 with the shim in place having verified
+  everything, i.e. the probe went INERT rather than lenient. `-E` is not negotiable (it is what
+  refuses the sitecustomize injection), so those two are now PROBE_EXEMPT with the same static
+  assertion `adversarial/run.sh` already gets, reported in the output rather than skipped;
+  (iv) the toolchain list is enforced with an ABSENT-ON-BOTH-SIDES exemption — a tree that never
+  carried part of the toolchain (a fork that took the hook but not the runner, the mutation-matrix
+  sandboxes) is a legitimate shape, while absent on exactly ONE side blocks.
+- One regression was introduced and caught by this sweep, recorded because it is the exact class
+  this catalog exists to catch: a comment placed BETWEEN backslash continuations in
+  `evidence_quote_spotcheck_guard.sh` swallowed the entire `STRICT=… LIVE_ROOT=… GIT_ANCHOR=…`
+  environment prefix, so the guard ran its body without them and still printed a green summary.
+  `bash -n` passed. Only the live sweep saw it.
 - Commits: (this commit — PRD-final-4 wave, P1-seal round-6)
