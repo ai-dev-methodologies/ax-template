@@ -52,6 +52,31 @@
 #   has nowhere to keep a key, and a key committed next to the data authenticates nothing. What
 #   these checks close is the cheap, observed shape: the appended hand-authored line.
 #
+# Why the round-13 addition to 12c (cross-family review ROUND 13, P1; TD-2026-08-01-(P1-symlink-
+# target-alias)). New BLOCKING code: GIT_SYMLINK_TARGET_ALIAS.
+#   Rounds 9-12 built an alias census and widened its key three times (case → normalization →
+#   non-ASCII case → ignorable Cf). Every one of those rounds registered only INDEX PATHS. A
+#   symlink's TARGET is not an index path — it is BLOB CONTENT, read as bytes and hashed and never
+#   resolved — so the whole four-round census did not apply to it on ANY axis.
+#   MEASURED (reviewer round 13; commit only, no environment control):
+#       git mv backend/gradlew backend/gradlew-real
+#       ln -s GRADLEW-REAL backend/gradlew          # the CASE is the whole attack
+#   On ordinary case-insensitive APFS `backend/gradlew` resolves `GRADLEW-REAL` to the tracked
+#   `backend/gradlew-real`, so R25 EXECUTES successfully, `git status --porcelain -uall` is EMPTY
+#   and the fingerprint returns the clean-tree constant. On a case-SENSITIVE checkout the committed
+#   symlink is DANGLING: the receiver gets a broken gradlew while our evidence says the tree is
+#   clean and the build passed. (Reviewer confirmed live: `backend/gradlew` and `backend/GRADLEW`
+#   are the same APFS inode, `backend/GRADLEW` is not an indexed spelling, and the shipped detector
+#   produced helper_verdict ([], []).)
+#   THE RULE: resolve the target's bytes LEXICALLY against the link's own (recorded) directory; if
+#   the result stays inside the repository, EXISTS, and its (st_dev, st_ino) is that of a REGISTERED
+#   prefix, then its spelling must BE a registered spelling — a FOLD-EQUAL but different spelling is
+#   an alias and BLOCKS. Precision comes from gating on fold-equality (`_ax_fold_path_key`, shared
+#   with the fingerprint helper) rather than on bare inequality: `..` traversal, chains through an
+#   intermediate symlinked directory, and absolute targets all differ from the record textually and
+#   none of them is an alias, so none of them is refused. See the 12c comment for the full
+#   disposition table (absolute / escaping / untracked / dangling / chained / directory / exact).
+#
 # Why the round-10 addition to 12c (cross-family review ROUND 10, P1; TD-2026-07-31-(P1-casefold-
 # prefix)). New BLOCKING code: GIT_CASEFOLD_DIR_ALIAS.
 #   Round 9's casefold check was LEAF-ONLY, and the entry that shipped it overclaimed. Both
@@ -1248,6 +1273,25 @@ if live_git_root and not expected_head_file.is_file() and guard_repo is not None
     #      pair. The key is now UNICODE CANONICAL CASELESS (`_ax_fold_path_key` above, the same
     #      function as the fingerprint helper's), the (dev, ino) discriminator is unchanged, and
     #      the leaf/directory code split is unchanged.
+    #      ROUND 13 / P1 (TD-2026-08-01-(P1-symlink-target-alias)) — FOUR ROUNDS OF ALIAS CENSUS,
+    #      AND NONE OF THEM LOOKED AT WHAT A SYMLINK POINTS AT. Rounds 9-12 registered INDEX PATHS
+    #      only; a symlink's TARGET is BLOB CONTENT, read as bytes and hashed below and never
+    #      RESOLVED, so the census did not apply to it on any of the four axes. MEASURED (reviewer
+    #      round 13; committed content, no environment control): `git mv backend/gradlew
+    #      backend/gradlew-real` + `ln -s GRADLEW-REAL backend/gradlew` → on case-insensitive APFS
+    #      the link resolves, R25 EXECUTES and goes green, `git status --porcelain -uall` is EMPTY
+    #      and the fingerprint is the clean-tree constant, while a case-SENSITIVE receiver gets a
+    #      DANGLING gradlew. The target is now resolved LEXICALLY against the link's own recorded
+    #      directory and must spell the record whenever it lands on a tracked inode by a FOLD-EQUAL
+    #      alias (`_ax_fold_path_key`, so case + normalization + non-ASCII case + ignorable Cf in
+    #      one step, and every future axis the fold gains)  → GIT_SYMLINK_TARGET_ALIAS.
+    #      NOT REFUSED, by construction and on purpose: an ABSOLUTE target, one that ESCAPES the
+    #      repository through `..`, one that names an UNTRACKED path, a DANGLING one (a different
+    #      defect class — identically broken here and at the receiver, so the evidence does not lie
+    #      about it; docs/BACKLOG.md P3-132), one reached through an intermediate symlinked
+    #      DIRECTORY (the record is not fold-equal, and that link is itself committed), and one
+    #      that spells the record EXACTLY — which is what both live tracked symlinks in this
+    #      catalog do, through `..` traversal. Measured here: 2 tracked symlinks, ZERO refusals.
     rc_of, objfmt = git_out("rev-parse", "--show-object-format", root=root, check=False)
     _algo = "sha256" if (rc_of == 0 and objfmt.strip() == "sha256") else "sha1"
     _p_idx = subprocess.run([GIT_BIN, "--no-replace-objects", "-C", str(root),
@@ -1299,6 +1343,9 @@ if live_git_root and not expected_head_file.is_file() and guard_repo is not None
         # `a/helper`, one directory inode on APFS, `git status` EMPTY, both implementations silent,
         # and the pushed tree serves no `A/helper` on a case-sensitive receiver.
         _execbits, _gldirt = [], []
+        _symlinks = []          # ROUND 13: (index path, on-disk target bytes), resolved after the
+                                # walk — the registry is only complete once every entry has
+                                # contributed its prefixes
         _casefold = {}          # folded prefix -> {(dev, ino): {spellings}}
         _statcache = {}         # relative path -> lstat result | None, one call per distinct prefix
         _foldcache = {}         # relative path -> canonical caseless key, one fold per prefix
@@ -1412,6 +1459,10 @@ if live_git_root and not expected_head_file.is_file() and guard_repo is not None
                 except OSError as _e:
                     _absent.append("%s (%s)" % (_show, _e.strerror or _e))
                     continue
+                # ROUND 13 / P1: the target is BLOB CONTENT — hashed below, and until now never
+                # RESOLVED. The bytes are already in hand and the blob comparison binds them to
+                # the committed ones, so collect here and compare after the walk.
+                _symlinks.append((_path, _d))
             else:
                 if _is_link:
                     try:
@@ -1452,6 +1503,53 @@ if live_git_root and not expected_head_file.is_file() and guard_repo is not None
                     _diraliased.append(_shown)
         _aliased.sort()
         _diraliased.sort()
+        # ROUND 13 / P1 (TD-2026-08-01-(P1-symlink-target-alias)): the alias census, applied to
+        # what a tracked SYMLINK POINTS AT. `_inodes` is derived from the SAME `_statcache` the
+        # prefix walk filled, so "registered" means exactly "a tracked path or a directory
+        # component of one" — one pass over the distinct prefixes, no new lstat. The seven steps
+        # and the full disposition table are in the 12c comment above and in the fingerprint
+        # helper's SymlinkTargetAlias docstring; this is the same rule, written twice on purpose.
+        _inodes = {}
+        for _rel, _pst in _statcache.items():
+            if _pst is not None:
+                _inodes.setdefault((_pst.st_dev, _pst.st_ino), set()).add(_rel)
+        _symaliased = []
+        for _lpath, _tgt in _symlinks:
+            if _tgt.startswith(b"/"):
+                continue                        # absolute: a location on the receiver's root fs
+            _stack = _lpath.split(b"/")[:-1]
+            _escaped = False
+            for _comp in _tgt.split(b"/"):
+                if _comp in (b"", b"."):
+                    continue
+                if _comp == b"..":
+                    if not _stack:
+                        _escaped = True
+                        break
+                    _stack.pop()
+                else:
+                    _stack.append(_comp)
+            if _escaped or not _stack:
+                continue                        # leaves the repository, or IS the repository root
+            _cand = b"/".join(_stack)
+            try:
+                _cst = os.lstat(os.path.join(_rootb, _cand))
+            except OSError:
+                continue                        # dangling: a different defect class (P3-132)
+            _names = _inodes.get((_cst.st_dev, _cst.st_ino))
+            if not _names or _cand in _names:
+                continue                        # untracked target, or the recorded spelling
+            _ckey = _ax_fold_path_key(_cand, _foldcache)
+            _alias = sorted(_n for _n in _names
+                            if _ax_fold_path_key(_n, _foldcache) == _ckey)
+            if not _alias:
+                continue                        # a tracked inode reached by a non-alias route
+            _symaliased.append(
+                "%s -> %s (resolves HERE to %s, which this repository records as %s)"
+                % (_lpath.decode(errors="replace"), _tgt.decode(errors="replace"),
+                   _cand.decode(errors="replace"),
+                   " / ".join(_n.decode(errors="replace") for _n in _alias)))
+        _symaliased.sort()
         if _execbits:
             emit_fail(
                 "GIT_EXEC_BIT_DIVERGENCE",
@@ -1497,6 +1595,23 @@ if live_git_root and not expected_head_file.is_file() and guard_repo is not None
                 "`A/helper` at all on a case-sensitive receiver. This is a MEASUREMENT, not an "
                 "assumption about the filesystem: genuinely distinct directories yield distinct "
                 "inodes and are NOT refused. Settle on one spelling (`git mv`) and re-run R25."
+            )
+        if _symaliased:
+            emit_fail(
+                "GIT_SYMLINK_TARGET_ALIAS",
+                "tracked SYMLINKS whose TARGET spells a tracked path with an ALIAS of the "
+                "spelling this repository records: " + ", ".join(_symaliased[:8]) + ". A "
+                "symlink's target is BLOB CONTENT, not an index path, so four rounds of "
+                "index-path alias census never looked at it. On this filesystem the alias "
+                "RESOLVES, so the build, the lint and every sweep succeed and the tree reports "
+                "CLEAN — while a receiver whose filesystem treats the difference as significant "
+                "gets a DANGLING link. Measured: `git mv backend/gradlew backend/gradlew-real` + "
+                "`ln -s GRADLEW-REAL backend/gradlew` left `git status --porcelain -uall` EMPTY, "
+                "ran R25 to green and left the fingerprint at the clean-tree constant. This is a "
+                "MEASUREMENT of an observed (st_dev, st_ino) identity plus a fold equality: a "
+                "target that leaves the repository, names an untracked path, dangles, or spells "
+                "the record EXACTLY is NOT refused. Spell the target the way the index records "
+                "the path (`ln -sf <recorded-spelling>`) and re-run R25."
             )
         if _flagged:
             emit_fail(
