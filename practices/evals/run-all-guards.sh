@@ -1599,6 +1599,25 @@ run_guard "release_anchor/helper_injection_blocked" 0 \
 # on its own code). The alias cases now ASSERT their premise at gate time (two entries, one inode,
 # one blob): write_audit's `git add -A` had been silently healing it, and a twin whose premise
 # evaporated was passing for a reason that was not the neuter.
+# ROUND 11 (TD-2026-08-01-(P1-unicode-prefix-fold) / P1) closes the FOLD the round-10 prefix map is
+# KEYED with. It was `bytes.lower()` — ASCII-only and normalization-blind — so two aliases the
+# filesystem serves from ONE inode were never compared, and neither needs any environment control:
+# both are committed content that arrives in an ordinary clone. (AA) index `é/check.sh` (NFC c3a9,
+# running `cat "é/helper"`) + index `e◌́/helper` (NFD 65cc81): measured at beee364, status EMPTY,
+# `bash é/check.sh` → PASS, BOTH implementations silent, fingerprint = the clean-tree constant,
+# while the pushed tree records only `e◌́/helper` → GIT_CASEFOLD_DIR_ALIAS. (AB) the same hole with
+# NON-ASCII CASE (`É` c389 ≡ `é` c3a9). The key is now UNICODE CANONICAL CASELESS,
+# NFC(casefold(NFD(s))) per UAX #21 §1.3, in BOTH implementations; the (st_dev, st_ino)
+# discriminator and the leaf/directory code split are UNCHANGED, so no new code was needed and a
+# case- or normalization-SENSITIVE fork-receiver is unaffected. (AA2)/(AB2) revert the fold to
+# `bytes.lower()` in both implementations and the attacks land again; (AA3)/(AA4)/(AB3)/(AB4) are
+# the per-implementation splits; (AC) proves the round-10 ASCII topology still blocks. Controls:
+# (AA5) genuinely DISTINCT `É/` and `é/` on a REAL case-sensitive APFS volume are NOT refused,
+# (AD) the two implementations' folds agree over every prefix of every tracked path plus an
+# adversarial corpus, and (AE) drives the shipped grouping with SYNTHETIC inodes for the one
+# control this platform cannot build — measured with hdiutil, case-insensitive APFS, CASE-SENSITIVE
+# APFS, case-sensitive HFS+, ExFAT and FAT32 are ALL normalization-INSENSITIVE, so a distinct-inode
+# NFC/NFD pair does not exist here; (AE) prints SIMULATED rather than claiming a live control.
 run_guard "hermetic_runtime/inherited_runtime_blocked" 0 \
     bash "$REPO_ROOT/practices/scripts/ax-prove-hermetic-runtime.sh"
 # ── P1-2/P1-4 ROUND-4: the recency guard's FIXTURE SWEEP ───────────────────────────

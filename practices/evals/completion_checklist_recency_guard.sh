@@ -581,6 +581,7 @@ import stat
 import hashlib
 import subprocess
 import datetime
+import unicodedata
 import warnings
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 
@@ -674,6 +675,37 @@ def _no_dup_pairs(pairs):
             )
         seen.add(k)
     return dict(pairs)
+
+
+# ROUND 11 / P1 (TD-2026-08-01-(P1-unicode-prefix-fold)) — THE CANONICAL CASELESS PATH KEY, and it
+# is BYTE-FOR-BYTE the same function as practices/scripts/lib/tree_fingerprint.py `_fold_path_key`.
+# The two implementations must reach the SAME verdict on the same input; the full rationale (why
+# NFD inside, why NFC outside, why casefold and not lower, why the ASCII fast path is not an
+# approximation, and the non-UTF-8 disposition) lives in that docstring and is not duplicated here.
+# In one line: rounds 9-10 keyed with `bytes.lower()`, which is ASCII-only and normalization-blind,
+# so `é`(c3a9) ≡ `e◌́`(65cc81) and `É`(c389) ≡ `é`(c3a9) — both ONE inode on APFS — were never
+# compared, and 12c's nine violation buckets came back EMPTY on the reviewer's topology.
+def _ax_fold_path_key(pfx, cache=None):
+    if cache is not None:
+        try:
+            return cache[pfx]
+        except KeyError:
+            pass
+    if pfx.isascii():
+        key = pfx.lower()
+    else:
+        try:
+            s = pfx.decode("utf-8", "surrogateescape")
+            s = unicodedata.normalize("NFC", unicodedata.normalize("NFD", s).casefold())
+            key = s.encode("utf-8", "surrogateescape")
+        except (UnicodeError, ValueError):
+            # Not reachable via surrogateescape; a belt. The round-10 key can only ever group a
+            # byte-identical spelling with itself, so it reports nothing and blocks nothing.
+            key = pfx.lower()
+    if cache is not None:
+        cache[pfx] = key
+    return key
+
 
 try:
     latest = json.loads(lines[-1], object_pairs_hook=_no_dup_pairs)
@@ -1199,6 +1231,16 @@ if live_git_root and not expected_head_file.is_file() and guard_repo is not None
     #      `A/check.sh` and `a/helper` (different leaves, ONE directory inode on APFS) never met.
     #      The map is now keyed on EVERY PATH PREFIX, gitlinks included, and a directory-component
     #      alias blocks with GIT_CASEFOLD_DIR_ALIAS.
+    #      ROUND 11 / P1 (TD-2026-08-01-(P1-unicode-prefix-fold)) — THE PREFIX WAS RIGHT, THE FOLD
+    #      WAS ASCII. The key was `bytes.lower()`: it lowercases A-Z and nothing else and is blind
+    #      to Unicode normalization, so `é`(c3a9) vs `e◌́`(65cc81) and `É`(c389) vs `é`(c3a9) —
+    #      each ONE inode on APFS, each reachable with committed content and no environment
+    #      control — were never compared. MEASURED at beee364 by driving THIS sweep over synthetic
+    #      index/stat responses for one inode: the ASCII pair fires GIT_CASEFOLD_DIR_ALIAS, the
+    #      NFC/NFD pair leaves all nine violation buckets EMPTY, and so does the non-ASCII case
+    #      pair. The key is now UNICODE CANONICAL CASELESS (`_ax_fold_path_key` above, the same
+    #      function as the fingerprint helper's), the (dev, ino) discriminator is unchanged, and
+    #      the leaf/directory code split is unchanged.
     rc_of, objfmt = git_out("rev-parse", "--show-object-format", root=root, check=False)
     _algo = "sha256" if (rc_of == 0 and objfmt.strip() == "sha256") else "sha1"
     _p_idx = subprocess.run([GIT_BIN, "--no-replace-objects", "-C", str(root),
@@ -1252,6 +1294,7 @@ if live_git_root and not expected_head_file.is_file() and guard_repo is not None
         _execbits, _gldirt = [], []
         _casefold = {}          # folded prefix -> {(dev, ino): {spellings}}
         _statcache = {}         # relative path -> lstat result | None, one call per distinct prefix
+        _foldcache = {}         # relative path -> canonical caseless key, one fold per prefix
         _fullpaths = set()      # the tracked paths themselves: leaf alias vs directory alias
         _rootb = os.fsencode(str(root))
         for _rec in _p_idx.stdout.split(b"\0"):
@@ -1282,7 +1325,11 @@ if live_git_root and not expected_head_file.is_file() and guard_repo is not None
                     _statcache[_pfx] = _pst
                 if _pst is None:
                     continue
-                _casefold.setdefault(_pfx.lower(), {}).setdefault(
+                # ROUND 11 / P1: canonical caseless, NOT `bytes.lower()`. Same function as the
+                # fingerprint helper's `_fold_path_key`; the (dev, ino) discriminator below is
+                # UNCHANGED, so a case- or normalization-SENSITIVE tree still yields two inodes,
+                # two singleton groups and no refusal.
+                _casefold.setdefault(_ax_fold_path_key(_pfx, _foldcache), {}).setdefault(
                     (_pst.st_dev, _pst.st_ino), set()).add(_pfx)
             # ROUND 8 / P1-A (0): the BITS. Both reproductions begin with `git update-index`, and
             # `ls-files -v` reports them directly — a lowercase tag is assume-unchanged, `S` is

@@ -2163,3 +2163,129 @@ regression.
   twins were already shipping. Corrected to 5/6/7/8/9/10 and to say what the new twins prove.
 
 - Commits: (this commit — PRD-final-4 wave, P1-seal round-10)
+
+---
+
+## TD-2026-08-01-(P1-unicode-prefix-fold) — the prefix was right; the FOLD was ASCII
+
+- Date: 2026-08-01
+- Status: accepted
+- Trigger: cross-family reviewer, ROUND 11, one P1 plus register-only P3 items. Round 11 confirmed
+  the round-10 seal dead against its own neuter matrix in BOTH directions and found no other
+  P0/P1 — the prefix map, symlinked directory components, gitlink prefixes, hardlinked directories
+  (APFS does not support them) and the walk ordering all held. The one P1 is the row already
+  registered as `docs/BACKLOG.md` **P3-120**, ESCALATED.
+
+### P1 — `bytes.lower()` is neither Unicode-aware nor normalization-aware
+
+Rounds 9 and 10 keyed the alias map with `bytes.lower()` — `tree_fingerprint.py:421` and
+`completion_checklist_recency_guard.sh:1285` at beee364. That function lowercases `A-Z` and nothing
+else, and it has no notion of canonical equivalence. So two spellings that the filesystem serves
+from ONE inode were placed in DIFFERENT groups and their shared inode was never compared.
+
+```
+REPRODUCTION (the reviewer's, replayed here against the beee364 implementations, APFS)
+    index: é/check.sh    (NFC   c3a9,   committed content: cat "é/helper")
+    index: e◌́/helper      (NFD  65cc81, committed content: PASS)
+    disk:  é and e◌́ are the SAME directory inode (16777229, 34664959)
+
+    git status --porcelain -uall   → EMPTY
+    bash é/check.sh                → PASS          (so every gate goes green)
+    tree_fingerprint.py .          → exit 0, 0a815065…  (the clean-tree constant)
+    the 12c sweep                  → all nine violation buckets EMPTY
+```
+
+The pushed tree records only `e◌́/helper`. A normalization-SENSITIVE receiver has no `é/helper`, so
+the committed check is broken on arrival and nothing measured it. **`É/` (c389) vs `é/` (c3a9) is
+the same defect through the same hole** — non-ASCII case, which `bytes.lower()` also does not touch.
+
+**No environment control is involved.** Everything above is committed content. Apple Git 2.50.1
+precomposes an NFD path at every text-level entry point measured (`git add`, `update-index
+--cacheinfo`, `update-index --index-info`, `mktree`) *even with `core.precomposeunicode=false`*, so
+the state cannot be typed into existence on macOS — but it is what a repository created on a
+normalization-sensitive filesystem hands a macOS clone. **Verified:** `git clone` of such a repo
+with default config yields an index holding `65cc81`, `git status` EMPTY, and `bash é/check.sh` →
+PASS. That is why the prover plants the tree OBJECT rather than using porcelain: it reproduces an
+arriving state, not an unreachable one.
+
+**THE FIX — canonical caseless keys in both implementations, `NFC(casefold(NFD(s)))`.**
+`_fold_path_key` (helper) and `_ax_fold_path_key` (12c sweep) are the same function.
+
+- **inner NFD** — UAX #21 §1.3 defines default caseless matching over NFD forms. Load-bearing, not
+  ceremony: measured, `casefold()` with no normalization separates every pair above.
+- **outer normalization** — load-bearing because casefold is **not closed** under canonical
+  equivalence. Measured: `U+1E9B U+0323` vs `U+1E69` fold EQUAL with an outer normalization and
+  UNEQUAL without one. (This is why the round-9 row's proposed `normalize('NFC', …).lower()` was
+  **not** adopted: it is wrong twice — `lower()` misses `É`≡`é`, and normalize-then-fold with no
+  outer step misses the U+1E9B case.)
+- **outer form = NFC, not the standard's NFD** — the value is only ever compared for EQUALITY, and
+  two strings are canonically equivalent iff their NFC forms are equal iff their NFD forms are
+  equal. NFC is the shorter key and the conventional canonical target here (git spells it
+  `core.precomposeunicode`).
+- **`casefold()` not `lower()`** — full case folding is what caseless MATCHING means; `lower()` is a
+  round-trip operation (`U+017F ſ` lowercases to itself but folds to `s`).
+- **ASCII fast path is not an approximation** — for pure-ASCII input NFD/NFC are the identity and
+  full casefold coincides exactly with `lower()`, so it returns the same bytes the slow path would.
+  It also creates no seam: a non-ASCII prefix folding INTO ASCII (`ſ` → `s`) still meets the ASCII
+  spelling. It exists so the live catalog's 8,276 distinct prefixes — all ASCII — cost what they did.
+- **non-UTF-8 paths: NOT a crash and NOT a block.** Paths are bytes and a latin-1 filename is not an
+  attack. The decode is `surrogateescape`; undecodable bytes survive as lone surrogates (unassigned,
+  combining class 0), pass normalization and casefold untouched, and re-encode to the ORIGINAL
+  bytes — `A/\xff/b` still folds its ASCII half to `a/\xff/b`. Verified over 3,000 random byte
+  strings: no exception, byte-exact round trip.
+
+**UNCHANGED ON PURPOSE:** the `(st_dev, st_ino)` discriminator (so this stays a MEASUREMENT and
+case-/normalization-sensitive forks are unaffected), the GIT_CASEFOLD_ALIAS (13) vs
+GIT_CASEFOLD_DIR_ALIAS (14) leaf/directory split, and byte-level path handling everywhere else.
+**No new code was added** — the remedy for all three alias shapes is the same (settle on one
+spelling), so a fourth code would name a difference that does not exist.
+
+### Evidence
+
+| Arm | Result |
+|---|---|
+| (AA) NFC/NFD directory alias | pre-fix exit 0 + clean-tree constant → post-fix `GIT_CASEFOLD_DIR_ALIAS`, BOTH implementations |
+| (AB) non-ASCII case (`É/` ≡ `é/`) | same |
+| (AC) round-10 ASCII (`A/` ≡ `a/`) | still refused — no regression |
+| (AA2)/(AB2) | fold reverted to `bytes.lower()` in BOTH → the attacks land again (exit 0) |
+| (AA3)/(AB3) sweep-only revert | the fingerprint helper still refuses (`AUDIT_FINGERPRINT_UNVERIFIABLE`) |
+| (AA4)/(AB4) helper-only revert | the 12c sweep still refuses on its own code |
+| (Z5) real case-sensitive APFS volume | distinct-inode `A/`+`a/` NOT refused |
+| (AA5) real case-sensitive APFS volume | distinct-inode `É/`+`é/` NOT refused |
+| (AD) fold parity | 8,298 inputs in-harness (8,276 live-tree prefixes + 22 adversarial) — 0 disagreements; a wider standalone run of 11,299 (the same corpus + 3,000 random byte strings) also disagreed 0 times and raised no exception |
+| (AE) normalization false-positive | **SIMULATED** — distinct synthetic inodes → 0 reports; one inode → reported |
+| live tree | digest `751098…` IDENTICAL pre and post, exit 0 |
+| performance | 0.265 → 0.266 s/run over 5 runs (+0.4%, within noise; 0 non-ASCII tracked paths) |
+
+**Why (AE) is simulated, stated rather than hidden:** a distinct-inode `é/`+`e◌́/` pair needs a
+normalization-SENSITIVE filesystem and this platform has none. Measured with `hdiutil` on this
+machine: case-insensitive APFS, **case-sensitive APFS**, case-sensitive HFS+, ExFAT and FAT32 are
+**all** normalization-INSENSITIVE (the FAT variants additionally rewrite the spelling to NFD on
+write). The reviewer's prescription assumed the case-sensitive APFS volume would also be
+normalization-sensitive; it is not, and that is reported rather than papered over.
+
+### Correction carried in this round
+
+`tree_fingerprint.py:252` still claimed the distinct-inode control was "verified with a simulated
+distinct-inode pair, because this machine has no case-sensitive volume to build the twin on". That
+was stale as of round 10 — (Z5) builds it on a real `hdiutil create -fs "Case-sensitive APFS"`
+volume. Corrected, and the paragraph now distinguishes what is real (both CASE controls) from what
+is simulated and why (the NORMALIZATION control).
+
+### Registered rather than done
+
+- `docs/BACKLOG.md` **P3-126** — pathological-prefix cost: O(P) memory in distinct prefixes and
+  O(depth²) bytes to build one entry's keys. **Graded honestly as a resource concern, not a
+  bypass** — exhaustion makes the sweep fail and the gate BLOCK (unknown never passes). Measured at
+  this catalog's scale: no observable cost (5,745 paths → 8,276 prefixes, +0.4% wall clock).
+- `docs/BACKLOG.md` **P3-127** — Windows/NTFS trailing-dot/space filename equivalence as an
+  **unverified** sibling. **Explicitly NOT APFS and not reproduced here**: no Windows host was
+  available to measure either (1) that NTFS serves both spellings from one inode or (2) that git for
+  Windows can create such index entries. Adding a trailing-dot/space strip to the fold without that
+  measurement would risk false positives on POSIX trees that use those characters legitimately, so
+  the row is registered with **no code change**.
+- `docs/BACKLOG.md` **P3-120** — **CLOSED by this entry**; it is the row this P1 escalated from. Its
+  original grading ("the clean-tree precondition already refuses the ordinary form") was true of the
+  LEAF form only and does not hold for the directory form round 10 opened.
+
+- Commits: (this commit — PRD-final-4 wave, P1-seal round-11)

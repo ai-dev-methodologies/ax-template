@@ -68,6 +68,23 @@ WHAT IT HASHES, deterministically:
     the same (st_dev, st_ino) BLOCKS — a directory component under GIT_CASEFOLD_DIR_ALIAS, the
     leaf case unchanged under GIT_CASEFOLD_ALIAS.
 
+    ROUND 11 / P1 (TD-2026-08-01-(P1-unicode-prefix-fold)) — THE PREFIX WAS RIGHT, THE FOLD WAS
+    ASCII. Rounds 9 and 10 keyed the map with `bytes.lower()`, which lowercases A-Z and nothing
+    else and is blind to Unicode normalization. Two aliases the filesystem serves from ONE inode
+    therefore never met, and no environment control is needed to reach either — both are committed
+    content. MEASURED against this file at beee364, in a throwaway repo on APFS:
+        index: é/check.sh    (NFC, c3a9;   contains: cat "é/helper")
+        index: e◌́/helper     (NFD, 65cc81; contains: PASS)
+        disk:  é and e◌́ are the SAME directory inode (16777229, 34664959)
+    `git status --porcelain -uall` is EMPTY, `bash é/check.sh` prints PASS locally so every gate
+    goes green, and this file returned the clean-tree constant 0a815065… at exit 0 — while the
+    PUSHED tree records only `e◌́/helper`, which a normalization-SENSITIVE receiver does not serve
+    as `é/helper`. `É/` vs `é/` is the same defect through the same hole (`bytes.lower()` does not
+    touch c389). The key is now UNICODE CANONICAL CASELESS — NFC(casefold(NFD(s))), UAX #21 §1.3 —
+    computed by `_fold_path_key`, which also states the non-UTF-8 disposition. The (st_dev, st_ino)
+    discriminator and the leaf/directory split are UNCHANGED, so a case- or normalization-sensitive
+    fork-receiver is unaffected and the two codes keep their meanings.
+
 HONEST LIMIT, and it matters for how much the recompute proves:
     ON A CLEAN TREE both inputs are EMPTY, so the digest is a CONSTANT — the same value for every
     clean tree of every commit. It is a DIRT fingerprint, not a tree identity. That is exactly
@@ -87,6 +104,7 @@ import shutil
 import stat
 import subprocess
 import sys
+import unicodedata
 
 
 class RedirectedGitContext(RuntimeError):
@@ -231,6 +249,11 @@ class CasefoldAlias(GitFiltersPresent):
     ROUND 10 SCOPE CORRECTION: this class is now the LEAF half of the alias family — it fires when
     every aliased spelling is a full tracked path. A shared DIRECTORY component is the other half
     and raises CasefoldDirectoryAlias; round 9 could not see it at all.
+    ROUND 11 SCOPE CORRECTION: "differing only in CASE" was ALSO too narrow, in two directions at
+    once, because the key was `bytes.lower()`. It is now canonical caseless (`_fold_path_key`), so
+    this class covers a leaf pair that differs by UNICODE NORMALIZATION (`é` ≡ `e◌́`) or by
+    NON-ASCII case (`É` ≡ `é`) exactly as it covers `A.sh` ≡ `a.sh`. The inode discriminator is
+    unchanged, so the cost to a case- or normalization-SENSITIVE fork-receiver is still zero.
     """
 
 
@@ -249,11 +272,24 @@ class CasefoldDirectoryAlias(GitFiltersPresent):
     THE MEASUREMENT IS THE SAME ONE: every prefix of every tracked path is folded, and a folded
     group is refused only when two DISTINCT spellings lstat to the SAME (st_dev, st_ino). A
     case-sensitive tree with genuinely distinct `A/` and `a/` directories yields two inodes and is
-    NOT refused — verified with a simulated distinct-inode pair, because this machine has no
-    case-sensitive volume to build the twin on.
-    HONEST RESIDUE: two spellings that fold equal AND are hardlinks of one inode on a
-    case-SENSITIVE filesystem would be flagged. That requires deliberately hardlinking `A.txt` to
-    `a.txt`; the same property was already true of the leaf check in round 9.
+    NOT refused.
+    ROUND 11 CORRECTION TO THIS PARAGRAPH: it used to end "verified with a simulated distinct-inode
+    pair, because this machine has no case-sensitive volume to build the twin on". That is no
+    longer the state of the harness and was already avoidable — ax-prove-hermetic-runtime.sh (Z5)
+    builds the control on a REAL case-sensitive volume, created with
+    `hdiutil create -fs "Case-sensitive APFS"`, and MEASURED there: distinct `A/`+`a/` directories
+    and distinct `Alias.txt`+`alias.txt` files are NOT refused. Round 11 adds the same real-volume
+    control for the non-ASCII case pair (`É/` vs `é/`, distinct inodes → not refused).
+    WHAT IS STILL SIMULATED, AND WHY — the NORMALIZATION control. A distinct-inode `é/` + `e◌́/`
+    pair requires a normalization-SENSITIVE filesystem, and this machine has none to offer:
+    MEASURED, case-insensitive APFS, case-SENSITIVE APFS, case-sensitive HFS+, ExFAT and FAT32 are
+    all normalization-INSENSITIVE (the FAT variants additionally rewrite the spelling to NFD on
+    write). So that arm runs against synthetic (st_dev, st_ino) identities and says so; it is the
+    same discriminator the real arms exercise, and it is labelled SIMULATED in the harness output
+    rather than claimed as a live control.
+    HONEST RESIDUE: two spellings that fold equal AND are hardlinks of one inode on a case- or
+    normalization-SENSITIVE filesystem would be flagged. That requires deliberately hardlinking
+    `A.txt` to `a.txt`; the same property was already true of the leaf check in round 9.
     """
 
 
@@ -402,7 +438,69 @@ def _lstat_cached(cache, rootb, rel):
         return st
 
 
-def _register_prefixes(casefold, statcache, rootb, path):
+def _fold_path_key(pfx, cache=None):
+    """ROUND 11 / P1: the CANONICAL CASELESS key of a path prefix (bytes in, bytes out).
+
+    ROUNDS 9-10 KEYED WITH `bytes.lower()`, WHICH IS ASCII-ONLY AND NORMALIZATION-BLIND. Two
+    aliases the filesystem serves from one inode therefore never met:
+      · NORMALIZATION. UTF-8 NFC `é` is c3a9; NFD `e` + U+0301 is 65cc81. `bytes.lower()` leaves
+        them distinct, so the shared inode was never compared. MEASURED on APFS (this machine,
+        beee364): index `é/check.sh` (NFC, runs `cat é/helper`) + index `e◌́/helper` (NFD),
+        `git status --porcelain -uall` EMPTY, one directory inode, `bash é/check.sh` → PASS,
+        fingerprint = the clean-tree constant 0a815065… — while the PUSHED tree records only
+        `e◌́/helper`, which a normalization-SENSITIVE receiver does not serve as `é/helper`.
+      · NON-ASCII CASE. `bytes.lower()` maps A-Z and nothing else, so `É/` (c389) and `é/` (c3a9)
+        folded apart even though APFS serves them from one directory. Same defect, same silence.
+
+    THE KEY IS UNICODE CANONICAL CASELESS MATCHING: NFC(casefold(NFD(s))).
+      · The INNER NFD is UAX #21 §1.3 ("Default Caseless Matching" is defined over NFD forms).
+        It is load-bearing, not ceremony — MEASURED here: `casefold()` with no normalization at
+        all separates every pair above, and the outer step alone is not enough either.
+      · The OUTER normalization is load-bearing because casefold is NOT closed under canonical
+        equivalence: MEASURED, U+1E9B U+0323 vs U+1E69 fold EQUAL with an outer normalization and
+        UNEQUAL without one.
+      · The outer form is NFC rather than the standard's NFD purely because this value is only
+        ever compared for EQUALITY, and two strings are canonically equivalent iff their NFC forms
+        are equal iff their NFD forms are equal. NFC is the shorter key and the conventional
+        canonical target on this platform (git spells it `core.precomposeunicode`).
+      · `casefold()` and not `lower()`: full case folding. `lower()` is a locale/round-trip
+        operation (U+017F ſ lowercases to itself but folds to `s`; U+212A K folds to `k`), and
+        caseless MATCHING is what a filesystem does.
+    The ASCII fast path is not an approximation: for pure-ASCII input NFD and NFC are the
+    identity and full casefold coincides exactly with `lower()`, so it returns the same bytes the
+    slow path would. It exists so the live catalog's ~6.8k distinct prefixes — all ASCII — cost
+    what they cost before. Note it does NOT create a seam: a non-ASCII prefix that folds INTO
+    ASCII (`ſ` → `s`) still meets the ASCII spelling, because the slow path produces the same key.
+
+    NON-UTF-8 PATHS ARE NOT A CRASH AND NOT A BLOCK. Paths are bytes; Linux permits any non-NUL
+    byte, and a fork-receiver whose tree holds a latin-1 filename is not doing anything wrong.
+    The decode is `surrogateescape`, so undecodable bytes survive as lone surrogates, pass through
+    normalization and casefold untouched (they are unassigned, combining class 0), and re-encode
+    to the ORIGINAL bytes — `A/\\xff/b` still folds its ASCII half to `a/\\xff/b`. The bare
+    `except` is a belt only (surrogateescape does not raise); it falls back to the round-10
+    `lower()` key, which can only ever group a byte-identical spelling with itself, i.e. it
+    reports nothing and blocks nothing. An unreadable spelling is not evidence of an alias.
+    """
+    if cache is not None:
+        try:
+            return cache[pfx]
+        except KeyError:
+            pass
+    if pfx.isascii():
+        key = pfx.lower()
+    else:
+        try:
+            s = pfx.decode("utf-8", "surrogateescape")
+            s = unicodedata.normalize("NFC", unicodedata.normalize("NFD", s).casefold())
+            key = s.encode("utf-8", "surrogateescape")
+        except (UnicodeError, ValueError):
+            key = pfx.lower()
+    if cache is not None:
+        cache[pfx] = key
+    return key
+
+
+def _register_prefixes(casefold, statcache, rootb, path, foldcache=None):
     """ROUND 10 / P1: fold EVERY PATH PREFIX, not just the full path.
 
     casefold maps a folded prefix to {(st_dev, st_ino): {spellings}}. A folded key holding two
@@ -411,6 +509,10 @@ def _register_prefixes(casefold, statcache, rootb, path):
     Called for EVERY index entry INCLUDING gitlinks — round 9 registered the map after the 160000
     `continue`, so a submodule path could alias a directory and never be looked at (the reviewer
     registered that omission separately; it closes here because it is the same walk).
+    ROUND 11 / P1: the key is `_fold_path_key`, i.e. canonical caseless, not `bytes.lower()`. The
+    (st_dev, st_ino) DISCRIMINATOR IS UNCHANGED and is what keeps this measurement free of false
+    positives — a case-sensitive or normalization-sensitive fork-receiver whose tree genuinely
+    holds two such directories yields two inodes and two singleton groups, and is not refused.
     """
     comps = path.split(b"/")
     for n in range(1, len(comps) + 1):
@@ -418,7 +520,7 @@ def _register_prefixes(casefold, statcache, rootb, path):
         st = _lstat_cached(statcache, rootb, prefix)
         if st is None:
             continue
-        casefold.setdefault(prefix.lower(), {}).setdefault(
+        casefold.setdefault(_fold_path_key(prefix, foldcache), {}).setdefault(
             (st.st_dev, st.st_ino), set()).add(prefix)
 
 
@@ -506,8 +608,10 @@ def _raw_index_sweep(repo, gbin, genv, dirty):
     execbits, gldirt = [], []
     # ROUND 10 / P1: folded PREFIX -> {(dev, ino): {spellings}}; round 9 keyed the COMPLETE folded
     # path, which cannot express an alias that lives in a shared DIRECTORY component.
+    # ROUND 11 / P1: the fold is CANONICAL CASELESS (`_fold_path_key`), not `bytes.lower()`.
     casefold = {}
     statcache = {}         # relative path -> lstat result | None, one call per distinct prefix
+    foldcache = {}         # prefix -> canonical caseless key, one fold per distinct prefix
     fullpaths = set()      # the tracked paths themselves, to tell a leaf alias from a directory one
     for rec in out.stdout.split(b"\0"):
         if not rec:
@@ -523,7 +627,7 @@ def _raw_index_sweep(repo, gbin, genv, dirty):
         # spellings anywhere in the tree, so an entry that this sweep has nothing else to say
         # about still has to contribute its components.
         fullpaths.add(path)
-        _register_prefixes(casefold, statcache, rootb, path)
+        _register_prefixes(casefold, statcache, rootb, path, foldcache)
         # (0) THE BITS THEMSELVES. `-v` spells assume-unchanged as a LOWERCASE tag and
         #     skip-worktree as `S`; both tell git to stop reporting the truth about a path that a
         #     release is about to ship, and both are the first move of the two reproductions.
@@ -799,7 +903,12 @@ if __name__ == "__main__":
     # 11 = a tracked path's EXECUTABLE BIT is not the index's, 12 = an uninitialized gitlink is
     # populated, 13 = two index entries differing only in case are one file on disk, and
     # (ROUND 10 / TD-2026-07-31-(P1-casefold-prefix)) 14 = a shared DIRECTORY component is spelled
-    # two ways and is one directory on disk (13 is leaf-only and always was). Callers BLOCK
+    # two ways and is one directory on disk (13 is leaf-only and always was). ROUND 11 /
+    # TD-2026-08-01-(P1-unicode-prefix-fold) widened WHAT COUNTS AS "spelled two ways" for BOTH 13
+    # and 14 — the key is canonical caseless (NFC(casefold(NFD(s)))), so a NORMALIZATION alias
+    # (`é` ≡ `e◌́`) and a NON-ASCII CASE alias (`É` ≡ `é`) now reach the same two codes that ASCII
+    # case already did; no code was added, because the remedy (rename one spelling) is the same.
+    # Callers BLOCK
     # on every non-zero code — printing nothing and exiting 0 is exactly the fail-open round 5
     # closed, `continue`ing past a representation is the same fail-open one level down (round 8),
     # and accepting a representation fact the digest does not carry is the same again (round 9).

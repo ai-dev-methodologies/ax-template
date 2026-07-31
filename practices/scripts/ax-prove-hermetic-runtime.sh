@@ -137,6 +137,29 @@
 #       cannot exist, so the harness runs the shared-prefix arm and SAYS WHICH ARM RAN — the
 #       premise of every alias case is asserted at gate time (r9_premise), never assumed.
 #
+# ROUND 11 (TD-2026-08-01-(P1-unicode-prefix-fold)) attacks the FOLD the round-10 prefix map is
+# KEYED with. It was `bytes.lower()`: ASCII-only and normalization-blind, so two aliases the
+# filesystem serves from ONE inode were never compared — and neither needs any environment
+# control, both are committed content that arrives in an ordinary clone.
+#   (AA) index `é/check.sh` (NFC c3a9, running `cat "é/helper"`) + index `e◌́/helper` (NFD 65cc81).
+#       MEASURED at beee364: status EMPTY, `bash é/check.sh` → PASS, BOTH implementations silent,
+#       fingerprint = the clean-tree constant — while the pushed tree records only `e◌́/helper`,
+#       which a normalization-SENSITIVE receiver does not serve as `é/helper`
+#                                                    → GIT_CASEFOLD_DIR_ALIAS.
+#   (AB) the same hole with NON-ASCII CASE: `É/` (c389) ≡ `é/` (c3a9), which `bytes.lower()` never
+#       touched                                      → GIT_CASEFOLD_DIR_ALIAS.
+#   (AA2)/(AB2) pre-round-11 twins: the neuter puts `bytes.lower()` BACK as the key in BOTH
+#       implementations (it does NOT delete the round-10 report), so what lands again is
+#       attributable to the FOLD alone. (AA3)/(AA4)/(AB3)/(AB4) are the per-implementation splits.
+#   (AC) NO REGRESSION: the round-10 ASCII topology is still refused by the widened fold.
+#   (AA5) the round-11 FALSE-POSITIVE control on a REAL case-sensitive volume: genuinely DISTINCT
+#       `É/` and `é/` must NOT be refused. (AD)/(AE) close the rest: (AD) asserts the two
+#       implementations' folds agree over every prefix of every tracked path plus an adversarial
+#       corpus, and (AE) drives the shipped grouping code with SYNTHETIC inodes for the one control
+#       this platform cannot build — MEASURED with hdiutil, case-insensitive APFS, CASE-SENSITIVE
+#       APFS, case-sensitive HFS+, ExFAT and FAT32 are ALL normalization-INSENSITIVE, so a
+#       distinct-inode NFC/NFD pair does not exist here. (AE) says SIMULATED in its own output.
+#
 # Nothing outside the throwaway directory is touched; the live tree is only ever READ.
 # Exit: 0 all attacks blocked · 1 at least one attack open · 2 harness error.
 set -uo pipefail
@@ -1038,17 +1061,30 @@ fi
 # Only the neutered files are staged: `git add -A` would ALSO re-add the attack's own index state
 # from disk, which on a case-insensitive filesystem HEALS a casefold premise (the two entries
 # collapse onto the one file's bytes) and makes the twin pass for a reason that is not the neuter.
-round9_neuter() {   # round9_neuter <sb> <what>  what ∈ all|guard|fp|r10all|r10guard|r10fp
+round9_neuter() {   # round9_neuter <sb> <what>
+                    # what ∈ all|guard|fp|r10all|r10guard|r10fp|r11all|r11guard|r11fp
     "${AX_PY_BIN:-python3}" - "$1/repo" "$2" <<'PY'
 import sys, pathlib
 repo, what = pathlib.Path(sys.argv[1]), sys.argv[2]
 GUARD = repo / "practices/evals/completion_checklist_recency_guard.sh"
 FP = repo / "practices/scripts/lib/tree_fingerprint.py"
+# An entry is (path, anchor) — the anchor's `if` is killed — or (path, anchor, replacement) when
+# the fix is not a report but a COMPUTATION. ROUND 11's fix is the latter: the round-9/10 refusals
+# already existed and fired, they were merely keyed with `bytes.lower()`, so the honest neuter is
+# to put `bytes.lower()` back. Killing the report instead would neuter round 10 as well and prove
+# nothing about the fold.
 R9_GUARD = [(GUARD, "        if _execbits:"), (GUARD, "        if _gldirt:"),
             (GUARD, "        if _aliased:")]
 R9_FP = [(FP, "    if execbits:"), (FP, "    if gldirt:"), (FP, "    if aliased:")]
 R10_GUARD = [(GUARD, "        if _diraliased:")]
 R10_FP = [(FP, "    if diraliased:")]
+R11_GUARD = [(GUARD,
+              "                _casefold.setdefault(_ax_fold_path_key(_pfx, _foldcache), "
+              "{}).setdefault(",
+              "                _casefold.setdefault(_pfx.lower(), {}).setdefault(")]
+R11_FP = [(FP,
+           "        casefold.setdefault(_fold_path_key(prefix, foldcache), {}).setdefault(",
+           "        casefold.setdefault(prefix.lower(), {}).setdefault(")]
 pairs = {
     "all": R9_GUARD + R9_FP,
     "guard": R9_GUARD,
@@ -1056,18 +1092,25 @@ pairs = {
     "r10all": R10_GUARD + R10_FP,
     "r10guard": R10_GUARD,
     "r10fp": R10_FP,
+    "r11all": R11_GUARD + R11_FP,
+    "r11guard": R11_GUARD,
+    "r11fp": R11_FP,
 }
 if what not in pairs:
-    print(f"unknown round9/10 neuter: {what}", file=sys.stderr)
+    print(f"unknown round9/10/11 neuter: {what}", file=sys.stderr)
     sys.exit(3)
-for path, anchor in pairs[what]:
+for entry in pairs[what]:
+    path, anchor = entry[0], entry[1]
     text = path.read_text(encoding="utf-8")
     n = text.count(anchor)
     if n != 1:
         print(f"round9 neuter anchor occurs {n}x (expected 1) in {path}: {anchor!r}",
               file=sys.stderr)
         sys.exit(3)
-    dead = anchor[:len(anchor) - len(anchor.lstrip())] + "if False:"
+    if len(entry) > 2:
+        dead = entry[2]
+    else:
+        dead = anchor[:len(anchor) - len(anchor.lstrip())] + "if False:"
     path.write_text(text.replace(anchor, dead, 1), encoding="utf-8")
 PY
     local rc=$?
@@ -1079,6 +1122,79 @@ PY
       && git update-ref refs/remotes/origin/main HEAD \
       && git push -q -f origin HEAD:refs/heads/main ) >/dev/null 2>&1
     return 0
+}
+
+# r11_plant <sb> <A-hex> <B-hex> — ROUND 11 / P1. Commit a two-spelling alias topology whose
+# spellings are given as RAW BYTES: spelling A holds `check.sh` (which reads `A/helper`), spelling
+# B holds `helper`. On a case-/normalization-INSENSITIVE filesystem A and B are one directory, so
+# the check runs locally while the pushed tree records only `B/helper`.
+# WHY THE TREE OBJECT IS WRITTEN BY HAND rather than with `git add`/`update-index --cacheinfo`/
+# `--index-info`/`mktree`: MEASURED on Apple Git 2.50.1, every one of those PRECOMPOSES an NFD path
+# to NFC — even with `core.precomposeunicode=false` — so none of them can express the NFD spelling.
+# A repository created on a normalization-SENSITIVE filesystem hands exactly this tree to a macOS
+# clone (verified: clone → index holds 65cc81, `git status` EMPTY, `bash é/check.sh` → PASS), so
+# writing the object is reproducing an arriving state, not inventing an unreachable one.
+# The ignore rule for the PHYSICAL spelling of `helper` goes in a PER-DIRECTORY .gitignore because
+# write_audit rewrites the ROOT one; ignore rules never apply to tracked paths, so the index entry
+# under spelling B is still checked.
+r11_plant() {
+    local sb="$1" ah="$2" bh="$3"
+    "${AX_PY_BIN:-python3}" - "$sb/repo" "$ah" "$bh" <<'PY'
+import os, subprocess, sys
+repo, ah, bh = sys.argv[1], sys.argv[2], sys.argv[3]
+A, B = bytes.fromhex(ah), bytes.fromhex(bh)
+os.chdir(repo)
+ENV = {**os.environ,
+       "GIT_AUTHOR_NAME": "ax", "GIT_AUTHOR_EMAIL": "ax@example.invalid",
+       "GIT_COMMITTER_NAME": "ax", "GIT_COMMITTER_EMAIL": "ax@example.invalid",
+       "GIT_AUTHOR_DATE": "2026-08-01T00:00:00Z",
+       "GIT_COMMITTER_DATE": "2026-08-01T00:00:00Z"}
+
+
+def g(*a, **kw):
+    return subprocess.run(["git", *a], stdout=subprocess.PIPE, check=True, env=ENV, **kw).stdout
+
+
+def hobj(data, typ="blob"):
+    return g("hash-object", "-t", typ, "-w", "--stdin", input=data).strip().decode()
+
+
+os.makedirs(A, exist_ok=True)
+check = b'cat "' + A + b'/helper"\n'
+open(os.path.join(A, b"check.sh"), "wb").write(check)
+open(os.path.join(A, b"helper"), "wb").write(b"PASS\n")
+open(os.path.join(A, b".gitignore"), "wb").write(b"helper\n")
+gi, chk, hlp = hobj(b"helper\n"), hobj(check), hobj(b"PASS\n")
+
+
+def ent(mode, name, sha):
+    return mode + b" " + name + b"\0" + bytes.fromhex(sha)
+
+
+tA = hobj(ent(b"100644", b".gitignore", gi) + ent(b"100644", b"check.sh", chk), "tree")
+tB = hobj(ent(b"100644", b"helper", hlp), "tree")
+raw = g("cat-file", "tree", "HEAD^{tree}")
+out, i = [], 0
+while i < len(raw):
+    sp = raw.index(b" ", i)
+    nul = raw.index(b"\0", sp)
+    mode, name, sha = raw[i:sp], raw[sp + 1:nul], raw[nul + 1:nul + 21]
+    i = nul + 21
+    if name not in (A, B):
+        out.append((mode, name, sha))
+out.append((b"40000", A, bytes.fromhex(tA)))
+out.append((b"40000", B, bytes.fromhex(tB)))
+out.sort(key=lambda e: e[1] + (b"/" if e[0] == b"40000" else b""))
+root = hobj(b"".join(m + b" " + n + b"\0" + s for m, n, s in out), "tree")
+head = g("rev-parse", "HEAD").strip().decode()
+commit = g("commit-tree", root, "-p", head, "-m", "alias").strip().decode()
+subprocess.run(["git", "update-ref", g("symbolic-ref", "HEAD").strip().decode(), commit],
+               check=True, env=ENV)
+subprocess.run(["git", "read-tree", root], check=True, env=ENV)
+subprocess.run(["git", "update-index", "--refresh", "-q"], env=ENV,
+               stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+PY
+    return $?
 }
 
 # r9_setup <sb> <kind> — runs BEFORE write_audit because it COMMITS (the index state IS the setup).
@@ -1144,6 +1260,26 @@ r9_setup() {
                  printf 'EVIL\n' > "$sb/repo/alias.txt" || return 2
                  ( builtin cd "$sb/repo" && git add A a Alias.txt alias.txt \
                    && git "${GIT_ID[@]}" commit -q -m csdistinct ) >/dev/null 2>&1 || return 2 ;;
+        nfcnfd)  # ROUND 11 / P1 — THE REVIEWER'S TOPOLOGY. No LEAF collision and no ASCII case
+                 # difference either: the two DIRECTORY spellings differ only by UNICODE
+                 # NORMALIZATION. `é` is NFC c3a9; `e`+U+0301 is NFD 65cc81. `bytes.lower()`
+                 # leaves them distinct, so rounds 9-10 never compared their shared inode.
+                 r11_plant "$sb" c3a9 65cc81 || return 2 ;;
+        nacase)  # ROUND 11 / P1, the sibling through the same hole: NON-ASCII CASE. `É` is c389,
+                 # `é` is c3a9; `bytes.lower()` maps A-Z and nothing else, so these folded apart
+                 # while APFS served them from one directory.
+                 r11_plant "$sb" c389 c3a9 || return 2 ;;
+        csnacase) # ROUND 11 NEGATIVE CONTROL on a REAL case-sensitive volume: `É/` and `é/` as
+                 # GENUINELY DISTINCT directories. The round-11 fold makes these one key, so
+                 # without the (st_dev, st_ino) discriminator this tree would now be refused —
+                 # which would brick every fork-receiver on a case-sensitive filesystem whose tree
+                 # happens to hold both spellings. Two inodes ⇒ two singleton groups ⇒ no refusal.
+                 mkdir -p "$sb/repo/É" "$sb/repo/é" || return 2
+                 printf 'cat "É/helper"\n' > "$sb/repo/É/check.sh" || return 2
+                 printf 'ALSO\n' > "$sb/repo/É/helper" || return 2
+                 printf 'PASS\n' > "$sb/repo/é/helper" || return 2
+                 ( builtin cd "$sb/repo" && git add É é \
+                   && git "${GIT_ID[@]}" commit -q -m csnacase ) >/dev/null 2>&1 || return 2 ;;
         shareprefix) # ROUND 10 NEGATIVE CONTROL, the arm a case-INSENSITIVE filesystem can build:
                  # two tracked entries under ONE spelling of a shared directory. Every tracked path
                  # in the live catalog shares prefixes with hundreds of others, so a prefix walk
@@ -1185,7 +1321,7 @@ r9_attack() {
         execA)    chmod +x "$sb/repo/backend/gradlew" || return 2 ;;
         execB)    chmod -x "$sb/repo/backend/gradlew" || return 2 ;;
         gldirt)   printf 'echo owned\n' > "$sb/repo/vendor/sub/check.sh" || return 2 ;;
-        casefold|dircase|csdistinct|shareprefix) : ;;
+        casefold|dircase|csdistinct|shareprefix|nfcnfd|nacase|csnacase) : ;;
                   # the alias (or its absence) IS the index state; nothing further to do on disk
         symreg)   git -C "$sb/repo" update-index --assume-unchanged linkpath.txt || return 2
                   rm -f "$sb/repo/linkpath.txt" || return 2
@@ -1210,7 +1346,7 @@ r9_attack() {
 # blobs). The neuter now stages only the toolchain, and every alias case asserts the premise here.
 # Returns 1 after calling violation(); a case with no premise to assert returns 0.
 r9_premise() {
-    local sb="$1" kind="$2" n b ia ib
+    local sb="$1" kind="$2" n b ia ib ah bh
     case "$kind" in
         casefold)
             n="$(git -C "$sb/repo" ls-files -s | awk -F'\t' '{print tolower($2)}' \
@@ -1246,6 +1382,43 @@ r9_premise() {
             if [ -z "$ia" ] || [ "$ia" = "$ib" ]; then
                 violation "premise broken (csdistinct): A/=[$ia] a/=[$ib] are NOT distinct, so" \
                           "this sandbox is not on a case-sensitive filesystem and the" \
+                          "false-positive control would be vacuous."
+                return 1
+            fi ;;
+        nfcnfd|nacase)
+            # ROUND 11 / P1. The premise is: BOTH spellings are in the index AS DISTINCT BYTES,
+            # and the filesystem serves them from ONE inode. If a future git precomposes the index
+            # entry (or the volume becomes normalization-sensitive), the topology is gone and this
+            # case must say so rather than pass on some other refusal.
+            if [ "$kind" = nfcnfd ]; then ah=c3a9; bh=65cc81; else ah=c389; bh=c3a9; fi
+            if ! "${AX_PY_BIN:-python3}" - "$sb/repo" "$ah" "$bh" <<'PY'
+import os, subprocess, sys
+repo, ah, bh = sys.argv[1], sys.argv[2], sys.argv[3]
+A, B = bytes.fromhex(ah), bytes.fromhex(bh)
+idx = subprocess.run(["git", "-C", repo, "ls-files", "-z"],
+                     stdout=subprocess.PIPE, check=True).stdout.split(b"\0")
+want = {A + b"/check.sh", B + b"/helper"}
+have = want & set(idx)
+sa = os.lstat(os.path.join(os.fsencode(repo), A))
+sb_ = os.lstat(os.path.join(os.fsencode(repo), B))
+ok = (have == want and A != B and (sa.st_dev, sa.st_ino) == (sb_.st_dev, sb_.st_ino))
+if not ok:
+    print(f"index holds {sorted(have)} of {sorted(want)}; "
+          f"{A!r}={(sa.st_dev, sa.st_ino)} {B!r}={(sb_.st_dev, sb_.st_ino)}", file=sys.stderr)
+sys.exit(0 if ok else 1)
+PY
+            then
+                violation "premise broken ($kind): this class needs BOTH spellings in the index as" \
+                          "DISTINCT BYTES and ONE directory inode on disk. Without that topology" \
+                          "the refusal under test is not the one being measured."
+                return 1
+            fi ;;
+        csnacase)
+            ia="$(stat -f '%d %i' "$sb/repo/É" 2>/dev/null || stat -c '%d %i' "$sb/repo/É")"
+            ib="$(stat -f '%d %i' "$sb/repo/é" 2>/dev/null || stat -c '%d %i' "$sb/repo/é")"
+            if [ -z "$ia" ] || [ "$ia" = "$ib" ]; then
+                violation "premise broken (csnacase): É/=[$ia] é/=[$ib] are NOT distinct, so this" \
+                          "sandbox is not on a case-sensitive filesystem and the round-11" \
                           "false-positive control would be vacuous."
                 return 1
             fi ;;
@@ -1378,6 +1551,39 @@ r9_case W3 casefold any   "leaf alias, only the 12c SWEEP neutered    " \
 r9_case W4 casefold any   "leaf alias, only the HELPER neutered       " \
     "GIT_CASEFOLD_ALIAS" fp "$CLEAN_FP"
 
+# ══ ROUND 11 (TD-2026-08-01-(P1-unicode-prefix-fold)) ════════════════════════════════
+# (AA) THE REVIEWER'S ROUND-11 TOPOLOGY: the two DIRECTORY spellings differ only by UNICODE
+# NORMALIZATION (`é` NFC c3a9 ≡ `e`+U+0301 NFD 65cc81). Rounds 9-10 keyed the prefix map with
+# `bytes.lower()`, which is ASCII-only and normalization-blind, so the shared inode was never
+# compared. MEASURED at beee364: status EMPTY, `bash é/check.sh` → PASS locally, both
+# implementations SILENT, fingerprint = the clean-tree constant — while the pushed tree records
+# only `e◌́/helper`. (AB) is the same defect through the same hole with NON-ASCII CASE (`É` c389 ≡
+# `é` c3a9). The fingerprint override is the clean-tree constant for the same reason as (W)/(Z).
+r9_case AA nfcnfd  empty "DIRECTORY aliased by NORMALIZATION (é ≡ é)" \
+    "GIT_CASEFOLD_DIR_ALIAS" "" "$CLEAN_FP"
+r9_case AB nacase  empty "DIRECTORY aliased by NON-ASCII CASE (É ≡ é)" \
+    "GIT_CASEFOLD_DIR_ALIAS" "" "$CLEAN_FP"
+# (AA2)/(AB2) the pre-round-11 twins. The neuter puts `bytes.lower()` BACK as the map key in both
+# implementations — it does NOT remove the round-10 report, so what lands again is attributable to
+# the FOLD and to nothing else.
+r9_case AA2 nfcnfd empty "same, round-11 fold reverted (both)       " "" r11all "$CLEAN_FP"
+r9_case AB2 nacase empty "same, round-11 fold reverted (both)       " "" r11all "$CLEAN_FP"
+# (AA3)/(AA4)/(AB3)/(AB4) — EACH IMPLEMENTATION ON ITS OWN, the round-10 split pattern. With only
+# the 12c sweep's fold reverted the FINGERPRINT HELPER must still refuse (it is the prior-release
+# copy the recompute runs, so its refusal surfaces as AUDIT_FINGERPRINT_UNVERIFIABLE); with only
+# the helper's fold reverted the sweep must still refuse on its own code.
+r9_case AA3 nfcnfd empty "normalization, only the SWEEP reverted    " \
+    "AUDIT_FINGERPRINT_UNVERIFIABLE" r11guard "$CLEAN_FP"
+r9_case AA4 nfcnfd empty "normalization, only the HELPER reverted   " \
+    "GIT_CASEFOLD_DIR_ALIAS" r11fp "$CLEAN_FP"
+r9_case AB3 nacase empty "non-ASCII case, only the SWEEP reverted   " \
+    "AUDIT_FINGERPRINT_UNVERIFIABLE" r11guard "$CLEAN_FP"
+r9_case AB4 nacase empty "non-ASCII case, only the HELPER reverted  " \
+    "GIT_CASEFOLD_DIR_ALIAS" r11fp "$CLEAN_FP"
+# (AC) NO REGRESSION: the round-10 ASCII topology must still be refused by the widened fold.
+r9_case AC dircase empty "round-10 ASCII A/ ≡ a/ still refused       " \
+    "GIT_CASEFOLD_DIR_ALIAS" "" "$CLEAN_FP"
+
 # (Z5) THE FALSE-POSITIVE CONTROL, and it is the one that matters: the refusal is a MEASUREMENT of
 # (st_dev, st_ino), so a tree whose `A/` and `a/` are GENUINELY DISTINCT directories must pass.
 # That topology can only be BUILT on a case-sensitive filesystem. The harness measures the one it
@@ -1407,6 +1613,7 @@ if [ -n "$CS_ROOT" ]; then
     note "(Z5) filesystem arm: CASE-SENSITIVE ($CS_ROOT) — building the real distinct-inode control"
     R9_ROOT="$CS_ROOT"
     r9_case Z5 csdistinct empty "DISTINCT A/ and a/ must NOT be refused     " ""
+    r9_case AA5 csnacase empty "DISTINCT É/ and é/ must NOT be refused      " ""
     R9_ROOT=""
 else
     note "(Z5) filesystem arm: CASE-INSENSITIVE (\$WORK) — distinct A/ and a/ cannot be created" \
@@ -1414,6 +1621,73 @@ else
          "for the real one)"
     r9_case Z5 shareprefix empty "shared directory prefix must NOT be refused " ""
 fi
+
+# (AD) ROUND 11 — THE TWO IMPLEMENTATIONS MUST AGREE ON THE FOLD, and (AE) the NORMALIZATION
+# false-positive control, which is SIMULATED and says so.
+# WHY SIMULATED: a distinct-inode `é/` + `e◌́/` pair needs a normalization-SENSITIVE filesystem, and
+# this platform has none to offer — MEASURED with hdiutil on this machine: case-insensitive APFS,
+# CASE-SENSITIVE APFS, case-sensitive HFS+, ExFAT and FAT32 are ALL normalization-INSENSITIVE (the
+# FAT variants additionally rewrite the spelling to NFD on write). So (Z5)/(AA5) are the real
+# distinct-inode controls the platform CAN build (ASCII case and non-ASCII case), and the
+# normalization one is exercised here against synthetic (st_dev, st_ino) identities through the
+# SHIPPED grouping code. It is labelled SIMULATED rather than claimed as a live control.
+note "(AD/AE) fold parity + SIMULATED normalization false-positive control"
+"${AX_PY_BIN:-python3}" - "$REPO_ROOT" <<'PY' || violation "(AD/AE) round-11 fold parity or the simulated normalization false-positive control FAILED"
+import importlib.util, pathlib, re, subprocess, sys, unicodedata
+root = pathlib.Path(sys.argv[1])
+spec = importlib.util.spec_from_file_location("axtf", root / "practices/scripts/lib/tree_fingerprint.py")
+tf = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(tf)
+guard_src = (root / "practices/evals/completion_checklist_recency_guard.sh").read_text()
+m = re.search(r"^def _ax_fold_path_key.*?^(?=\S)", guard_src, re.M | re.S)
+if not m:
+    print("  (AD) the 12c sweep's _ax_fold_path_key could not be located", file=sys.stderr)
+    sys.exit(1)
+ns = {"unicodedata": unicodedata}
+exec(m.group(0), ns)
+gfold, ffold = ns["_ax_fold_path_key"], tf._fold_path_key
+# (AD) parity over EVERY prefix of EVERY tracked path in the live catalog, plus the adversarial
+# folding corpus. Two implementations of one rule are two chances to drift.
+corpus = []
+for p in subprocess.run(["git", "-C", str(root), "ls-files", "-z"],
+                        stdout=subprocess.PIPE, check=True).stdout.split(b"\0"):
+    if p:
+        c = p.split(b"/")
+        corpus += [b"/".join(c[:n]) for n in range(1, len(c) + 1)]
+live = len(set(corpus))
+corpus = sorted(set(corpus)) + [
+    b'\xc3\xa9', b'e\xcc\x81', b'\xc3\x89', b'E\xcc\x81', b'A', b'a', b'\xc5\xbf', b's',
+    b'\xe2\x84\xaa', b'k', b'\xc3\x9f', b'ss', b'\xe1\xba\x9b\xcc\xa3', b'\xe1\xb9\xa9',
+    b'\xc4\xb0', b'i', b'\xff', b'A\xffB', b'a\xffb', b'\xed\xa0\x80', b'', b'a/\xff/B']
+drift = [x for x in corpus if gfold(x) != ffold(x)]
+if drift:
+    print(f"  (AD) the two folds DISAGREE on {len(drift)} input(s), e.g. {drift[:3]}",
+          file=sys.stderr)
+    sys.exit(1)
+print(f"  (AD) fold parity: {len(corpus)} inputs ({live} live-tree prefixes) — 0 disagreements")
+# The fold must actually MERGE the pairs, otherwise (AE) below is vacuous.
+for a, b, lab in ((b'\xc3\xa9', b'e\xcc\x81', "NFC/NFD"), (b'\xc3\x89', b'\xc3\xa9', "É/é")):
+    if ffold(a) != ffold(b):
+        print(f"  (AE) vacuous: {lab} do not fold equal", file=sys.stderr)
+        sys.exit(1)
+# (AE) the DISCRIMINATOR, through the shipped grouping code. ONE key, TWO synthetic inodes ⇒ no
+# report (a normalization-sensitive receiver is not refused); ONE key, ONE inode ⇒ reported.
+NFC, NFD = b'\xc3\xa9', b'e\xcc\x81'
+key = ffold(NFC)
+full = {NFC + b"/check.sh", NFD + b"/helper"}
+two = {key: {(1, 10): {NFC}, (1, 11): {NFD}}}
+one = {key: {(1, 10): {NFC, NFD}}}
+leaf_t, dir_t = tf._alias_verdicts(two, full)
+leaf_o, dir_o = tf._alias_verdicts(one, full)
+if leaf_t or dir_t:
+    print(f"  (AE) FALSE POSITIVE: distinct inodes were reported {leaf_t} {dir_t}", file=sys.stderr)
+    sys.exit(1)
+if not dir_o:
+    print("  (AE) vacuous: one inode under one folded key produced no report", file=sys.stderr)
+    sys.exit(1)
+print("  (AE) SIMULATED normalization control: distinct inodes → 0 reports; "
+      f"one inode → {dir_o} (the discriminator, not the fold, decides)")
+PY
 
 echo ""
 if [ "$FAIL" -ne 0 ]; then
@@ -1427,11 +1701,14 @@ echo "  a COMMITTED push-only bypass, a SELF-ERASING \$BASH_ENV, a preset AX_PRI
 echo "  exported export() ahead of a sourced lib's preflight, a filter.<n>.process content mask, an"
 echo "  index-regular path swapped for a SYMLINK under --assume-unchanged, a --skip-worktree"
 echo "  DELETION, an executable-bit divergence in both directions, a POPULATED uninitialized"
-echo "  gitlink, a LEAF casefold alias and a DIRECTORY-component casefold alias are each refused by"
+echo "  gitlink, a LEAF casefold alias, a DIRECTORY-component casefold alias, a directory aliased by"
+echo "  UNICODE NORMALIZATION (é ≡ e◌́) and one aliased by NON-ASCII CASE (É ≡ é) are each refused by"
 echo "  the live gates; the unattacked control passes, an uninitialized gitlink is NOT refused, the"
-echo "  false-positive control passes (distinct inodes / a shared prefix are not aliases), and"
-echo "  every round-5/6/7/8/9/10 addition has a neutered twin in which its attack lands again —"
-echo "  including a bits-only twin for the round-8 representation backstop and, for every round-9"
-echo "  and round-10 refusal, SEPARATE sweep-only and helper-only twins proving each implementation"
-echo "  load-bearing on its own — so the refusals are attributable to the fixes, not the sandbox."
+echo "  false-positive controls pass (distinct inodes for A/·a/ AND for É/·é/, and a shared prefix,"
+echo "  are not aliases), the two implementations' path folds agree over every prefix of every"
+echo "  tracked path, and every round-5/6/7/8/9/10/11 addition has a neutered twin in which its"
+echo "  attack lands again — including a bits-only twin for the round-8 representation backstop"
+echo "  and, for every round-9, round-10 and round-11 refusal, SEPARATE sweep-only and helper-only"
+echo "  twins proving each implementation load-bearing on its own — so the refusals are"
+echo "  attributable to the fixes, not the sandbox."
 exit 0

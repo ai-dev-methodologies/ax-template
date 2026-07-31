@@ -29,8 +29,10 @@ signature를 발견**(17/17)함으로써 경험적으로 반증되었다 — 발
 | P0 (expiry-bound / live defects) | 30 | 30 | **100%** |
 | P1 (generic signature backlog) | 73 | 73 | **100%** |
 | P2 (verification escapes) | 73 | 60 | **82%** |
-| P3 (industry-niche deferrals) | 124 | 106 | **85%** |
-| **P0–P3 합계 (수렴 분모)** | **300** | **269** | **90%** |
+| P3 (industry-niche deferrals) | 126 | 107 | **85%** |
+| **P0–P3 합계 (수렴 분모)** | **302** | **270** | **89%** |
+
+> 2026-08-01 P1-seal 라운드 11 — reviewer P1(라운드-9/10의 prefix fold 키가 `bytes.lower()`였다: ASCII 전용 + 정규화 무지)을 `tree_fingerprint.py` + recency guard 12c 양쪽에 대칭 봉합 — 키를 **유니코드 canonical caseless** `NFC(casefold(NFD(s)))`(UAX #21 §1.3)로 교체, **(st_dev, st_ino) 판별자와 leaf/directory 코드 분기는 불변**. beee364 기계 재현: 인덱스 `é/check.sh`(NFC c3a9) + `e◌́/helper`(NFD 65cc81), APFS 한 inode → status EMPTY · 로컬 `bash é/check.sh` → PASS · **두 구현 모두 침묵** · fingerprint = 클린트리 상수 — 푸시된 트리엔 `é/helper` 부재. 비ASCII 케이스(`É`≡`é`)는 같은 구멍의 형제. 환경 통제 불필요(전부 커밋된 내용, 평범한 clone으로 도착 — 검증됨). 신규 코드 **0**(13/14의 의미만 확장, 시정 방법이 동일하므로). 성능: 라이브 트리 digest **불변**, 0.265→0.266 s/run(+0.4%, ASCII fast path가 8,276 prefix 전부 커버). 오탐: 실제 case-sensitive APFS 이미지에서 distinct-inode `A/`·`a/`(Z5)와 `É/`·`é/`(AA5) 모두 통과. 정규화 오탐 control은 **SIMULATED** — hdiutil 실측 결과 case-insensitive APFS·case-**sensitive** APFS·case-sensitive HFS+·ExFAT·FAT32가 전부 정규화-**무감각**이라 distinct-inode NFC/NFD 쌍은 이 플랫폼에 존재하지 않는다(산문 정정 포함). P3-120 closed(이 P1이 escalate한 행), 신규 2건 등재(P3-126 병리적 prefix 비용 — fail-closed이므로 우회 아님 · P3-127 Windows 후행 점·공백 — **NTFS 한정, 미검증**) → 분모 300→302, 수렴 270/302 **89%**.
 
 > 2026-07-31 P1-seal 라운드 10 — reviewer P1(라운드-9 casefold 체크가 **leaf-only**였다: 두 구현 모두 *완전* fold 경로로 그룹핑해 **디렉터리 컴포넌트** alias를 표현조차 못 함)을 `tree_fingerprint.py` + recency guard 12c 양쪽에 대칭 봉합 — **모든 경로 prefix**를 fold해 (st_dev, st_ino) 동일 그룹을 거부, gitlink 포함, 신규 코드 `GIT_CASEFOLD_DIR_ALIAS` (fingerprint exit 14). d567c37 기계 재현: `A/check.sh`(`cat A/helper` 실행) + `a/helper`, APFS에서 `A`≡`a` 한 inode → status EMPTY · 12c violation set EMPTY · fingerprint = 클린트리 상수 `0a815065…` · 푸시된 트리엔 `A/helper` 부재. leaf 형태는 clean-tree 전제조건이 backstop이지만 **디렉터리 형태는 backstop이 없어 조용히 열려 있었다**. false-positive control은 **실제 case-sensitive APFS 이미지**에서 검증(distinct inode → exit 0, 오탐 0). 성능 +~0.02s(0.23–0.26 → 0.25–0.28s, prefix당 lstat 캐시). P2 2건 봉합: 라운드-9 neuter가 두 구현을 **동시에** 무력화하던 것을 구현별로 분리((Z3)(T3)(V3)(W3) sweep-only → 헬퍼가 여전히 거부 / (Z4)(T4)(V4)(W4) helper-only → 스윕이 자기 코드로 거부), (W2) twin의 premise 소실(`write_audit`의 `git add -A`가 alias를 치유) → 스테이징 축소 + gate 시점 premise 단언. 신규 5건 등재(P2-71 dirty-표현 트레이드오프 open · P3-122 stage>0 오진단 closed · P3-123 `.DS_Store` gitlink usability open · P3-124 gitlink casefold 누락 closed · P3-125 stale PASS 배너 closed) → 분모 295→300, 수렴 269/300 **90%**.
 > 2026-07-31 P1-seal 라운드 9 — reviewer P1-1(실행비트 divergence 양방향 수용)·P1-2(비어있지 않은 미초기화 gitlink 수용)를 tree_fingerprint.py + recency guard 12c 양쪽에 대칭 봉합(신규 코드 3개: `GIT_EXEC_BIT_DIVERGENCE` 11 · `GIT_GITLINK_UNINITIALIZED_POPULATED` 12 · `GIT_CASEFOLD_ALIAS` 13, 클린트리 상수 보존). 정정 (a) 'AUTHENTICATED interpreter' 산문 2곳 + 클래스 전수 재스윕(neuter 키 `identity`→`smoketest`), (b) 라운드-8의 `env -i` 근거 **철회**(측정으로 3개 논거 모두 반증) 후 P2-70으로 측정된 설계와 함께 등재, (c) 라운드-8이 구현만 하고 구동하지 않은 두 분기(symlink→regular 미러 · 초기화된 gitlink divergence)를 명시 케이스로 추가, (d) 하네스의 `|| return 0` 조용한 스킵을 loud로, (e) APFS casefold는 **구현**(단 통상형은 clean-tree 전제조건이 이미 거부 — defense-in-depth로 정직 표기). 신규 3건 등재(P2-70, P3-120 유니코드 정규화 fold, P3-121 원장 백틱 소음) → 분모 292→295, 수렴 266/295 **90%**.
@@ -484,12 +486,51 @@ R25). *이름이 세션 기록에만 있던 항목을 여기로 영구화했다.
 - [x] P3-82 이번 wave 신규 fail 픽스처가 `[87]` kill-proof 미등재 — `practices/evals/fixture_kill_manifest.yaml`에 react-substance 4종, evidence-quote-spotcheck templates 1종, l2_frontmatter_deps 1종, l4_presentational_view 3종이 등재되지 않아 그 픽스처들의 비공허성이 기계 검증되지 않는다(현재 근거는 수동 뮤테이션 기록뿐 — react-substance는 4×4 대각 매트릭스, 나머지는 단일 neuter flip). 전 픽스처 등재가 오늘의 보편 관행은 아니므로(10 item vs 다수 픽스처 디렉터리) 차단 사항은 아니다. done-when: allowlist 가능한 anchor neuter shape를 찾아 등재하거나, 등재 불가 사유를 manifest에 기록((P2-33)의 fail_vocab_scan 선례). 출처: 2026-07-28 wave 적대검증 권고. closure: 2026-07-29 (remaining-19 wave, PRD docs/PRD-remaining-19.md) — [87] kill-proof **57항목 전건 비공허**(당시 산문의 "53"은 작성 시점에도 stale — 그 커밋 3558755의 manifest는 이미 57항목이었다. 2026-07-30 (P2-50)이 min_items 플로어+중복 거부로 래칫, 통합 시 62)(레거시 9건 중 8 + 이번 웨이브 신규 전부). 9번째(fail_template_fabricated_anchor)는 도구 한계(불리언 플래그 3개+--root를 [87]이 표현 불가)로 **등재 불가 사유를 manifest에 기록**(fail_vocab_scan 선례) — run-all 자체 등록이 exit 1을 단언하므로 픽스처가 약한 게 아니라 도구가 못 미치는 것.
 - [ ] P3-118 hard-guards 스텝의 45분 하드 타임아웃이 DoS 창을 넓힌다 — 26827a2에서 900→2700초로 올렸다(sweep 성장에 따른 SIGTERM 해소). 정직한 대가: 한 guard를 45분간 매달아 둘 수 있는 입력/환경은 R25 전체를 그만큼 지연시키고, 게이트를 끄고 싶은 사람에게 '기다리다 포기' 경로를 준다. done-when: per-guard 타임아웃(전체가 아니라 개별)으로 분할하거나, 스텝 예산을 관측된 p99에 결박해 상한을 다시 낮춘다. 출처: 2026-07-30 cross-family reviewer R7 P3 (register-only).
 - [ ] P3-119 초기화된 서브모듈 **내부** 워킹트리의 dirt는 raw 스윕 밖 — R8 P1-A에서 gitlink를 결박했지만(초기화된 서브모듈의 HEAD == 상위가 기록한 커밋, `GIT_GITLINK_DIVERGENCE`), 그 서브모듈 **자체의 워킹트리가 더러운지**는 여전히 측정하지 않는다. 상위 push는 기록된 커밋만 보내므로 노출은 'R25가 서브모듈의 커밋되지 않은 바이트를 테스트했을 수 있다'는 형태다(푸시되는 바이트를 숨기는 채널은 아님). **미초기화** gitlink는 의도적으로 비차단 — 이 카탈로그의 3개 gitlink가 전부 그 상태(빈 fixture 디렉터리)이고, 차단하면 모든 fresh clone을 아무 이득 없이 거부한다. done-when: 초기화된 서브모듈마다 `tree_fingerprint`를 재귀 적용하고 그 digest를 상위 digest에 결속(클린트리 상수 보존 방식으로). 출처: 2026-07-31 cross-family reviewer R8 P1-A (bound-remainder, register-only).
-- [ ] P3-120 `GIT_CASEFOLD_ALIAS`는 **대소문자 fold만** 본다 — APFS는 유니코드 정규화(NFC/NFD)도 fold하므로 `é`(조합형)와 `é`(분해형)는 디스크에서 한 파일이지만, casefold 키가 `bytes.lower()`라 두 인덱스 항목이 같은 그룹으로 묶이지 않아 그 alias는 여전히 통과한다. (e)와 동일 클래스, 다른 fold. 노출 형태도 동일: 두 blob 중 하나는 디스크에 존재한 적이 없어 검증 불가인 채로 푸시된다(단 blob이 다르면 status가 modified로 드러나므로 clean-tree 전제조건이 통상형은 이미 거부한다). done-when: casefold 키를 `unicodedata.normalize('NFC', …).lower()` 동등으로 확장하고, 정규화 alias fixture로 비공허성 증명. 출처: 2026-07-31 cross-family reviewer R9 (e) 구현 중 발견 (register-only).
+- [x] **P3-120** — **closed 2026-08-01 (P1-seal R11)**: 이 행이 예견한 바로 그 결함이 라운드 11에서
+  **P1으로 escalate**했다 — 등재 당시 판단("blob이 다르면 status가 modified로 드러나므로 clean-tree
+  전제조건이 통상형은 이미 거부한다")은 **leaf 형태에만** 참이었고, R10이 연 **디렉터리 컴포넌트**
+  형태에는 backstop이 없다. 두 스펠링의 디렉터리가 한 inode면 blob은 각각 자기 파일과 일치해
+  `git status`가 EMPTY이고, 환경 통제도 필요 없다(전부 커밋된 내용이며 평범한 clone으로 도착한다).
+  봉합: 두 구현의 prefix 키를 `bytes.lower()` → **유니코드 canonical caseless**
+  `NFC(casefold(NFD(s)))`(UAX #21 §1.3)로 교체(`_fold_path_key` / `_ax_fold_path_key`, 하네스 (AD)
+  8,298 입력 differential 0 불일치 + 별도 3,000 랜덤 바이트열 포함 11,299 입력에서도 0). done-when이 제안한 `normalize('NFC', …).lower()`는 **채택하지 않았다** —
+  `lower()`는 비ASCII 케이스(`É`≡`é`)를 놓치고 inner-NFD 없는 형태는 U+1E9B U+0323 ≡ U+1E69을
+  놓친다(둘 다 측정으로 반증). 비공허성: `ax-prove-hermetic-runtime.sh` (AA)(AB) RED + (AA2)(AB2)
+  both-neuter + (AA3/AA4/AB3/AB4) 구현별 분리 neuter + (AC) R10 ASCII 무회귀 + (Z5)(AA5) 실제
+  case-sensitive APFS 볼륨 false-positive control + (AD) fold parity + (AE) SIMULATED 정규화 control.
+  출처: 2026-08-01 cross-family reviewer R11 P1 (이 행에서 escalate).
+  <!-- 원문(등재 시): -->
+  <!-- P3-120 `GIT_CASEFOLD_ALIAS`는 **대소문자 fold만** 본다 — APFS는 유니코드 정규화(NFC/NFD)도 fold하므로 `é`(조합형)와 `é`(분해형)는 디스크에서 한 파일이지만, casefold 키가 `bytes.lower()`라 두 인덱스 항목이 같은 그룹으로 묶이지 않아 그 alias는 여전히 통과한다. (e)와 동일 클래스, 다른 fold. 노출 형태도 동일: 두 blob 중 하나는 디스크에 존재한 적이 없어 검증 불가인 채로 푸시된다(단 blob이 다르면 status가 modified로 드러나므로 clean-tree 전제조건이 통상형은 이미 거부한다). done-when: casefold 키를 `unicodedata.normalize('NFC', …).lower()` 동등으로 확장하고, 정규화 alias fixture로 비공허성 증명. 출처: 2026-07-31 cross-family reviewer R9 (e) 구현 중 발견 (register-only). -->
 - [ ] P3-121 `run-all-guards.sh:1458`의 원장 산문이 큰따옴표 문자열 안에 백틱을 담고 있어 실행할 때마다 stderr에 `command substitution: syntax error` 4줄을 뱉는다(`git show <origin/main→HEAD fallback>:<this guard>` 등). 게이트 판정에는 영향이 없고(종료코드 불변) 이번 라운드 이전부터 동일했음을 두 번의 스위트 실행에서 확인했다. 위험은 '정상 소음'이 진짜 오류를 가리는 것. done-when: 해당 원장 문자열을 single-quote 히어독으로 옮기거나 백틱을 이스케이프. 출처: 2026-07-31 P1-seal R9 레인에서 부수 발견 (register-only).
 
 - [x] **P3-122** — **closed 2026-07-31 (P1-seal R10, P1 봉합에 부수 closure)**: `stage > 0` 중복 경로의 casefold **오진단**("path ≡ path"). 라운드-9 구현은 casefold 그룹의 멤버를 리스트로 모아 `len(names) > 1`이면 alias로 보고했는데, 머지 충돌 중인 인덱스는 **같은 경로를 stage 1/2/3으로 세 번** 나열하므로 동일 스펠링이 중복 적재돼 자기 자신과의 alias를 보고했을 것이다(`GIT_CASEFOLD_ALIAS — a.txt ≡ a.txt`). R10의 prefix 워크가 스펠링을 **set**으로 모으면서 자연히 소멸 — 동일 스펠링은 접히고, 그룹은 *서로 다른* 두 스펠링이 한 inode를 가리킬 때만 발화한다. 두 구현 대칭 적용(`_alias_verdicts` / `_aliased`·`_diraliased`). 출처: 2026-07-31 cross-family reviewer R10 P3 (register; fell out of the P1 fix).
 - [x] **P3-124** — **closed 2026-07-31 (P1-seal R10, P1 봉합에 부수 closure)**: casefold 맵에서 **`160000`(gitlink) 항목이 누락**돼 있었다 — 라운드-9는 맵 등록을 `if mode == b"160000": … continue` **뒤에** 두었으므로 서브모듈 경로는 어떤 alias 그룹에도 들어가지 않았다(서브모듈 디렉터리가 casefold alias여도 무검사). R10의 prefix 워크는 모드 분기 **앞**에서 모든 인덱스 항목의 전 prefix를 등록하므로 gitlink도 포함된다. 두 구현 대칭. 출처: 2026-07-31 cross-family reviewer R10 P3 (register; fell out of the P1 fix).
 - [x] **P3-125** — **closed 2026-07-31 (P1-seal R10)**: `ax-prove-hermetic-runtime.sh`의 PASS 배너가 "every round-5/6/7/8 addition has a neutered twin"이라고 **stale**하게 주장했다 — 라운드-9 twin((T2)/(U2)/(V2)/(W2))이 이미 실행 중이었고 배너만 갱신되지 않았다. 프루버 요약이 자기 커버리지를 **과소**진술하는 것도 과대진술과 같은 등급의 결함이다(다음 라운드가 "라운드-9는 twin이 없다"고 읽는다). 5/6/7/8/9/10으로 정정 + 신규 twin이 무엇을 증명하는지(구현별 분리 neuter, false-positive control) 명시. 출처: 2026-07-31 cross-family reviewer R10 P3.
+- [ ] P3-126 **prefix 맵의 병리적 입력 비용 — O(P) 메모리 / O(depth²) 키 구성 (fail-closed, 우회 아님)**:
+  R10의 prefix 워크는 인덱스 항목마다 모든 경로 컴포넌트를 문자열로 재구성해 맵에 담는다 —
+  깊이 d인 경로 하나가 d개의 키를 만들고 각 키를 `b"/".join(comps[:n])`으로 처음부터 다시
+  이어붙이므로 항목당 키 구성 비용은 **O(d²) 바이트**이고, 트리 전체 메모리는 서로 다른 prefix
+  수 P에 **선형**이다(라이브 카탈로그 실측: 5,745 tracked path → 8,276 distinct prefix, 총 실행
+  0.265→0.266 s/run으로 유의미한 차이 없음 — 이 규모에서는 문제가 아니다). 병리적으로 깊은
+  인덱스(git 경로 상한 근처의 컴포넌트 수 × 수만 항목)를 담은 fork-receiver 트리는 스윕의 메모리·
+  CPU를 그만큼 쓴다. **정직한 등급 판정**: 이것은 우회 경로가 **아니다** — 자원이 고갈되면 스윕이
+  실패하고 게이트는 fail-closed로 BLOCK한다(unknown never passes). 따라서 가용성 우려이지 정확성
+  결함이 아니며, R25 스텝 예산(P3-118)과 같은 계열이다. done-when: (a) 키를 누적 방식으로 구성해
+  O(d)로 낮추고(부모 키 + `b"/"` + 컴포넌트), (b) 병리적 깊이/폭 입력에 대한 벤치를 붙여 상한을
+  관측치에 결박하거나, (c) 측정으로 현실 트리에서 도달 불가임을 보이고 등재를 닫는다.
+  출처: 2026-08-01 cross-family reviewer R11 (register-only).
+- [ ] P3-127 **Windows/NTFS 후행 점·공백 파일명 동치 — 미검증 형제 (APFS 아님, 명시)**:
+  Win32 경로 정규화는 파일명의 **후행 점과 공백을 잘라낸다**(`a.txt.`·`a.txt ` → `a.txt`), 따라서
+  NTFS 위의 fork-receiver에서는 이 스펠링들이 R11이 닫은 casefold/정규화 alias와 **같은 형태의**
+  alias가 될 수 있다: 인덱스는 두 항목, 파일시스템은 한 파일. R11의 fold는 유니코드 canonical
+  caseless일 뿐 Win32 경로 정규화가 아니므로 이 변형은 fold 키를 병합하지 않는다.
+  **범위를 명시한다: 이것은 APFS 결함이 아니고 이 머신에서 재현되지 않았다** — 등재 시점에
+  Windows 호스트가 없어 (1) NTFS가 실제로 두 스펠링을 한 inode로 서비스하는지, (2) git for Windows가
+  그런 인덱스 항목을 만들 수 있는지 **둘 다 미검증**이다. 검증 없이 fold에 후행 점·공백 스트립을
+  추가하면 그 문자를 정당하게 쓰는 POSIX 트리에 오탐을 들일 위험이 있으므로 **코드 변경 없이 등재만**
+  한다. done-when: Windows/NTFS 호스트에서 (1)(2)를 측정하고, 참이면 fold가 아니라 별도의 플랫폼
+  스코프 검사로 추가 + 비공허성 fixture, 거짓이면 이 행을 측정 기록과 함께 닫는다.
+  출처: 2026-08-01 cross-family reviewer R11 (register-only, unverified sibling).
 - [ ] P3-123 **`.DS_Store`만 있는 gitlink 디렉터리를 usability 관점에서 거부한다** — `GIT_GITLINK_UNINITIALIZED_POPULATED`(R9/P1-2)는 "미초기화 gitlink는 부재이거나 **실제로 빈** 디렉터리여야 한다"고 요구한다. macOS Finder가 그 디렉터리를 한 번 방문하기만 해도 `.DS_Store`가 생기고, 그 순간 R25가 BLOCK된다 — 공격이 아니라 **운영 사고**이며, 메시지는 "remove the untracked content"라 복구는 가능하지만 진단 비용이 크다. 반대로 `.DS_Store`를 예외 허용하면 "빈 디렉터리" 불변식에 이름 기반 구멍이 생긴다(첫 예외가 다음 예외의 근거가 된다). 트레이드오프가 진짜이므로 결정 없이 등재한다. done-when: (a) 거부를 유지하되 메시지에 `.DS_Store`/`Thumbs.db` 같은 OS 부산물을 지목하는 힌트를 추가하거나, (b) OS 부산물 allowlist를 도입하고 그 목록이 이름 기반임을 명문화 + 비공허성 fixture로 증명. 출처: 2026-07-31 cross-family reviewer R10 P3 (register-only).
 
 ## P4 — trigger-bound scope_deferrals (수렴 분모 제외; by-design)
