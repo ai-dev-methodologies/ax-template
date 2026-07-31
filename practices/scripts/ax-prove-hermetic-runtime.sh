@@ -197,18 +197,15 @@ edits = {
                            '            *) AX_PY_BIN="$_ax_hb" ;;\n'
                            '            "AXPY 3 "*) AX_PY_BIN="$_ax_hb" ;;')])],
     # (J') revert the toolchain byte comparison to the filter-honouring `git diff --quiet`.
+    # A MINIMAL anchor on purpose: the surrounding lines legitimately move (the absent-on-both-
+    # sides exemption landed between rounds and broke a multi-line anchor). This one line IS the
+    # comparison — reverting it to the filter-honouring `git diff --quiet` is the pre-round-6 world.
     "rawbytes": [(ANCHOR, [
         ('    ax_ratchet_filters_absent "$repo" "$label" "$@" || bad=1', '    :'),
-        ("\n".join([
-            '        want="$(ax_git "$repo" rev-parse --verify --quiet "${rev}:${rel}" 2>/dev/null)"',
-            '        have="$(ax_git "$repo" hash-object --no-filters -t blob -- "$rel" 2>/dev/null)"',
-            '        rc=1',
-            '        if [ -z "$want" ] || [ -z "$have" ]; then rc=2; fi',
-            '        [ -n "$want" ] && [ "$want" = "$have" ] && continue']),
+        ('        [ -n "$want" ] && [ "$want" = "$have" ] && continue',
          "\n".join([
             '        ax_git "$repo" diff --quiet "$rev" -- "$rel" >/dev/null 2>&1',
             '        rc=$?',
-            '        want=x; have=x',
             '        [ "$rc" -eq 0 ] && continue']))])],
     # (K') remove the prior-release re-run from the hook.
     "priorrelease": [(HOOK, [('    pp_anchor_recency_gate "$ANCHOR_REV" "$local_sha" || exit 1',
