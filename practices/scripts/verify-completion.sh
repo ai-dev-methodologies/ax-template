@@ -309,14 +309,24 @@ done
 IFS="$_ax_hifs"; unset _ax_hifs _ax_hd
 AX_GIT_BIN="$(PATH="$_AX_HRM_PATH" command -v git 2>/dev/null || true)"
 AX_PY_BIN="$(PATH="$_AX_HRM_PATH" command -v python3 2>/dev/null || true)"
-# ── ROUND 6 / P1-2: A PATH IS NOT AN IDENTITY ───────────────────────────────────────
-# INVARIANT: a tool this gate runs must SAY WHAT IT IS. `-f`/`-x` FOLLOW SYMLINKS and assert
-# nothing about the program: MEASURED — a symlink named python3 pointing at /usr/bin/true passed
-# every lexical/`-x` test and turned the recency guard's entire python body into exit 0 (honest
-# baseline 1). So each tool is (a) canonicalised through its real directory, (b) refused if it
-# lives inside the tree under audit, and (c) made to IDENTIFY ITSELF by being RUN — `git --version`
-# must produce a git version banner, python3 must print a python self-report under `-I -S`. A
-# /usr/bin/true symlink prints nothing and is refused.
+# ── ROUND 6 / P1-2: A PATH IS NOT EVEN A SMOKE TEST ─────────────────────────────────
+# INVARIANT: a tool this gate runs must at least ANSWER LIKE THE PROGRAM IT IS SUPPOSED TO BE.
+# `-f`/`-x` FOLLOW SYMLINKS and assert nothing at all: MEASURED — a symlink named python3
+# pointing at /usr/bin/true passed every lexical/`-x` test and turned the recency guard's entire
+# python body into exit 0 (honest baseline 1). So each tool is (a) canonicalised through its real
+# directory, (b) refused if it lives inside the tree under audit, and (c) RUN once against a
+# fixed challenge — `git --version` must produce a git version banner, python3 must print a
+# self-report under `-I -S`. A /usr/bin/true symlink prints nothing and is refused.
+# WHAT THAT IS AND IS NOT (corrected, reviewer ROUND 8 / P1-B — the earlier prose called this
+# 'identity' and the tool 'authenticated', and it is NEITHER). The challenge is PUBLIC and FIXED,
+# so a hostile wrapper forwards it to the real binary, answers correctly, and does what it likes
+# with everything else — measured by the reviewer in round 7, which flipped fail_audit_log_missing
+# from exit 1 to exit 0. This is therefore a SMOKE TEST for a MIS-RESOLVED tool (a stub, a
+# /usr/bin/true symlink, a shim on an inherited PATH), not authentication and not identity. PATH
+# executables are DECLARED TRUSTED — see practices/DECISIONS.md TD-2026-07-30-(ratchet-threat-
+# model) and docs/BACKLOG.md P2-68 for the external-trust-root work that would change that. The
+# code name HERMETIC_TOOL_UNAUTHENTIC is kept because guards, fixtures and DECISIONS entries
+# reference it; it means 'did not answer the smoke test', never 'failed authentication'.
 # The PYTHON* family is scrubbed for the same reason the GIT_* family is: PYTHONPATH /
 # PYTHONHOME / PYTHONEXECUTABLE / PYTHONSTARTUP redirect what the interpreter IS before a single
 # line of ours runs — measured, a PYTHONPATH sitecustomize.py doing `os._exit(0)` skipped the whole
@@ -346,7 +356,9 @@ for _ax_hn in "git=$AX_GIT_BIN" "python3=$AX_PY_BIN"; do
         exit $_AX_HRM_EXIT
     fi
     _ax_hb="$_ax_hdir/$(basename "$_ax_hb")"
-    # (c) identity by SELF-REPORT — the only statement about a program that a path cannot forge.
+    # (c) the SMOKE TEST: run it once and read what it says. A path cannot make this statement,
+    #     and a hostile wrapper can (it forwards the fixed public challenge) — so this catches a
+    #     mis-resolved tool, which is the in-scope class, and nothing beyond it.
     if [ "${_ax_hn%%=*}" = "git" ]; then
         _ax_hver="$("$_ax_hb" --version 2>/dev/null)" || _ax_hver=""
         case "$_ax_hver" in
@@ -355,7 +367,8 @@ for _ax_hn in "git=$AX_GIT_BIN" "python3=$AX_PY_BIN"; do
                   echo "  not identify itself as git (\`git --version\` said '${_ax_hver:-<nothing>}')."
                   echo "  Lexical absoluteness and -f/-x FOLLOW SYMLINKS and say nothing about the"
                   echo "  program: a symlink named python3 → /usr/bin/true satisfied all of them and"
-                  echo "  turned an entire guard into exit 0. A tool this gate runs must say what it is."; } >&2
+                  echo "  turned an entire guard into exit 0. A mis-resolved tool is refused here; a"
+                  echo "  hostile PATH wrapper is NOT caught by this and is declared out of scope."; } >&2
                 exit $_AX_HRM_EXIT ;;
         esac
     else
@@ -366,7 +379,8 @@ for _ax_hn in "git=$AX_GIT_BIN" "python3=$AX_PY_BIN"; do
                   echo "  not identify itself as a python3 interpreter under \`-I -S\` (it said"
                   echo "  '${_ax_hver:-<nothing>}'). MEASURED: a symlink named python3 → /usr/bin/true"
                   echo "  passed every path test and silently skipped this gate's whole python body"
-                  echo "  (exit 0 where the honest answer was 1). Identity is what the program says."; } >&2
+                  echo "  (exit 0 where the honest answer was 1). This is a smoke test for a"
+                  echo "  mis-resolved interpreter, not authentication — see DECISIONS."; } >&2
                 exit $_AX_HRM_EXIT ;;
         esac
     fi

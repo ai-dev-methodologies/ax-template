@@ -1289,14 +1289,17 @@ the trigger event, do not relitigate.
   **HERMETIC_PREFLIGHT_UNVERIFIABLE** (an `/usr/bin/env` that produces nothing is unknown, and
   unknown never passes).
 
-- **P1-2 — an absolute path authenticates neither the binary nor python's startup.** The round-5
+- **P1-2 — an absolute path does not even smoke-test the binary, nor python's startup.**
+  (HEADLINE CORRECTED, reviewer ROUND 8 / P1-B: it read "authenticates neither…", which implies
+  that what replaced it DOES authenticate. It does not — see the scope note at the end of this
+  bullet.) The round-5
   validator accepted anything lexically absolute that passed symlink-FOLLOWING `-f`/`-x`.
   MEASURED: a symlink named `python3` → `/usr/bin/true` passed every test and turned the recency
   guard's entire python body into **exit 0** (honest baseline 1); a `sitecustomize.py` calling
   `os._exit(0)`, reached through an inherited `PYTHONPATH`, did the same. FIX — (a) the tool's
-  DIRECTORY is canonicalised with `builtin pwd -P` and the program is then made to IDENTIFY ITSELF
-  by being RUN (`git --version` must produce a git banner; python3 must print a self-report under
-  `-I -S`), new code **HERMETIC_TOOL_UNAUTHENTIC**; (b) the whole `PYTHON*` family is scrubbed in
+  DIRECTORY is canonicalised with `builtin pwd -P` and the program is then RUN ONCE AGAINST A
+  FIXED CHALLENGE (`git --version` must produce a git banner; python3 must print a self-report
+  under `-I -S`), new code **HERMETIC_TOOL_UNAUTHENTIC**; (b) the whole `PYTHON*` family is scrubbed in
   the bootstrap and every ratchet-internal python call site runs `-I -S` (isolated, no `site`,
   which is what a `sitecustomize.py` rides in on); (c) the PyYAML concern is real and is answered
   rather than hidden — see the honest limit below.
@@ -1307,7 +1310,16 @@ the trigger event, do not relitigate.
   Those two sites use `-E`, which still refuses `PYTHONPATH`/`PYTHONHOME`/`PYTHONSTARTUP` — the
   reviewer's actual injection vector — and they are preceded by an `import yaml` capability probe
   **run with the same interpreter and the same flags**, which BLOCKS
-  (**HERMETIC_PY_YAML_UNAVAILABLE**) and never degrades to a skip. The residual is a
+  (**HERMETIC_PY_YAML_UNAVAILABLE**) and never degrades to a skip.
+  SCOPE OF (a), stated (reviewer ROUND 8 / P1-B): the challenge is **public and fixed**, so a
+  hostile PATH wrapper forwards it to the real binary and answers correctly — the reviewer
+  demonstrated exactly that in round 7 (P1-2), flipping `fail_audit_log_missing` from exit 1 to
+  exit 0. (a) is therefore a **SMOKE TEST for a MIS-RESOLVED tool**, not identity and not
+  authentication; PATH executables are declared trusted by
+  TD-2026-07-30-(ratchet-threat-model), with the external-trust-root work registered as
+  docs/BACKLOG.md P2-68. The code name `HERMETIC_TOOL_UNAUTHENTIC` is retained only because
+  guards, fixtures and entries in this file reference it; it means "did not answer the smoke
+  test". The residual is a
   `sitecustomize.py` already installed inside site-packages, which is the same trust domain as
   PyYAML itself.
 
@@ -1462,6 +1474,63 @@ Two consequences follow, and both are load-bearing:
   ax-template ever running in an untrusted-environment context (hosted CI for third-party forks,
   an agent sandbox with an attacker-writable PATH). Until then it would be cost without a threat.
 
+### AMENDMENT (2026-07-31, reviewer ROUND 8 / P1-B) — the startup file is environment control, and `$-` does not attest startup history
+
+The round-7 entry (TD-2026-07-30-(P1-privileged-startup)) is **not withdrawn, and it is not a
+seal.** Round 8 showed four ways an adversary who controls the startup environment defeats the
+privileged re-exec. Every one of them requires exactly that control, so all four are **out of
+scope by the boundary above** — the same adversary can simply not install the opt-in hooks. What
+must change is the CLAIM, not the code:
+
+**Bash startup-file control (`BASH_ENV` / `ENV`, and by extension `~/.bashrc` for an interactive
+parent, `shopt -s expand_aliases` payloads, and anything else bash executes before a script's
+first line) is ENVIRONMENT CONTROL and is therefore OUT OF SCOPE.** The round-7 privileged-mode
+work is **DEFENSE IN DEPTH against accidental and inherited contamination** — a `BASH_ENV` left
+in a profile, a function exported by a tool wrapper, a stale `ENV` in a CI image — **not a seal
+against a hostile startup file.** `$-` attests the shell's **CURRENT mode**; it attests nothing
+about the shell's **startup history**. Inside bash, any detector that could be written is itself
+reachable from the same startup file, so there is no in-script construct that attests what
+already ran.
+
+The reviewer's four reproductions, recorded verbatim as the evidence for that boundary:
+
+> - `BASH_ENV` can define functions and THEN `builtin set -p`
+> - `$BASH` is assignable after startup
+> - an attacker `exec` that does `builtin exec /usr/bin/true` never returns so the second `case`
+>   never fires
+> - a sourced-lib probe with a late `set -p` + `declare(){ exit 0; }` gave rc 0 with no
+>   `SOURCED_OK`
+
+Read together: the payload runs first and then MANUFACTURES the state the re-exec block tests
+for, so the block's own premise (`$- contains p` ⇒ nothing hostile ran) is false under startup
+control. That is a correction to the round-7 prose, not a new attack surface — round 7 already
+recorded the residual "`$BASH_ENV` whose first line is `exit 0`", and these four are the same
+class taken further.
+
+**The cheap strengthening was evaluated and DECLINED, with a reason rather than a shrug.**
+Re-executing through `/usr/bin/env -i` with a minimal allowlist would keep `BASH_ENV`/`ENV` out
+of the child's environ entirely. It is refused because it BREAKS TWO THINGS THIS CATALOG
+DEPENDS ON, and buys nothing against the class it would be sold as closing:
+
+1. **It would silently drop `AX_RELEASE_ANCHOR_SHA`/`_KIND`/`_REF`/`_ROOT`.** Those are exported
+   ONCE by the runner and re-read by every guard, and that single-resolution pin is precisely
+   what closes the round-4 TOCTOU on the anchor ref (TD-2026-07-30-(P1-anchor-runtime), defect 2).
+   With them stripped, each guard would fall back to re-resolving `origin/main` itself — i.e. the
+   round-4 defect, restored by a "hardening" change. Guards also take env-borne configuration
+   (`STRICT=` / `LIVE_ROOT=` / `GIT_ANCHOR=`), and a swallowed env prefix producing a green
+   summary is the exact failure recorded two entries above in this file.
+2. **It would convert a LOUD refusal into SILENT tolerance.** Today a contaminated environment is
+   detected and named: the pure-keyword preflight refuses on `BASH_ENV`/`ENV` being set at all
+   (`HERMETIC_PREFLIGHT_HOSTILE`). Stripping the variable before the preflight sees it would make
+   the accidental case — the case actually in scope — pass quietly instead of telling the
+   operator to fix their shell. For the hostile case it changes nothing, because a startup file
+   that runs `exit 0`, or that fakes `$-`, never reaches the re-exec at all.
+
+So nothing was kept from that suggestion, and nothing was faked. The honest summary is: **against
+accidental/inherited contamination the environment is refused loudly, and that is what the
+round-7 work buys. Against a hostile startup file there is no in-bash defence, and this entry
+says so instead of decorating it.**
+
 ### Where the boundary bites, concretely
 
 - `$BASH_ENV` whose FIRST line is `exit 0` ends the shell before any entry's first line exists
@@ -1507,8 +1576,19 @@ preflight, and the banner in all eight files states what is actually true.
 
 **FIX — bash PRIVILEGED MODE at the invocation boundary.** In privileged mode bash does not
 process `$BASH_ENV`/`$ENV` and does not import functions from the environment. As its first
-executable text, each of the six EXECUTED entries detects privileged mode and, if absent, `exec`s
-the SAME interpreter with `-p`, re-running itself with the original arguments:
+executable text, each of the **SEVEN** EXECUTED entries detects privileged mode and, if absent,
+`exec`s the SAME interpreter with `-p`, re-running itself with the original arguments.
+(CORRECTION, reviewer ROUND 8 / P1-B: this said "six". The count on disk is seven —
+`.githooks/pre-push`, `practices/scripts/verify-completion.sh`,
+`practices/evals/run-all-guards.sh`, `practices/evals/completion_checklist_recency_guard.sh`,
+`practices/evals/evidence_quote_spotcheck_guard.sh`,
+`practices/evals/manifest_snapshot_integrity_guard.sh`,
+`practices/evals/pre_push_decision_guard.sh` — verifiable as
+`grep -rl 'AX_PRIV_REEXEC=1 "$BASH" -p'`. The two SOURCED libs assert instead, for the reason
+below, which is where "six + two = eight files" came from.) **And read it with the ROUND-8
+AMENDMENT in TD-2026-07-30-(ratchet-threat-model): this is defense in depth against accidental /
+inherited contamination, NOT a seal against a hostile startup file — `$-` attests the current
+mode, not startup history.**
 
 ```
 case $- in
@@ -1633,3 +1713,122 @@ mode this catalog exists to catch.
 - P1-2 is NOT fixed here. See TD-2026-07-30-(ratchet-threat-model) for the boundary and
   `docs/BACKLOG.md` P2-68 for the external-trust-root work item.
 - Commits: (this commit — PRD-final-4 wave, P1-seal round-7)
+
+---
+
+## TD-2026-07-31-(P1-worktree-representation) — a representation the sweep did not expect is not a `continue`
+
+- Date: 2026-07-31
+- Status: accepted
+- Trigger: cross-family reviewer, ROUND 8, P1-A. Round 7 closed "a claim about BYTES must be made
+  on RAW BYTES" by hashing every tracked path git calls clean directly, in python, with no git
+  process in the loop. But the loop only handled the paths whose ON-DISK SHAPE matched the index,
+  and spelled everything else `continue` — in **both** implementations
+  (`practices/scripts/lib/tree_fingerprint.py:197,209` and the recency guard's 12c sweep at
+  `:1113,1125`). Two of those skipped states hide bytes that a push ships, and reaching them
+  needs **no environment control at all** — one `git update-index` does it, squarely inside the
+  declared threat model.
+
+### The two reproductions (measured here, in throwaway repos)
+
+```
+(1) SYMLINK SWAP
+    HEAD carries a malicious practices/verification-checklist.yaml
+    git update-index --assume-unchanged practices/verification-checklist.yaml
+    rm practices/verification-checklist.yaml
+    ln -s <benign file OUTSIDE the repo> practices/verification-checklist.yaml
+    → git status --porcelain : EMPTY
+    → git ls-files -s        : 100644 …  (the index still names the malicious blob)
+    → what R25 reads         : "steps: [benign]"
+    → what the push ships    : "steps: [MALICIOUS]"
+
+(2) SKIP-WORKTREE ABSENCE
+    git update-index --skip-worktree <malicious tracked source>; rm it
+    → git status --porcelain : EMPTY, the build simply omits the file
+
+PRE-FIX, three trees, ONE digest — both_bypasses = true:
+    clean tree              → 0a815065ebf5…  exit 0
+    (1) symlink swap        → 0a815065ebf5…  exit 0
+    (2) skip-worktree gone  → 0a815065ebf5…  exit 0
+```
+
+### Fix, applied SYMMETRICALLY to both implementations
+
+For any live/push-eligible run an unexpected worktree representation now BLOCKS. New codes:
+
+| code | fires when | fingerprint exit |
+|---|---|---|
+| `GIT_INDEX_FLAGS_SET` | `git ls-files -v` reports a lowercase tag (assume-unchanged) or `S` (skip-worktree) | 9 |
+| `GIT_WORKTREE_TYPE_MISMATCH` | index mode 100644/100755 but the worktree is a SYMLINK — **and the mirror**, index mode 120000 but the worktree is a regular file/directory; also a gitlink that is a symlink | 7 |
+| `GIT_TRACKED_PATH_ABSENT` | a tracked path git calls clean is missing or unreadable (`OSError`); the message names assume-unchanged / skip-worktree / sparse checkout as the legitimate-looking causes | 8 |
+| `GIT_GITLINK_DIVERGENCE` | an INITIALIZED submodule whose HEAD is not the commit the superproject records | 10 |
+
+The BITS are read directly rather than inferred one symptom at a time: both reproductions begin
+with `git update-index`, and `ls-files -v` reports the bits. Measured on this catalog: **5,745
+tracked paths, ZERO non-`H` tags**, so the refusal costs an honest tree nothing. Verified on a
+deliberately dirty tree (one modified, one deleted, one staged, one untracked path) that every
+tag stays `H` — this is the two bits, not a proxy for dirtiness.
+
+**Gitlinks are BOUND, not exempt.** Round 7 exempted them with "no bytes of ours on disk", which
+is true of the superproject's blobs and false of what a run tests: an initialized submodule
+sitting at a different commit means R25 tested one submodule while the push ships another, and
+`submodule.<n>.ignore=all` keeps `git status` silent about it. An **UNINITIALIZED** gitlink is
+deliberately NOT blocked — all three in this catalog are empty post-clone fixture directories and
+nothing was tested from them; blocking would refuse every fresh clone to close nothing. The
+remainder (dirt inside an initialized submodule's own work tree) is `docs/BACKLOG.md` **P3-119**.
+
+```
+POST-FIX
+  clean control (scratch)            exit 0  0a815065ebf5…      (constant preserved)
+  (1) symlink swap                   exit 9  GIT_INDEX_FLAGS_SET
+  (2) skip-worktree absence          exit 9  GIT_INDEX_FLAGS_SET
+  dirty control (M/D/staged/??)      exit 0  3204bed0bd39…      (no false block)
+LAYER INDEPENDENCE (bits refusal neutered — a sparse checkout SETS the bit, so without this
+the representation backstop would be dead code behind it):
+  (1) symlink swap                   exit 7  GIT_WORKTREE_TYPE_MISMATCH
+  (1b) mirror: index symlink → file  exit 7  GIT_WORKTREE_TYPE_MISMATCH
+  (2) skip-worktree absence          exit 8  GIT_TRACKED_PATH_ABSENT
+  clean control                      exit 0  0a815065ebf5…
+NEGATIVE CONTROL on the LIVE tree (5,745 paths):
+  pre-fix (HEAD copy)  b622ac117ad6…  0.249s total
+  post-fix             b622ac117ad6…  0.222s total   ← identical digest, same cost
+GITLINK
+  uninitialized                      exit 0  (not blocked, by design)
+  initialized at a different commit  exit 10 GIT_GITLINK_DIVERGENCE
+```
+
+### Why both copies had to change, and why the guard's own sweep is load-bearing
+
+The recency guard recomputes the fingerprint with the **PREVIOUS RELEASE'S** copy of the helper.
+Until this fix reaches `origin/main`, that copy is the pre-round-8 one and answers the clean-tree
+constant for both attacks — so the recompute cannot be the layer that catches them. The guard's
+own 12c sweep is. That is the general shape: the writer and the verifier must not disagree about
+what a tree IS, so the change lands in both files in the same commit.
+
+### Falsification
+
+`practices/scripts/ax-prove-hermetic-runtime.sh` gains cases **(P)** symlink swap, **(Q)**
+skip-worktree deletion, **(P′)/(Q′)** the same attacks in a COMMITTED pre-round-8 sandbox (both
+must land, exit 0, or the harness is stale), **(R1)/(R2)** the bits-only neuter proving the
+representation backstop refuses on its own, and **(S)** an over-correction control asserting an
+uninitialized gitlink still PASSES. Each attack asserts `git status --porcelain` is EMPTY before
+the gate runs — if a future git reports the swap, the scenario says so instead of passing quietly.
+
+### Not fixture-covered, and why (stated rather than glossed)
+
+There is no committed `fail_*` fixture for these codes. The recency guard's fixture roots are
+**by construction not git work trees** — they declare `.ax-verify/expected_head.txt`, and the
+whole 12b0/12b/12c block is gated on `live_git_root and not expected_head_file.is_file()`. The
+attack IS a disagreement between the git **INDEX** and the worktree, so a directory with no index
+has nothing to disagree with: a fixture able to express it would have to BE a git repository,
+which the fixture contract excludes. The evidence is therefore the live falsification cases above
+(sandboxed, with pre-fix twins), the same posture already used for the other live-root-bound codes
+(`MONOTONIC_FLOOR_REGRESSION`, `ANCHOR_*`).
+
+- P1-B is NOT a code change. See the ROUND-8 AMENDMENT in
+  TD-2026-07-30-(ratchet-threat-model): bash startup-file control is environment control and
+  therefore out of scope; the round-7 privileged-mode work is defense in depth against
+  accidental/inherited contamination, not a seal; `$-` attests current mode, not startup history.
+- Registered from this round: `docs/BACKLOG.md` **P2-69** (toolpaths.json interpolation +
+  symlink-following output) and **P3-119** (submodule-internal residue).
+- Commits: (this commit — PRD-final-4 wave, P1-seal round-8)

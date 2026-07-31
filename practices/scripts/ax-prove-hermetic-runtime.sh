@@ -34,7 +34,9 @@
 #       (G') the same attack with the round-6 preflight removed lands again (exit 0).
 #   (H) a symlink named python3 pointing at /usr/bin/true, which satisfied every -f/-x/absolute
 #       test and skipped the whole python body                      → HERMETIC_TOOL_UNAUTHENTIC
-#       (H') the same attack with the identity self-report removed lands again.
+#       (H') the same attack with the SMOKE TEST removed lands again. SCOPE (round 8 / P1-B):
+#       this refuses a MIS-RESOLVED tool, not a hostile PATH wrapper — the challenge is fixed
+#       and public, so a wrapper forwards it. See TD-2026-07-30-(ratchet-threat-model).
 #   (I) PYTHONPATH → sitecustomize.py calling os._exit(0)           → the gate reaches its honest
 #       non-zero verdict anyway (scrubbed env + `-I -S`).
 #   (J) a `filter.<n>.clean` that echoes the committed copy, so a TAMPERED toolchain file reads
@@ -65,6 +67,27 @@
 #       ordinary tracked file's bytes makes `git status --porcelain` EMPTY, so the fingerprint's
 #       raw-byte loop never opens it        → GIT_FILTERS_PRESENT / GIT_RAW_INDEX_DIVERGENCE.
 #       (O') with the keyword subset restored and the raw sweep removed the mask lands (exit 0).
+#
+# ROUND 8 (TD-2026-07-31-(P1-worktree-representation) / P1-A) attacks invariant (beta) from the one
+# side round 7 left open: it measured BYTES, but only for paths whose ON-DISK SHAPE it expected,
+# and `continue`d past the rest. Two representations hide bytes that a push ships, and both are
+# reachable with one `git update-index` — no environment control, squarely inside the declared
+# threat model. MEASURED pre-fix: a clean tree, a symlink swap and a tracked-but-absent path all
+# produced the IDENTICAL fingerprint 0a815065… (the clean-tree constant).
+#   (P) an index-REGULAR tracked path, marked --assume-unchanged, deleted and replaced by a
+#       SYMLINK to a benign file OUTSIDE the repository. `git status --porcelain` is EMPTY and the
+#       index still says mode 100644          → GIT_INDEX_FLAGS_SET / GIT_WORKTREE_TYPE_MISMATCH.
+#       (P') with the round-8 refusals removed from BOTH implementations it lands again (exit 0).
+#   (Q) a tracked path marked --skip-worktree and deleted: status empty, the build omits the file,
+#       both sweeps ignored the absent path      → GIT_INDEX_FLAGS_SET / GIT_TRACKED_PATH_ABSENT.
+#       (Q') same neuter, lands again (exit 0).
+#   (R) LAYER INDEPENDENCE: with ONLY the index-bit refusal neutered, (P) and (Q) must still be
+#       refused on the REPRESENTATION codes. Without this the representation layer would be dead
+#       code behind the bit check — a sparse checkout sets skip-worktree, so the bit is present in
+#       the ordinary case and would mask whether the backstop works at all.
+#   (S) OVER-CORRECTION CONTROL: a sandbox carrying an UNINITIALIZED gitlink must still PASS. All
+#       three gitlinks in this catalog are empty post-clone fixture directories; a refusal there
+#       would break every fresh clone to close nothing.
 #
 # Nothing outside the throwaway directory is touched; the live tree is only ever READ.
 # Exit: 0 all attacks blocked · 1 at least one attack open · 2 harness error.
@@ -323,6 +346,64 @@ PY
     return 0
 }
 
+# ── ROUND 8 neuters (TD-2026-07-31-(P1-worktree-representation) / P1-A). Same contract as the
+# round-5/6/7 neuters: EXACTLY ONE match per anchor, so a refactor makes this harness fail loudly
+# instead of silently proving nothing. `all` restores the round-7 world (every round-8 refusal
+# gone, so the sweeps `continue` past the unexpected representation exactly as they did); `bits`
+# removes ONLY the index-flag refusal, which is what makes the representation layer separately
+# falsifiable.
+round8_neuter() {   # round8_neuter <sb> <what>   what ∈ all|bits
+    "${AX_PY_BIN:-python3}" - "$1/repo" "$2" <<'PY'
+import sys, pathlib
+repo, what = pathlib.Path(sys.argv[1]), sys.argv[2]
+GUARD = repo / "practices/evals/completion_checklist_recency_guard.sh"
+FP = repo / "practices/scripts/lib/tree_fingerprint.py"
+pairs = {
+    "all": [
+        (GUARD, "        if _flagged:"), (GUARD, "        if _mistyped:"),
+        (GUARD, "        if _absent:"), (GUARD, "        if _glbad:"),
+        (FP, "    if flagged:"), (FP, "    if mistyped:"),
+        (FP, "    if unreadable:"), (FP, "    if gitlinks:"),
+    ],
+    "bits": [(GUARD, "        if _flagged:"), (FP, "    if flagged:")],
+}
+for path, anchor in pairs[what]:
+    text = path.read_text(encoding="utf-8")
+    n = text.count(anchor)
+    if n != 1:
+        print(f"round8 neuter anchor occurs {n}x (expected 1) in {path}: {anchor!r}",
+              file=sys.stderr)
+        sys.exit(3)
+    dead = anchor[:len(anchor) - len(anchor.lstrip())] + "if False:"
+    path.write_text(text.replace(anchor, dead, 1), encoding="utf-8")
+PY
+    local rc=$?
+    [ "$rc" -ne 0 ] && return "$rc"
+    # Committed and published as the sandbox's origin/main, so the sandbox is a self-consistent
+    # OLD WORLD rather than a new world with an uncommitted edit — otherwise the toolchain
+    # authenticity check fires on the neuter itself and the reproduction measures the wrong thing.
+    ( builtin cd "$1/repo" && git add -A && git "${GIT_ID[@]}" commit -q -m "pre-round-8" \
+      && git update-ref refs/remotes/origin/main HEAD \
+      && git push -q -f origin HEAD:refs/heads/main ) >/dev/null 2>&1
+    return 0
+}
+
+# r8_sentinel <sb> — commit an ordinary tracked file carrying the MALICIOUS bytes, and leave a
+# BENIGN twin outside the repository for the symlink to point at. The target is deliberately NOT
+# a toolchain path: 12b already compares those nine on raw bytes, so attacking one would be caught
+# by a check that predates this round and the reproduction would prove nothing. Everything ELSE in
+# the tree — which is what R25 actually builds and lints — had no such cover.
+R8_REL="practices/verification-checklist.yaml"
+r8_sentinel() {
+    local sb="$1"
+    mkdir -p "$sb/repo/$(dirname "$R8_REL")" || return 2
+    printf 'steps: [MALICIOUS]\n' > "$sb/repo/$R8_REL" || return 2
+    printf 'steps: [benign]\n' > "$sb/benign.yaml" || return 2
+    ( builtin cd "$sb/repo" && git add "$R8_REL" \
+      && git "${GIT_ID[@]}" commit -q -m sentinel ) >/dev/null 2>&1 || return 2
+    return 0
+}
+
 # proc_filter_prepare <sb> <tracked-rel> — write git's LONG-RUNNING FILTER (protocol v2) and the
 # .gitattributes that attaches it, but do NOT enable it yet. Split in two on purpose: the
 # attribute commit MOVES HEAD, so it must land before write_audit or the gate would fail with
@@ -383,7 +464,7 @@ build_sb_red() {
     return 0
 }
 
-echo "=== ax-prove-hermetic-runtime — ROUND 5 (runtime) + ROUND 6 (preflight / raw bytes) + ROUND 7 (privileged startup / filter.process) ==="
+echo "=== ax-prove-hermetic-runtime — ROUND 5 (runtime) + ROUND 6 (preflight / raw bytes) + ROUND 7 (privileged startup / filter.process) + ROUND 8 (worktree representation) ==="
 
 # ── (F) NEGATIVE CONTROL, first: an unattacked sandbox must actually PASS ─────────────
 SB_OK="$WORK/control"; build_sb "$SB_OK" || { echo "harness setup failed (control)" >&2; exit 2; }
@@ -520,7 +601,11 @@ if [ "$G2_RC" -ne 0 ]; then
               "so (G) proves nothing about the preflight. The harness has gone stale."
 fi
 
-# ── (H) A PATH IS NOT AN IDENTITY ───────────────────────────────────────────────────
+# ── (H) A PATH IS NOT EVEN A SMOKE TEST ─────────────────────────────────────────────
+# CORRECTED SCOPE (reviewer ROUND 8 / P1-B): this proves a MIS-RESOLVED interpreter is
+# refused. It does NOT prove the interpreter is authenticated — a hostile wrapper forwards the
+# fixed public challenge to the real binary (reviewer round 7, P1-2), and PATH executables are
+# declared trusted in TD-2026-07-30-(ratchet-threat-model).
 mkdir -p "$WORK/fakebin"
 ln -sf /usr/bin/true "$WORK/fakebin/python3" 2>/dev/null || cp /usr/bin/true "$WORK/fakebin/python3"
 SB_H="$WORK/py-true"; build_sb_red "$SB_H" || { echo "harness setup failed (H)" >&2; exit 2; }
@@ -528,7 +613,8 @@ run_gate "$SB_H" "$WORK/h.log" PATH="$WORK/fakebin:$PATH"; H_RC=$?
 note "(H) python3 → /usr/bin/true symlink       : exit=$H_RC (want non-zero)"
 if [ "$H_RC" -eq 0 ] || ! grep -q "HERMETIC_TOOL_UNAUTHENTIC" "$WORK/h.log"; then
     violation "a symlink named python3 pointing at /usr/bin/true was accepted as the interpreter" \
-              "(exit=$H_RC). -f/-x FOLLOW SYMLINKS; only running the program identifies it."
+              "(exit=$H_RC). -f/-x FOLLOW SYMLINKS and assert nothing; running the program is"
+              "the smoke test that catches a stub. It is not authentication."
     head -3 "$WORK/h.log" >&2
 fi
 SB_H2="$WORK/py-true-neutered"; build_sb_red "$SB_H2" identity || { echo "harness setup failed (H')" >&2; exit 2; }
@@ -753,6 +839,99 @@ if [ "$O2_RC" -ne 0 ]; then
     head -5 "$WORK/o2.log" >&2
 fi
 
+# ══ ROUND 8 (TD-2026-07-31-(P1-worktree-representation) / P1-A) ═══════════════════════
+# Invariant (beta) again, from the side round 7 left open: a claim about bytes must be made on raw
+# bytes — AND a path whose on-disk REPRESENTATION is not the one the index records is a path about
+# which this gate has no byte claim to make. Round 7 spelled that `continue`.
+
+# r8_apply <sb> <kind>  kind ∈ symlink|absent — the attack, applied AFTER write_audit so that HEAD
+# and the recorded fingerprint are the honest ones a real run would have produced.
+r8_apply() {
+    local sb="$1" kind="$2"
+    case "$kind" in
+        symlink)
+            git -C "$sb/repo" update-index --assume-unchanged "$R8_REL" || return 2
+            rm -f "$sb/repo/$R8_REL" || return 2
+            ln -s "$sb/benign.yaml" "$sb/repo/$R8_REL" || return 2 ;;
+        absent)
+            git -C "$sb/repo" update-index --skip-worktree "$R8_REL" || return 2
+            rm -f "$sb/repo/$R8_REL" || return 2 ;;
+        *) return 2 ;;
+    esac
+    # The premise of the whole class: git must report NOTHING. If a future git reports the swap,
+    # the scenario is measuring a different refusal and must say so rather than pass quietly.
+    if [ -n "$(git -C "$sb/repo" status --porcelain)" ]; then
+        violation "harness premise broken: \`git status --porcelain\` is NOT empty after the" \
+                  "$kind swap, so this scenario no longer reproduces the reviewer's setup."
+        return 3
+    fi
+    return 0
+}
+
+r8_case() {   # r8_case <tag> <kind> <label> <expected-codes-regex> [neuter]
+    local tag="$1" kind="$2" label="$3" want="$4" neuter="${5:-}" sb rc
+    sb="$WORK/r8-$tag"
+    build_sb "$sb" || { echo "harness setup failed ($tag)" >&2; exit 2; }
+    r8_sentinel "$sb" || { echo "harness setup failed ($tag/sentinel)" >&2; exit 2; }
+    # The neuter COMMITS (that is what makes the sandbox a self-consistent old world), so it must
+    # land BEFORE write_audit — otherwise HEAD moves under the audit line and every neutered case
+    # fails with AUDIT_STALE_HEAD, i.e. for a reason that has nothing to do with the attack.
+    if [ -n "$neuter" ]; then
+        round8_neuter "$sb" "$neuter" || { echo "harness setup failed ($tag/neuter stale)" >&2; exit 2; }
+    fi
+    write_audit "$sb"
+    r8_apply "$sb" "$kind" || return 0
+    run_gate "$sb" "$WORK/$tag.log"; rc=$?
+    note "($tag) $label: exit=$rc"
+    if [ -n "$want" ]; then
+        if [ "$rc" -eq 0 ] || ! grep -qE "$want" "$WORK/$tag.log"; then
+            violation "the $kind representation swap was not refused with $want (exit=$rc)." \
+                      "\`git status\` is empty and the index still names the committed blob, so" \
+                      "R25 verified something the push will not ship."
+            head -5 "$WORK/$tag.log" >&2
+        fi
+    else
+        if [ "$rc" -ne 0 ]; then
+            violation "in a pre-round-8 sandbox the $kind swap did NOT reproduce (exit=$rc), so" \
+                      "the round-8 refusals are not attributable — this harness has gone stale."
+            head -5 "$WORK/$tag.log" >&2
+        fi
+    fi
+}
+
+# (P)/(Q) the two reproductions against the LIVE gate.
+r8_case P symlink "index-regular path → SYMLINK (assume-unchanged)" \
+    "GIT_INDEX_FLAGS_SET|GIT_WORKTREE_TYPE_MISMATCH"
+r8_case Q absent  "tracked path DELETED (skip-worktree)          " \
+    "GIT_INDEX_FLAGS_SET|GIT_TRACKED_PATH_ABSENT"
+# (P')/(Q') the same attacks in a committed pre-round-8 world: they must land again.
+r8_case P2 symlink "same swap, round-8 refusals removed          " "" all
+r8_case Q2 absent  "same deletion, round-8 refusals removed      " "" all
+# (R) LAYER INDEPENDENCE — only the index-bit refusal is gone; the representation backstop alone
+# must still refuse. A sparse checkout sets skip-worktree, so without this the backstop would
+# never be exercised and could rot into dead code behind the bit check.
+r8_case R1 symlink "swap, ONLY the index-bit refusal removed     " "GIT_WORKTREE_TYPE_MISMATCH" bits
+r8_case R2 absent  "deletion, ONLY the index-bit refusal removed " "GIT_TRACKED_PATH_ABSENT" bits
+
+# (S) OVER-CORRECTION CONTROL: an UNINITIALIZED gitlink is the ordinary post-clone shape (all
+# three in this catalog are empty fixture directories). Blocking it would refuse every fresh clone
+# to close nothing, so the sandbox that carries one must still PASS.
+SB_S="$WORK/r8-gitlink"; build_sb "$SB_S" || { echo "harness setup failed (S)" >&2; exit 2; }
+S_HEAD="$(git -C "$SB_S/repo" rev-parse HEAD)"
+mkdir -p "$SB_S/repo/vendor/sub"
+( builtin cd "$SB_S/repo" && git update-index --add --cacheinfo "160000,$S_HEAD,vendor/sub" \
+  && git "${GIT_ID[@]}" commit -q -m gitlink ) >/dev/null 2>&1 \
+    || { echo "harness setup failed (S/gitlink)" >&2; exit 2; }
+write_audit "$SB_S"
+run_gate "$SB_S" "$WORK/s.log"; S_RC=$?
+note "(S) control: UNINITIALIZED gitlink present : exit=$S_RC (want 0)"
+if [ "$S_RC" -ne 0 ]; then
+    violation "a tree carrying an uninitialized submodule was refused (exit=$S_RC). That is the" \
+              "ordinary post-clone shape and it hides nothing — the round-8 gitlink binding must" \
+              "fire only on an INITIALIZED submodule that is not at the recorded commit."
+    head -5 "$WORK/s.log" >&2
+fi
+
 echo ""
 if [ "$FAIL" -ne 0 ]; then
     echo "ax-prove-hermetic-runtime: FAIL — an inherited-runtime path is open" >&2
@@ -762,8 +941,11 @@ echo "ax-prove-hermetic-runtime: PASS — a redirected git context, an exported 
 echo "  a tampered fingerprint helper (committed or not), an exported set/[ arriving before the"
 echo "  scrub, a /usr/bin/true interpreter, a PYTHONPATH sitecustomize, a clean-filter byte mask,"
 echo "  a COMMITTED push-only bypass, a SELF-ERASING \$BASH_ENV, a preset AX_PRIV_REEXEC, an"
-echo "  exported export() ahead of a sourced lib's preflight and a filter.<n>.process content mask"
-echo "  are each refused by the live gates; the unattacked control passes, and every round-5/6/7"
-echo "  addition has a neutered twin in which its attack lands again — so the refusals are"
-echo "  attributable to the fixes, not to the sandbox."
+echo "  exported export() ahead of a sourced lib's preflight, a filter.<n>.process content mask, an"
+echo "  index-regular path swapped for a SYMLINK under --assume-unchanged and a --skip-worktree"
+echo "  DELETION are each refused by the live gates; the unattacked control passes, an"
+echo "  uninitialized gitlink is NOT refused, and every round-5/6/7/8 addition has a neutered twin"
+echo "  in which its attack lands again — including a bits-only twin proving the round-8"
+echo "  representation backstop refuses on its own — so the refusals are attributable to the"
+echo "  fixes, not to the sandbox."
 exit 0

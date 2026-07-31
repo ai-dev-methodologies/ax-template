@@ -52,6 +52,30 @@
 #   has nowhere to keep a key, and a key committed next to the data authenticates nothing. What
 #   these checks close is the cheap, observed shape: the appended hand-authored line.
 #
+# Why the round-8 additions to 12c (cross-family review ROUND 8, P1-A; TD-2026-07-31-(P1-worktree-
+# representation)). New BLOCKING codes: GIT_WORKTREE_TYPE_MISMATCH, GIT_TRACKED_PATH_ABSENT,
+# GIT_INDEX_FLAGS_SET, GIT_GITLINK_DIVERGENCE.
+#   Round 7 hashed the raw bytes of every tracked path git calls clean — but only for the paths
+#   whose ON-DISK SHAPE it expected. Two representations were `continue`d, and each hides bytes
+#   that a push ships. MEASURED, three trees, ONE digest (0a815065…, the clean-tree constant):
+#     (i)  a clean tree;
+#     (ii) HEAD carries a malicious practices/verification-checklist.yaml; `git update-index
+#          --assume-unchanged` it, `rm` it, replace it with a SYMLINK to a benign file outside
+#          the repository. `git status --porcelain` is EMPTY, the index still says mode 100644,
+#          both sweeps hit islink() and skip → R25 verifies the benign target, the push ships the
+#          malicious blob;
+#     (iii) a malicious tracked source marked `--skip-worktree` and deleted. Status empty, the
+#          build omits the file, both sweeps ignore the absent path.
+#   A representation the sweep did not expect is not a `continue`; it is an answer the gate cannot
+#   give, and unknown never passes. The index BITS behind (ii)/(iii) are also read directly
+#   (`git ls-files -v`: lowercase tag = assume-unchanged, `S` = skip-worktree) and refused, and
+#   gitlinks — round 7's other stated exemption — are BOUND: an initialized submodule must be at
+#   the recorded commit. Applied symmetrically here and in practices/scripts/lib/
+#   tree_fingerprint.py, because the writer and the verifier must not disagree about what a tree
+#   is. Residue, registered rather than hidden: an UNINITIALIZED submodule is not blocked (all
+#   three gitlinks in this catalog are empty post-clone fixture directories), and dirt inside an
+#   initialized submodule's own work tree is that repository's fingerprint — docs/BACKLOG.md P3-119.
+#
 # Why 8 (cross-family review P1-X, 2026-07-30 — the ref is not the tree):
 #   Two guards in an R25 run ratchet against "the previous release", which they resolve from
 #   refs/remotes/origin/main. THAT IS AN ORDINARY LOCAL REF. `git update-ref` aims it at a
@@ -290,14 +314,24 @@ done
 IFS="$_ax_hifs"; unset _ax_hifs _ax_hd
 AX_GIT_BIN="$(PATH="$_AX_HRM_PATH" command -v git 2>/dev/null || true)"
 AX_PY_BIN="$(PATH="$_AX_HRM_PATH" command -v python3 2>/dev/null || true)"
-# ── ROUND 6 / P1-2: A PATH IS NOT AN IDENTITY ───────────────────────────────────────
-# INVARIANT: a tool this gate runs must SAY WHAT IT IS. `-f`/`-x` FOLLOW SYMLINKS and assert
-# nothing about the program: MEASURED — a symlink named python3 pointing at /usr/bin/true passed
-# every lexical/`-x` test and turned the recency guard's entire python body into exit 0 (honest
-# baseline 1). So each tool is (a) canonicalised through its real directory, (b) refused if it
-# lives inside the tree under audit, and (c) made to IDENTIFY ITSELF by being RUN — `git --version`
-# must produce a git version banner, python3 must print a python self-report under `-I -S`. A
-# /usr/bin/true symlink prints nothing and is refused.
+# ── ROUND 6 / P1-2: A PATH IS NOT EVEN A SMOKE TEST ─────────────────────────────────
+# INVARIANT: a tool this gate runs must at least ANSWER LIKE THE PROGRAM IT IS SUPPOSED TO BE.
+# `-f`/`-x` FOLLOW SYMLINKS and assert nothing at all: MEASURED — a symlink named python3
+# pointing at /usr/bin/true passed every lexical/`-x` test and turned the recency guard's entire
+# python body into exit 0 (honest baseline 1). So each tool is (a) canonicalised through its real
+# directory, (b) refused if it lives inside the tree under audit, and (c) RUN once against a
+# fixed challenge — `git --version` must produce a git version banner, python3 must print a
+# self-report under `-I -S`. A /usr/bin/true symlink prints nothing and is refused.
+# WHAT THAT IS AND IS NOT (corrected, reviewer ROUND 8 / P1-B — the earlier prose called this
+# 'identity' and the tool 'authenticated', and it is NEITHER). The challenge is PUBLIC and FIXED,
+# so a hostile wrapper forwards it to the real binary, answers correctly, and does what it likes
+# with everything else — measured by the reviewer in round 7, which flipped fail_audit_log_missing
+# from exit 1 to exit 0. This is therefore a SMOKE TEST for a MIS-RESOLVED tool (a stub, a
+# /usr/bin/true symlink, a shim on an inherited PATH), not authentication and not identity. PATH
+# executables are DECLARED TRUSTED — see practices/DECISIONS.md TD-2026-07-30-(ratchet-threat-
+# model) and docs/BACKLOG.md P2-68 for the external-trust-root work that would change that. The
+# code name HERMETIC_TOOL_UNAUTHENTIC is kept because guards, fixtures and DECISIONS entries
+# reference it; it means 'did not answer the smoke test', never 'failed authentication'.
 # The PYTHON* family is scrubbed for the same reason the GIT_* family is: PYTHONPATH /
 # PYTHONHOME / PYTHONEXECUTABLE / PYTHONSTARTUP redirect what the interpreter IS before a single
 # line of ours runs — measured, a PYTHONPATH sitecustomize.py doing `os._exit(0)` skipped the whole
@@ -327,7 +361,9 @@ for _ax_hn in "git=$AX_GIT_BIN" "python3=$AX_PY_BIN"; do
         exit $_AX_HRM_EXIT
     fi
     _ax_hb="$_ax_hdir/$(basename "$_ax_hb")"
-    # (c) identity by SELF-REPORT — the only statement about a program that a path cannot forge.
+    # (c) the SMOKE TEST: run it once and read what it says. A path cannot make this statement,
+    #     and a hostile wrapper can (it forwards the fixed public challenge) — so this catches a
+    #     mis-resolved tool, which is the in-scope class, and nothing beyond it.
     if [ "${_ax_hn%%=*}" = "git" ]; then
         _ax_hver="$("$_ax_hb" --version 2>/dev/null)" || _ax_hver=""
         case "$_ax_hver" in
@@ -336,7 +372,8 @@ for _ax_hn in "git=$AX_GIT_BIN" "python3=$AX_PY_BIN"; do
                   echo "  not identify itself as git (\`git --version\` said '${_ax_hver:-<nothing>}')."
                   echo "  Lexical absoluteness and -f/-x FOLLOW SYMLINKS and say nothing about the"
                   echo "  program: a symlink named python3 → /usr/bin/true satisfied all of them and"
-                  echo "  turned an entire guard into exit 0. A tool this gate runs must say what it is."; } >&2
+                  echo "  turned an entire guard into exit 0. A mis-resolved tool is refused here; a"
+                  echo "  hostile PATH wrapper is NOT caught by this and is declared out of scope."; } >&2
                 exit $_AX_HRM_EXIT ;;
         esac
     else
@@ -347,7 +384,8 @@ for _ax_hn in "git=$AX_GIT_BIN" "python3=$AX_PY_BIN"; do
                   echo "  not identify itself as a python3 interpreter under \`-I -S\` (it said"
                   echo "  '${_ax_hver:-<nothing>}'). MEASURED: a symlink named python3 → /usr/bin/true"
                   echo "  passed every path test and silently skipped this gate's whole python body"
-                  echo "  (exit 0 where the honest answer was 1). Identity is what the program says."; } >&2
+                  echo "  (exit 0 where the honest answer was 1). This is a smoke test for a"
+                  echo "  mis-resolved interpreter, not authentication — see DECISIONS."; } >&2
                 exit $_AX_HRM_EXIT ;;
         esac
     fi
@@ -1070,16 +1108,35 @@ if live_git_root and not expected_head_file.is_file() and guard_repo is not None
     #      So: for every tracked path git calls CLEAN, hash the bytes on disk AS A GIT BLOB, here,
     #      and compare with the object id in the index. No git process participates, so no filter
     #      protocol (present or future) can answer it.
-    #      COVERAGE, stated exactly: all of `git ls-files -s` MINUS (i) gitlinks, (ii) paths git
-    #      already reports dirty (their raw bytes are hashed into the fingerprint anyway), and
-    #      (iii) paths absent from disk (sparse/skip-worktree; absence carries no bytes). Measured
-    #      cost on this catalog: 5,745 paths / 5.4 MB / ~0.2 s.
+    #      COVERAGE, stated exactly: all of `git ls-files -s -v` MINUS paths git already reports
+    #      dirty (their raw bytes are hashed into the fingerprint anyway). Measured cost on this
+    #      catalog: 5,745 paths / 5.4 MB / ~0.2 s.
     #      A mismatch also fires for eol conversion (core.autocrlf/core.eol/`text`), which is not
     #      an attack but is equally fatal to a byte claim; the message names both causes.
+    #      ROUND 8 / P1-A — THE TWO EXEMPTIONS ABOVE WERE THE HOLE, IN BOTH IMPLEMENTATIONS.
+    #      Round 7 wrote "(i) gitlinks, (iii) paths absent from disk (sparse/skip-worktree;
+    #      absence carries no bytes)" and silently `continue`d past an index-REGULAR path that is
+    #      a SYMLINK on disk as well (the raw loop cannot read a link as a file). MEASURED
+    #      (reviewer round 8, reproduced in a throwaway repo): HEAD carries a malicious
+    #      practices/verification-checklist.yaml; `git update-index --assume-unchanged` it, `rm`
+    #      it, put a symlink to a benign file OUTSIDE the repo in its place → `git status
+    #      --porcelain` EMPTY, index mode still 100644, and both sweeps skip. Same with a
+    #      malicious tracked file marked `--skip-worktree` and deleted. All three states (clean
+    #      tree / symlink swap / tracked-but-absent) produced the IDENTICAL fingerprint
+    #      0a815065…, i.e. R25 verifies bytes that are not the ones the push ships.
+    #      So: an unexpected worktree REPRESENTATION blocks (GIT_WORKTREE_TYPE_MISMATCH, both
+    #      directions), an absent/unreadable tracked path blocks (GIT_TRACKED_PATH_ABSENT), the
+    #      index BITS that produce them are read directly and refused (GIT_INDEX_FLAGS_SET — `git
+    #      ls-files -v` spells assume-unchanged as a lowercase tag and skip-worktree as `S`;
+    #      measured, ZERO non-`H` tags on this catalog, so the refusal costs an honest tree
+    #      nothing), and gitlinks are BOUND rather than exempt: an INITIALIZED submodule must be
+    #      at the commit the superproject records (GIT_GITLINK_DIVERGENCE). An UNINITIALIZED one
+    #      is deliberately not blocked — all three gitlinks here are empty post-clone fixture
+    #      directories and nothing was tested from them; the residue is docs/BACKLOG.md P3-119.
     rc_of, objfmt = git_out("rev-parse", "--show-object-format", root=root, check=False)
     _algo = "sha256" if (rc_of == 0 and objfmt.strip() == "sha256") else "sha1"
     _p_idx = subprocess.run([GIT_BIN, "--no-replace-objects", "-C", str(root),
-                             "ls-files", "-s", "-z"],
+                             "ls-files", "-s", "-v", "-z"],
                             stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, env=GIT_ENV)
     _p_st = subprocess.run([GIT_BIN, "--no-replace-objects", "-C", str(root),
                             "status", "--porcelain", "-z", "-uall"],
@@ -1101,36 +1158,127 @@ if live_git_root and not expected_head_file.is_file() and guard_repo is not None
             if _e[:1] in (b"R", b"C"):
                 _i += 1
             _dirty.add(_e[3:])
-        _bad = []
+        _bad, _mistyped, _absent, _flagged, _glbad = [], [], [], [], []
         for _rec in _p_idx.stdout.split(b"\0"):
             if not _rec:
                 continue
             try:
                 _meta, _path = _rec.split(b"\t", 1)
-                _mode, _blob, _stage = _meta.split(b" ")
+                _tag, _mode, _blob, _stage = _meta.split(b" ")
             except ValueError:
                 continue
-            if _mode == b"160000" or _path in _dirty:
-                continue
+            _show = _path.decode(errors="replace")
+            # ROUND 8 / P1-A (0): the BITS. Both reproductions begin with `git update-index`, and
+            # `ls-files -v` reports them directly — a lowercase tag is assume-unchanged, `S` is
+            # skip-worktree. Reading the cause is cheaper and more honest than inferring its
+            # symptoms one at a time. Verified on a deliberately dirty tree (modified/deleted/
+            # staged/untracked) that every tag stays `H`, so this is the two bits, not dirtiness.
+            if _tag == b"S":
+                _flagged.append("%s (skip-worktree)" % _show)
+            elif _tag.isalpha() and _tag.islower():
+                _flagged.append("%s (assume-unchanged)" % _show)
             _full = os.path.join(os.fsencode(str(root)), _path)
-            try:
-                if _mode == b"120000":
+            if _mode == b"160000":
+                # ROUND 8 / P1-A: gitlinks are BOUND, not exempt. An INITIALIZED submodule whose
+                # HEAD is not the recorded commit means this run tested one submodule while the
+                # push ships another. An uninitialized one carries nothing and is left alone.
+                if os.path.islink(_full):
+                    _mistyped.append("%s (index: gitlink/submodule, on disk: SYMLINK)" % _show)
+                elif os.path.exists(os.path.join(_full, b".git")):
+                    _pg = subprocess.run([GIT_BIN, "--no-replace-objects", "-C",
+                                          os.fsdecode(_full), "rev-parse", "HEAD"],
+                                         stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+                                         env=GIT_ENV)
+                    _have = _pg.stdout.strip() if _pg.returncode == 0 else b""
+                    if not _have:
+                        _glbad.append("%s (initialized, but its HEAD could not be read)" % _show)
+                    elif _have != _blob:
+                        _glbad.append("%s (superproject records %s, work tree is at %s)"
+                                      % (_show, _blob[:12].decode(), _have[:12].decode()))
+                continue
+            if _path in _dirty:
+                continue
+            _is_link = os.path.islink(_full)
+            if _mode == b"120000":
+                if not _is_link:
+                    # THE MIRROR CASE, checked because the pair is the invariant: nothing here
+                    # reads an index-symlink path that is a regular file, so round 7 skipped it.
+                    if os.path.exists(_full):
+                        _mistyped.append("%s (index: symlink, on disk: regular file or directory)"
+                                         % _show)
+                    else:
+                        _absent.append("%s (index: symlink, absent from disk)" % _show)
+                    continue
+                try:
                     _d = os.readlink(_full)
                     _d = _d if isinstance(_d, bytes) else os.fsencode(_d)
-                else:
-                    if os.path.islink(_full):
-                        continue
+                except OSError as _e:
+                    _absent.append("%s (%s)" % (_show, _e.strerror or _e))
+                    continue
+            else:
+                if _is_link:
+                    try:
+                        _t = os.readlink(_full)
+                        _t = _t.decode(errors="replace") if isinstance(_t, bytes) else _t
+                    except OSError:
+                        _t = "<unreadable>"
+                    _mistyped.append("%s (index: regular file mode %s, on disk: SYMLINK -> %s)"
+                                     % (_show, _mode.decode(errors="replace"), _t))
+                    continue
+                try:
                     with open(_full, "rb") as _fh:
                         _d = _fh.read()
-            except OSError:
-                continue
+                except OSError as _e:
+                    _absent.append("%s (%s)" % (_show, _e.strerror or _e))
+                    continue
             _h = hashlib.new(_algo)
             _h.update(b"blob %d\0" % len(_d))
             _h.update(_d)
             if _h.hexdigest().encode() != _blob:
-                _bad.append(_path.decode(errors="replace"))
+                _bad.append(_show)
                 if len(_bad) >= 8:
                     break
+        if _flagged:
+            emit_fail(
+                "GIT_INDEX_FLAGS_SET",
+                "the index of the tree being pushed carries bits that tell git to stop reporting "
+                "the truth about tracked paths: " + ", ".join(_flagged[:8]) + ". "
+                "`git update-index --assume-unchanged` and `--skip-worktree` keep `git status` "
+                "empty while the file on disk is replaced, deleted or swapped for a symlink — "
+                "measured, either one makes the tree fingerprint report the clean-tree constant "
+                "while the push ships the committed blob. Clear them (`git update-index "
+                "--no-assume-unchanged` / `--no-skip-worktree <path>`) and re-run R25."
+            )
+        if _mistyped:
+            emit_fail(
+                "GIT_WORKTREE_TYPE_MISMATCH",
+                "tracked paths whose WORKTREE REPRESENTATION is not the one the index records: "
+                + ", ".join(_mistyped[:8]) + ". The index says one kind of object and the "
+                "filesystem holds another, so every read of that path — this sweep, the "
+                "fingerprint, the build, the lint — answers about something the push will not "
+                "ship. Measured: an index-regular path replaced by a symlink to a benign file "
+                "outside the repository left `git status` empty and the fingerprint at the "
+                "clean-tree constant. A representation this gate cannot account for is refused, "
+                "never skipped."
+            )
+        if _absent:
+            emit_fail(
+                "GIT_TRACKED_PATH_ABSENT",
+                "tracked paths this repository reports as unmodified that are not readable on "
+                "disk: " + ", ".join(_absent[:8]) + ". The legitimate-looking ways to arrive here "
+                "are `git update-index --assume-unchanged`, `git update-index --skip-worktree` "
+                "and a SPARSE CHECKOUT; under all three `git status` stays empty while the file "
+                "the push ships is not on disk at all, so nothing R25 executed or hashed was "
+                "about it. Restore the path (and clear the bit) and re-run R25."
+            )
+        if _glbad:
+            emit_fail(
+                "GIT_GITLINK_DIVERGENCE",
+                "initialized submodules whose work tree is not at the commit the superproject "
+                "records: " + ", ".join(_glbad[:8]) + ". The push ships the RECORDED commit, so "
+                "a run performed against a different one certifies code the receiver will not "
+                "get. `git submodule update --init` and re-run R25."
+            )
         if _bad:
             emit_fail(
                 "GIT_RAW_INDEX_DIVERGENCE",
