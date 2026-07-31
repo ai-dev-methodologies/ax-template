@@ -116,6 +116,27 @@
 #       `r8_apply … || return 0`, which turned a case whose attack could not even be applied into a
 #       SILENT PASS — a proof harness that can skip its own cases proves nothing.
 #
+# ROUND 10 (TD-2026-07-31-(P1-casefold-prefix)) attacks the round-9 casefold check itself: it was
+# LEAF-ONLY. Both implementations grouped COMPLETE folded paths, so two entries whose LEAF names
+# differ never met even when a shared DIRECTORY component was the alias.
+#   (Z) index `A/check.sh` (running `cat A/helper`) + index `a/helper`; on APFS `A` and `a` are ONE
+#       directory inode. Status EMPTY, the local read succeeds, and MEASURED against d567c37 the
+#       fingerprint returned the clean-tree constant with an EMPTY 12c violation set — while the
+#       pushed tree serves no `A/helper` to a case-sensitive receiver → GIT_CASEFOLD_DIR_ALIAS.
+#       (Z2) with the refusal removed from BOTH implementations it lands again (exit 0).
+#   (Z3)/(Z4) ROUND 10 / P2 — PER-IMPLEMENTATION ATTRIBUTION. The round-9 twins disabled the 12c
+#       sweep and the fingerprint helper TOGETHER, so they proved the pair load-bearing and not
+#       either one. Every alias/representation class now also runs with exactly ONE side neutered:
+#       (Z3)(T3)(V3)(W3) sweep-only → the helper still refuses (AUDIT_FINGERPRINT_UNVERIFIABLE,
+#       the recompute runs the prior release's copy), (Z4)(T4)(V4)(W4) helper-only → the sweep
+#       still refuses on its own code.
+#   (Z5) THE FALSE-POSITIVE CONTROL: genuinely DISTINCT `A/` and `a/` directories must NOT be
+#       refused, because the check is a measurement of (st_dev, st_ino) and a case-sensitive
+#       fork-receiver must be unaffected. Built on a case-sensitive filesystem when one is
+#       reachable ($WORK on Linux, or AX_PROVE_CS_DIR); on a case-insensitive one the topology
+#       cannot exist, so the harness runs the shared-prefix arm and SAYS WHICH ARM RAN — the
+#       premise of every alias case is asserted at gate time (r9_premise), never assumed.
+#
 # Nothing outside the throwaway directory is touched; the live tree is only ever READ.
 # Exit: 0 all attacks blocked · 1 at least one attack open · 2 harness error.
 set -uo pipefail
@@ -143,7 +164,12 @@ done
 command -v git >/dev/null 2>&1 || { echo "ax-prove-hermetic-runtime: git required" >&2; exit 2; }
 
 WORK="$(mktemp -d)"
-trap 'rm -rf "$WORK"' EXIT
+# AX_PROVE_KEEP=1 preserves the sandboxes and their per-case gate logs so a round's TRANSCRIPTS can
+# be quoted rather than paraphrased (the reviewer asks for the codes, not for a summary of them).
+# It changes nothing the harness measures; the default remains "leave nothing behind".
+ax_cleanup() { [ -n "${AX_PROVE_KEEP:-}" ] && { echo "  (sandboxes kept: $*)"; return 0; }
+               rm -rf "$@"; }
+trap 'ax_cleanup "$WORK"' EXIT
 FAIL=0
 note() { echo "  $*"; }
 violation() { echo "  VIOLATION: $*" >&2; FAIL=1; }
@@ -233,8 +259,14 @@ write_audit() {
     printf '{"step_id":"gate","status":"PASS","head_sha":"%s","tree_fingerprint":"%s"}\n' \
         "$head" "$fp" > "$sb/repo/.ax-verify/last_run.jsonl"
     # .ax-verify must not itself make the tree dirty — the gate now reads `git status` directly.
+    # ROUND 10 / P2: ONLY .gitignore is staged. `git add -A` here re-read every path from disk, and
+    # on a case-insensitive filesystem that HEALS a casefold premise — the two aliased entries
+    # collapse onto the one file's bytes, so the case that was supposed to carry two divergent
+    # blobs carried one, and nothing said so. The setups commit their own state; nothing else is
+    # pending at this point.
     printf '.ax-verify/\n' > "$sb/repo/.gitignore"
-    ( builtin cd "$sb/repo" && git add -A && git "${GIT_ID[@]}" commit -q -m "ignore audit dir" ) >/dev/null 2>&1
+    ( builtin cd "$sb/repo" && git add -- .gitignore \
+      && git "${GIT_ID[@]}" commit -q -m "ignore audit dir" ) >/dev/null 2>&1
     # rewrite with the post-commit head/fingerprint
     head="$(git -C "$sb/repo" rev-parse HEAD)"
     fp="${fp_override:-$(python3 "$sb/repo/$FP_REL" "$sb/repo" 2>/dev/null)}"
@@ -991,22 +1023,43 @@ fi
 # Each has a pre-round-9 (or pre-round-8) twin in which it lands again, so the refusal is
 # attributable to the fix and not to the sandbox.
 
-# ── ROUND 9 neuters. Same exactly-once anchor contract as every earlier neuter. `all` removes the
-# three round-9 refusals from BOTH implementations; `bits` (reused from round 8) removes only the
-# index-flag refusal, which is what makes (X) separately attributable.
-round9_neuter() {   # round9_neuter <sb> <what>   what ∈ all
+# ── ROUND 9/10 neuters. Same exactly-once anchor contract as every earlier neuter.
+# `all` removes the three round-9 refusals from BOTH implementations; `bits` (reused from round 8)
+# removes only the index-flag refusal, which is what makes (X) separately attributable.
+#
+# ROUND 10 / P2 (reviewer): THE SHIPPED ROUND-9 NEUTERS DISABLED BOTH IMPLEMENTATIONS TOGETHER, so
+# a twin that lands again proved only "the pair is load-bearing" — not that EITHER of them is. The
+# keys are therefore split per implementation:
+#     all / r10all      both implementations   → the attack must LAND (exit 0)
+#     guard / r10guard  only the 12c sweep     → the FINGERPRINT HELPER must still refuse; it is
+#                                                the prior-release copy the recompute runs, so its
+#                                                refusal surfaces as AUDIT_FINGERPRINT_UNVERIFIABLE
+#     fp / r10fp        only the helper        → the 12c sweep must still refuse, on its own code
+# Only the neutered files are staged: `git add -A` would ALSO re-add the attack's own index state
+# from disk, which on a case-insensitive filesystem HEALS a casefold premise (the two entries
+# collapse onto the one file's bytes) and makes the twin pass for a reason that is not the neuter.
+round9_neuter() {   # round9_neuter <sb> <what>  what ∈ all|guard|fp|r10all|r10guard|r10fp
     "${AX_PY_BIN:-python3}" - "$1/repo" "$2" <<'PY'
 import sys, pathlib
 repo, what = pathlib.Path(sys.argv[1]), sys.argv[2]
 GUARD = repo / "practices/evals/completion_checklist_recency_guard.sh"
 FP = repo / "practices/scripts/lib/tree_fingerprint.py"
+R9_GUARD = [(GUARD, "        if _execbits:"), (GUARD, "        if _gldirt:"),
+            (GUARD, "        if _aliased:")]
+R9_FP = [(FP, "    if execbits:"), (FP, "    if gldirt:"), (FP, "    if aliased:")]
+R10_GUARD = [(GUARD, "        if _diraliased:")]
+R10_FP = [(FP, "    if diraliased:")]
 pairs = {
-    "all": [
-        (GUARD, "        if _execbits:"), (GUARD, "        if _gldirt:"),
-        (GUARD, "        if _aliased:"),
-        (FP, "    if execbits:"), (FP, "    if gldirt:"), (FP, "    if aliased:"),
-    ],
+    "all": R9_GUARD + R9_FP,
+    "guard": R9_GUARD,
+    "fp": R9_FP,
+    "r10all": R10_GUARD + R10_FP,
+    "r10guard": R10_GUARD,
+    "r10fp": R10_FP,
 }
+if what not in pairs:
+    print(f"unknown round9/10 neuter: {what}", file=sys.stderr)
+    sys.exit(3)
 for path, anchor in pairs[what]:
     text = path.read_text(encoding="utf-8")
     n = text.count(anchor)
@@ -1019,7 +1072,10 @@ for path, anchor in pairs[what]:
 PY
     local rc=$?
     [ "$rc" -ne 0 ] && return "$rc"
-    ( builtin cd "$1/repo" && git add -A && git "${GIT_ID[@]}" commit -q -m "pre-round-9" \
+    ( builtin cd "$1/repo" \
+      && git add -- practices/evals/completion_checklist_recency_guard.sh \
+                    practices/scripts/lib/tree_fingerprint.py \
+      && git "${GIT_ID[@]}" commit -q -m "pre-round-9/10" \
       && git update-ref refs/remotes/origin/main HEAD \
       && git push -q -f origin HEAD:refs/heads/main ) >/dev/null 2>&1
     return 0
@@ -1045,13 +1101,59 @@ r9_setup() {
               && git update-index --add --cacheinfo "160000,$h,vendor/sub" \
               && git "${GIT_ID[@]}" commit -q -m gitlink ) >/dev/null 2>&1 || return 2 ;;
         casefold)
+            # ROUND 10 / P2 — THE PREMISE, MADE EXPLICIT. This setup used to register the second
+            # spelling with a DIVERGENT blob, and write_audit's `git add -A` then quietly healed it
+            # back to the one file's bytes; nothing asserted either way. Measured with the healing
+            # removed: divergent blobs make the alias show up as ` M alias.txt`, so the gate refuses
+            # on AUDIT_TREE_DIRTY_NOW and the casefold code never runs — that shape cannot show the
+            # refusal is load-bearing (and round 9 said as much in prose: the ordinary form is
+            # already refused by the clean-tree precondition).
+            # The shape that ISOLATES the casefold refusal is therefore the EQUAL-blob one: two
+            # index entries, one file, a CLEAN tree, and nothing but the alias check able to see
+            # it. It is also what the shipped round-9 case actually ran, unknowingly.
             printf 'REAL\n' > "$sb/repo/Alias.txt" || return 2
             ( builtin cd "$sb/repo" && git add Alias.txt \
               && git "${GIT_ID[@]}" commit -q -m alias1 ) >/dev/null 2>&1 || return 2
-            b="$(printf 'EVIL\n' | git -C "$sb/repo" hash-object -w --stdin)" || return 2
+            b="$(git -C "$sb/repo" hash-object -w -- "$sb/repo/Alias.txt")" || return 2
             ( builtin cd "$sb/repo" \
               && git update-index --add --cacheinfo "100644,$b,alias.txt" \
               && git "${GIT_ID[@]}" commit -q -m alias2 ) >/dev/null 2>&1 || return 2 ;;
+        dircase) # ROUND 10 / P1 — THE REVIEWER'S TOPOLOGY, verbatim. No LEAF collision at all:
+                 #   index A/check.sh  (committed content: `cat A/helper`)
+                 #   index a/helper    (committed content: PASS)
+                 # On APFS `A` and `a` are ONE directory, so the local `cat A/helper` succeeds and
+                 # every gate goes green; the PUSHED tree serves no `A/helper` on a case-sensitive
+                 # receiver. Round 9 grouped COMPLETE folded paths, so the two never met.
+                 mkdir -p "$sb/repo/A" || return 2
+                 printf 'cat A/helper\n' > "$sb/repo/A/check.sh" || return 2
+                 printf 'PASS\n' > "$sb/repo/A/helper" || return 2
+                 b="$(printf 'PASS\n' | git -C "$sb/repo" hash-object -w --stdin)" || return 2
+                 ( builtin cd "$sb/repo" && git add A/check.sh \
+                   && git update-index --add --cacheinfo "100644,$b,a/helper" \
+                   && git "${GIT_ID[@]}" commit -q -m dircase ) >/dev/null 2>&1 || return 2 ;;
+        csdistinct) # ROUND 10 NEGATIVE CONTROL — the FALSE-POSITIVE test. Requires a genuinely
+                 # case-sensitive filesystem: `A/` and `a/` as DISTINCT directories, plus the leaf
+                 # pair `Alias.txt`/`alias.txt` as DISTINCT files. The refusal is a MEASUREMENT of
+                 # (st_dev, st_ino), so distinct inodes must NOT be refused — otherwise every
+                 # Linux fork-receiver whose tree happens to hold both spellings is bricked.
+                 mkdir -p "$sb/repo/A" "$sb/repo/a" || return 2
+                 printf 'cat A/helper\n' > "$sb/repo/A/check.sh" || return 2
+                 printf 'ALSO\n' > "$sb/repo/A/helper" || return 2
+                 printf 'PASS\n' > "$sb/repo/a/helper" || return 2
+                 printf 'REAL\n' > "$sb/repo/Alias.txt" || return 2
+                 printf 'EVIL\n' > "$sb/repo/alias.txt" || return 2
+                 ( builtin cd "$sb/repo" && git add A a Alias.txt alias.txt \
+                   && git "${GIT_ID[@]}" commit -q -m csdistinct ) >/dev/null 2>&1 || return 2 ;;
+        shareprefix) # ROUND 10 NEGATIVE CONTROL, the arm a case-INSENSITIVE filesystem can build:
+                 # two tracked entries under ONE spelling of a shared directory. Every tracked path
+                 # in the live catalog shares prefixes with hundreds of others, so a prefix walk
+                 # that grouped on the folded key alone (rather than on an OBSERVED inode alias)
+                 # would refuse the whole tree.
+                 mkdir -p "$sb/repo/A" || return 2
+                 printf 'cat A/helper\n' > "$sb/repo/A/check.sh" || return 2
+                 printf 'PASS\n' > "$sb/repo/A/helper" || return 2
+                 ( builtin cd "$sb/repo" && git add A \
+                   && git "${GIT_ID[@]}" commit -q -m shareprefix ) >/dev/null 2>&1 || return 2 ;;
         symreg)  # an index-SYMLINK path (mode 120000), consistent on disk
             ( builtin cd "$sb/repo" && ln -s benign-target.txt linkpath.txt \
               && git add linkpath.txt \
@@ -1083,7 +1185,8 @@ r9_attack() {
         execA)    chmod +x "$sb/repo/backend/gradlew" || return 2 ;;
         execB)    chmod -x "$sb/repo/backend/gradlew" || return 2 ;;
         gldirt)   printf 'echo owned\n' > "$sb/repo/vendor/sub/check.sh" || return 2 ;;
-        casefold) : ;;   # the alias IS the index state; there is nothing further to do on disk
+        casefold|dircase|csdistinct|shareprefix) : ;;
+                  # the alias (or its absence) IS the index state; nothing further to do on disk
         symreg)   git -C "$sb/repo" update-index --assume-unchanged linkpath.txt || return 2
                   rm -f "$sb/repo/linkpath.txt" || return 2
                   printf 'a regular file where the index says symlink\n' \
@@ -1100,6 +1203,56 @@ r9_attack() {
     return 0
 }
 
+# r9_premise <sb> <kind> — ASSERT the scenario's premise still holds at the moment the gate runs.
+# ROUND 10 / P2 (reviewer): (W2) had NO post-neuter assertion, so its exit 0 was compatible with a
+# sandbox in which the alias had quietly stopped existing — and the neuter's own `git add -A` was
+# able to heal exactly that (it re-reads `alias.txt` from the ONE file on disk, equalising the two
+# blobs). The neuter now stages only the toolchain, and every alias case asserts the premise here.
+# Returns 1 after calling violation(); a case with no premise to assert returns 0.
+r9_premise() {
+    local sb="$1" kind="$2" n b ia ib
+    case "$kind" in
+        casefold)
+            n="$(git -C "$sb/repo" ls-files -s | awk -F'\t' '{print tolower($2)}' \
+                 | grep -cx 'alias.txt')"
+            b="$(git -C "$sb/repo" ls-files -s | awk -F'\t' 'tolower($2)=="alias.txt"{print $1}' \
+                 | awk '{print $2}' | sort -u | wc -l | tr -d ' ')"
+            ia="$(stat -f '%d %i' "$sb/repo/Alias.txt" 2>/dev/null \
+                  || stat -c '%d %i' "$sb/repo/Alias.txt")"
+            ib="$(stat -f '%d %i' "$sb/repo/alias.txt" 2>/dev/null \
+                  || stat -c '%d %i' "$sb/repo/alias.txt")"
+            if [ "$n" -ne 2 ] || [ "$b" -ne 1 ] || [ -z "$ia" ] || [ "$ia" != "$ib" ]; then
+                violation "premise broken (casefold): the index holds $n entries folding to" \
+                          "alias.txt over $b blob(s), Alias.txt=[$ia] alias.txt=[$ib]. This class" \
+                          "needs TWO entries, ONE inode and ONE blob — two blobs make the tree" \
+                          "DIRTY, so the gate refuses on AUDIT_TREE_DIRTY_NOW and the casefold" \
+                          "code never runs, which proves nothing about the casefold code."
+                return 1
+            fi ;;
+        dircase)
+            n="$(git -C "$sb/repo" ls-files | grep -cxE 'A/check\.sh|a/helper')"
+            ia="$(stat -f '%d %i' "$sb/repo/A" 2>/dev/null || stat -c '%d %i' "$sb/repo/A")"
+            ib="$(stat -f '%d %i' "$sb/repo/a" 2>/dev/null || stat -c '%d %i' "$sb/repo/a")"
+            if [ "$n" -ne 2 ] || [ -z "$ia" ] || [ "$ia" != "$ib" ]; then
+                violation "premise broken (dircase): the index holds $n of the two entries and" \
+                          "A/=[$ia] a/=[$ib]. This class needs BOTH entries and ONE directory" \
+                          "inode; on a case-SENSITIVE filesystem the topology cannot exist and" \
+                          "this case must not be reported as a pass."
+                return 1
+            fi ;;
+        csdistinct)
+            ia="$(stat -f '%d %i' "$sb/repo/A" 2>/dev/null || stat -c '%d %i' "$sb/repo/A")"
+            ib="$(stat -f '%d %i' "$sb/repo/a" 2>/dev/null || stat -c '%d %i' "$sb/repo/a")"
+            if [ -z "$ia" ] || [ "$ia" = "$ib" ]; then
+                violation "premise broken (csdistinct): A/=[$ia] a/=[$ib] are NOT distinct, so" \
+                          "this sandbox is not on a case-sensitive filesystem and the" \
+                          "false-positive control would be vacuous."
+                return 1
+            fi ;;
+    esac
+    return 0
+}
+
 # r9_case <tag> <kind> <expect-status> <label> <want-regex> [neuter] [fp-override]
 # fp-override exists for exactly one case, (W): a casefold alias is an INDEX state, so it must be
 # committed in the SETUP, which means the post-fix fingerprint helper already refuses when
@@ -1109,7 +1262,9 @@ r9_attack() {
 # recompute at 12a/12c-recompute, so what is measured is still the alias refusal and nothing else.
 r9_case() {
     local tag="$1" kind="$2" want_status="$3" label="$4" want="$5" neuter="${6:-}" fpo="${7:-}" sb rc
-    sb="$WORK/r9-$tag"
+    # R9_ROOT lets ONE case (the false-positive control) be built on a different filesystem; every
+    # other case uses $WORK. Both are throwaway directories removed by the EXIT trap.
+    sb="${R9_ROOT:-$WORK}/r9-$tag"
     build_sb "$sb" || { echo "harness setup failed ($tag)" >&2; exit 2; }
     printf 'benign\n' > "$sb/repo/benign-target.txt"
     ( builtin cd "$sb/repo" && git add benign-target.txt \
@@ -1131,6 +1286,7 @@ r9_case() {
         *) echo "ax-prove-hermetic-runtime: harness setup failed ($tag/attack $kind)" >&2
            exit 2 ;;
     esac
+    r9_premise "$sb" "$kind" || return 1     # ROUND 10 / P2: the premise, asserted at gate time
     run_gate "$sb" "$WORK/r9-$tag.log"; rc=$?
     note "($tag) $label: exit=$rc"
     if [ -n "$want" ]; then
@@ -1161,14 +1317,18 @@ r9_case U2 execB    empty "same, round-9 refusals removed              " "" all
 r9_case V  gldirt   empty "uninitialized gitlink POPULATED on disk     " \
     "GIT_GITLINK_UNINITIALIZED_POPULATED"
 r9_case V2 gldirt   empty "same, round-9 refusals removed              " "" all
-# (W) two index entries differing only in case. Status is NOT asserted empty here, and that is the
-# honest scope of this one: with divergent blobs the alias also shows up as a modification, so the
-# gate's clean-tree precondition already refuses the ordinary form. The refusal is defense in depth
-# — it names the actual fault (one file, two blobs, one of them never on disk to be verified)
-# instead of the symptom, and it fires in check 12c BEFORE the clean-tree check at 12a.
-r9_case W  casefold any   "two index entries differing only in CASE    " \
+# (W) two index entries differing only in case, ONE file, and — ROUND 10 / P2 — status ASSERTED
+# empty with the blobs ASSERTED equal. Round 9 ran this case with `any` and with divergent blobs
+# that write_audit silently healed; measured with the healing removed, divergent blobs make the
+# tree DIRTY and the gate refuses on AUDIT_TREE_DIRTY_NOW without ever reaching the casefold code.
+# So the shape that isolates the refusal is the clean, equal-blob one (which is what round 9 in
+# fact ran). The honest scope of the LEAF class is therefore: the divergent form is caught by the
+# clean-tree precondition anyway, and this refusal names the fault in the form that precondition
+# cannot see. The DIRECTORY form (Z) has no such backstop — that one was silently open.
+r9_case W  casefold empty "two index entries differing only in CASE    " \
     "GIT_CASEFOLD_ALIAS" "" "0a815065ebf5ad6ce3828aba4cfc387f26a56a306e8616bb22aadce99dd11211"
-r9_case W2 casefold any   "same, round-9 refusals removed              " "" all
+r9_case W2 casefold empty "same, round-9 refusals removed              " "" all \
+    "0a815065ebf5ad6ce3828aba4cfc387f26a56a306e8616bb22aadce99dd11211"
 # (X) ROUND 9 / (c): the MIRROR of round 8's (P) — index SYMLINK, regular file on disk. Round 8
 # implemented this direction and never exercised it. Run with the index-bit refusal neutered so the
 # code under test is the REPRESENTATION backstop and not the assume-unchanged bit.
@@ -1180,6 +1340,81 @@ r9_case X  symreg   empty "index SYMLINK → regular file (bits neutered)" \
 r9_case Y  glinit   any   "INITIALIZED gitlink at the wrong commit     " \
     "GIT_GITLINK_DIVERGENCE"
 
+# ══ ROUND 10 (TD-2026-07-31-(P1-casefold-prefix)) ════════════════════════════════════
+# (Z) THE REVIEWER'S TOPOLOGY. Round 9's (e) grouped COMPLETE folded paths, so an alias living in a
+# shared DIRECTORY component was invisible to both implementations: `A/check.sh` and `a/helper`
+# have different folded keys, and on APFS `A` and `a` are one directory inode. MEASURED against the
+# d567c37 implementations: status EMPTY, fingerprint = the clean-tree constant 0a815065…, 12c's
+# violation set EMPTY — while the pushed tree serves no `A/helper` to a case-sensitive receiver.
+# The fingerprint is overridden with the clean-tree constant for the same reason as (W): the alias
+# is an INDEX state, so it exists before write_audit, and the post-fix helper would refuse there —
+# the gate would then block on the RECORD SHAPE instead of on the alias. The constant is the honest
+# value for this tree (status is empty), and 12c fires before the recompute.
+CLEAN_FP="0a815065ebf5ad6ce3828aba4cfc387f26a56a306e8616bb22aadce99dd11211"
+r9_case Z  dircase  empty "DIRECTORY component aliased (A/ ≡ a/)      " \
+    "GIT_CASEFOLD_DIR_ALIAS" "" "$CLEAN_FP"
+# (Z2) the pre-round-10 twin: with the refusal removed from BOTH implementations the attack lands.
+r9_case Z2 dircase  empty "same, round-10 refusal removed (both)      " "" r10all "$CLEAN_FP"
+# (Z3)/(Z4) ROUND 10 / P2 — EACH IMPLEMENTATION, ON ITS OWN. With only the 12c sweep neutered the
+# FINGERPRINT HELPER must still refuse; it is the prior-release copy the recompute runs, so its
+# refusal surfaces as AUDIT_FINGERPRINT_UNVERIFIABLE. With only the helper neutered the sweep must
+# still refuse, on its own code. Neither implementation may be dead weight behind the other.
+r9_case Z3 dircase  empty "same, only the 12c SWEEP neutered          " \
+    "AUDIT_FINGERPRINT_UNVERIFIABLE" r10guard "$CLEAN_FP"
+r9_case Z4 dircase  empty "same, only the FINGERPRINT HELPER neutered " \
+    "GIT_CASEFOLD_DIR_ALIAS" r10fp "$CLEAN_FP"
+# The same split, applied to the three round-9 refusals whose shipped twins disabled both
+# implementations at once (reviewer P2). Each must be independently load-bearing.
+r9_case T3 execA    empty "exec bit, only the 12c SWEEP neutered      " \
+    "AUDIT_FINGERPRINT_UNVERIFIABLE" guard
+r9_case T4 execA    empty "exec bit, only the HELPER neutered         " \
+    "GIT_EXEC_BIT_DIVERGENCE" fp
+r9_case V3 gldirt   empty "gitlink dirt, only the 12c SWEEP neutered  " \
+    "AUDIT_FINGERPRINT_UNVERIFIABLE" guard
+r9_case V4 gldirt   empty "gitlink dirt, only the HELPER neutered     " \
+    "GIT_GITLINK_UNINITIALIZED_POPULATED" fp
+r9_case W3 casefold any   "leaf alias, only the 12c SWEEP neutered    " \
+    "AUDIT_FINGERPRINT_UNVERIFIABLE" guard "$CLEAN_FP"
+r9_case W4 casefold any   "leaf alias, only the HELPER neutered       " \
+    "GIT_CASEFOLD_ALIAS" fp "$CLEAN_FP"
+
+# (Z5) THE FALSE-POSITIVE CONTROL, and it is the one that matters: the refusal is a MEASUREMENT of
+# (st_dev, st_ino), so a tree whose `A/` and `a/` are GENUINELY DISTINCT directories must pass.
+# That topology can only be BUILT on a case-sensitive filesystem. The harness measures the one it
+# has and says which arm ran — it never skips:
+#   · case-sensitive $WORK (Linux, or AX_PROVE_CS_DIR pointing at a case-sensitive volume) → the
+#     real control: distinct `A/`+`a/` directories AND distinct `Alias.txt`+`alias.txt` files.
+#   · case-insensitive $WORK → the strongest shape that filesystem admits: two tracked entries
+#     under ONE spelling of a shared directory. Every path in the live catalog shares prefixes, so
+#     a walk that grouped on the folded key alone (instead of on an observed inode alias) would
+#     refuse the whole tree; this arm holds that line.
+cs_probe() {   # cs_probe <dir> → 0 when <dir> is on a CASE-SENSITIVE filesystem
+    local d="$1/.axcase.$$"
+    mkdir -p "$d" || return 1
+    : > "$d/CaseProbe" || { rm -rf "$d"; return 1; }
+    if [ -e "$d/caseprobe" ]; then rm -rf "$d"; return 1; fi
+    rm -rf "$d"; return 0
+}
+CS_ROOT=""
+if [ -n "${AX_PROVE_CS_DIR:-}" ] && [ -d "${AX_PROVE_CS_DIR}" ] && cs_probe "$AX_PROVE_CS_DIR"; then
+    CS_ROOT="$AX_PROVE_CS_DIR/axprove.$$"
+    mkdir -p "$CS_ROOT" || CS_ROOT=""
+    [ -n "$CS_ROOT" ] && trap 'ax_cleanup "$WORK" "$CS_ROOT"' EXIT
+elif cs_probe "$WORK"; then
+    CS_ROOT="$WORK"
+fi
+if [ -n "$CS_ROOT" ]; then
+    note "(Z5) filesystem arm: CASE-SENSITIVE ($CS_ROOT) — building the real distinct-inode control"
+    R9_ROOT="$CS_ROOT"
+    r9_case Z5 csdistinct empty "DISTINCT A/ and a/ must NOT be refused     " ""
+    R9_ROOT=""
+else
+    note "(Z5) filesystem arm: CASE-INSENSITIVE (\$WORK) — distinct A/ and a/ cannot be created" \
+         "here; running the shared-prefix arm instead (export AX_PROVE_CS_DIR=<case-sensitive dir>" \
+         "for the real one)"
+    r9_case Z5 shareprefix empty "shared directory prefix must NOT be refused " ""
+fi
+
 echo ""
 if [ "$FAIL" -ne 0 ]; then
     echo "ax-prove-hermetic-runtime: FAIL — an inherited-runtime path is open" >&2
@@ -1190,10 +1425,13 @@ echo "  a tampered fingerprint helper (committed or not), an exported set/[ arri
 echo "  scrub, a /usr/bin/true interpreter, a PYTHONPATH sitecustomize, a clean-filter byte mask,"
 echo "  a COMMITTED push-only bypass, a SELF-ERASING \$BASH_ENV, a preset AX_PRIV_REEXEC, an"
 echo "  exported export() ahead of a sourced lib's preflight, a filter.<n>.process content mask, an"
-echo "  index-regular path swapped for a SYMLINK under --assume-unchanged and a --skip-worktree"
-echo "  DELETION are each refused by the live gates; the unattacked control passes, an"
-echo "  uninitialized gitlink is NOT refused, and every round-5/6/7/8 addition has a neutered twin"
-echo "  in which its attack lands again — including a bits-only twin proving the round-8"
-echo "  representation backstop refuses on its own — so the refusals are attributable to the"
-echo "  fixes, not to the sandbox."
+echo "  index-regular path swapped for a SYMLINK under --assume-unchanged, a --skip-worktree"
+echo "  DELETION, an executable-bit divergence in both directions, a POPULATED uninitialized"
+echo "  gitlink, a LEAF casefold alias and a DIRECTORY-component casefold alias are each refused by"
+echo "  the live gates; the unattacked control passes, an uninitialized gitlink is NOT refused, the"
+echo "  false-positive control passes (distinct inodes / a shared prefix are not aliases), and"
+echo "  every round-5/6/7/8/9/10 addition has a neutered twin in which its attack lands again —"
+echo "  including a bits-only twin for the round-8 representation backstop and, for every round-9"
+echo "  and round-10 refusal, SEPARATE sweep-only and helper-only twins proving each implementation"
+echo "  load-bearing on its own — so the refusals are attributable to the fixes, not the sandbox."
 exit 0

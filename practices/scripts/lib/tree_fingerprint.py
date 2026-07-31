@@ -52,6 +52,22 @@ WHAT IT HASHES, deterministically:
     vendor/sub/check.sh` a file that a fresh clone never receives; (3) two index entries differing
     only in CASE, which a case-insensitive filesystem serves from ONE file. All three BLOCK.
 
+    ROUND 10 / P1 (TD-2026-07-31-(P1-casefold-prefix)) — ROUND 9's (e) WAS LEAF-ONLY, AND THE
+    ENTRY THAT CLAIMED IT WAS OVERCLAIMED. The casefold group above was keyed on the COMPLETE
+    folded path, so two entries whose LEAF names differ never landed in the same group even when a
+    shared DIRECTORY component was a casefold alias. MEASURED against this file at d567c37, in a
+    throwaway repo on APFS:
+        index: A/check.sh  (contains: cat A/helper)
+        index: a/helper    (contains: PASS)
+        disk:  A and a are the SAME directory inode (16777229, 34423509)
+    `git status --porcelain` is EMPTY, `cat A/helper` succeeds locally so every gate goes green,
+    and this file returned the clean-tree constant 0a815065… at exit 0 — while the PUSHED tree
+    holds only `a/helper`, so a case-sensitive receiver has no `A/helper` at all and the committed
+    check is broken on arrival. The alias is now measured over EVERY PATH PREFIX (each directory
+    component, folded, plus the full path), gitlinks included, and a group whose members lstat to
+    the same (st_dev, st_ino) BLOCKS — a directory component under GIT_CASEFOLD_DIR_ALIAS, the
+    leaf case unchanged under GIT_CASEFOLD_ALIAS.
+
 HONEST LIMIT, and it matters for how much the recompute proves:
     ON A CLEAN TREE both inputs are EMPTY, so the digest is a CONSTANT — the same value for every
     clean tree of every commit. It is a DIRT fingerprint, not a tree identity. That is exactly
@@ -212,6 +228,32 @@ class CasefoldAlias(GitFiltersPresent):
     distinct inodes and nothing is refused, so this costs a Linux fork-receiver nothing.
     Measured on this catalog: ZERO casefold collisions and ZERO inode aliases among 5,745 tracked
     paths, so the refusal costs this tree nothing either.
+    ROUND 10 SCOPE CORRECTION: this class is now the LEAF half of the alias family — it fires when
+    every aliased spelling is a full tracked path. A shared DIRECTORY component is the other half
+    and raises CasefoldDirectoryAlias; round 9 could not see it at all.
+    """
+
+
+class CasefoldDirectoryAlias(GitFiltersPresent):
+    """A DIRECTORY component that two index entries spell differently and the filesystem serves once.
+
+    ROUND 10 / P1 (TD-2026-07-31-(P1-casefold-prefix)). Round 9 grouped COMPLETE folded paths, so
+    the alias it could see was the leaf one (`Alias.txt` ≡ `alias.txt`). The reviewer's topology
+    needs no leaf collision at all:
+        A/check.sh   — committed, runs `cat A/helper`
+        a/helper     — committed, contains PASS
+    The two full folded keys differ, so round 9 grouped them apart and returned the clean-tree
+    constant; on APFS `A` and `a` are ONE directory, so `cat A/helper` succeeds locally, R25 goes
+    green, and the pushed tree records `a/helper` — which a case-sensitive receiver does not serve
+    as `A/helper`. The committed check is broken on arrival, and nothing measured it.
+    THE MEASUREMENT IS THE SAME ONE: every prefix of every tracked path is folded, and a folded
+    group is refused only when two DISTINCT spellings lstat to the SAME (st_dev, st_ino). A
+    case-sensitive tree with genuinely distinct `A/` and `a/` directories yields two inodes and is
+    NOT refused — verified with a simulated distinct-inode pair, because this machine has no
+    case-sensitive volume to build the twin on.
+    HONEST RESIDUE: two spellings that fold equal AND are hardlinks of one inode on a
+    case-SENSITIVE filesystem would be flagged. That requires deliberately hardlinking `A.txt` to
+    `a.txt`; the same property was already true of the leaf check in round 9.
     """
 
 
@@ -339,6 +381,69 @@ def _gitlink_uninitialized_dirt(full, show):
             % (show, len(kids), "y" if len(kids) == 1 else "ies", names))
 
 
+def _lstat_cached(cache, rootb, rel):
+    """lstat <rootb>/<rel> once per DISTINCT relative path. Returns the stat result, or None.
+
+    ROUND 10 / P1: the prefix walk below visits every directory component of every tracked path,
+    so `practices/` is reached ~700 times on this catalog. The cache makes the walk cost the number
+    of DISTINCT prefixes (files + directories) rather than the number of (entry, component) pairs,
+    and the full path is itself the last prefix — so the exec-bit check reads the same cached stat
+    instead of taking a second one. Measured net effect on 5,745 entries: +~1.1k lstat calls for
+    the directories, -5,745 for the shared full-path stat.
+    """
+    try:
+        return cache[rel]
+    except KeyError:
+        try:
+            st = os.lstat(os.path.join(rootb, rel))
+        except OSError:
+            st = None
+        cache[rel] = st
+        return st
+
+
+def _register_prefixes(casefold, statcache, rootb, path):
+    """ROUND 10 / P1: fold EVERY PATH PREFIX, not just the full path.
+
+    casefold maps a folded prefix to {(st_dev, st_ino): {spellings}}. A folded key holding two
+    DISTINCT spellings under ONE inode is an observed alias; the same key under two inodes is a
+    case-sensitive filesystem doing exactly what it should, and is not an alias.
+    Called for EVERY index entry INCLUDING gitlinks — round 9 registered the map after the 160000
+    `continue`, so a submodule path could alias a directory and never be looked at (the reviewer
+    registered that omission separately; it closes here because it is the same walk).
+    """
+    comps = path.split(b"/")
+    for n in range(1, len(comps) + 1):
+        prefix = b"/".join(comps[:n])
+        st = _lstat_cached(statcache, rootb, prefix)
+        if st is None:
+            continue
+        casefold.setdefault(prefix.lower(), {}).setdefault(
+            (st.st_dev, st.st_ino), set()).add(prefix)
+
+
+def _alias_verdicts(casefold, fullpaths):
+    """Split the observed aliases into (leaf, directory). ROUND 10 / P1.
+
+    A group whose spellings are ALL full tracked paths is the round-9 leaf case
+    (GIT_CASEFOLD_ALIAS). A group in which any spelling is a directory COMPONENT is the round-10
+    case (GIT_CASEFOLD_DIR_ALIAS) — it is reported apart because the remedy is different (rename a
+    directory, not a file) and because the leaf demo and the directory demo must be distinguishable
+    in the falsification harness.
+    The spellings are a SET, so a path listed once per stage during a merge conflict cannot produce
+    the "path ≡ path" self-report round 9 would have emitted (registered by the reviewer as a P3;
+    it closes here because the set is what the prefix walk needed anyway).
+    """
+    leaf, directory = [], []
+    for byident in casefold.values():
+        for names in byident.values():
+            if len(names) < 2:
+                continue
+            shown = " ≡ ".join(sorted(n.decode(errors="replace") for n in names))
+            (leaf if all(n in fullpaths for n in names) else directory).append(shown)
+    return sorted(leaf), sorted(directory)
+
+
 def _gitlink_divergence(repo, gbin, genv, path, want):
     """ROUND 8 / P1-A + ROUND 9 / P1-2. Returns (bucket, message) or None.
 
@@ -399,7 +504,11 @@ def _raw_index_sweep(repo, gbin, genv, dirty):
     rootb = os.fsencode(repo)
     diverged, mistyped, unreadable, flagged, gitlinks = [], [], [], [], []
     execbits, gldirt = [], []
-    casefold = {}          # ROUND 9 / (e): lowercased path -> [(path, (dev, ino)), …]
+    # ROUND 10 / P1: folded PREFIX -> {(dev, ino): {spellings}}; round 9 keyed the COMPLETE folded
+    # path, which cannot express an alias that lives in a shared DIRECTORY component.
+    casefold = {}
+    statcache = {}         # relative path -> lstat result | None, one call per distinct prefix
+    fullpaths = set()      # the tracked paths themselves, to tell a leaf alias from a directory one
     for rec in out.stdout.split(b"\0"):
         if not rec:
             continue
@@ -409,6 +518,12 @@ def _raw_index_sweep(repo, gbin, genv, dirty):
         except ValueError:
             continue
         show = path.decode(errors="replace")
+        # ROUND 10 / P1: the prefix walk happens FIRST, for EVERY entry — before the gitlink
+        # `continue` below and before the dirty skip. An alias is a property of a PAIR of
+        # spellings anywhere in the tree, so an entry that this sweep has nothing else to say
+        # about still has to contribute its components.
+        fullpaths.add(path)
+        _register_prefixes(casefold, statcache, rootb, path)
         # (0) THE BITS THEMSELVES. `-v` spells assume-unchanged as a LOWERCASE tag and
         #     skip-worktree as `S`; both tell git to stop reporting the truth about a path that a
         #     release is about to ship, and both are the first move of the two reproductions.
@@ -430,18 +545,13 @@ def _raw_index_sweep(repo, gbin, genv, dirty):
         # be told to stop reporting the executable bit (core.fileMode=false) and NEVER reports a
         # casefold alias, and the digest carries neither, so a path that is dirty for content can
         # still be lying about its mode.
-        try:
-            st = os.lstat(full)
-        except OSError:
-            st = None
+        st = _lstat_cached(statcache, rootb, path)      # already taken by the prefix walk above
         if st is not None and stat.S_ISREG(st.st_mode) and mode in (b"100644", b"100755"):
             if bool(st.st_mode & 0o111) != (mode == b"100755"):
                 execbits.append(
                     "%s (index: %s, on disk: %s)"
                     % (show, "100755 (executable)" if mode == b"100755" else "100644 (plain)",
                        "executable" if st.st_mode & 0o111 else "NOT executable"))
-        if st is not None:
-            casefold.setdefault(path.lower(), []).append((show, (st.st_dev, st.st_ino)))
         if path in dirty:
             continue
         is_link = os.path.islink(full)
@@ -482,18 +592,9 @@ def _raw_index_sweep(repo, gbin, genv, dirty):
         # NOTE: no early `break` here. Round 8 had one, and it was only ever reached when EVERY
         # bucket was already full; the casefold check below needs the WHOLE index (an alias is a
         # property of a pair, so a truncated walk can miss the second half of one).
-    aliased = []
-    for group in casefold.values():
-        if len(group) < 2:
-            continue
-        seen = {}
-        for show, key in group:
-            seen.setdefault(key, []).append(show)
-        for names in seen.values():
-            if len(names) > 1:
-                aliased.append(" ≡ ".join(sorted(names)))
+    aliased, diraliased = _alias_verdicts(casefold, fullpaths)
     return (diverged[:8], mistyped[:8], unreadable[:8], flagged[:8], gitlinks[:8],
-            execbits[:8], gldirt[:8], aliased[:8])
+            execbits[:8], gldirt[:8], aliased[:8], diraliased[:8])
 
 
 def fingerprint(repo):
@@ -562,8 +663,11 @@ def fingerprint(repo):
     # core.fileMode=false tells git to stop reporting, and which no digest here carries), a
     # populated but UNINITIALIZED gitlink (a directory the push ships EMPTY), and two index entries
     # that a case-insensitive filesystem serves from ONE file.
+    # ROUND 10 / P1, (TD-2026-07-31-(P1-casefold-prefix)): the casefold measurement above is taken
+    # over every PATH PREFIX, so an alias that lives in a shared DIRECTORY component — which round
+    # 9's complete-path grouping could not express at all — is refused too.
     (diverged, mistyped, unreadable, flagged, gitlinks,
-     execbits, gldirt, aliased) = _raw_index_sweep(
+     execbits, gldirt, aliased, diraliased) = _raw_index_sweep(
         repo, gbin, genv, set(modified) | set(untracked))
     if flagged:
         raise IndexFlagsSet(
@@ -620,6 +724,16 @@ def fingerprint(repo):
               "lint — answers about a single file for both entries while the push ships two "
               "distinct blobs; one of them was never on disk to be verified. Rename one entry so "
               "the index and the filesystem agree.")
+    if diraliased:
+        raise CasefoldDirectoryAlias(
+            "index entries whose DIRECTORY components are spelled two ways and are ONE directory "
+            "on this filesystem: " + ", ".join(diraliased)
+            + ". The spellings lstat to the same device/inode, so a path built with either one "
+              "resolves here — measured, `A/check.sh` reading `A/helper` while the index records "
+              "`a/helper` left `git status` empty and this fingerprint at the clean-tree constant, "
+              "and the pushed tree serves no `A/helper` at all on a case-sensitive receiver. This "
+              "is a MEASUREMENT: genuinely distinct directories yield distinct inodes and are not "
+              "refused. Settle on one spelling (`git mv`) so the index and the filesystem agree.")
     if gitlinks:
         raise GitlinkDivergence(
             "initialized submodules whose work tree is not at the commit the superproject "
@@ -683,7 +797,9 @@ if __name__ == "__main__":
     # 9 = the index carries assume-unchanged / skip-worktree bits, 10 = an initialized submodule
     # is not at the recorded commit, and (ROUND 9 / TD-2026-07-30-(P1-representation-parity))
     # 11 = a tracked path's EXECUTABLE BIT is not the index's, 12 = an uninitialized gitlink is
-    # populated, 13 = two index entries differing only in case are one file on disk. Callers BLOCK
+    # populated, 13 = two index entries differing only in case are one file on disk, and
+    # (ROUND 10 / TD-2026-07-31-(P1-casefold-prefix)) 14 = a shared DIRECTORY component is spelled
+    # two ways and is one directory on disk (13 is leaf-only and always was). Callers BLOCK
     # on every non-zero code — printing nothing and exiting 0 is exactly the fail-open round 5
     # closed, `continue`ing past a representation is the same fail-open one level down (round 8),
     # and accepting a representation fact the digest does not carry is the same again (round 9).
@@ -713,6 +829,9 @@ if __name__ == "__main__":
     except CasefoldAlias as exc:
         print(f"tree_fingerprint: GIT_CASEFOLD_ALIAS — {exc}", file=sys.stderr)
         sys.exit(13)
+    except CasefoldDirectoryAlias as exc:
+        print(f"tree_fingerprint: GIT_CASEFOLD_DIR_ALIAS — {exc}", file=sys.stderr)
+        sys.exit(14)
     except RawIndexDivergence as exc:
         # Ordered BEFORE GitFiltersPresent: RawIndexDivergence subclasses it so that callers
         # written against the older type still block, but the code printed must be the specific

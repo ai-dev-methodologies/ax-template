@@ -2018,6 +2018,28 @@ word "only"; the classification of each site stands. Recorded rather than quietl
 census sentence that overstates its own completeness is the same defect this catalog keeps
 finding in its guards.
 
+**(e) — CORRECTED IN ROUND 10, AND THE CORRECTION IS THAT THIS CLAIM WAS OVERCLAIMED.** What (e)
+shipped is a **LEAF-ONLY** check: both implementations grouped **complete** folded paths, so two
+entries whose LEAF names differ never landed in the same group even when a shared DIRECTORY
+component was a casefold alias on APFS. The paragraph below says "two index entries differing only
+in case", which reads as the whole class and is not — the reviewer's round-10 topology needs no
+leaf collision at all:
+
+```
+    Index: A/check.sh   (contains: cat A/helper)
+    Index: a/helper     (contains: PASS)
+    Disk on APFS: A and a are the SAME directory inode
+```
+
+`A/check.sh` and `a/helper` have different full folded keys, so neither implementation detected the
+shared directory inode; `cat A/helper` succeeds locally so R25 goes green, and the PUSHED tree
+contains only `a/helper`, so on a case-sensitive receiver `A/helper` is absent. Two further
+statements below are corrected by measurement in round 10: the harness case (W) did **not** carry
+divergent blobs at gate time (`write_audit`'s `git add -A` healed them, unasserted), and the
+"the ordinary form is already refused by the clean-tree precondition" backstop that made (e)
+"defense in depth" **does not exist for the directory form** — that one was silently open. See
+TD-2026-07-31-(P1-casefold-prefix).
+
 **(e) APFS CASEFOLD-ALIAS — IMPLEMENTED, with an honest scope.** Two index entries differing only
 in case are ONE file on APFS/NTFS: the filesystem can hold one, the push ships two blobs, and every
 read answers about the single file for both entries. `GIT_CASEFOLD_ALIAS` fires when a casefold
@@ -2041,3 +2063,103 @@ one of them never on disk to be verified — and it fires in check 12c before th
   Cosmetic, present identically before this round (verified in both suite runs), noticed here.
 
 - Commits: (this commit — PRD-final-4 wave, P1-seal round-9)
+
+---
+
+## TD-2026-07-31-(P1-casefold-prefix) — an alias is a property of a PATH, not of its last component
+
+- Date: 2026-07-31
+- Status: accepted
+- Trigger: cross-family reviewer, ROUND 10, one P1 plus register-only P2/P3 items. Round 10
+  accepted every round-9 disposition except (e), and confirmed by running the individual neuters
+  itself that the exec-bit and populated-gitlink seals are live.
+
+### P1 — the casefold check was LEAF-ONLY, and round 9's (e) said otherwise
+
+Both implementations grouped **complete** folded paths — `tree_fingerprint.py:443` and
+`completion_checklist_recency_guard.sh:1291` at d567c37 — so two entries whose LEAF names differ
+never landed in the same group, however their DIRECTORY components were spelled.
+
+```
+REPRODUCTION (the reviewer's, replayed here against the d567c37 implementations, APFS)
+    index: A/check.sh   (committed content: `cat A/helper`)
+    index: a/helper     (committed content: PASS)
+    disk : A and a are ONE directory — stat: dev 16777229, ino 34423509 for both spellings
+    → git status --porcelain : EMPTY
+    → cat A/helper           : PASS        (so every gate that reads or runs it goes green)
+    → git ls-tree -r HEAD    : A/check.sh, a/helper      ← what the push actually ships
+    PRE-FIX  (git show d567c37:…/tree_fingerprint.py) → 0a815065ebf5…  exit 0  (CLEAN-TREE CONSTANT)
+    PRE-FIX  recency 12c                              → violation set EMPTY (prover twin (Z2):
+                                                         recency_pass, tree "clean", exit 0)
+    POST-FIX tree_fingerprint                         → GIT_CASEFOLD_DIR_ALIAS exit 14
+    POST-FIX recency 12c                              → GIT_CASEFOLD_DIR_ALIAS, exit 1
+```
+
+On a case-sensitive receiver `A/helper` does not exist, so the committed check is broken on
+arrival — and unlike the leaf form, **nothing else refused it**: the tree is genuinely clean, so
+the clean-tree precondition that made (e) "defense in depth" has no purchase here.
+
+**Fix, symmetric in both implementations, and it is the reviewer's prescription.** Every tracked
+entry contributes **every prefix of its path** (each directory component, folded, plus the full
+path) to a map `folded prefix → {(st_dev, st_ino): {spellings}}`; a group in which one inode is
+reached by two DISTINCT spellings is refused. `160000` entries are included — round 9 registered
+the map after the gitlink `continue`, which the reviewer registered separately and which closes
+here because it is the same walk. Leaf groups (every spelling is a full tracked path) keep
+`GIT_CASEFOLD_ALIAS`; groups involving a directory component are the new
+`GIT_CASEFOLD_DIR_ALIAS` (fingerprint exit **14**) — a different remedy (`git mv` a directory) and
+a distinguishable RED demo.
+
+**It stays a MEASUREMENT, so case-sensitive forks are unaffected.** Verified on a real
+case-sensitive APFS image (`hdiutil create -fs "Case-sensitive APFS"`), not by simulation: a tree
+holding `A/`+`a/` as distinct directories (inodes 52 and 53) and `Alias.txt`+`alias.txt` as
+distinct files (57 and 58) fingerprints to the clean-tree constant at exit 0, and the live push
+gate passes it (prover (Z5), real arm via `AX_PROVE_CS_DIR`).
+
+| control | measurement |
+|---|---|
+| live tree, 5,745 entries (2 symlinks, 3 gitlinks) | exit 0, digest unchanged at `0a815065…` |
+| distinct `A/`+`a/` on a case-sensitive volume | exit 0 — no false positive |
+| leaf alias (round 9's `Alias.txt` ≡ `alias.txt`) | still blocks, `GIT_CASEFOLD_ALIAS` — no regression |
+| individual neuter of the new refusal | attack lands again (exit 0) — non-vacuous |
+
+**Cost.** One `lstat` per DISTINCT prefix, cached (`practices/scripts/lib/tree_fingerprint.py`
+`_lstat_cached`), and the full path is itself the last prefix, so the exec-bit check reads the same
+cached stat instead of taking a second one: +~1.1k directory stats, −5,745 duplicate stats. Measured
+on the live tree, five runs each: **0.23–0.26 s before, 0.25–0.28 s after** — +~0.02 s, no material
+regression.
+
+### P2 items actioned in the harness
+
+- **Per-implementation attribution.** The shipped round-9 neuters disabled the 12c sweep and the
+  fingerprint helper TOGETHER, so a twin that landed again proved the PAIR load-bearing and neither
+  member. `round9_neuter` now takes `guard` / `fp` (and `r10guard` / `r10fp`) and every alias and
+  representation class runs both: sweep-only → the helper still refuses, surfacing as
+  `AUDIT_FINGERPRINT_UNVERIFIABLE` because the recompute runs the PRIOR RELEASE'S copy ((Z3) `release
+  39e7fb10f801`, (W3) `release ab8df1640cad`, plus (T3)/(V3)); helper-only → the sweep still refuses
+  on its own code ((Z4)/(W4)/(T4)/(V4)).
+- **The (W2) twin's premise.** It had no post-neuter assertion, and TWO `git add -A` calls could
+  heal the alias (the neuter's, and — the one that actually did it — `write_audit`'s, which re-reads
+  every path from disk so the two aliased entries collapse onto the one file's bytes). Both are now
+  narrowed to the paths they mean to stage, and `r9_premise` asserts the premise at gate time.
+  **What that exposed, and it is a correction to round 9:** with the healing removed and divergent
+  blobs restored, the leaf case never reaches the casefold code at all — ` M alias.txt` makes the
+  tree dirty and the gate refuses with `AUDIT_TREE_DIRTY_NOW`. The shape that ISOLATES the leaf
+  refusal is the equal-blob one, which is what round 9's case had in fact been running unknowingly.
+  (W) now asserts exactly that: two entries, one inode, one blob, status empty.
+- **Dirty-representation handling** narrows the fingerprint's usefulness for a dirty resume state
+  — registered with the tradeoff stated (`docs/BACKLOG.md` **P2-71**), not silently changed.
+
+### Registered rather than done
+
+- `docs/BACKLOG.md` **P2-71** — dirty-representation handling vs. dirty-resume usefulness.
+- `docs/BACKLOG.md` **P3-122** — `stage > 0` duplicate-path casefold misdiagnosis. **Closed as it
+  fell out:** the spellings are now a SET, so the same path listed once per merge stage collapses
+  and cannot produce a `path ≡ path` self-report. Kept as a row for the record with its evidence.
+- `docs/BACKLOG.md` **P3-123** — `.DS_Store`-only gitlink directory usability refusal (a Finder
+  visit to an empty gitlink now blocks R25 with `GIT_GITLINK_UNINITIALIZED_POPULATED`).
+- `docs/BACKLOG.md` **P3-120** (round 9) still stands: Unicode NFC/NFD folding is not covered; the
+  prefix walk folds case only.
+- The prover's PASS banner claimed "every round-5/6/7/8 addition has a neutered twin" while round-9
+  twins were already shipping. Corrected to 5/6/7/8/9/10 and to say what the new twins prove.
+
+- Commits: (this commit — PRD-final-4 wave, P1-seal round-10)

@@ -52,6 +52,25 @@
 #   has nowhere to keep a key, and a key committed next to the data authenticates nothing. What
 #   these checks close is the cheap, observed shape: the appended hand-authored line.
 #
+# Why the round-10 addition to 12c (cross-family review ROUND 10, P1; TD-2026-07-31-(P1-casefold-
+# prefix)). New BLOCKING code: GIT_CASEFOLD_DIR_ALIAS.
+#   Round 9's casefold check was LEAF-ONLY, and the entry that shipped it overclaimed. Both
+#   implementations grouped COMPLETE folded paths, so two entries whose LEAF names differ never met
+#   even when a shared DIRECTORY component was a casefold alias. MEASURED against the d567c37
+#   implementations, throwaway repo on APFS:
+#       index: A/check.sh   (committed content: `cat A/helper`)
+#       index: a/helper     (committed content: PASS)
+#       disk : A and a are the SAME directory inode (16777229, 34423509)
+#   `git status --porcelain` EMPTY · `cat A/helper` succeeds locally so every gate goes green ·
+#   tree_fingerprint returned the clean-tree constant 0a815065… at exit 0 · 12c's violation set was
+#   EMPTY. The PUSHED tree holds only `a/helper`, so a case-sensitive receiver has no `A/helper` and
+#   the committed check is broken on arrival.
+#   The fix measures EVERY PATH PREFIX (each directory component, folded, plus the full path),
+#   gitlinks included, and refuses a folded group whose DISTINCT spellings lstat to the same
+#   (st_dev, st_ino). Still a MEASUREMENT: on a case-sensitive volume genuinely distinct `A/` and
+#   `a/` yield distinct inodes and are NOT refused (verified on a real case-sensitive APFS image).
+#   Measured cost on this catalog: 5,745 entries, ~1.1k extra directory lstats, +~0.02 s.
+#
 # Why the round-9 additions to 12c (cross-family review ROUND 9, P1-1/P1-2/(e); TD-2026-07-30-
 # (P1-representation-parity)). New BLOCKING codes: GIT_EXEC_BIT_DIVERGENCE,
 # GIT_GITLINK_UNINITIALIZED_POPULATED, GIT_CASEFOLD_ALIAS.
@@ -72,7 +91,8 @@
 #       executes it, and the push ships a gitlink whose fresh clone is an EMPTY directory. The
 #       fresh-clone shape (absent, or an actually-empty directory) stays ACCEPTED — that is the
 #       state of all three gitlinks here and (S) in the prover holds it.
-#     · A CASEFOLD ALIAS. Two index entries differing only in case are ONE file on APFS/NTFS.
+#     · A CASEFOLD ALIAS — LEAF ONLY, as round 10 had to correct. Two index entries differing only
+#       in case are ONE file on APFS/NTFS.
 #       Flagged only when they lstat to the same (st_dev, st_ino), so a case-sensitive
 #       fork-receiver is unaffected. HONEST SCOPE: with divergent blobs the alias ALSO shows up as
 #       a modification, so the gate's clean-tree precondition already refuses the ordinary form —
@@ -1175,6 +1195,10 @@ if live_git_root and not expected_head_file.is_file() and guard_repo is not None
     #          (st_dev, st_ino), i.e. one file serving two blobs on a case-insensitive filesystem.
     #      Measured on this catalog: 5,745 tracked paths, ZERO of all three, so none costs an
     #      honest tree anything.
+    #      ROUND 10 / P1 — THE CASEFOLD CHECK WAS LEAF-ONLY. It grouped COMPLETE folded paths, so
+    #      `A/check.sh` and `a/helper` (different leaves, ONE directory inode on APFS) never met.
+    #      The map is now keyed on EVERY PATH PREFIX, gitlinks included, and a directory-component
+    #      alias blocks with GIT_CASEFOLD_DIR_ALIAS.
     rc_of, objfmt = git_out("rev-parse", "--show-object-format", root=root, check=False)
     _algo = "sha256" if (rc_of == 0 and objfmt.strip() == "sha256") else "sha1"
     _p_idx = subprocess.run([GIT_BIN, "--no-replace-objects", "-C", str(root),
@@ -1219,8 +1243,17 @@ if live_git_root and not expected_head_file.is_file() and guard_repo is not None
         #   · two index entries differing only in CASE, which APFS/NTFS serve from ONE file. Flagged
         #     only when they lstat to the same (st_dev, st_ino) — a measurement, so a case-sensitive
         #     fork-receiver is unaffected.
+        # ROUND 10 / P1 (TD-2026-07-31-(P1-casefold-prefix)): the casefold map is keyed on every
+        # PATH PREFIX, not on the complete path. Round 9 grouped complete folded paths, so two
+        # entries whose LEAF names differ never met even when a shared DIRECTORY component was an
+        # alias — measured at d567c37: index `A/check.sh` (running `cat A/helper`) + index
+        # `a/helper`, one directory inode on APFS, `git status` EMPTY, both implementations silent,
+        # and the pushed tree serves no `A/helper` on a case-sensitive receiver.
         _execbits, _gldirt = [], []
-        _casefold = {}
+        _casefold = {}          # folded prefix -> {(dev, ino): {spellings}}
+        _statcache = {}         # relative path -> lstat result | None, one call per distinct prefix
+        _fullpaths = set()      # the tracked paths themselves: leaf alias vs directory alias
+        _rootb = os.fsencode(str(root))
         for _rec in _p_idx.stdout.split(b"\0"):
             if not _rec:
                 continue
@@ -1230,6 +1263,27 @@ if live_git_root and not expected_head_file.is_file() and guard_repo is not None
             except ValueError:
                 continue
             _show = _path.decode(errors="replace")
+            # ROUND 10 / P1: the prefix walk runs FIRST, for EVERY entry — before the gitlink
+            # `continue` (round 9 registered the map after it, so a 160000 path could alias a
+            # directory unseen) and before the dirty skip. One lstat per DISTINCT prefix; the full
+            # path is itself the last prefix, so the exec-bit check below reads the cached stat
+            # instead of taking a second one.
+            _fullpaths.add(_path)
+            _comps = _path.split(b"/")
+            for _n in range(1, len(_comps) + 1):
+                _pfx = b"/".join(_comps[:_n])
+                if _pfx in _statcache:
+                    _pst = _statcache[_pfx]
+                else:
+                    try:
+                        _pst = os.lstat(os.path.join(_rootb, _pfx))
+                    except OSError:
+                        _pst = None
+                    _statcache[_pfx] = _pst
+                if _pst is None:
+                    continue
+                _casefold.setdefault(_pfx.lower(), {}).setdefault(
+                    (_pst.st_dev, _pst.st_ino), set()).add(_pfx)
             # ROUND 8 / P1-A (0): the BITS. Both reproductions begin with `git update-index`, and
             # `ls-files -v` reports them directly — a lowercase tag is assume-unchanged, `S` is
             # skip-worktree. Reading the cause is cheaper and more honest than inferring its
@@ -1278,18 +1332,13 @@ if live_git_root and not expected_head_file.is_file() and guard_repo is not None
                 continue
             # ROUND 9 / P1-1 + (e): read BEFORE the `dirty` continue — neither fact is carried by
             # the digest, and `git status` reports neither once core.fileMode is false.
-            try:
-                _st = os.lstat(_full)
-            except OSError:
-                _st = None
+            _st = _statcache.get(_path)      # already taken by the prefix walk above
             if _st is not None and stat.S_ISREG(_st.st_mode) and _mode in (b"100644", b"100755"):
                 if bool(_st.st_mode & 0o111) != (_mode == b"100755"):
                     _execbits.append(
                         "%s (index: %s, on disk: %s)"
                         % (_show, "100755 (executable)" if _mode == b"100755" else "100644 (plain)",
                            "executable" if _st.st_mode & 0o111 else "NOT executable"))
-            if _st is not None:
-                _casefold.setdefault(_path.lower(), []).append((_show, (_st.st_dev, _st.st_ino)))
             if _path in _dirty:
                 continue
             _is_link = os.path.islink(_full)
@@ -1332,16 +1381,23 @@ if live_git_root and not expected_head_file.is_file() and guard_repo is not None
                 _bad.append(_show)
         # ROUND 9 / (e): NO early break above. The casefold check is a property of a PAIR, so a
         # walk that stops at the eighth byte mismatch could miss the second half of an alias.
-        _aliased = []
-        for _grp in _casefold.values():
-            if len(_grp) < 2:
-                continue
-            _seen = {}
-            for _s, _key in _grp:
-                _seen.setdefault(_key, []).append(_s)
-            for _names in _seen.values():
-                if len(_names) > 1:
-                    _aliased.append(" ≡ ".join(sorted(_names)))
+        # ROUND 10 / P1: a group whose spellings are ALL full tracked paths is the leaf case
+        # (GIT_CASEFOLD_ALIAS); a group in which any spelling is a directory COMPONENT is the
+        # round-10 case (GIT_CASEFOLD_DIR_ALIAS) — different remedy, so a different code. The
+        # spellings are a SET, so a path listed once per stage during a merge conflict cannot
+        # produce the "path ≡ path" self-report round 9 would have emitted.
+        _aliased, _diraliased = [], []
+        for _byident in _casefold.values():
+            for _names in _byident.values():
+                if len(_names) < 2:
+                    continue
+                _shown = " ≡ ".join(sorted(_n.decode(errors="replace") for _n in _names))
+                if all(_n in _fullpaths for _n in _names):
+                    _aliased.append(_shown)
+                else:
+                    _diraliased.append(_shown)
+        _aliased.sort()
+        _diraliased.sort()
         if _execbits:
             emit_fail(
                 "GIT_EXEC_BIT_DIVERGENCE",
@@ -1374,6 +1430,19 @@ if live_git_root and not expected_head_file.is_file() and guard_repo is not None
                 "— this sweep, the fingerprint, the build, the lint — answers about a single file "
                 "for both entries while the push ships two distinct blobs; one of them was never "
                 "on disk to be verified. Rename one entry so the index and the filesystem agree."
+            )
+        if _diraliased:
+            emit_fail(
+                "GIT_CASEFOLD_DIR_ALIAS",
+                "index entries whose DIRECTORY components are spelled two ways and are ONE "
+                "directory on this filesystem: " + ", ".join(_diraliased[:8]) + ". The spellings "
+                "lstat to the same device/inode, so a path built with either one resolves here — "
+                "measured at d567c37: a committed `A/check.sh` reading `A/helper` while the index "
+                "records `a/helper` left `git status` EMPTY, both implementations silent and the "
+                "tree fingerprint at the clean-tree constant, while the PUSHED tree serves no "
+                "`A/helper` at all on a case-sensitive receiver. This is a MEASUREMENT, not an "
+                "assumption about the filesystem: genuinely distinct directories yield distinct "
+                "inodes and are NOT refused. Settle on one spelling (`git mv`) and re-run R25."
             )
         if _flagged:
             emit_fail(

@@ -1583,6 +1583,22 @@ run_guard "release_anchor/helper_injection_blocked" 0 \
 # off the recorded commit → GIT_GITLINK_DIVERGENCE. ROUND 9 / (d): a setup failure inside a case is
 # now LOUD (harness exit 2) instead of `|| return 0`, which silently turned a broken case into a
 # green one.
+# ROUND 10 (TD-2026-07-31-(P1-casefold-prefix) / P1 + P2) closes the round-9 casefold check, which
+# was LEAF-ONLY: both implementations grouped COMPLETE folded paths, so `A/check.sh` and `a/helper`
+# — different leaves, ONE directory inode on APFS — never met. Measured against d567c37: status
+# EMPTY, 12c's violation set EMPTY, fingerprint = the clean-tree constant, while the pushed tree
+# serves no `A/helper` to a case-sensitive receiver. (Z) is that topology → GIT_CASEFOLD_DIR_ALIAS,
+# with the alias measured over EVERY PATH PREFIX (gitlinks included). (Z2) is its pre-round-10 twin
+# (lands again); (Z5) is the FALSE-POSITIVE control — genuinely DISTINCT `A/` and `a/` must NOT be
+# refused, built on a case-sensitive filesystem when one is reachable ($WORK on Linux, or
+# AX_PROVE_CS_DIR) and on the shared-prefix arm otherwise, with the arm PRINTED either way.
+# ROUND 10 / P2: the round-9 twins disabled both implementations at once, so they proved the PAIR
+# load-bearing and neither member; every alias/representation class now also runs sweep-only
+# ((Z3)(T3)(V3)(W3) → the prior-release helper still refuses, surfacing as
+# AUDIT_FINGERPRINT_UNVERIFIABLE) and helper-only ((Z4)(T4)(V4)(W4) → the 12c sweep still refuses
+# on its own code). The alias cases now ASSERT their premise at gate time (two entries, one inode,
+# one blob): write_audit's `git add -A` had been silently healing it, and a twin whose premise
+# evaporated was passing for a reason that was not the neuter.
 run_guard "hermetic_runtime/inherited_runtime_blocked" 0 \
     bash "$REPO_ROOT/practices/scripts/ax-prove-hermetic-runtime.sh"
 # ── P1-2/P1-4 ROUND-4: the recency guard's FIXTURE SWEEP ───────────────────────────
