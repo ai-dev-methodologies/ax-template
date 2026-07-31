@@ -373,8 +373,16 @@ class SymlinkTargetAlias(GitFiltersPresent):
         symlinks in this catalog are exactly this shape (`../../.ledger-target.txt` and
         `../../.receipts-target.yaml`), both land on the EXACT recorded spelling, and both pass.
         Lexical `..` is not POSIX `..` when a component is a symlink; the candidate is then a path
-        the kernel would resolve elsewhere, its lstat lands on a different inode (or none), and the
-        check is silent. That is UNDER-inclusive, never over-inclusive.
+        the kernel would resolve elsewhere, and USUALLY its lstat lands on a different inode (or
+        none) and the check goes silent — under-inclusive.
+        CORRECTED 2026-08-01 (independent verification lane, with a reproduction): the words
+        "never over-inclusive" were FALSE. A link whose POSIX resolution ESCAPES the repo and
+        dangles can still have its LEXICAL candidate land on a registered, fold-equal inode —
+        measured with `ln -s outdirlink/../SECRET.txt` where `outdirlink -> ../outside`: the kernel
+        routes it outside and it does not exist, yet the lexical candidate folds onto tracked
+        `secret.txt` and this check BLOCKS it. That direction is fail-closed (a false refusal, not
+        a missed alias) and the shape is pathological, so it is registered rather than fixed —
+        see BACKLOG P3-133. What is retracted is the absolute claim, not the mechanism.
       · ABSOLUTE target — NOT BLOCKED. It names a location on the receiver's root filesystem; the
         index cannot record it, so there is no recorded spelling to be an alias OF. (An absolute
         target that happens to point back into this checkout is unportable for reasons that have
@@ -706,10 +714,13 @@ def _resolve_link_target(linkpath, target):
     Returns (kind, candidate):
       ("absolute", None) · ("escapes", None) · ("root", None) · ("inside", b"a/b")
     Lexical, not POSIX: `..` is popped textually, whereas the kernel pops AFTER following a
-    symlinked component. The candidate is then lstat'd, so a divergence between the two makes the
-    lookup land on a different inode (or none) and the check goes SILENT — under-inclusive by
-    construction, never over-inclusive. It is also exactly what a receiver types when it opens the
-    committed path component by component.
+    symlinked component. The candidate is then lstat'd, so a divergence between the two USUALLY
+    makes the lookup land on a different inode (or none) and the check goes SILENT — under-
+    inclusive. "Never over-inclusive" was claimed here and is RETRACTED (2026-08-01, reproduced by
+    an independent lane): a POSIX-escaping, dangling link can have its lexical candidate land on a
+    registered fold-equal inode and be refused. Fail-closed, pathological, registered as P3-133.
+    It is also exactly what a receiver types when it opens the committed path component by
+    component.
     """
     if target.startswith(b"/"):
         return ("absolute", None)
