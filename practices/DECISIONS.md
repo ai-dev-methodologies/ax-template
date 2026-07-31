@@ -1832,3 +1832,188 @@ which the fixture contract excludes. The evidence is therefore the live falsific
 - Registered from this round: `docs/BACKLOG.md` **P2-69** (toolpaths.json interpolation +
   symlink-following output) and **P3-119** (submodule-internal residue).
 - Commits: (this commit — PRD-final-4 wave, P1-seal round-8)
+
+---
+
+## TD-2026-07-30-(P1-representation-parity) — separating the shapes is not comparing them: the bits a digest never carried
+
+- Date: 2026-07-31
+- Status: accepted
+- Trigger: cross-family reviewer, ROUND 9, P1-1 and P1-2, plus five corrections (a)-(e). Round 8
+  stopped `continue`ing past worktree representations it did not expect — it separated
+  regular / symlink / gitlink / absent and refused the ones it could not account for. Then it
+  compared **only blob BYTES**. A tracked path's representation carries more than its bytes, and
+  every fact it carries that no digest here holds is a fact the index and the working tree can
+  disagree about while `git status --porcelain` stays EMPTY. The reviewer found two, and both are
+  reachable with ordinary git commands — no environment control, squarely inside the declared
+  threat model (TD-2026-07-30-(ratchet-threat-model)).
+
+### P1-1 — the EXECUTABLE BIT was accepted in both directions
+
+Both sweeps read the index entry (`git ls-files -s`), split regular from symlink, and then compared
+the blob id. git's regular modes are `100644` and `100755`; **nothing compared that bit to the
+filesystem.** `core.fileMode=false` tells git to stop *reporting* a mode difference — it does not
+change the *record* — so the divergence is invisible to `git status` and to a digest built from it.
+
+```
+REPRODUCTION (measured here, throwaway repo; direction A)
+    git config core.fileMode false
+    chmod -x gradlew; git update-index --chmod=-x gradlew; git commit      # index := 100644
+    chmod +x gradlew                                                        # disk  := executable
+    → git status --porcelain : EMPTY
+    → git ls-files -s        : 100644 …
+    → stat                   : -rwxr-xr-x
+    PRE-FIX  tree_fingerprint → 0a815065ebf5…  exit 0   (THE CLEAN-TREE CONSTANT)
+    POST-FIX tree_fingerprint → GIT_EXEC_BIT_DIVERGENCE exit 11
+
+direction B (the mirror), same repo
+    git update-index --chmod=+x gradlew; git commit; chmod -x gradlew
+    → git status --porcelain : EMPTY
+    PRE-FIX  → 0a815065ebf5…  exit 0
+    POST-FIX → GIT_EXEC_BIT_DIVERGENCE exit 11
+```
+
+Why it matters concretely: R25 invokes `./gradlew` **directly, 118 times**. Under direction A every
+one of them runs the locally-executable file, R25 goes green, and the push records `100644` — a
+fresh checkout of the certified commit cannot execute it at all. Direction B is the mirror and is
+the *likelier accident*: a script fails locally, an operator fixes it with a `chmod` the index never
+learns about, and the mode nobody tested is what ships.
+
+**Fix, symmetric in both implementations.** The index mode is read from `git ls-files -s` — the
+RECORD, not git's filtered view — and compared against `os.lstat()` on the regular path, as a
+CLASS (any-x ⇔ `100755`, no-x ⇔ `100644`; `0o700` vs `0o755` is not a divergence). Both directions
+block with `GIT_EXEC_BIT_DIVERGENCE` (fingerprint exit 11). The check runs BEFORE the
+`path in dirty` skip, because a path that is dirty for content can still be lying about its mode
+and the digest carries the content, never the bit. Measured on this catalog: 5,745 tracked paths,
+**zero** divergences — the refusal costs an honest tree nothing.
+
+### P1-2 — a NONEMPTY "uninitialized" gitlink was accepted
+
+Round 8 bound INITIALIZED submodules (recorded sha must equal the submodule's HEAD) and
+deliberately exempted uninitialized ones, on the reasoning "nothing on disk, nothing was tested".
+The implementation tested the wrong proposition: it returned success on the **absence of
+`<gitlink>/.git`** and never required the directory to be EMPTY.
+
+```
+REPRODUCTION (measured here)
+    git update-index --add --cacheinfo 160000,<sha>,vendor/sub ; git commit
+    mkdir -p vendor/sub ; printf 'echo owned\n' > vendor/sub/check.sh     # NO .git anywhere
+    → git status --porcelain : EMPTY   (git does not descend into a gitlink)
+    PRE-FIX  tree_fingerprint → 0a815065ebf5…  exit 0
+    POST-FIX tree_fingerprint → GIT_GITLINK_UNINITIALIZED_POPULATED exit 12
+```
+
+A committed mandatory step that runs `bash vendor/sub/check.sh` therefore executes a file that the
+push does not ship: a gitlink commits a **sha**, and a fresh clone of that commit gets an EMPTY
+directory. The round-8 reasoning is preserved exactly where it was right — the fresh-clone shape.
+The corrected rule: an uninitialized gitlink is acceptable **only** when its worktree path is ABSENT
+or an ACTUALLY-EMPTY directory. All three gitlinks in this catalog are empty post-clone fixture
+directories and still pass (prover control (S), re-verified). Distinct from `docs/BACKLOG.md`
+**P3-119**, which is dirt inside an INITIALIZED submodule's own work tree.
+
+### New blocking codes
+
+| code | fires when | fingerprint exit |
+|---|---|---|
+| `GIT_EXEC_BIT_DIVERGENCE` | index `100644`/`100755` disagrees with the filesystem x-bit CLASS, either direction | 11 |
+| `GIT_GITLINK_UNINITIALIZED_POPULATED` | a gitlink with no gitdir whose worktree path is a nonempty directory (or not a directory at all) | 12 |
+| `GIT_CASEFOLD_ALIAS` | two index entries differing only in case that lstat to the same `(st_dev, st_ino)` | 13 |
+
+Both implementations carry all three: `practices/scripts/lib/tree_fingerprint.py` and the recency
+guard's 12c sweep. The clean-tree constant `0a815065…` is preserved by construction (nothing new is
+appended to the hash), which matters because the recency guard recomputes with the PREVIOUS
+RELEASE'S copy of the helper.
+
+### The five corrections the reviewer also required
+
+**(a) OVERCLAIMING PROSE.** `verify-completion.sh:514` still read "the AUTHENTICATED interpreter"
+and its live failure output said "the authenticated interpreter $AX_PY_BIN" — while the same file's
+banner correctly says *transparency, not authentication*. Both are corrected to "resolved", with a
+comment that names what actually happened (absolute path + regular + executable + a fixed PUBLIC
+smoke test that a wrapper forwards) and points at TD-2026-07-30-(ratchet-threat-model). A
+class-wide re-sweep (every tracked `.sh`/`.py`/`.md`/`.yaml` under `practices/`, `docs/`,
+`.githooks/`; any line matching authenticat|verified|identity within ±1 line of a
+tool/interpreter word, excluding negative statements) found **two** further instances and **one**
+was ours: the prover's neuter key `identity`, renamed to `smoketest`. The other survivors are
+either explicit negations ("does NOT prove the interpreter is authenticated"), byte-equality
+against a git-recorded blob (which IS an authentication of *content*, not of a PATH executable), or
+upstream snapshot text.
+
+**(b) THE `env -i` RATIONALE WAS OVERSTATED, and the reviewer is right on every point.** The
+round-8 entry declined the allowlisted `env -i` re-exec for two reasons, and MEASUREMENT shows
+both were wrong as written:
+- *"It would silently drop `AX_RELEASE_ANCHOR_*`"* — true of a BARE `env -i`, false of an
+  **allowlist**, which is what was proposed. Verified: every consumer reads them as
+  `[ -n "${AX_RELEASE_ANCHOR_SHA:-}" ]`, so `VAR="${VAR:-}"` passes the value when set and an
+  empty string when unset, and empty is indistinguishable from unset at every consuming site.
+- *"Guards also take env-borne configuration (`STRICT=` / `LIVE_ROOT=` / `GIT_ANCHOR=`)"* —
+  **factually wrong.** Measured: those three are set INSIDE the guards
+  (`evidence_quote_spotcheck_guard.sh:585,614,740`, `manifest_snapshot_integrity_guard.sh:487,619`)
+  as a prefix on an internal `python3` call, LONG AFTER the re-exec. Nothing inherits them.
+- *"It would convert a LOUD refusal into SILENT tolerance"* — also wrong as written, because
+  `BASH_ENV`/`ENV` can be passed through VISIBLY (`BASH_ENV="${BASH_ENV:-}"`), and the preflight
+  tests `case "${BASH_ENV:-}${ENV:-}" in ?*)`, so a set value still fires
+  `HERMETIC_PREFLIGHT_HOSTILE` while an unset one still passes.
+
+So the stated rationale is WITHDRAWN. What replaces it is a measurement and a scoped decision, not
+a shrug:
+- Measured: the recency guard runs to its honest verdict under
+  `/usr/bin/env -i PATH=… /bin/bash -p <guard>` (exit 0, `recency_pass`, same fingerprint), and the
+  **entire** 192-check suite runs under `/usr/bin/env -i PATH=… HOME=… TMPDIR=… /bin/bash -p
+  practices/evals/run-all-guards.sh` with the same result as an inherited environment — including
+  `vacuity_class_proof_guard.sh`, which shells out to `./gradlew pitest` (both mutants KILLED).
+  The allowlist is therefore **small and tractable for the guard surface**: `PATH`, `HOME`,
+  `TMPDIR`, `JAVA_HOME`, `BASH_ENV`, `ENV`, and the `AX_*` family. The only non-`AX_` variables
+  read anywhere on that surface are `PATH`, `TMPDIR` (always with a `:-/tmp` default) and
+  `JAVA_HOME` (read at exactly one site, `verify-completion.sh:1166`).
+- NOT IMPLEMENTED IN THIS ROUND, with the reason: `verify-completion.sh` is the one entry that
+  execs FOREIGN TOOLCHAINS — gradle **and** npm — whose environment surface is not enumerable from
+  this repository (`GRADLE_*`, `JDK_*`, `NODE_*`, `npm_config_*`, and whatever a fork-receiver's
+  wrapper adds), and the frontend step cannot be exercised from this lane (the main loop owns R25,
+  and npm is out of bounds here). Shipping the construct at five of six entries and not the sixth
+  would be an asymmetry that reads as an oversight; shipping it at all six without ever running the
+  npm step would be an untested change to the gate that decides whether anything may ship.
+  Registered as `docs/BACKLOG.md` **P2-70** with the allowlist and the measurement above, so the
+  next person implements a measured design rather than re-deriving it.
+  **The claim now matches what is done: the environment is refused LOUDLY when contaminated
+  (`HERMETIC_PREFLIGHT_HOSTILE`, `HERMETIC_ENV_HOSTILE`), and it is NOT stripped.**
+
+**(c) THE TWO MISSING POSITIVE REGRESSIONS.** Round 8 implemented two branches and never drove
+them, so both could have rotted into dead code behind a green harness. Added to
+`ax-prove-hermetic-runtime.sh` as explicit sandbox cases: **(X)** the MIRROR of (P) — an
+index-SYMLINK path that is a REGULAR FILE on disk, run with ONLY the index-bit refusal neutered so
+the code under test is the representation backstop → `GIT_WORKTREE_TYPE_MISMATCH`; and **(Y)** an
+INITIALIZED submodule moved off the recorded commit → `GIT_GITLINK_DIVERGENCE`.
+
+**(d) THE HARNESS SILENTLY SKIPPED SETUP FAILURES.** `r8_apply … || return 0` turned a case whose
+attack could not even be applied into a SILENT PASS — the scenario never ran, nothing was measured,
+and the harness still printed its green summary. Setup failure is now LOUD: `exit 2` (harness
+error) for an inapplicable attack, `return 1` only for the premise-broken path that already called
+`violation()`. Every other `ax-prove-*.sh` was checked for the same shape;
+`ax-prove-gate-blocks-agent.sh:38` and `ax-prove-evidence-gate-blocks-agent.sh:43` are the only
+other `|| true` sites and are NOT this class (they are `grep -c` arithmetic, already commented,
+under `set -euo pipefail`).
+
+**(e) APFS CASEFOLD-ALIAS — IMPLEMENTED, with an honest scope.** Two index entries differing only
+in case are ONE file on APFS/NTFS: the filesystem can hold one, the push ships two blobs, and every
+read answers about the single file for both entries. `GIT_CASEFOLD_ALIAS` fires when a casefold
+group's members lstat to the same `(st_dev, st_ino)` — a MEASUREMENT, so a case-sensitive
+fork-receiver is unaffected. Measured on this catalog: zero casefold collisions, zero inode aliases.
+**What it is NOT:** with divergent blobs the alias ALSO shows up as a modification
+(measured: `git status` printed ` M alias.txt`), so the gate's clean-tree precondition already
+refuses the ordinary form, and with identical blobs there is no lie to catch. This refusal is
+therefore **defense in depth that names the fault instead of the symptom** — one file, two blobs,
+one of them never on disk to be verified — and it fires in check 12c before the clean-tree check at
+12a. It is not the closure of a demonstrated silent hole, and it is not sold as one.
+
+### Registered rather than done
+
+- `docs/BACKLOG.md` **P2-70** — the allowlisted `env -i` re-exec, with the measured allowlist.
+- `docs/BACKLOG.md` **P3-120** — UNICODE NORMALIZATION aliasing. APFS also folds NFC/NFD, so `é`
+  composed and decomposed are one file; the casefold key is `bytes.lower()`, which does not group
+  them, so that alias is still accepted. Same class as (e), different fold.
+- `docs/BACKLOG.md` **P3-121** — `run-all-guards.sh:1458` emits four `command substitution: syntax
+  error` lines on stderr because the ledger prose contains backticks inside a double-quoted string.
+  Cosmetic, present identically before this round (verified in both suite runs), noticed here.
+
+- Commits: (this commit — PRD-final-4 wave, P1-seal round-9)

@@ -41,6 +41,17 @@ WHAT IT HASHES, deterministically:
     deleted all produced the IDENTICAL digest 0a815065…. They BLOCK now, together with the index
     bits that produce them and a diverged initialized submodule.
 
+    ROUND 9 / P1-1 + P1-2 + (e) (TD-2026-07-30-(P1-representation-parity)) — ROUND 8 SEPARATED THE
+    SHAPES AND THEN COMPARED ONLY BLOB BYTES. A tracked path's representation carries THREE more
+    facts that no digest here holds and that `git status` can be told (or is simply unable) to
+    report: (1) the EXECUTABLE BIT — `core.fileMode=false` + `git update-index --chmod=-x` + a
+    local `chmod +x` leaves status EMPTY and the digest at the clean-tree constant while R25's 118
+    direct `./gradlew` invocations run a file the push records as 100644; (2) a gitlink with NO
+    gitdir whose directory is nevertheless POPULATED — round 8 returned success on the absence of
+    `<gitlink>/.git` without requiring the directory to be EMPTY, so a committed check can `bash
+    vendor/sub/check.sh` a file that a fresh clone never receives; (3) two index entries differing
+    only in CASE, which a case-insensitive filesystem serves from ONE file. All three BLOCK.
+
 HONEST LIMIT, and it matters for how much the recompute proves:
     ON A CLEAN TREE both inputs are EMPTY, so the digest is a CONSTANT — the same value for every
     clean tree of every commit. It is a DIRT fingerprint, not a tree identity. That is exactly
@@ -57,6 +68,7 @@ Usage:
 import hashlib
 import os
 import shutil
+import stat
 import subprocess
 import sys
 
@@ -136,6 +148,70 @@ class IndexFlagsSet(GitFiltersPresent):
     only appear with --deleted/--modified/--others). Verified on a deliberately dirty tree — one
     modified, one deleted, one staged, one untracked path — that every tag stayed `H`, so this
     refusal is exactly the two bits and not a proxy for dirtiness.
+    """
+
+
+class ExecBitDivergence(GitFiltersPresent):
+    """A tracked regular path whose EXECUTABLE-BIT CLASS on disk is not the one the index records.
+
+    ROUND 9 / P1-1 (TD-2026-07-30-(P1-representation-parity)). Round 8 separated regular from
+    symlink and then compared only BLOB BYTES. git's regular-file modes carry one more bit of
+    representation — 100644 vs 100755 — and NOTHING compared it. MEASURED (reviewer round 9,
+    reproduced in a throwaway repo): `git config core.fileMode false`, `git update-index --chmod=-x
+    backend/gradlew`, commit, then `chmod +x backend/gradlew` on disk → `git status --porcelain` is
+    EMPTY (core.fileMode=false tells git to stop reporting the bit), the blob bytes are identical
+    so the round-8 sweep is satisfied, and this fingerprint returns the clean-tree constant. R25's
+    118 direct `./gradlew` invocations then run happily against the locally-executable file while
+    the push records mode 100644 and a fresh checkout cannot execute it at all.
+    THE INDEX MODE IS READ FROM `git ls-files -s`, NOT FROM GIT'S FILTERED VIEW. That is the whole
+    point: `core.fileMode=false` suppresses the *report*, not the *record*, so the record is what
+    is compared, and the refusal is INDEPENDENT of core.fileMode by construction.
+    BOTH DIRECTIONS BLOCK. index 100755 + non-executable on disk is the mirror: every gate that
+    runs the file (a build script, a hook, a guard) fails locally, so an operator "fixes" it with a
+    chmod that the index never learns about — and the push ships the mode nobody tested.
+    WHAT IS COMPARED IS THE CLASS, not the bits: git records exactly two regular modes, so any-x
+    ⇔ 100755 and no-x ⇔ 100644. A 0o700 vs 0o755 difference is not a divergence and is not flagged.
+    Measured on this catalog: 5,745 tracked paths, ZERO divergences — the refusal costs an honest
+    tree nothing.
+    """
+
+
+class GitlinkUninitializedDirt(GitFiltersPresent):
+    """A gitlink whose worktree path holds FILES but no gitdir — "uninitialized" and yet populated.
+
+    ROUND 9 / P1-2 (TD-2026-07-30-(P1-representation-parity)). Round 8 exempted an UNINITIALIZED
+    submodule on the reasoning that "nothing on disk, nothing was tested". The exemption tested the
+    wrong thing: it returned success on the ABSENCE OF `<gitlink>/.git` alone, without ever
+    requiring the directory to be EMPTY. MEASURED (reviewer round 9): add a gitlink with
+    `git update-index --add --cacheinfo 160000,<sha>,vendor/sub`, commit a mandatory check that
+    runs `bash vendor/sub/check.sh`, then create `vendor/sub/check.sh` on disk with NO `.git`
+    anywhere inside → `git status --porcelain` is EMPTY (git does not descend into a gitlink),
+    every sweep returns clean, and R25 executes a file that the push does not ship: a gitlink
+    commits only the recorded sha, and a fresh clone of it gets an EMPTY directory.
+    THE CORRECTED RULE: an uninitialized gitlink is acceptable ONLY when its worktree path is
+    ABSENT or an ACTUALLY-EMPTY directory. The fresh-clone case — which is why round 8 declined to
+    block at all, and which is still right — is exactly the empty-directory case, and all three
+    gitlinks in this catalog are in it. Anything else BLOCKS.
+    DISTINCT FROM docs/BACKLOG.md P3-119, which is dirt inside an INITIALIZED submodule's own work
+    tree (that repository's fingerprint to compute). This is content under a gitlink that has no
+    repository at all, so there is nothing else that could ever account for it.
+    """
+
+
+class CasefoldAlias(GitFiltersPresent):
+    """Two index entries differing only in CASE that are ONE file on a case-insensitive filesystem.
+
+    ROUND 9 / (e) (TD-2026-07-30-(P1-representation-parity)). On APFS (and NTFS, and a
+    case-insensitive HFS+) `A.sh` and `a.sh` are the same file. git's index can hold BOTH, with
+    different blobs; the filesystem can hold only one. Every read this file makes — and every read
+    the build makes — then answers about that one file for both entries, so one of the two blobs is
+    a byte claim about a file that is not on disk, and the push ships both.
+    THE TEST IS A MEASUREMENT, NOT AN ASSUMPTION ABOUT THE FILESYSTEM: two index paths whose
+    casefolded forms are equal are flagged only when they lstat to the SAME (st_dev, st_ino), i.e.
+    when the aliasing is observed. On a case-sensitive filesystem the same repository yields two
+    distinct inodes and nothing is refused, so this costs a Linux fork-receiver nothing.
+    Measured on this catalog: ZERO casefold collisions and ZERO inode aliases among 5,745 tracked
+    paths, so the refusal costs this tree nothing either.
     """
 
 
@@ -240,21 +316,55 @@ def _blob_id(data, algo):
     return h.hexdigest().encode()
 
 
+def _gitlink_uninitialized_dirt(full, show):
+    """ROUND 9 / P1-2: an uninitialized gitlink may be ABSENT or EMPTY — never populated.
+
+    Returns a description when the worktree path holds anything, else None. `os.listdir` is the
+    whole test: a gitlink ships only its recorded sha, so a fresh clone of this commit produces an
+    empty directory, and anything a run read from a populated one is code the receiver never gets.
+    """
+    if not os.path.exists(full):
+        return None                                     # absent: the ordinary pre-init shape
+    if not os.path.isdir(full):
+        return ("%s (a gitlink whose worktree path is not a directory at all)" % show)
+    try:
+        kids = os.listdir(full)
+    except OSError as exc:
+        return ("%s (uninitialized gitlink whose directory could not be listed: %s)"
+                % (show, exc.strerror or exc))
+    if not kids:
+        return None                                     # empty: the ordinary post-clone shape
+    names = ", ".join(sorted(os.fsdecode(k) for k in kids)[:4])
+    return ("%s (uninitialized gitlink — no gitdir — yet its directory holds %d entr%s: %s)"
+            % (show, len(kids), "y" if len(kids) == 1 else "ies", names))
+
+
 def _gitlink_divergence(repo, gbin, genv, path, want):
-    """ROUND 8 / P1-A: an INITIALIZED submodule must be at the commit the gitlink records."""
+    """ROUND 8 / P1-A + ROUND 9 / P1-2. Returns (bucket, message) or None.
+
+    bucket is "dirt" for an UNINITIALIZED gitlink that is nonetheless populated (round 9) and
+    "diverged" for an INITIALIZED submodule that is not at the recorded commit (round 8). The two
+    are reported under different codes because they are different lies: one ships an empty
+    directory where a run read files, the other ships a different commit than the run tested.
+    """
     full = os.path.join(os.fsencode(repo), path)
+    show = path.decode(errors="replace")
     if not os.path.exists(os.path.join(full, b".git")):
-        return None                      # uninitialized: nothing on disk, nothing was tested
+        # ROUND 9 / P1-2: "uninitialized" is not by itself a pass. It is a pass only when there is
+        # nothing there — the round-8 exemption tested for the absence of a gitdir and forgot to
+        # test for the absence of FILES, which is the state a populated fake submodule occupies.
+        dirt = _gitlink_uninitialized_dirt(full, show)
+        return ("dirt", dirt) if dirt else None
     p = subprocess.run([gbin, "--no-replace-objects", "-C", os.fsdecode(full),
                         "rev-parse", "HEAD"],
                        stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, env=genv)
     have = p.stdout.strip() if p.returncode == 0 else b""
     if have and have != want:
-        return ("%s (the superproject records %s, the submodule work tree is at %s)"
-                % (path.decode(errors="replace"), want[:12].decode(), have[:12].decode()))
+        return ("diverged", "%s (the superproject records %s, the submodule work tree is at %s)"
+                % (show, want[:12].decode(), have[:12].decode()))
     if not have:
-        return ("%s (initialized but its HEAD could not be read, so the commit this run tested "
-                "cannot be compared with the one the push ships)" % path.decode(errors="replace"))
+        return ("diverged", "%s (initialized but its HEAD could not be read, so the commit this "
+                "run tested cannot be compared with the one the push ships)" % show)
     return None
 
 
@@ -286,6 +396,8 @@ def _raw_index_sweep(repo, gbin, genv, dirty):
     algo = _object_algo(repo, gbin, genv)
     rootb = os.fsencode(repo)
     diverged, mistyped, unreadable, flagged, gitlinks = [], [], [], [], []
+    execbits, gldirt = [], []
+    casefold = {}          # ROUND 9 / (e): lowercased path -> [(path, (dev, ino)), …]
     for rec in out.stdout.split(b"\0"):
         if not rec:
             continue
@@ -309,8 +421,25 @@ def _raw_index_sweep(repo, gbin, genv, dirty):
             else:
                 gl = _gitlink_divergence(repo, gbin, genv, path, blob)
                 if gl:
-                    gitlinks.append(gl)
+                    (gldirt if gl[0] == "dirt" else gitlinks).append(gl[1])
             continue
+        # ROUND 9 / P1-1 + (e): the two representation facts that are NOT the blob and NOT the
+        # dirty/clean split, so both are read BEFORE the `dirty` continue below. `git status` can
+        # be told to stop reporting the executable bit (core.fileMode=false) and NEVER reports a
+        # casefold alias, and the digest carries neither, so a path that is dirty for content can
+        # still be lying about its mode.
+        try:
+            st = os.lstat(full)
+        except OSError:
+            st = None
+        if st is not None and stat.S_ISREG(st.st_mode) and mode in (b"100644", b"100755"):
+            if bool(st.st_mode & 0o111) != (mode == b"100755"):
+                execbits.append(
+                    "%s (index: %s, on disk: %s)"
+                    % (show, "100755 (executable)" if mode == b"100755" else "100644 (plain)",
+                       "executable" if st.st_mode & 0o111 else "NOT executable"))
+        if st is not None:
+            casefold.setdefault(path.lower(), []).append((show, (st.st_dev, st.st_ino)))
         if path in dirty:
             continue
         is_link = os.path.islink(full)
@@ -348,10 +477,21 @@ def _raw_index_sweep(repo, gbin, genv, dirty):
                 continue
         if _blob_id(data, algo) != blob:
             diverged.append(show)
-        if (len(diverged) >= 8 and len(mistyped) >= 8 and len(unreadable) >= 8
-                and len(flagged) >= 8 and len(gitlinks) >= 8):
-            break
-    return diverged[:8], mistyped[:8], unreadable[:8], flagged[:8], gitlinks[:8]
+        # NOTE: no early `break` here. Round 8 had one, and it was only ever reached when EVERY
+        # bucket was already full; the casefold check below needs the WHOLE index (an alias is a
+        # property of a pair, so a truncated walk can miss the second half of one).
+    aliased = []
+    for group in casefold.values():
+        if len(group) < 2:
+            continue
+        seen = {}
+        for show, key in group:
+            seen.setdefault(key, []).append(show)
+        for names in seen.values():
+            if len(names) > 1:
+                aliased.append(" ≡ ".join(sorted(names)))
+    return (diverged[:8], mistyped[:8], unreadable[:8], flagged[:8], gitlinks[:8],
+            execbits[:8], gldirt[:8], aliased[:8])
 
 
 def fingerprint(repo):
@@ -415,7 +555,13 @@ def fingerprint(repo):
     # regular file, a tracked path ABSENT from disk, an index carrying assume-unchanged /
     # skip-worktree bits, and an initialized submodule that is not at the recorded commit are all
     # states in which the tree this file describes is not the tree the push ships. Each BLOCKS.
-    diverged, mistyped, unreadable, flagged, gitlinks = _raw_index_sweep(
+    # ROUND 9 / P1-1, P1-2, (e): three more disagreements between the index and the working tree
+    # that are neither bytes nor the shapes round 8 enumerated — the EXECUTABLE BIT (which
+    # core.fileMode=false tells git to stop reporting, and which no digest here carries), a
+    # populated but UNINITIALIZED gitlink (a directory the push ships EMPTY), and two index entries
+    # that a case-insensitive filesystem serves from ONE file.
+    (diverged, mistyped, unreadable, flagged, gitlinks,
+     execbits, gldirt, aliased) = _raw_index_sweep(
         repo, gbin, genv, set(modified) | set(untracked))
     if flagged:
         raise IndexFlagsSet(
@@ -444,6 +590,34 @@ def fingerprint(repo):
               "under all three `git status` stays empty while the file the push ships is not on "
               "disk at all, so nothing this run executed or hashed was about it. Restore the "
               "path (and clear the bit) before producing push evidence.")
+    if execbits:
+        raise ExecBitDivergence(
+            "tracked paths whose EXECUTABLE BIT on disk is not the one the index records: "
+            + ", ".join(execbits)
+            + ". git records exactly two regular modes (100644 / 100755) and `core.fileMode=false` "
+              "tells git to stop REPORTING a difference — it does not change the RECORD, so this "
+              "comparison is made against `git ls-files -s` and is independent of that setting. "
+              "Measured: a 100644 file made executable on disk left `git status` empty and the "
+              "fingerprint at the clean-tree constant while every `./gradlew` invocation ran the "
+              "locally-executable file that a fresh checkout cannot execute. Fix the record "
+              "(`git update-index --chmod=+x|-x <path>`) or the file, and re-run.")
+    if gldirt:
+        raise GitlinkUninitializedDirt(
+            "gitlinks with no gitdir whose worktree path is nevertheless POPULATED: "
+            + ", ".join(gldirt)
+            + ". A gitlink ships only the commit it records, so a fresh clone of this commit gets "
+              "an EMPTY directory there — anything read or executed from a populated one is code "
+              "the receiver never gets. An uninitialized gitlink is acceptable only when its path "
+              "is absent or an actually-empty directory. Either initialize the submodule "
+              "(`git submodule update --init`) or remove the untracked content.")
+    if aliased:
+        raise CasefoldAlias(
+            "index entries that differ only in CASE and are ONE file on this filesystem: "
+            + ", ".join(aliased)
+            + ". They lstat to the same device/inode, so every read — this sweep, the build, the "
+              "lint — answers about a single file for both entries while the push ships two "
+              "distinct blobs; one of them was never on disk to be verified. Rename one entry so "
+              "the index and the filesystem agree.")
     if gitlinks:
         raise GitlinkDivergence(
             "initialized submodules whose work tree is not at the commit the superproject "
@@ -505,9 +679,12 @@ if __name__ == "__main__":
     # clean does not match its index blob on raw bytes, and (ROUND 8 / P1-A) 7 = a tracked path's
     # worktree REPRESENTATION is not the index's, 8 = a tracked path is absent/unreadable,
     # 9 = the index carries assume-unchanged / skip-worktree bits, 10 = an initialized submodule
-    # is not at the recorded commit. Callers BLOCK on every non-zero code — printing nothing and
-    # exiting 0 is exactly the fail-open round 5 closed, and `continue`ing past a representation
-    # is the same fail-open one level down, which is what round 8 closed.
+    # is not at the recorded commit, and (ROUND 9 / TD-2026-07-30-(P1-representation-parity))
+    # 11 = a tracked path's EXECUTABLE BIT is not the index's, 12 = an uninitialized gitlink is
+    # populated, 13 = two index entries differing only in case are one file on disk. Callers BLOCK
+    # on every non-zero code — printing nothing and exiting 0 is exactly the fail-open round 5
+    # closed, `continue`ing past a representation is the same fail-open one level down (round 8),
+    # and accepting a representation fact the digest does not carry is the same again (round 9).
     try:
         print(fingerprint(sys.argv[1]))
     except RedirectedGitContext as exc:
@@ -525,6 +702,15 @@ if __name__ == "__main__":
     except GitlinkDivergence as exc:
         print(f"tree_fingerprint: GIT_GITLINK_DIVERGENCE — {exc}", file=sys.stderr)
         sys.exit(10)
+    except ExecBitDivergence as exc:
+        print(f"tree_fingerprint: GIT_EXEC_BIT_DIVERGENCE — {exc}", file=sys.stderr)
+        sys.exit(11)
+    except GitlinkUninitializedDirt as exc:
+        print(f"tree_fingerprint: GIT_GITLINK_UNINITIALIZED_POPULATED — {exc}", file=sys.stderr)
+        sys.exit(12)
+    except CasefoldAlias as exc:
+        print(f"tree_fingerprint: GIT_CASEFOLD_ALIAS — {exc}", file=sys.stderr)
+        sys.exit(13)
     except RawIndexDivergence as exc:
         # Ordered BEFORE GitFiltersPresent: RawIndexDivergence subclasses it so that callers
         # written against the older type still block, but the code printed must be the specific

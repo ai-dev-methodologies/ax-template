@@ -511,12 +511,18 @@ preflight_faked() {
 }
 
 # ── Preflight (i): yaml parser — required unconditionally (checklist is yaml) ──
-# ROUND 6 / P1-2(c): the probe now runs the AUTHENTICATED interpreter with the SAME flags the
-# consuming call site uses (-E), because a capability established under one interpreter/flag set
-# says nothing about another. It BLOCKS; it never degrades to a skip — 'the parser was missing so
-# we did not check' is the fail-open this whole round is about.
+# ROUND 6 / P1-2(c): the probe runs THE SAME RESOLVED INTERPRETER the consuming call sites use,
+# with the SAME flags (-E), because a capability established under one interpreter/flag set says
+# nothing about another. It BLOCKS; it never degrades to a skip — 'the parser was missing so we did
+# not check' is the fail-open this whole round is about.
+# WORDING, corrected in ROUND 9 / (a): this said "the AUTHENTICATED interpreter", which claims
+# something no part of this file does or can do. $AX_PY_BIN was RESOLVED (absolute path, regular
+# file, executable) and it ANSWERED A FIXED PUBLIC SMOKE TEST; a wrapper forwards that challenge
+# and answers it correctly. See practices/DECISIONS.md TD-2026-07-30-(ratchet-threat-model): PATH
+# executables are DECLARED TRUSTED, they are not authenticated, and the resolved paths are printed
+# for a reviewer to see rather than verified.
 if preflight_faked yaml || { ! "$AX_PY_BIN" -E -c 'import yaml' >/dev/null 2>&1 && ! command -v yq >/dev/null 2>&1; }; then
-    echo "verify-completion: R25 BLOCK (HERMETIC_PY_YAML_UNAVAILABLE): the authenticated" >&2
+    echo "verify-completion: R25 BLOCK (HERMETIC_PY_YAML_UNAVAILABLE): the resolved" >&2
     echo "  interpreter $AX_PY_BIN cannot 'import yaml' under -E and yq is not on PATH, so the" >&2
     echo "  checklist cannot be parsed. Install PyYAML for THIS interpreter" >&2
     echo "  ($AX_PY_BIN -m pip install pyyaml) or install yq. Blocking, not skipping." >&2

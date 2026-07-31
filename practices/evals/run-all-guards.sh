@@ -1565,6 +1565,24 @@ run_guard "release_anchor/helper_injection_blocked" 0 \
 # the representation backstop refuses on its own (a sparse checkout SETS that bit, so without this
 # the backstop would be untested dead code); (S) is an over-correction control — an UNINITIALIZED
 # gitlink must still PASS, because that is the ordinary post-clone shape of all three gitlinks here.
+# ROUND 9 (TD-2026-07-30-(P1-representation-parity) / P1-1, P1-2, (c), (d), (e)) closes the parity
+# gap round 8 left: it separated the SHAPES and then compared only BLOB BYTES, so three
+# representation facts no digest carries were still accepted. (T)/(U) the EXECUTABLE BIT, both
+# directions — `core.fileMode=false` + `update-index --chmod=-x` + a local `chmod +x` leaves status
+# EMPTY and the fingerprint at the clean-tree constant while R25's direct `./gradlew` invocations
+# run a file the push records as 100644 → GIT_EXEC_BIT_DIVERGENCE (the index mode is read from
+# `ls-files -s`, so core.fileMode cannot suppress it). (V) a gitlink with NO gitdir whose directory
+# is nevertheless POPULATED — round 8 exempted on the absence of `<gitlink>/.git` alone and never
+# required the directory to be EMPTY, so a committed step can execute a file the push does not ship
+# → GIT_GITLINK_UNINITIALIZED_POPULATED. (W) two index entries differing only in case that lstat to
+# ONE inode → GIT_CASEFOLD_ALIAS (defense in depth: the ordinary form also shows as a modification).
+# (T2)/(U2)/(V2)/(W2) are committed pre-round-9 twins in which each attack lands again. ROUND 9 /
+# (c) additionally exercises the two round-8 branches that were implemented but never driven:
+# (X) the MIRROR of (P) — an index-SYMLINK path that is a REGULAR file on disk, run with ONLY the
+# index-bit refusal neutered → GIT_WORKTREE_TYPE_MISMATCH; and (Y) an INITIALIZED submodule moved
+# off the recorded commit → GIT_GITLINK_DIVERGENCE. ROUND 9 / (d): a setup failure inside a case is
+# now LOUD (harness exit 2) instead of `|| return 0`, which silently turned a broken case into a
+# green one.
 run_guard "hermetic_runtime/inherited_runtime_blocked" 0 \
     bash "$REPO_ROOT/practices/scripts/ax-prove-hermetic-runtime.sh"
 # ── P1-2/P1-4 ROUND-4: the recency guard's FIXTURE SWEEP ───────────────────────────

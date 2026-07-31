@@ -89,6 +89,33 @@
 #       three gitlinks in this catalog are empty post-clone fixture directories; a refusal there
 #       would break every fresh clone to close nothing.
 #
+# ROUND 9 (TD-2026-07-30-(P1-representation-parity) / P1-1, P1-2, (c), (d), (e)) attacks the parity
+# round 8 left: it SEPARATED the shapes and then compared only BLOB BYTES, so three representation
+# facts that no digest here carries were still accepted. None needs environment control.
+#   (T) an index-100644 path that is EXECUTABLE on disk, under `core.fileMode=false`: status EMPTY,
+#       bytes identical, fingerprint = the clean-tree constant, and R25's direct `./gradlew`
+#       invocations run a file the push records as non-executable → GIT_EXEC_BIT_DIVERGENCE.
+#   (U) the MIRROR: index 100755, NOT executable on disk           → GIT_EXEC_BIT_DIVERGENCE.
+#       (T2)/(U2) with the round-9 refusals removed, both land again (exit 0).
+#   (V) a gitlink with NO gitdir whose directory is POPULATED. Round 8's exemption tested for the
+#       absence of `<gitlink>/.git` and never required the directory to be EMPTY, so a committed
+#       step can `bash vendor/sub/check.sh` a file that a fresh clone of the pushed commit never
+#       receives                                     → GIT_GITLINK_UNINITIALIZED_POPULATED.
+#       (V2) with the round-9 refusals removed it lands again (exit 0).
+#   (W) two index entries differing only in CASE that lstat to ONE inode → GIT_CASEFOLD_ALIAS.
+#       SCOPE, stated: with divergent blobs the alias also shows as a modification, so the
+#       clean-tree precondition already refuses the ordinary form; this is defense in depth that
+#       names the fault rather than the symptom. (W2) is its pre-round-9 twin.
+#   (X) ROUND 9 / (c): the MIRROR of (P) — an index-SYMLINK path that is a REGULAR FILE on disk.
+#       Round 8 implemented this direction and never exercised it; run with ONLY the index-bit
+#       refusal neutered so the code under test is the representation backstop
+#                                                    → GIT_WORKTREE_TYPE_MISMATCH.
+#   (Y) ROUND 9 / (c): an INITIALIZED submodule moved off the recorded commit — round 8's other
+#       implemented-but-undriven branch          → GIT_GITLINK_DIVERGENCE.
+#   ROUND 9 / (d): a per-case SETUP FAILURE is now LOUD (harness exit 2). It used to be
+#       `r8_apply … || return 0`, which turned a case whose attack could not even be applied into a
+#       SILENT PASS — a proof harness that can skip its own cases proves nothing.
+#
 # Nothing outside the throwaway directory is touched; the live tree is only ever READ.
 # Exit: 0 all attacks blocked · 1 at least one attack open · 2 harness error.
 set -uo pipefail
@@ -224,7 +251,7 @@ run_gate() {   # run_gate <sb> <log> [env assignments...] — the LIVE recency g
 
 # ── ROUND 6 neuters. Same contract as prefix_neuter: every anchor must occur EXACTLY ONCE, so a
 # refactor makes this harness fail loudly instead of silently proving nothing.
-round6_neuter() {   # round6_neuter <sb> <what>   what ∈ preflight|identity|rawbytes|priorrelease
+round6_neuter() {   # round6_neuter <sb> <what>   what ∈ preflight|smoketest|rawbytes|priorrelease
     "${AX_PY_BIN:-python3}" - "$1/repo" "$2" <<'PY'
 import re, sys, pathlib
 repo, what = pathlib.Path(sys.argv[1]), sys.argv[2]
@@ -236,7 +263,7 @@ edits = {
     #      bootstrap's own `[ … ]` executed before anything looked at the runtime.
     "preflight": [(GUARD, [('_AX_PF_ENV="$(/usr/bin/env)"', '_AX_PF_ENV="AX_NEUTERED"')])],
     # (H') remove the interpreter self-report: back to "absolute + -x is good enough".
-    "identity": [(GUARD, [('            "AXPY 3 "*) AX_PY_BIN="$_ax_hb" ;;',
+    "smoketest": [(GUARD, [('            "AXPY 3 "*) AX_PY_BIN="$_ax_hb" ;;',
                            '            *) AX_PY_BIN="$_ax_hb" ;;\n'
                            '            "AXPY 3 "*) AX_PY_BIN="$_ax_hb" ;;')])],
     # (J') revert the toolchain byte comparison to the filter-honouring `git diff --quiet`.
@@ -617,11 +644,11 @@ if [ "$H_RC" -eq 0 ] || ! grep -q "HERMETIC_TOOL_UNAUTHENTIC" "$WORK/h.log"; the
               "the smoke test that catches a stub. It is not authentication."
     head -3 "$WORK/h.log" >&2
 fi
-SB_H2="$WORK/py-true-neutered"; build_sb_red "$SB_H2" identity || { echo "harness setup failed (H')" >&2; exit 2; }
+SB_H2="$WORK/py-true-neutered"; build_sb_red "$SB_H2" smoketest || { echo "harness setup failed (H')" >&2; exit 2; }
 run_gate "$SB_H2" "$WORK/h2.log" PATH="$WORK/fakebin:$PATH"; H2_RC=$?
 note "(H') same attack, self-report removed      : exit=$H2_RC (want 0 = reproduces)"
 if [ "$H2_RC" -ne 0 ]; then
-    violation "the /usr/bin/true interpreter did NOT reproduce with the identity check removed" \
+    violation "the /usr/bin/true interpreter did NOT reproduce with the smoke test removed" \
               "(exit=$H2_RC); (H) is therefore not attributable to it. Harness stale."
 fi
 
@@ -880,7 +907,17 @@ r8_case() {   # r8_case <tag> <kind> <label> <expected-codes-regex> [neuter]
         round8_neuter "$sb" "$neuter" || { echo "harness setup failed ($tag/neuter stale)" >&2; exit 2; }
     fi
     write_audit "$sb"
-    r8_apply "$sb" "$kind" || return 0
+    # ROUND 9 / (d): SETUP FAILURE IS LOUD. This used to be `|| return 0`, which turned a broken
+    # case — a failed `update-index`, a missing sentinel, an `ln -s` that could not run — into a
+    # SILENT PASS: the scenario never ran, nothing was measured, and the harness still printed its
+    # green summary. A proof harness that can skip its own cases proves nothing, so a setup
+    # failure now aborts the whole run with the harness-error exit.
+    r8_apply "$sb" "$kind"
+    case $? in
+        0) ;;
+        3) return 1 ;;   # premise broken: r8_apply already called violation()
+        *) echo "ax-prove-hermetic-runtime: harness setup failed ($tag/apply $kind)" >&2; exit 2 ;;
+    esac
     run_gate "$sb" "$WORK/$tag.log"; rc=$?
     note "($tag) $label: exit=$rc"
     if [ -n "$want" ]; then
@@ -931,6 +968,217 @@ if [ "$S_RC" -ne 0 ]; then
               "fire only on an INITIALIZED submodule that is not at the recorded commit."
     head -5 "$WORK/s.log" >&2
 fi
+
+# ══ ROUND 9 (TD-2026-07-30-(P1-representation-parity)) ═══════════════════════════════
+# Round 8 separated the SHAPES and then compared only BLOB BYTES. A tracked path's representation
+# carries three more facts, none of which any digest here holds:
+#   (T)/(U) the EXECUTABLE BIT, both directions. `core.fileMode=false` tells git to stop REPORTING
+#       it, so status stays EMPTY and the fingerprint stays at the clean-tree constant while R25's
+#       118 direct `./gradlew` invocations run a file the push records as 100644 — which a fresh
+#       checkout cannot execute at all.          → GIT_EXEC_BIT_DIVERGENCE
+#   (V) a gitlink with NO gitdir whose directory is nevertheless POPULATED. Round 8's exemption
+#       returned success on the ABSENCE of `<gitlink>/.git` alone and never required the directory
+#       to be EMPTY, so a committed step can `bash vendor/sub/check.sh` a file that the push does
+#       not ship (a gitlink ships a sha; a fresh clone gets an empty directory).
+#                                                → GIT_GITLINK_UNINITIALIZED_POPULATED
+#   (W) two index entries differing only in CASE that a case-insensitive filesystem serves from ONE
+#       file.                                    → GIT_CASEFOLD_ALIAS
+# and ROUND 9 / (c) adds the two POSITIVE REGRESSIONS round 8 claimed but never exercised:
+#   (X) the MIRROR of (P): an index-SYMLINK path that is a REGULAR FILE on disk.
+#                                                → GIT_WORKTREE_TYPE_MISMATCH
+#   (Y) an INITIALIZED submodule at a commit the superproject does not record.
+#                                                → GIT_GITLINK_DIVERGENCE
+# Each has a pre-round-9 (or pre-round-8) twin in which it lands again, so the refusal is
+# attributable to the fix and not to the sandbox.
+
+# ── ROUND 9 neuters. Same exactly-once anchor contract as every earlier neuter. `all` removes the
+# three round-9 refusals from BOTH implementations; `bits` (reused from round 8) removes only the
+# index-flag refusal, which is what makes (X) separately attributable.
+round9_neuter() {   # round9_neuter <sb> <what>   what ∈ all
+    "${AX_PY_BIN:-python3}" - "$1/repo" "$2" <<'PY'
+import sys, pathlib
+repo, what = pathlib.Path(sys.argv[1]), sys.argv[2]
+GUARD = repo / "practices/evals/completion_checklist_recency_guard.sh"
+FP = repo / "practices/scripts/lib/tree_fingerprint.py"
+pairs = {
+    "all": [
+        (GUARD, "        if _execbits:"), (GUARD, "        if _gldirt:"),
+        (GUARD, "        if _aliased:"),
+        (FP, "    if execbits:"), (FP, "    if gldirt:"), (FP, "    if aliased:"),
+    ],
+}
+for path, anchor in pairs[what]:
+    text = path.read_text(encoding="utf-8")
+    n = text.count(anchor)
+    if n != 1:
+        print(f"round9 neuter anchor occurs {n}x (expected 1) in {path}: {anchor!r}",
+              file=sys.stderr)
+        sys.exit(3)
+    dead = anchor[:len(anchor) - len(anchor.lstrip())] + "if False:"
+    path.write_text(text.replace(anchor, dead, 1), encoding="utf-8")
+PY
+    local rc=$?
+    [ "$rc" -ne 0 ] && return "$rc"
+    ( builtin cd "$1/repo" && git add -A && git "${GIT_ID[@]}" commit -q -m "pre-round-9" \
+      && git update-ref refs/remotes/origin/main HEAD \
+      && git push -q -f origin HEAD:refs/heads/main ) >/dev/null 2>&1
+    return 0
+}
+
+# r9_setup <sb> <kind> — runs BEFORE write_audit because it COMMITS (the index state IS the setup).
+# Every path it leaves behind is CONSISTENT, so the audit line records an honest clean tree.
+r9_setup() {
+    local sb="$1" kind="$2" h b
+    case "$kind" in
+        execA)   # index 100644, disk non-executable → consistent; the attack adds the x bit
+            git -C "$sb/repo" config core.fileMode false || return 2
+            chmod -x "$sb/repo/backend/gradlew" || return 2
+            git -C "$sb/repo" update-index --chmod=-x backend/gradlew || return 2
+            ( builtin cd "$sb/repo" && git "${GIT_ID[@]}" commit -q -m "execA setup" ) \
+                >/dev/null 2>&1 || return 2 ;;
+        execB)   # index 100755, disk executable → consistent; the attack REMOVES the x bit
+            git -C "$sb/repo" config core.fileMode false || return 2 ;;
+        gldirt)  # an EMPTY uninitialized gitlink: exactly the shape (S) proves must still pass
+            h="$(git -C "$sb/repo" rev-parse HEAD)" || return 2
+            mkdir -p "$sb/repo/vendor/sub" || return 2
+            ( builtin cd "$sb/repo" \
+              && git update-index --add --cacheinfo "160000,$h,vendor/sub" \
+              && git "${GIT_ID[@]}" commit -q -m gitlink ) >/dev/null 2>&1 || return 2 ;;
+        casefold)
+            printf 'REAL\n' > "$sb/repo/Alias.txt" || return 2
+            ( builtin cd "$sb/repo" && git add Alias.txt \
+              && git "${GIT_ID[@]}" commit -q -m alias1 ) >/dev/null 2>&1 || return 2
+            b="$(printf 'EVIL\n' | git -C "$sb/repo" hash-object -w --stdin)" || return 2
+            ( builtin cd "$sb/repo" \
+              && git update-index --add --cacheinfo "100644,$b,alias.txt" \
+              && git "${GIT_ID[@]}" commit -q -m alias2 ) >/dev/null 2>&1 || return 2 ;;
+        symreg)  # an index-SYMLINK path (mode 120000), consistent on disk
+            ( builtin cd "$sb/repo" && ln -s benign-target.txt linkpath.txt \
+              && git add linkpath.txt \
+              && git "${GIT_ID[@]}" commit -q -m symlink ) >/dev/null 2>&1 || return 2 ;;
+        glinit)  # a REAL, initialized submodule recorded at its FIRST commit
+            mkdir -p "$sb/repo/vendor/mod" || return 2
+            ( builtin cd "$sb/repo/vendor/mod" && git init -q . \
+              && printf 'one\n' > f.txt && git add f.txt \
+              && git "${GIT_ID[@]}" commit -q -m one ) >/dev/null 2>&1 || return 2
+            h="$(git -C "$sb/repo/vendor/mod" rev-parse HEAD)" || return 2
+            ( builtin cd "$sb/repo/vendor/mod" && printf 'two\n' > f.txt && git add f.txt \
+              && git "${GIT_ID[@]}" commit -q -m two && git checkout -q "$h" ) \
+                >/dev/null 2>&1 || return 2
+            ( builtin cd "$sb/repo" \
+              && git update-index --add --cacheinfo "160000,$h,vendor/mod" \
+              && git "${GIT_ID[@]}" commit -q -m gitlink-init ) >/dev/null 2>&1 || return 2 ;;
+        *) return 2 ;;
+    esac
+    return 0
+}
+
+# r9_attack <sb> <kind> <expect-status> — runs AFTER write_audit, NEVER commits. <expect-status> is
+# `empty` when the class's whole premise is that `git status --porcelain` shows nothing; the premise
+# is asserted, so a future git that DOES report the change makes this harness say so loudly instead
+# of passing on a different refusal.
+r9_attack() {
+    local sb="$1" kind="$2" want_status="$3"
+    case "$kind" in
+        execA)    chmod +x "$sb/repo/backend/gradlew" || return 2 ;;
+        execB)    chmod -x "$sb/repo/backend/gradlew" || return 2 ;;
+        gldirt)   printf 'echo owned\n' > "$sb/repo/vendor/sub/check.sh" || return 2 ;;
+        casefold) : ;;   # the alias IS the index state; there is nothing further to do on disk
+        symreg)   git -C "$sb/repo" update-index --assume-unchanged linkpath.txt || return 2
+                  rm -f "$sb/repo/linkpath.txt" || return 2
+                  printf 'a regular file where the index says symlink\n' \
+                      > "$sb/repo/linkpath.txt" || return 2 ;;
+        glinit)   ( builtin cd "$sb/repo/vendor/mod" && git checkout -q master 2>/dev/null \
+                    || git checkout -q main ) >/dev/null 2>&1 || return 2 ;;
+        *) return 2 ;;
+    esac
+    if [ "$want_status" = "empty" ] && [ -n "$(git -C "$sb/repo" status --porcelain)" ]; then
+        violation "harness premise broken: \`git status --porcelain\` is NOT empty after the" \
+                  "$kind attack, so this scenario no longer reproduces the reviewer's setup."
+        return 3
+    fi
+    return 0
+}
+
+# r9_case <tag> <kind> <expect-status> <label> <want-regex> [neuter] [fp-override]
+# fp-override exists for exactly one case, (W): a casefold alias is an INDEX state, so it must be
+# committed in the SETUP, which means the post-fix fingerprint helper already refuses when
+# write_audit calls it and the audit line would carry an empty fingerprint — the gate would then
+# block on the RECORD SHAPE (check 11) instead of on the alias. A syntactically valid placeholder
+# keeps checks 5/11 satisfied; the alias is refused in check 12c, which runs BEFORE the fingerprint
+# recompute at 12a/12c-recompute, so what is measured is still the alias refusal and nothing else.
+r9_case() {
+    local tag="$1" kind="$2" want_status="$3" label="$4" want="$5" neuter="${6:-}" fpo="${7:-}" sb rc
+    sb="$WORK/r9-$tag"
+    build_sb "$sb" || { echo "harness setup failed ($tag)" >&2; exit 2; }
+    printf 'benign\n' > "$sb/repo/benign-target.txt"
+    ( builtin cd "$sb/repo" && git add benign-target.txt \
+      && git "${GIT_ID[@]}" commit -q -m target ) >/dev/null 2>&1
+    r9_setup "$sb" "$kind" || { echo "harness setup failed ($tag/setup $kind)" >&2; exit 2; }
+    # The neuter COMMITS, so like round 8 it must land BEFORE write_audit or every neutered case
+    # would fail with AUDIT_STALE_HEAD for a reason unrelated to the attack.
+    if [ -n "$neuter" ]; then
+        case "$neuter" in
+            bits) round8_neuter "$sb" bits ;;
+            *)    round9_neuter "$sb" "$neuter" ;;
+        esac || { echo "harness setup failed ($tag/neuter stale)" >&2; exit 2; }
+    fi
+    write_audit "$sb" "$fpo"
+    r9_attack "$sb" "$kind" "$want_status"
+    case $? in
+        0) ;;
+        3) return 1 ;;                       # premise broken: r9_attack already called violation()
+        *) echo "ax-prove-hermetic-runtime: harness setup failed ($tag/attack $kind)" >&2
+           exit 2 ;;
+    esac
+    run_gate "$sb" "$WORK/r9-$tag.log"; rc=$?
+    note "($tag) $label: exit=$rc"
+    if [ -n "$want" ]; then
+        if [ "$rc" -eq 0 ] || ! grep -qE "$want" "$WORK/r9-$tag.log"; then
+            violation "the $kind representation divergence was not refused with $want (exit=$rc)." \
+                      "The index and the working tree disagree about a fact no digest carries, so" \
+                      "R25 certified something the push will not ship."
+            head -5 "$WORK/r9-$tag.log" >&2
+        fi
+    else
+        if [ "$rc" -ne 0 ]; then
+            violation "in a pre-fix sandbox the $kind divergence did NOT reproduce (exit=$rc), so" \
+                      "the round-9 refusals are not attributable — this harness has gone stale."
+            head -5 "$WORK/r9-$tag.log" >&2
+        fi
+    fi
+}
+
+# (T)/(U) the executable bit, BOTH directions, against the LIVE gate …
+r9_case T  execA    empty "index 100644 + EXECUTABLE on disk           " \
+    "GIT_EXEC_BIT_DIVERGENCE"
+r9_case U  execB    empty "index 100755 + NOT executable on disk       " \
+    "GIT_EXEC_BIT_DIVERGENCE"
+# … and their pre-round-9 twins, in which the same attack lands again.
+r9_case T2 execA    empty "same, round-9 refusals removed              " "" all
+r9_case U2 execB    empty "same, round-9 refusals removed              " "" all
+# (V) a populated but UNINITIALIZED gitlink, and its twin.
+r9_case V  gldirt   empty "uninitialized gitlink POPULATED on disk     " \
+    "GIT_GITLINK_UNINITIALIZED_POPULATED"
+r9_case V2 gldirt   empty "same, round-9 refusals removed              " "" all
+# (W) two index entries differing only in case. Status is NOT asserted empty here, and that is the
+# honest scope of this one: with divergent blobs the alias also shows up as a modification, so the
+# gate's clean-tree precondition already refuses the ordinary form. The refusal is defense in depth
+# — it names the actual fault (one file, two blobs, one of them never on disk to be verified)
+# instead of the symptom, and it fires in check 12c BEFORE the clean-tree check at 12a.
+r9_case W  casefold any   "two index entries differing only in CASE    " \
+    "GIT_CASEFOLD_ALIAS" "" "0a815065ebf5ad6ce3828aba4cfc387f26a56a306e8616bb22aadce99dd11211"
+r9_case W2 casefold any   "same, round-9 refusals removed              " "" all
+# (X) ROUND 9 / (c): the MIRROR of round 8's (P) — index SYMLINK, regular file on disk. Round 8
+# implemented this direction and never exercised it. Run with the index-bit refusal neutered so the
+# code under test is the REPRESENTATION backstop and not the assume-unchanged bit.
+r9_case X  symreg   empty "index SYMLINK → regular file (bits neutered)" \
+    "GIT_WORKTREE_TYPE_MISMATCH" bits
+# (Y) ROUND 9 / (c): an INITIALIZED submodule moved off the recorded commit — round 8's other
+# implemented-but-unexercised branch. Status is not asserted empty (a superproject reports "new
+# commits"); the gitlink check runs before the clean-tree check, and the point is the CODE.
+r9_case Y  glinit   any   "INITIALIZED gitlink at the wrong commit     " \
+    "GIT_GITLINK_DIVERGENCE"
 
 echo ""
 if [ "$FAIL" -ne 0 ]; then
