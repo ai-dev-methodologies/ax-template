@@ -456,9 +456,17 @@ def _fold_path_key(pfx, cache=None):
       · The INNER NFD is UAX #21 §1.3 ("Default Caseless Matching" is defined over NFD forms).
         It is load-bearing, not ceremony — MEASURED here: `casefold()` with no normalization at
         all separates every pair above, and the outer step alone is not enough either.
-      · The OUTER normalization is load-bearing because casefold is NOT closed under canonical
-        equivalence: MEASURED, U+1E9B U+0323 vs U+1E69 fold EQUAL with an outer normalization and
-        UNEQUAL without one.
+      · The OUTER normalization is NOT load-bearing — CORRECTED 2026-08-01 by an independent
+        verification lane that measured it. The original sentence here claimed U+1E9B U+0323 vs
+        U+1E69 folds EQUAL only WITH an outer normalization; that comparison was against
+        `casefold()` with no normalization at all. Given the INNER NFD, `casefold(NFD(s))` alone
+        already equalizes every cited pair, and over 14,284 inputs the with-outer and inner-only
+        variants induce an IDENTICAL partition. The outer step is redundant-but-harmless key
+        canonicalization, kept because this value is only ever compared for EQUALITY and a
+        canonical spelling is cheaper to reason about. It is retained, not removed, so that the
+        key never depends on which unnormalized spelling reached it first — but calling it
+        load-bearing was an overclaim, and an overclaim about one's own evidence is the exact
+        defect this catalog keeps finding in its guards.
       · The outer form is NFC rather than the standard's NFD purely because this value is only
         ever compared for EQUALITY, and two strings are canonically equivalent iff their NFC forms
         are equal iff their NFD forms are equal. NFC is the shorter key and the conventional

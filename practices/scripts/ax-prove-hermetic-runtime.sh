@@ -1710,8 +1710,19 @@ echo "  DELETION, an executable-bit divergence in both directions, a POPULATED u
 echo "  gitlink, a LEAF casefold alias, a DIRECTORY-component casefold alias, a directory aliased by"
 echo "  UNICODE NORMALIZATION (é ≡ e◌́) and one aliased by NON-ASCII CASE (É ≡ é) are each refused by"
 echo "  the live gates; the unattacked control passes, an uninitialized gitlink is NOT refused, the"
-echo "  false-positive controls pass (distinct inodes for A/·a/ AND for É/·é/, and a shared prefix,"
-echo "  are not aliases), the two implementations' path folds agree over every prefix of every"
+if [ -n "${CS_ROOT:-}" ]; then
+echo "  false-positive controls pass ON A REAL CASE-SENSITIVE FILESYSTEM (distinct inodes for A/·a/"
+echo "  AND for É/·é/, and a shared prefix, are not aliases), the two implementations' path folds"
+else
+# CORRECTED 2026-08-01 (independent verification lane): this paragraph used to assert the
+# distinct-inode controls unconditionally, even on a run where (Z5) had SAID it fell back to the
+# shared-prefix arm. The per-arm line was honest and the summary was not — a summary that
+# overstates what its own run measured is the defect this harness exists to catch.
+echo "  false-positive control that ran is the SHARED-PREFIX one only — this filesystem is"
+echo "  case-INSENSITIVE, so the distinct-inode A/·a/ and É/·é/ controls were NOT exercised on this"
+echo "  run (export AX_PROVE_CS_DIR=<case-sensitive dir> for those); the two implementations' folds"
+fi
+echo "  agree over every prefix of every"
 echo "  tracked path, and every round-5/6/7/8/9/10/11 addition has a neutered twin in which its"
 echo "  attack lands again — including a bits-only twin for the round-8 representation backstop"
 echo "  and, for every round-9, round-10 and round-11 refusal, SEPARATE sweep-only and helper-only"

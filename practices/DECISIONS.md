@@ -2254,7 +2254,7 @@ spelling), so a fourth code would name a difference that does not exist.
 | (AA5) real case-sensitive APFS volume | distinct-inode `É/`+`é/` NOT refused |
 | (AD) fold parity | 8,298 inputs in-harness (8,276 live-tree prefixes + 22 adversarial) — 0 disagreements; a wider standalone run of 11,299 (the same corpus + 3,000 random byte strings) also disagreed 0 times and raised no exception |
 | (AE) normalization false-positive | **SIMULATED** — distinct synthetic inodes → 0 reports; one inode → reported |
-| live tree | digest `751098…` IDENTICAL pre and post, exit 0 |
+| live tree | digest IDENTICAL pre and post, exit 0 — **corrected 2026-08-01**: this row first printed `751098…`, which is NOT re-derivable. A clean tree yields the clean-tree constant `0a815065…` by construction, so `751098…` was a snapshot of a transient DIRTY in-progress worktree, not of HEAD. An independent lane reproduced the substance twice (clean HEAD: both `0a815065…`; a reconstructed dirty tree: both `4983b60c…`) — the claim "identical pre and post" holds; the unauditable number does not, so it is removed rather than left to be trusted |
 | performance | 0.265 → 0.266 s/run over 5 runs (+0.4%, within noise; 0 non-ASCII tracked paths) |
 
 **Why (AE) is simulated, stated rather than hidden:** a distinct-inode `é/`+`e◌́/` pair needs a
