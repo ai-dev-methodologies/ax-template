@@ -553,6 +553,37 @@ checklist:
       4. Behaviour-preserving MOVES only — do not rewrite component logic to silence
          the rule. Verify per app: cd apps/<app> && npx tsc --noEmit.
 
+  # ── 4c. Frontend unit/component tests (vitest — full suite) ─────────────────
+  # BACKLOG P3-109: the "frontend N/N vitest" claim recorded in session prose/MEMORY had no
+  # commit-bound artifact — R25 gated frontend-lint only, so a vitest regression could land
+  # without ever failing the completion contract. This step closes that gap by making
+  # `npm run test` (= `vitest run`, see frontend/package.json) itself a hard R25 step, the same
+  # way frontend-lint above closed the equivalent gap for ESLint.
+  # timeout_seconds: inherited default (900s) — stated honestly as NOT a measured figure. This
+  # step was authored WITHOUT executing npm (R25 authorship discipline for this closure: the
+  # author names the step and its expected shape; the central R25 run executes and times it for
+  # real, never the authoring pass). Disk-true scale at authoring time: 75 committed
+  # `frontend/tests/**/*.vitest.*` files under the `jsdom` environment
+  # (frontend/vitest.config.*). 900s is the same generous ceiling every other single-command step
+  # in this file inherits (e.g. frontend-lint above) — not a tuned budget for this specific
+  # suite's actual wall-clock time. If a real R25 run's timing differs materially, tighten this
+  # comment and, if warranted, override timeout_seconds with the measured number.
+  - id: frontend-test
+    title: "Frontend vitest (full unit/component suite — jsdom, 75 files at authoring time)"
+    parallel: false
+    commands:
+      - command: "npm run test"
+        working_directory: "frontend"
+        expected_exit: 0
+    fix_playbook: |
+      Frontend vitest failed — a unit/component test regressed.
+      1. Reproduce: cd frontend && npm run test  (= npx vitest run)
+      2. If it errors "vitest: not found", deps are missing → cd frontend && npm ci
+         (then re-run).
+      3. Isolate the failing file: cd frontend && npx vitest run <path/to/file>
+      4. Fix the implementation, not the test, unless the test itself is wrong per this
+         project's testing convention — re-run until green.
+
   # ── 5. Aggregate regression (final binary pass/fail) ────────────────────────
   - id: aggregate-regression
     title: "Aggregate ./gradlew test (catch cross-domain regression)"

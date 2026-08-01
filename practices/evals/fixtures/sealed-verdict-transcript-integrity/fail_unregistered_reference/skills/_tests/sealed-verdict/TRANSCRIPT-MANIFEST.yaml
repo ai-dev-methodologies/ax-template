@@ -1,0 +1,7 @@
+# fixture manifest — fail_unregistered_reference
+# Deliberately incomplete: only registered-verdict.md's binding is here. orphan-verdict.md
+# references orphan-verdict-transcript.md in its prose, but that pair has no entry below.
+bindings:
+  - verdict: registered-verdict.md
+    transcript: registered-verdict-transcript.md
+    transcript_sha256: "561141d27efd5ce7e406ed105e96229a911305a3e8034b7086bbadf5a0d43eea"

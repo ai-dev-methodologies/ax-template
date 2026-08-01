@@ -1,0 +1,49 @@
+# skills/_tests/sealed-verdict/TRANSCRIPT-MANIFEST.yaml — BACKLOG P3-108.
+#
+# WHY THIS FILE EXISTS
+# ---------------------
+# A sealed-verdict file that carries a real context-0 sub-agent transcript (e.g.
+# scheduler-l4-verdict-v2.md → scheduler-l4-verdict-v2-transcript.md) binds to that transcript by
+# a PATH STRING only — the verdict's prose names the transcript file, and nothing recomputes or
+# checks its bytes. Editing the transcript after the fact (to make the sub-agent look like it
+# answered something it didn't) is therefore undetectable: the path still resolves, the verdict's
+# quoted excerpts can be made to match the doctored file, and no gate looks at the relationship
+# between the two files at all.
+#
+# This registry is the fix: for every (verdict, transcript) pair, it records the transcript's
+# sha256 AT THE TIME THE VERDICT WAS SCORED. practices/evals/sealed_verdict_transcript_integrity_
+# guard.sh recomputes that sha256 on every run and BLOCKS on mismatch.
+#
+# WHY A REGISTRY AND NOT JUST A VERDICT-HEADER FIELD
+# ---------------------------------------------------
+# v1 and v2 (scheduler-l4-verdict.md, scheduler-l4-verdict-v2.md) are SEALED — the standing
+# "seals are history, not config" convention forbids editing them, ever, including to retrofit a
+# new field this convention did not exist at their recorded_at. v2 is the file that actually
+# carries a transcript today, so its binding has to live SOMEWHERE mechanically checkable, and it
+# cannot live inside v2 itself. This registry is that somewhere. Going forward, a NEW
+# transcript-carrying verdict (see scheduler-l4-verdict-v3.md) ALSO records transcript_path +
+# transcript_sha256 directly in its own frontmatter (self-describing, no registry lookup needed to
+# read the file in isolation) — but it is STILL listed here, so one guard checks every case
+# uniformly instead of half the cases living in-header and half in a registry with different
+# code paths.
+#
+# SHAPE (deliberately flat/grep-friendly — the guard parses this without a YAML library):
+#   bindings:
+#     - verdict: <filename, relative to this directory>
+#       transcript: <filename, relative to this directory>
+#       transcript_sha256: <64-hex-char sha256 of the transcript file's bytes>
+#
+# Every verdict `.md` file in this directory (other than a `*-transcript.md` file itself, or this
+# registry) that TEXTUALLY REFERENCES a `*-transcript.md` filename MUST have a matching entry
+# here — sealed_verdict_transcript_integrity_guard.sh's completeness check enforces this, so a
+# future verdict that introduces a transcript reference without registering its hash is a BLOCK,
+# not a silent gap.
+#
+# Recomputed with: shasum -a 256 skills/_tests/sealed-verdict/scheduler-l4-verdict-v2-transcript.md
+bindings:
+  - verdict: scheduler-l4-verdict-v2.md
+    transcript: scheduler-l4-verdict-v2-transcript.md
+    transcript_sha256: "10508da8224195bb42e046f9803d52b58028e19b8a5336b2245c746547662c42"
+  - verdict: scheduler-l4-verdict-v3.md
+    transcript: scheduler-l4-verdict-v2-transcript.md
+    transcript_sha256: "10508da8224195bb42e046f9803d52b58028e19b8a5336b2245c746547662c42"

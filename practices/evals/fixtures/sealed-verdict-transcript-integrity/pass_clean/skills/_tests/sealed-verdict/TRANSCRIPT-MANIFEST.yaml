@@ -1,0 +1,5 @@
+# fixture manifest — pass_clean
+bindings:
+  - verdict: foo-verdict.md
+    transcript: foo-verdict-transcript.md
+    transcript_sha256: "7218cf330e971c89ff42bb362b779a6fe7dcaaa1334febb43f911b9294d03a8c"

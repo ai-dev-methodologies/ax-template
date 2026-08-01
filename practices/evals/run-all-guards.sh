@@ -2390,6 +2390,19 @@ if [ "$INCLUDE_FIXTURES" -eq 1 ]; then
         bash "$SCRIPT_DIR/checklist_command_path_spelling_guard.sh" --fixtures
 fi
 
+# ── 105. sealed_verdict_transcript_integrity_guard ──────────────────────────
+echo "[105] sealed_verdict_transcript_integrity_guard.sh (BACKLOG P3-108 — a sealed-verdict file that carries a real context-0 sub-agent transcript (e.g. scheduler-l4-verdict-v2.md → scheduler-l4-verdict-v2-transcript.md) bound to it by a PATH STRING only, so tampering with the transcript's bytes after the verdict was scored was undetectable: the path still resolves and nothing recomputed or checked its content. skills/_tests/sealed-verdict/TRANSCRIPT-MANIFEST.yaml now records, for every (verdict, transcript) pair, the transcript's sha256 at scoring time; this guard recomputes it on every run and BLOCKS on mismatch (TRANSCRIPT_TAMPERED, exit 1). v1/v2 of the scheduler-l4 lineage are SEALED and never edited, so the registry — not an edit to those files — is what applies the binding retroactively; v3 (the P3-105 M1-correction pass) additionally self-describes the same fields in its own frontmatter, and is still listed in the registry so one guard checks both cases uniformly. A second check enforces COMPLETENESS: every verdict \`.md\` that textually references a \`*-transcript.md\` filename must have a matching registered binding, else UNREGISTERED_TRANSCRIPT_REFERENCE (exit 1) — closing the gap for a future verdict that introduces a transcript without ever registering its hash. Non-vacuity: zero parsed bindings is MANIFEST_EMPTY (exit 2), never a green nothing. Fixtures: pass_clean (one correct binding) / fail_tampered_transcript (byte-copy of pass_clean whose transcript content was edited after copying the manifest — same recorded sha256, different disk sha256) / fail_unregistered_reference (one correctly-registered pair plus one verdict, 'orphan-verdict.md', that references a transcript filename absent from the manifest). Residual, stated honestly: this closes drift AFTER a binding is recorded, not the origin trust question of whether the transcript was faithfully hashed the first time — the same boundary evidence_guard.sh draws between structure and content truth.)"
+run_guard "sealed_verdict_transcript_integrity/live" 0 \
+    bash "$SCRIPT_DIR/sealed_verdict_transcript_integrity_guard.sh"
+if [ "$INCLUDE_FIXTURES" -eq 1 ]; then
+    run_guard "sealed_verdict_transcript_integrity/fixture_pass_clean" 0 \
+        bash "$SCRIPT_DIR/sealed_verdict_transcript_integrity_guard.sh" --root "$SCRIPT_DIR/fixtures/sealed-verdict-transcript-integrity/pass_clean"
+    run_guard "sealed_verdict_transcript_integrity/fixture_fail_tampered_transcript" 1 \
+        bash "$SCRIPT_DIR/sealed_verdict_transcript_integrity_guard.sh" --root "$SCRIPT_DIR/fixtures/sealed-verdict-transcript-integrity/fail_tampered_transcript"
+    run_guard "sealed_verdict_transcript_integrity/fixture_fail_unregistered_reference" 1 \
+        bash "$SCRIPT_DIR/sealed_verdict_transcript_integrity_guard.sh" --root "$SCRIPT_DIR/fixtures/sealed-verdict-transcript-integrity/fail_unregistered_reference"
+fi
+
 # ── Summary ──────────────────────────────────────────────────────────────────
 echo ""
 echo "=== Results ==="
