@@ -3138,3 +3138,91 @@ that genuinely moved. That is registered as its own backlog row rather than sile
 here.
 
 - Commits: e25f598, ce85dc5, and this commit (final-4 wave, Lane A)
+
+## TD-2026-08-01-Lane-G — P2-73 B-class anchors (additive ratchet) + P2-72 standing job
+
+- Status: ACCEPT
+- Date: 2026-08-01
+- Maintainer: Lane G (backlog-closure wave, branch final4)
+- Evidence: template/rule frontmatter `evidence:` blocks; the live and throwaway-clone
+  measurements recorded below (the anchor-ratchet exit codes are live-root-bound and NOT
+  fixture-coverable, so this record is their evidence)
+- Rationale: Lane A's B-class prescription was tested rather than executed, and it failed
+  both halves of the test: the defect it describes is not present in the body that actually
+  resolves, and the edit it prescribes is refused by the ratchet as a substitution.
+- Re-evaluation trigger: any change to `resolve_snapshot_any_catalog`'s catalog order, or a
+  second upstream_id registered against different pages in the two catalogs.
+
+### Which snapshot a templates/** citation actually resolves against — MEASURED
+
+`evidence_quote_spotcheck_guard.resolve_snapshot_any_catalog` tries `practices/` and only
+then `practices-react/`. That is a reading of the loop; the measurement is stronger. In a
+throwaway clone at 4b161fd the practices-side copy was renamed away and the protected sweep
+went from `64 file(s), 68 anchor(s), 0 finding(s)` / exit 0 to **exit 1 with 4 findings** —
+`TEMPLATE_QUOTE_NOT_IN_SNAPSHOT` + `TEMPLATE_SECTION_NOT_IN_SNAPSHOT` for skeleton.tsx and
+sonner.tsx against the practices-react copy. So `practices/upstream/` is what resolves.
+
+That matters because ONE upstream_id names TWO DIFFERENT PAGES:
+
+| catalog | `wcag-22-techniques-2026-05` source | carries the SC 4.1.3 sentence? |
+|---|---|---|
+| `practices/upstream/` | `…/WCAG22/Understanding/status-messages.html` (receipt r158, HTTP 200) | YES, verbatim, under a `## Success Criterion (SC)` heading |
+| `practices-react/upstream/` | `…/WCAG22/Techniques/` — the INDEX (receipt r102, HTTP 200) | NO |
+
+Lane A's B-class finding ("the cited page is an index that does not contain the sentence")
+was measured against the react-side body. The body that RESOLVES is the Understanding page,
+and it does contain it. The live protected sweep is green because of that, not because the
+gate is asleep.
+
+### Why the prescribed respell was refused — MEASURED, three ways
+
+At a CONSTANT count of 64 (the case the subset check exists for):
+
+| edit | result |
+|---|---|
+| ledger rows + `# require:` respelled, guard frozenset untouched | exit 2 `PROTECTED_LEDGER_REQUIRED_IDENTITY_MISSING` (both identities named) |
+| both in-tree surfaces respelled, COMMITTED in a throwaway clone | exit 5 `PROTECTED_IDENTITY_REMOVED` vs origin/main — "the pin set may only GROW" |
+| guard file edited but uncommitted | exit 8 `RATCHET_TOOLCHAIN_MODIFIED` — the ratchet refuses to certify from an implementation that exists only in someone's tree |
+
+So the honest move is ADDITIVE: each file gains a SECOND anchor stating the same normative
+sentence against `wcag-2-2` (the WCAG 2.2 Recommendation, practices-react, tier 1), verified
+as a substring of a NON-HEADING prose block. Nothing leaves the fatal set; the claim stops
+depending on which catalog wins the resolution race. Five surfaces moved together, 64 → 66.
+The additive half-edits were measured too: ledger-only → exit 3 `PROTECTED_LEDGER_CENSUS_UNEQUAL`
+(66/66/66/64/64 printed), guard-only → exit 2 `PROTECTED_LEDGER_FLOOR`. Final live state:
+all five surfaces == 66, `66 file(s), 70 anchor(s), 0 finding(s)`, exit 0; all 33 registered
+`evidence_quote_spotcheck` invocations at their expected exits.
+
+### The third file, disposed of rather than carried
+
+`practices/rules/background-poll-must-show-refresh-state.md` was flagged as the same B-class
+defect on the practices side, where `wcag-2-2` does not exist. It is NOT defective: a rule
+resolves within its own catalog, and the practices-side `wcag-22-techniques-2026-05` IS the
+Understanding page, which contains both its quote ("status messages can be programmatically
+determined through role or properties") and its section ("SC 4.1.3 Status Messages (Level
+AA)") verbatim. No WCAG 2.2 body needs fetching into `practices/upstream/`, and no re-anchor
+is warranted. What remains is the NAMING hazard — an id called "techniques" whose
+practices-side body is the Understanding page, and whose react-side body is the index — which
+is registered as a residual rather than renamed here (renaming an id touches every citation
+that uses it and is its own wave).
+
+### P2-72 — the standing job, and what it does not close
+
+`practices/scripts/ax-case-sensitive-sweep.sh` makes Lane F's one-time baseline repeatable:
+case-sensitive APFS volume → probes → clone of a committed revision → `run-all-guards.sh
+--include-fixtures` → detach with a VERIFIED leak check. First standing run (rev cd9210e):
+**357 passed / 0 failed, exit 0, 932 s** — the same 357/357 Lane F measured by hand.
+
+Its own leak check was the interesting part. The first implementation asked
+`hdiutil info | grep -F "$MNT"`, and MEASURED DURING THAT RUN that returns 0 for a volume
+that IS attached: hdiutil prints the resolved `/private/var/...` spelling while `mktemp -d`
+produced `/var/folders/...` with a doubled slash. A "detached cleanly" claim from that check
+would have been unearned. It now scans BOTH `hdiutil info` and `mount` for BOTH spellings and
+is ARMED on every run by a positive control — if the predicate cannot see a volume that is
+demonstrably attached, the run exits 5 instead of reporting a clean detach.
+
+Honest remainder: **nothing schedules it.** It is invocable, registered in CLAUDE.md's
+enforcement-surface table as periodic/manual, and proven to run — but no hook, no CI and no
+R25 step calls it, and its coverage statement excludes the gradle and npm steps (no JDK or
+node_modules is provisioned on the volume) and unicode normalization (the volume folds
+NFC/NFD — measured, printed, not papered over).
