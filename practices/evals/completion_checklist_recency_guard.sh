@@ -1898,6 +1898,7 @@ if live_git_root and not expected_head_file.is_file() and guard_repo is not None
         _STEP_BUDGET = 4096
         _symaliased = []
         _symunbounded = []
+        _symsubjects = set()        # BACKLOG P3-131/132: links the ALIAS census already owns
         for _lpath, _tgt in _symlinks:
             if _tgt.startswith(b"/"):
                 continue                        # absolute: a location on the receiver's root fs
@@ -1970,6 +1971,7 @@ if live_git_root and not expected_head_file.is_file() and guard_repo is not None
                                      if _ax_fold_path_key(_n, _foldcache) == _wkey)
                     if not _walias:
                         continue                # a tracked inode reached by a non-alias route
+                    _symsubjects.add(_lpath)
                     _symaliased.append(
                         "%s -> %s (resolves HERE THROUGH the intermediate component %s, which "
                         "this repository records as %s)"
@@ -1977,6 +1979,7 @@ if live_git_root and not expected_head_file.is_file() and guard_repo is not None
                            _wsp.decode(errors="replace"),
                            " / ".join(_n.decode(errors="replace") for _n in _walias)))
             if _unbounded:
+                _symsubjects.add(_lpath)
                 _symunbounded.append("%s -> %s (%s)"
                                      % (_lpath.decode(errors="replace"),
                                         _tgt.decode(errors="replace"), _unbounded))
@@ -1996,6 +1999,7 @@ if live_git_root and not expected_head_file.is_file() and guard_repo is not None
                             if _ax_fold_path_key(_n, _foldcache) == _ckey)
             if not _alias:
                 continue                        # a tracked inode reached by a non-alias route
+            _symsubjects.add(_lpath)
             _symaliased.append(
                 "%s -> %s (resolves HERE to %s, which this repository records as %s)"
                 % (_lpath.decode(errors="replace"), _tgt.decode(errors="replace"),
@@ -2075,6 +2079,14 @@ if live_git_root and not expected_head_file.is_file() and guard_repo is not None
         _rootreal = os.path.realpath(_rootb)
         _rootsep = _rootreal if _rootreal.endswith(b"/") else _rootreal + b"/"
         for _lpath, _tgt in _symlinks:
+            # THE ONE EXCLUSION (symmetric with the helper): an ALIASED target also "resolves here
+            # and not at the receiver", but the content IS shipped — only the SPELLING is wrong,
+            # which is rounds 13/14/14b' subject, code and remedy. Re-reporting it here would
+            # print the wrong remedy AND subsume those rounds, so their neutered twins would stop
+            # attributing anything (measured: every twin from (AJ2) onward flipped). Nothing
+            # escapes: such a link is already blocking under its own code, computed above.
+            if _lpath in _symsubjects:
+                continue
             _hok = os.path.exists(os.path.join(_rootb, _lpath))
             if _tgt.startswith(b"/"):
                 _treal = os.path.realpath(_tgt)

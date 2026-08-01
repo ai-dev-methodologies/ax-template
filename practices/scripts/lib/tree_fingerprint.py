@@ -1086,7 +1086,8 @@ def _receiver_resolves(linkpath, target, tracked, trackeddirs, linktargets):
     return bool(stack)                          # the target reduced to the clone root
 
 
-def _symlink_receiver_divergences(rootb, symlinks, tracked, trackeddirs, linktargets):
+def _symlink_receiver_divergences(rootb, symlinks, tracked, trackeddirs, linktargets,
+                                  alias_subjects=frozenset()):
     """The RECEIVER-RESOLUTION PARITY census. See SymlinkReceiverDivergence.__doc__ for the
     four-way classification, the refuted premise, and every shape deliberately NOT refused.
 
@@ -1099,11 +1100,22 @@ def _symlink_receiver_divergences(rootb, symlinks, tracked, trackeddirs, linktar
     diverged = []
     hygiene = []
     rootreal = os.path.realpath(rootb)
+    # THE ONE EXCLUSION, and it is a boundary rather than an amnesty. An ALIASED target also
+    # "resolves here and not at the receiver" — but the content IS shipped, the target merely
+    # names it with a spelling the receiver's filesystem does not serve. That is rounds 13/14/14b'
+    # subject, under their own code, with their own remedy (`ln -sf <recorded-spelling>`), and
+    # re-reporting it here would (i) print the wrong remedy and (ii) SUBSUME those rounds, so
+    # their neutered twins would no longer attribute anything. Measured: without this exclusion
+    # every twin from (AJ2) onward flipped from exit 0 to the parity code. Nothing escapes — a
+    # link in <alias_subjects> is already BLOCKING under GIT_SYMLINK_TARGET_ALIAS or
+    # GIT_SYMLINK_RESOLUTION_UNBOUNDED, and those verdicts are computed BEFORE this census.
     if not rootreal.endswith(b"/"):
         rootsep = rootreal + b"/"
     else:
         rootsep = rootreal
     for path, target in symlinks:
+        if path in alias_subjects:
+            continue                            # rounds 13/14/14b own this link (see above)
         full = os.path.join(rootb, path)
         here_ok = os.path.exists(full)          # follows the whole chain, exactly as a reader would
         if target.startswith(b"/"):
@@ -1154,12 +1166,19 @@ def _symlink_target_verdicts(rootb, symlinks, inodes, foldcache):
     walk that feeds the casefold map, so "registered" means "a tracked path or a directory
     component of one". The full disposition table — and why each non-blocking case is not blocked
     — is in SymlinkTargetAlias.__doc__; this function is the seven steps stated there.
-    Returns (alias_reports, unbounded_reports): the second list is the round-14 budget refusal,
-    reported under its OWN code because its remedy is different (unbreak the chain, not respell
-    the target).
+    Returns (alias_reports, unbounded_reports, subjects): the second list is the round-14 budget
+    refusal, reported under its OWN code because its remedy is different (unbreak the chain, not
+    respell the target). <subjects> is the set of LINK PATHS this census has any verdict on —
+    BACKLOG P3-131/P3-132 needs it, because the receiver-parity census must NOT re-judge a link
+    whose receiver-side failure is a SPELLING failure: git DOES ship that content, the target just
+    names it wrong, and that is precisely this function's subject and remedy (`ln -sf <recorded>`).
+    Without the exclusion the parity check would subsume rounds 13/14/14b entirely and their
+    per-round neutered twins would stop being attributable — which is how this exclusion was
+    found: every twin from (AJ2) onward flipped to the parity code.
     """
     out = []
     unbounded = []
+    subjects = set()
     for path, target in symlinks:
         kind, cand, walked = _resolve_link_target(rootb, path, target)
         # ROUND 14b / P1: the SAME verdict on EVERY component the walk resolved, not on the final
@@ -1184,12 +1203,14 @@ def _symlink_target_verdicts(rootb, symlinks, inodes, foldcache):
                                 if _fold_path_key(n, foldcache) == wkey)
                 if not walias:
                     continue                    # a tracked inode reached by a non-alias route
+                subjects.add(path)
                 out.append("%s -> %s (resolves HERE THROUGH the intermediate component %s, which "
                            "this repository records as %s)"
                            % (path.decode(errors="replace"), target.decode(errors="replace"),
                               wsp.decode(errors="replace"),
                               " / ".join(n.decode(errors="replace") for n in walias)))
         if kind == "unbounded":
+            subjects.add(path)
             unbounded.append("%s -> %s (%s)"
                              % (path.decode(errors="replace"),
                                 target.decode(errors="replace"),
@@ -1210,11 +1231,12 @@ def _symlink_target_verdicts(rootb, symlinks, inodes, foldcache):
         alias = sorted(n for n in names if _fold_path_key(n, foldcache) == key)
         if not alias:
             continue                            # a tracked inode reached by a non-alias route
+        subjects.add(path)
         out.append("%s -> %s (resolves HERE to %s, which this repository records as %s)"
                    % (path.decode(errors="replace"), target.decode(errors="replace"),
                       cand.decode(errors="replace"),
                       " / ".join(n.decode(errors="replace") for n in alias)))
-    return sorted(out), sorted(unbounded)
+    return sorted(out), sorted(unbounded), subjects
 
 
 def _alias_verdicts(casefold, fullpaths):
@@ -1443,7 +1465,8 @@ def _raw_index_sweep(repo, gbin, genv, dirty):
     for rel, st in statcache.items():
         if st is not None:
             inodes.setdefault((st.st_dev, st.st_ino), set()).add(rel)
-    symaliased, symunbounded = _symlink_target_verdicts(rootb, symlinks, inodes, foldcache)
+    symaliased, symunbounded, symsubjects = _symlink_target_verdicts(
+        rootb, symlinks, inodes, foldcache)
     # BACKLOG P3-131/P3-132: RECEIVER-RESOLUTION PARITY. The registry above answers "does the
     # target ALIAS a recorded spelling"; this one answers the strictly different question "does
     # the link resolve from CONTENT GIT SHIPS". `trackeddirs` is derived from the index paths
@@ -1458,7 +1481,7 @@ def _raw_index_sweep(repo, gbin, genv, dirty):
             trackeddirs.add(acc)
     linktargets = dict(symlinks)
     symdiverged, symhygiene = _symlink_receiver_divergences(
-        rootb, symlinks, fullpaths, trackeddirs, linktargets)
+        rootb, symlinks, fullpaths, trackeddirs, linktargets, symsubjects)
     return (diverged[:8], mistyped[:8], unreadable[:8], flagged[:8], gitlinks[:8],
             execbits[:8], gldirt[:8], aliased[:8], diraliased[:8], symaliased[:8],
             symunbounded[:8], symdiverged[:8], symhygiene[:8])
