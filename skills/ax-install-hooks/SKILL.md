@@ -64,6 +64,13 @@ Pick **one** of the three branches below based on what the project already uses
 (check for `.husky/` or `lefthook.yml` first; default to `core.hooksPath` if
 neither is present).
 
+Before writing the commands, check `ax.config.json`'s `stacks` field to decide
+which lines belong in the hook: `stacks.react: true` → the npm `lint`/`test`
+lines; `stacks.java: true` → a Gradle verification task line (`./gradlew
+testPractices` below is the ax-template default — adjust the module path and
+task name to whatever the target project actually registers); both `true` →
+include both. Omit whichever block the project's `stacks` doesn't have.
+
 ### Branch A — `core.hooksPath` (no dependency, default recommendation)
 
 ```bash
@@ -74,6 +81,7 @@ set -euo pipefail
 # Run THIS project's own checks — not ax-template's guards.
 npm run lint --if-present
 npm test --if-present
+# Java stack: (cd backend && ./gradlew testPractices)  # swap in the project's actual module path/task
 EOF
 chmod +x .githooks/pre-commit
 git config core.hooksPath .githooks
@@ -86,6 +94,7 @@ npx husky init
 cat > .husky/pre-commit <<'EOF'
 npm run lint --if-present
 npm test --if-present
+# Java stack: (cd backend && ./gradlew testPractices)  # swap in the project's actual module path/task
 EOF
 ```
 
@@ -99,6 +108,8 @@ pre-commit:
       run: npm run lint --if-present
     test:
       run: npm test --if-present
+    java-practices: # java stack only — omit this command entirely for react-only projects
+      run: cd backend && ./gradlew testPractices # swap in the project's actual module path/task
 ```
 
 ```bash

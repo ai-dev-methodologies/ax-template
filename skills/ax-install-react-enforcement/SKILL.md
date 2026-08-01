@@ -102,10 +102,19 @@ export default [
     files: [`${axConfig.react?.srcDir ?? 'src'}/**/*.{ts,tsx,js,jsx}`],
     plugins: { ax: axPlugin },
     settings: { ax: axConfig.react },
-    rules: { /* catalog rules — start with plugin.configs.recommended.rules and narrow from there */ },
+    rules: axPlugin.configs.recommended.rules,
   },
 ]
 ```
+
+`axPlugin.configs.recommended.rules` turns the full recommended set on (see
+`practices-react/eslint-plugin-ax/README.md`) — this is the starting point, not an
+optional extra. A `rules: {}` block wires the plugin into the config without
+enabling a single rule, so ESLint reports `0 problems` even on a file that should
+fail — indistinguishable from "clean." Narrow individual severities from the
+recommended set afterward (e.g. `'ax/no-god-route': 'warn'`) if the project needs
+a lighter starting point; never replace the object with a hand-picked list that
+starts empty.
 
 > ⚠️ **Never hardcode the `files` glob to a fixed `"src"` top-level directory.** If `react.srcDir` in `ax.config.json`
 > is anything other than `src`, a hardcoded glob silently matches zero files —

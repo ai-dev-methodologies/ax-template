@@ -109,6 +109,66 @@ test('layoutFrom — does not mutate the input settings object', () => {
   assert.equal(JSON.stringify(settings), before)
 })
 
+// ── layoutFrom deep-immutability contract (D-track D-1 fix) — the returned
+// `layers[layer]` arrays must be fresh copies, not the caller's array by
+// reference, and must be frozen at every level so a mutation attempt on the
+// result throws instead of silently corrupting the caller's settings. ──
+
+test('layoutFrom — custom layers.app array is copied, not returned by reference', () => {
+  const appLayer = ['pages']
+  const settings = { ax: { layers: { app: appLayer, features: ['modules'], shared: ['core'] } } }
+  const layout = layoutFrom(settings)
+  assert.notEqual(layout.layers.app, appLayer)
+  assert.deepStrictEqual(layout.layers.app, ['pages'])
+})
+
+test('layoutFrom — mutating the input layers.app array after the call does not affect the returned layout', () => {
+  const appLayer = ['pages']
+  const settings = { ax: { layers: { app: appLayer, features: ['modules'], shared: ['core'] } } }
+  const layout = layoutFrom(settings)
+  appLayer.push('injected')
+  assert.deepStrictEqual(layout.layers.app, ['pages'])
+})
+
+test('layoutFrom — returned layers arrays are frozen (custom layout)', () => {
+  const settings = { ax: { layers: { app: ['pages'], features: ['modules'], shared: ['core'] } } }
+  const layout = layoutFrom(settings)
+  assert.equal(Object.isFrozen(layout.layers.app), true)
+  assert.equal(Object.isFrozen(layout.layers.features), true)
+  assert.equal(Object.isFrozen(layout.layers.shared), true)
+  assert.throws(() => layout.layers.app.push('x'), TypeError)
+})
+
+test('layoutFrom — pushing onto the returned layers.app array throws and leaves the caller settings array untouched', () => {
+  const appLayer = ['pages']
+  const settings = { ax: { layers: { app: appLayer, features: ['modules'], shared: ['core'] } } }
+  const layout = layoutFrom(settings)
+  assert.throws(() => layout.layers.app.push('injected'), TypeError)
+  assert.deepStrictEqual(appLayer, ['pages']) // caller's own array is untouched — not shared, not mutated
+})
+
+test('layoutFrom — returned layers arrays are frozen (DEFAULT fallback, no settings.ax)', () => {
+  const layout = layoutFrom(undefined)
+  assert.equal(Object.isFrozen(layout.layers.app), true)
+  assert.equal(Object.isFrozen(layout.layers.features), true)
+  assert.equal(Object.isFrozen(layout.layers.shared), true)
+  assert.throws(() => layout.layers.shared.push('x'), TypeError)
+})
+
+test('layoutFrom — DEFAULT fallback layers arrays are not shared by reference with DEFAULT_LAYOUT', () => {
+  const layout = layoutFrom(undefined)
+  assert.notEqual(layout.layers.app, DEFAULT_LAYOUT.layers.app)
+  assert.notEqual(layout.layers.features, DEFAULT_LAYOUT.layers.features)
+  assert.notEqual(layout.layers.shared, DEFAULT_LAYOUT.layers.shared)
+})
+
+test('layoutFrom — per-field layers fallback (only one layer overridden) still returns fresh frozen arrays', () => {
+  const layout = layoutFrom({ ax: { layers: { app: ['pages'] } } })
+  assert.notEqual(layout.layers.features, DEFAULT_LAYOUT.layers.features)
+  assert.equal(Object.isFrozen(layout.layers.features), true)
+  assert.deepStrictEqual(layout.layers.features, ['features'])
+})
+
 // ── path functions with a custom layout ────────────────────────────────────
 
 const CUSTOM = layoutFrom({

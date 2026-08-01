@@ -7,6 +7,11 @@
 #   bash practices/generate_index.sh                        # default: --catalog practices
 #   bash practices/generate_index.sh --catalog practices-react
 #
+#   --catalog-dir DIR / --out FILE are selftest-only overrides (used by
+#   generate_index_selftest.sh to point the generator at practices/generate_index_fixtures/*
+#   instead of a real catalog). Not for normal use — normal invocations only ever pass
+#   --catalog. A relative DIR/FILE resolves against REPO_ROOT; an absolute one is used as-is.
+#
 # Deterministic (2 consecutive runs against an unchanged rules/ tree diff 0):
 # LC_ALL=C throughout, zero `date` calls, rule ids / tags / tag-membership lists all
 # sorted. bash 3.2 compatible (no mapfile, no associative arrays) — same nullglob +
@@ -24,10 +29,16 @@ set -euo pipefail
 export LC_ALL=C
 
 CATALOG="practices"
+CATALOG_DIR_OVERRIDE=""
+OUT_OVERRIDE=""
 while [ $# -gt 0 ]; do
     case "$1" in
         --catalog) CATALOG="$2"; shift 2 ;;
         --catalog=*) CATALOG="${1#--catalog=}"; shift ;;
+        --catalog-dir) CATALOG_DIR_OVERRIDE="$2"; shift 2 ;;
+        --catalog-dir=*) CATALOG_DIR_OVERRIDE="${1#--catalog-dir=}"; shift ;;
+        --out) OUT_OVERRIDE="$2"; shift 2 ;;
+        --out=*) OUT_OVERRIDE="${1#--out=}"; shift ;;
         *) echo "generate_index.sh: unknown arg: $1" >&2; exit 2 ;;
     esac
 done
@@ -41,9 +52,25 @@ fi
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-CATALOG_DIR="$REPO_ROOT/$CATALOG"
+
+if [ -n "$CATALOG_DIR_OVERRIDE" ]; then
+    case "$CATALOG_DIR_OVERRIDE" in
+        /*) CATALOG_DIR="$CATALOG_DIR_OVERRIDE" ;;
+        *) CATALOG_DIR="$REPO_ROOT/$CATALOG_DIR_OVERRIDE" ;;
+    esac
+else
+    CATALOG_DIR="$REPO_ROOT/$CATALOG"
+fi
 RULES_DIR="$CATALOG_DIR/rules"
-OUT="$CATALOG_DIR/INDEX.md"
+
+if [ -n "$OUT_OVERRIDE" ]; then
+    case "$OUT_OVERRIDE" in
+        /*) OUT="$OUT_OVERRIDE" ;;
+        *) OUT="$REPO_ROOT/$OUT_OVERRIDE" ;;
+    esac
+else
+    OUT="$CATALOG_DIR/INDEX.md"
+fi
 
 if [ ! -d "$RULES_DIR" ]; then
     echo "generate_index.sh: catalog '$CATALOG' has no rules/ dir at $RULES_DIR" >&2
@@ -71,6 +98,7 @@ fi
 python3 - "$CATALOG" "$OUT" "${SORTED[@]}" <<'PYEOF'
 import sys
 import hashlib
+import os
 import re
 import yaml
 
@@ -245,12 +273,12 @@ body.append('## Rules')
 body.extend(rule_lines)
 body.append('')
 
-with open(out_path, 'w', encoding='utf-8') as fh:
-    fh.write('\n'.join(body))
-
 # ── census (non-vacuity, PRD F11): count unclassified rows, stderr ONLY —
 #    never write "unclassified" into the index body for explanatory purposes,
-#    or the census's own grep on the file would find its own output (false-RED). ──
+#    or the census's own grep on the file would find its own output (false-RED).
+#    This MUST run before the write below: a run that fails the census must
+#    leave any pre-existing out_path completely untouched, not overwrite it
+#    with the bad INDEX and then exit 1 (atomic-write requirement). ──
 unclassified_count = sum(1 for r in rows if r[2] == 'unclassified')
 if unclassified_count != 0:
     sys.stderr.write(
@@ -259,6 +287,23 @@ if unclassified_count != 0:
         "classify_verification() branch for it\n" % (unclassified_count, catalog)
     )
     sys.exit(1)
+
+# ── atomic write: render to a tmp file in the same dir as out_path, then
+#    os.replace() into place. A crash/error mid-write (disk full, permissions)
+#    leaves the tmp file orphaned but out_path itself untouched — never a
+#    half-written or stale-content INDEX.md. ──
+tmp_path = out_path + '.tmp'
+try:
+    with open(tmp_path, 'w', encoding='utf-8') as fh:
+        fh.write('\n'.join(body))
+    os.replace(tmp_path, out_path)
+except Exception:
+    try:
+        os.remove(tmp_path)
+    except OSError:
+        pass
+    raise
+
 sys.stderr.write(
     "generate_index.sh: %s: 0 unclassified verification rows (%d total)\n"
     % (catalog, rule_count)

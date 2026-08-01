@@ -3550,7 +3550,7 @@ instrument that finds them empirically and a hand-audit would only anticipate a 
 strip trailing dots or fold width) are not probed and would not be detected.
 
 ## R109 — Claude Code plugin 소비 채널 (D-track): 스킬은 안내, 강제는 설치
-- Status: PROPOSED
+- Status: ACCEPT
 - Date: 2026-08-01
 - Drivers: ax-template은 fork-as-base 모델이라 신규 프로젝트가 참조 워크로드와 `com.ax.template`
   패키지를 통째로 상속해야 하고, 다른 레이아웃의 기존 프로젝트에는 적용 경로가 0이다. Java 룰의

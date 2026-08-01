@@ -62,11 +62,15 @@ function escapeRe(s) {
  *   value that isn't a non-empty array of non-empty strings falls back to
  *   that one layer's default.
  *
- * The returned object is frozen and never aliases (nor mutates) `settings`.
+ * The returned object is always freshly constructed and deep-frozen — it
+ * never aliases (nor mutates) `settings`, and never returns a `layers[layer]`
+ * array by reference (neither the caller's `ax.layers.*` array nor
+ * `DEFAULT_LAYOUT`'s own arrays), so mutating the result can never reach the
+ * input settings or a shared default.
  */
 export function layoutFrom(settings) {
   const ax = isPlainObject(settings) ? settings.ax : undefined
-  if (!isPlainObject(ax)) return DEFAULT_LAYOUT
+  if (!isPlainObject(ax)) return cloneLayout(DEFAULT_LAYOUT)
 
   const srcDir = typeof ax.srcDir === 'string' && ax.srcDir.length > 0 ? ax.srcDir : DEFAULT_LAYOUT.srcDir
 
@@ -81,16 +85,36 @@ export function layoutFrom(settings) {
     alias = filtered
   }
 
-  let layers = DEFAULT_LAYOUT.layers
-  if (isPlainObject(ax.layers)) {
-    layers = {
-      app: isNonEmptyStringArray(ax.layers.app) ? ax.layers.app : DEFAULT_LAYOUT.layers.app,
-      features: isNonEmptyStringArray(ax.layers.features) ? ax.layers.features : DEFAULT_LAYOUT.layers.features,
-      shared: isNonEmptyStringArray(ax.layers.shared) ? ax.layers.shared : DEFAULT_LAYOUT.layers.shared,
-    }
-  }
+  const rawLayers = isPlainObject(ax.layers)
+    ? {
+        app: isNonEmptyStringArray(ax.layers.app) ? ax.layers.app : DEFAULT_LAYOUT.layers.app,
+        features: isNonEmptyStringArray(ax.layers.features) ? ax.layers.features : DEFAULT_LAYOUT.layers.features,
+        shared: isNonEmptyStringArray(ax.layers.shared) ? ax.layers.shared : DEFAULT_LAYOUT.layers.shared,
+      }
+    : DEFAULT_LAYOUT.layers
 
-  return Object.freeze({ srcDir, alias: Object.freeze(alias), layers: Object.freeze(layers) })
+  return Object.freeze({
+    srcDir,
+    alias: Object.freeze({ ...alias }),
+    layers: Object.freeze({
+      app: Object.freeze(rawLayers.app.slice()),
+      features: Object.freeze(rawLayers.features.slice()),
+      shared: Object.freeze(rawLayers.shared.slice()),
+    }),
+  })
+}
+
+/** Deep-copy-and-freeze a layout so callers never share DEFAULT_LAYOUT's own arrays/objects by reference. */
+function cloneLayout(layout) {
+  return Object.freeze({
+    srcDir: layout.srcDir,
+    alias: Object.freeze({ ...layout.alias }),
+    layers: Object.freeze({
+      app: Object.freeze(layout.layers.app.slice()),
+      features: Object.freeze(layout.layers.features.slice()),
+      shared: Object.freeze(layout.layers.shared.slice()),
+    }),
+  })
 }
 
 /** Normalize a path to forward slashes and strip a trailing slash. */
