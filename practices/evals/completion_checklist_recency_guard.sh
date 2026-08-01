@@ -1216,18 +1216,31 @@ if guard_repo is None:
         'supplied by this file\'s own shell half, so reaching this message means the python body '
         'was invoked directly by something else.'
     )
+#     RELOCATED-COPY AFFORDANCE, gated exactly like the release-anchor helper's: this file is
+#     COPIED to a bare temp path and run there by fixture_kill_proof_guard [87], where
+#     `guard_repo` resolves to a directory that is not a git work tree and carries no
+#     verify-completion.sh. Blocking there would make [87] report every recency fixture as vacuous
+#     (measured: 4 of them) for a reason that has nothing to do with the fixture. So the skip is
+#     allowed ONLY when the guard's own root is NOT a git work tree — i.e. exactly the relocated
+#     sandbox. On any live tree a missing writer BLOCKS, because "delete the file the pin is
+#     checked against" is precisely the shape this check refuses.
+_guard_repo_is_git = git_out("rev-parse", "--git-dir", root=guard_repo, check=False)[0] == 0
 writer = guard_repo / "practices" / "scripts" / "verify-completion.sh"
 try:
     wtext = writer.read_text(errors="replace")
 except OSError as _exc:
-    emit_fail(
-        "AUDIT_WRITER_UNREADABLE",
-        f'the committed audit writer could not be read at {writer} ({_exc.__class__.__name__}). '
-        f'This guard pins the exact field set a genuine audit line carries and corroborates that '
-        f'pin against the code that actually writes it. With the writer unreadable the pin stands '
-        f'alone and unverified, which is the state an attacker who wants the pin unenforced would '
-        f'engineer. Restore practices/scripts/verify-completion.sh and re-run.'
-    )
+    if not _guard_repo_is_git:
+        wtext = None
+    else:
+        emit_fail(
+            "AUDIT_WRITER_UNREADABLE",
+            f'the committed audit writer could not be read at {writer} '
+            f'({_exc.__class__.__name__}). This guard pins the exact field set a genuine audit '
+            f'line carries and corroborates that pin against the code that actually writes it. '
+            f'With the writer unreadable the pin stands alone and unverified, which is the state '
+            f'an attacker who wants the pin unenforced would engineer. Restore '
+            f'practices/scripts/verify-completion.sh and re-run.'
+        )
 # The audit printf is the schema. Extract the key names from the FORMAT STRING of the line that
 # appends to $AUDIT_LOG, so the pin above is checked against the code that actually writes, not
 # against a comment.
@@ -1242,44 +1255,56 @@ except OSError as _exc:
 #       (iii) that one statement must be the one that APPENDS TO THE AUDIT LOG. The schema is not
 #            "a line shaped like the schema", it is "the format string of the write this guard
 #            reads back", and only the redirection says which write that is.
-_writer_lines = wtext.split("\n")
-_cands = [i for i, _l in enumerate(_writer_lines) if re.match(r"printf\s+'\{\"ts\"", _l)]
-if len(_cands) != 1:
-    emit_fail(
-        "AUDIT_WRITER_SCHEMA_UNRESOLVED",
-        f'the committed writer (practices/scripts/verify-completion.sh) contains '
-        f'{len(_cands)} line-initial printf statements of the audit-line shape, and this guard '
-        f'requires EXACTLY ONE. Zero means the writer no longer emits the record this guard '
-        f'verifies — the schema pin would then be corroborated by nothing and the check would '
-        f'silently stand down. Two or more means the guard cannot say WHICH one is the schema, '
-        f'and taking "the first regex-shaped hit" is a decoy channel: an added earlier line of '
-        f'that shape silently becomes the authority. Keep exactly one audit printf in the writer '
-        f'(the transparency sidecar deliberately leads with a "kind" key for this reason).'
-    )
-_i = _cands[0]
-_stmt = [_writer_lines[_i]]
-while _stmt[-1].endswith("\\") and _i + 1 < len(_writer_lines):
-    _i += 1
-    _stmt.append(_writer_lines[_i])
-_stmt = "\n".join(_stmt)
-if '>> "$AUDIT_LOG"' not in _stmt:
-    emit_fail(
-        "AUDIT_WRITER_SCHEMA_UNRESOLVED",
-        'the single audit-shaped printf in practices/scripts/verify-completion.sh does not '
-        'append to "$AUDIT_LOG". This guard reads .ax-verify/runs.jsonl and pins the field set '
-        'of the record it finds there; the pin is only meaningful if it was taken from the '
-        'statement that WRITES that file. A format string that is no longer wired to the audit '
-        'log is a schema for nothing, and the guard will not adopt it by resemblance.'
-    )
-_m_schema = re.search(r"printf\s+'(\{\"ts\".*?)\\n'", _stmt, re.S)
-if _m_schema is None:
-    emit_fail(
-        "AUDIT_WRITER_SCHEMA_UNRESOLVED",
-        'the audit printf statement in practices/scripts/verify-completion.sh was located but '
-        'its format string could not be parsed, so this guard cannot corroborate its pinned '
-        'field set against the writer. Unknown never passes.'
-    )
-emitted = tuple(re.findall(r'"([a-z_]+)":', _m_schema.group(1)))
+if wtext is None:
+    # Relocated sandbox (see the affordance note above): there is no committed writer here to
+    # corroborate the pin against, and this root cannot ship anything either. The pin below still
+    # runs against the LINE; only the writer cross-check stands down, and only here.
+    emitted = tuple(AUDIT_SCHEMA_KEYS)
+else:
+    # THE EXTRACTION POINT — three load-bearing clauses:
+    #   (i)   a LINE-INITIAL `printf '{"ts"…` (code, not the prose that quotes the pattern),
+    #   (ii)  EXACTLY ONE of them (zero = nothing to corroborate; two+ = which one is authority?),
+    #   (iii) that statement must be the one that APPENDS TO THE AUDIT LOG.
+    _writer_lines = wtext.split("\n")
+    _cands = [i for i, _l in enumerate(_writer_lines)
+              if re.match(r"printf\s+'\{\"ts\"", _l)]
+    if len(_cands) != 1:
+        emit_fail(
+            "AUDIT_WRITER_SCHEMA_UNRESOLVED",
+            f'the committed writer (practices/scripts/verify-completion.sh) contains '
+            f'{len(_cands)} line-initial printf statements of the audit-line shape, and this '
+            f'guard requires EXACTLY ONE. Zero means the writer no longer emits the record this '
+            f'guard verifies — the schema pin would then be corroborated by nothing and the check '
+            f'would silently stand down. Two or more means the guard cannot say WHICH one is the '
+            f'schema, and taking "the first regex-shaped hit" is a decoy channel: an added '
+            f'earlier line of that shape silently becomes the authority. Keep exactly one audit '
+            f'printf in the writer (the transparency sidecar deliberately leads with a "kind" key '
+            f'for this reason).'
+        )
+    _i = _cands[0]
+    _stmt = [_writer_lines[_i]]
+    while _stmt[-1].endswith("\\") and _i + 1 < len(_writer_lines):
+        _i += 1
+        _stmt.append(_writer_lines[_i])
+    _stmt = "\n".join(_stmt)
+    if '>> "$AUDIT_LOG"' not in _stmt:
+        emit_fail(
+            "AUDIT_WRITER_SCHEMA_UNRESOLVED",
+            'the single audit-shaped printf in practices/scripts/verify-completion.sh does not '
+            'append to "$AUDIT_LOG". This guard reads .ax-verify/runs.jsonl and pins the field '
+            'set of the record it finds there; the pin is only meaningful if it was taken from '
+            'the statement that WRITES that file. A format string that is no longer wired to the '
+            'audit log is a schema for nothing, and the guard will not adopt it by resemblance.'
+        )
+    _m_schema = re.search(r"printf\s+'(\{\"ts\".*?)\\n'", _stmt, re.S)
+    if _m_schema is None:
+        emit_fail(
+            "AUDIT_WRITER_SCHEMA_UNRESOLVED",
+            'the audit printf statement in practices/scripts/verify-completion.sh was located '
+            'but its format string could not be parsed, so this guard cannot corroborate its '
+            'pinned field set against the writer. Unknown never passes.'
+        )
+    emitted = tuple(re.findall(r'"([a-z_]+)":', _m_schema.group(1)))
 if tuple(AUDIT_SCHEMA_KEYS) != emitted:
     emit_fail(
         "AUDIT_WRITER_SCHEMA_DRIFT",
