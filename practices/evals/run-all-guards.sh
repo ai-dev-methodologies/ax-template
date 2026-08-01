@@ -402,23 +402,43 @@ RESULTS=()
 #
 #   (2) THE PER-GUARD CAP, derived from the measurement rather than guessed. It is
 #           per_guard_timeout = max(k * p99, floor)
-#       with **k = 20** and **floor = 300s**. Why those two numbers, stated so they can be argued
-#       with: p99 over the live sweep is ~5.6 s (the single slowest invocation is the hermetic
-#       runtime prover at ~200 s and is deliberately EXEMPT, see below), so k * p99 is ~112 s,
-#       under the floor, and the floor is what actually binds. k = 20 is chosen against the
-#       FAILURE MODE, not against the typical case: the guards' own runtime varies by more than
-#       an order of magnitude with machine load, cold page cache and repository size at a
-#       fork-receiver, and a cap that fires on a slow laptop converts this gate from an
-#       enforcement surface into a flake — which is strictly worse than the DoS window it closes,
-#       because a flaky gate gets disabled. floor = 300 s exists because k * p99 on a sweep this
-#       fast would otherwise produce a cap of a few seconds, which no fork-receiver's machine
-#       would survive. The OUTER 2700 s step budget is UNCHANGED and still binds the whole sweep;
-#       this cap only ensures that ONE hung guard cannot consume all of it, which is exactly what
-#       the row asked for.
-#       EXEMPTIONS are explicit and few: the two provers (`ax-prove-hermetic-runtime` builds and
-#       runs dozens of throwaway git sandboxes, ~200 s here) are legitimately long and are capped
-#       at the outer budget instead. An exemption is named by label prefix, in this file, so
-#       adding one is a reviewed edit rather than an environment variable.
+#       with **k = 20** and **floor = 300s**. THE NUMBERS BELOW ARE MEASURED, on a full
+#       `--include-fixtures` sweep of 311 invocations (2026-08-01, this machine):
+#           whole population   median 0.074 s · p95 2.55 s · p99 28.1 s
+#           capped population  median 0.075 s · p95 2.34 s · p99 10.27 s · MAX 77.4 s
+#                              (resume_provenance/live, which really does take 77 s)
+#       "capped population" excludes the three invocations that are long BY DESIGN and are
+#       therefore EXEMPT (below). k * p99 = 20 * 10.27 ~= 205 s, which is UNDER the floor, so on
+#       this tree the FLOOR is what binds and the cap is 300 s — 3.9x headroom over the slowest
+#       guard that is actually capped.
+#       WHY k = 20, argued against the failure mode rather than the typical case: guard runtime
+#       varies by more than an order of magnitude with machine load, cold page cache and
+#       repository size at a fork-receiver, and a cap that fires on a slow laptop converts this
+#       gate from an enforcement surface into a FLAKE — strictly worse than the DoS window it
+#       closes, because a flaky gate gets disabled. A ratio of 20 buys that headroom without
+#       being so loose that a hang is indistinguishable from slowness.
+#       WHY floor = 300 s: k * p99 alone would produce a cap of a couple of hundred seconds on
+#       THIS tree and a cap of a few SECONDS on a smaller one, which no fork-receiver's machine
+#       would survive. The floor is the "never cap below this regardless of how fast our sweep
+#       happens to be" term.
+#       The OUTER 2700 s step budget is UNCHANGED and still binds the whole sweep; this cap only
+#       ensures that ONE hung guard cannot consume all of it, which is exactly what the row asked.
+#       EXEMPTIONS are explicit, few, and each is a MEASURED number rather than an assertion that
+#       something is "slow":
+#           hermetic_runtime/…            ~94 s  — builds and runs dozens of throwaway git
+#                                                  sandboxes (60+ arms)
+#           release_anchor/helper_injection_blocked  — same class, sandbox-building prover
+#           fixture_kill_proof/…          ~334 s — MUTATION-tests every shell guard's fail
+#                                                  fixture by neutering the guard and re-running
+#                                                  it; the work is inherently O(number of guards)
+#                                                  and grows with the catalog. MEASURED uncapped
+#                                                  at 333.9 s, exit 0. It was the FIRST thing the
+#                                                  new cap killed (exit 124 at 300 s) on the very
+#                                                  run that produced this table, which is exactly
+#                                                  the flake this comment warns about — so it is
+#                                                  exempted on evidence, not on suspicion.
+#       An exemption is a label prefix IN THIS FILE, so adding one is a reviewed edit rather than
+#       an environment variable. Exempt guards are still bounded — by the outer 2700 s step.
 #       HONEST LIMITS: `timeout(1)` is not on every macOS by default (it ships with coreutils as
 #       `gtimeout`); when neither is present the cap DEGRADES TO INSTRUMENTATION ONLY and says so
 #       out loud rather than silently pretending to enforce. And a guard killed by the cap is
@@ -426,11 +446,11 @@ RESULTS=()
 #       fail-closed: it never converts a hang into a pass.
 AX_GUARD_TIMEOUT_K=20
 AX_GUARD_TIMEOUT_FLOOR=300
-AX_GUARD_TIMEOUT_P99=6           # measured on the live sweep, rounded up (see the table)
+AX_GUARD_TIMEOUT_P99=11          # MEASURED: p99 of the capped population = 10.27 s (n=299)
 AX_GUARD_TIMEOUT=$(( AX_GUARD_TIMEOUT_K * AX_GUARD_TIMEOUT_P99 ))
 [ "$AX_GUARD_TIMEOUT" -lt "$AX_GUARD_TIMEOUT_FLOOR" ] && AX_GUARD_TIMEOUT=$AX_GUARD_TIMEOUT_FLOOR
 # Labels exempted from the per-guard cap (prefix match). Long BY DESIGN, not by pathology.
-AX_GUARD_TIMEOUT_EXEMPT="hermetic_runtime/ release_anchor/helper_injection_blocked"
+AX_GUARD_TIMEOUT_EXEMPT="hermetic_runtime/ release_anchor/helper_injection_blocked fixture_kill_proof/"
 
 AX_TIMEOUT_BIN=""
 if command -v timeout >/dev/null 2>&1; then AX_TIMEOUT_BIN="timeout"
