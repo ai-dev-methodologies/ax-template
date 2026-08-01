@@ -794,14 +794,49 @@ def _register_prefixes(casefold, statcache, rootb, path, foldcache=None):
     (st_dev, st_ino) DISCRIMINATOR IS UNCHANGED and is what keeps this measurement free of false
     positives — a case-sensitive or normalization-sensitive fork-receiver whose tree genuinely
     holds two such directories yields two inodes and two singleton groups, and is not refused.
+
+    BACKLOG P3-126 (2026-08-01) — ACCUMULATIVE KEYS. Round 10's walk rebuilt each prefix with
+    `b"/".join(comps[:n])` AND handed that whole prefix to `_fold_path_key`, so for a path of
+    depth d the walk did d folds over strings of average length d/2 — O(d**2) of unicode work
+    (decode + Cf category scan + NFD + casefold + NFC on the cache-miss path) per index entry.
+    The fold is COMPOSITIONAL ACROSS `/`, so the key can be accumulated instead: fold the parent
+    key ONCE and append `b"/"` + the folded COMPONENT, which is O(d) folds over O(1)-sized
+    components. WHY THE COMPOSITION IS EXACT (and not merely close):
+      · `/` is U+002F: ASCII, category Po (not Cf, so the strip never removes it), combining
+        class 0, and it participates in NO canonical composition or decomposition. It is
+        therefore a normalization-segment boundary that neither NFD reordering nor NFC
+        composition can cross, in either direction — a combining mark at the end of the parent
+        component and one at the start of the child can never interact.
+      · `casefold()` is context-free (Python applies full case folding with no locale or
+        final-sigma context), so it distributes over concatenation unconditionally.
+      · The Cf strip is per-character, and `/` is not Cf. A component that is ENTIRELY Cf folds
+        to `b""` on both sides, which is the same answer the monolithic fold gives.
+      · The ASCII fast path is not a seam: it is documented+measured above to return exactly the
+        bytes the slow path would, so mixing an ASCII parent with a non-ASCII component is safe.
+    PROVEN, NOT ASSUMED, on the live catalog: the accumulative and monolithic keys were compared
+    for BYTE EQUALITY over every prefix of every tracked path, and the induced partition of the
+    casefold map is IDENTICAL. That equality is the correctness condition — a different partition
+    would silently change what the alias census can see, which is the whole point of the map.
+    The fold cache is now keyed by COMPONENT rather than by prefix, so it also holds strictly
+    fewer entries (distinct components << distinct prefixes) for the same answers.
     """
     comps = path.split(b"/")
-    for n in range(1, len(comps) + 1):
-        prefix = b"/".join(comps[:n])
+    prefix = b""
+    key = b""
+    for n, comp in enumerate(comps):
+        if n:
+            prefix = prefix + b"/" + comp
+            key = key + b"/" + _fold_path_key(comp, foldcache)
+        else:
+            prefix = comp
+            key = _fold_path_key(comp, foldcache)
         st = _lstat_cached(statcache, rootb, prefix)
         if st is None:
+            # `prefix`/`key` are already advanced, so skipping a non-existent level still leaves
+            # the accumulation correct for the levels below it (the round-10 walk recomputed from
+            # scratch each iteration, which made this trivially true; here it is deliberate).
             continue
-        casefold.setdefault(_fold_path_key(prefix, foldcache), {}).setdefault(
+        casefold.setdefault(key, {}).setdefault(
             (st.st_dev, st.st_ino), set()).add(prefix)
 
 

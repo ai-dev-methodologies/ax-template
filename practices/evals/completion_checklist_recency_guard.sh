@@ -1659,9 +1659,26 @@ if live_git_root and not expected_head_file.is_file() and guard_repo is not None
             # path is itself the last prefix, so the exec-bit check below reads the cached stat
             # instead of taking a second one.
             _fullpaths.add(_path)
+            # BACKLOG P3-126 (2026-08-01): ACCUMULATIVE KEYS — the exact symmetric counterpart of
+            # the fingerprint helper's `_register_prefixes`. The round-10 walk rebuilt each prefix
+            # with `b"/".join(_comps[:_n])` and folded THAT WHOLE PREFIX, i.e. d folds over strings
+            # of average length d/2 = O(d**2) of unicode work per index entry. `/` is a
+            # normalization-segment boundary that neither NFD reordering nor NFC composition can
+            # cross, it is never stripped (it is not Cf), and casefold is context-free — so the
+            # fold distributes over concatenation and the key can be accumulated: parent key +
+            # b"/" + folded COMPONENT, O(d). Proven by BYTE EQUALITY of both key sets and by an
+            # IDENTICAL induced partition over the live catalog; see the helper's docstring for
+            # the full argument. `_foldcache` now memoizes COMPONENTS, so it is also smaller.
             _comps = _path.split(b"/")
-            for _n in range(1, len(_comps) + 1):
-                _pfx = b"/".join(_comps[:_n])
+            _pfx = b""
+            _key = b""
+            for _n, _comp in enumerate(_comps):
+                if _n:
+                    _pfx = _pfx + b"/" + _comp
+                    _key = _key + b"/" + _ax_fold_path_key(_comp, _foldcache)
+                else:
+                    _pfx = _comp
+                    _key = _ax_fold_path_key(_comp, _foldcache)
                 if _pfx in _statcache:
                     _pst = _statcache[_pfx]
                 else:
@@ -1671,12 +1688,14 @@ if live_git_root and not expected_head_file.is_file() and guard_repo is not None
                         _pst = None
                     _statcache[_pfx] = _pst
                 if _pst is None:
+                    # `_pfx`/`_key` are already advanced, so skipping a non-existent level leaves
+                    # the accumulation correct for every level below it.
                     continue
                 # ROUND 11 / P1: canonical caseless, NOT `bytes.lower()`. Same function as the
                 # fingerprint helper's `_fold_path_key`; the (dev, ino) discriminator below is
                 # UNCHANGED, so a case- or normalization-SENSITIVE tree still yields two inodes,
                 # two singleton groups and no refusal.
-                _casefold.setdefault(_ax_fold_path_key(_pfx, _foldcache), {}).setdefault(
+                _casefold.setdefault(_key, {}).setdefault(
                     (_pst.st_dev, _pst.st_ino), set()).add(_pfx)
             # ROUND 8 / P1-A (0): the BITS. Both reproductions begin with `git update-index`, and
             # `ls-files -v` reports them directly — a lowercase tag is assume-unchanged, `S` is
