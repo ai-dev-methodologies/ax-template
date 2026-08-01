@@ -2003,6 +2003,138 @@ if live_git_root and not expected_head_file.is_file() and guard_repo is not None
                    " / ".join(_n.decode(errors="replace") for _n in _alias)))
         _symaliased.sort()
         _symunbounded.sort()
+
+        # ── BACKLOG P3-131 + P3-132 (2026-08-01): RECEIVER-RESOLUTION PARITY ────────────────
+        # The block above asks whether a target ALIASES a recorded spelling. This one asks the
+        # strictly different question the two rows were closed against and got WRONG: does the
+        # link resolve from CONTENT GIT SHIPS? Both rows rested on one sentence — "a dangling
+        # link is identically broken here and at the receiver, so the evidence does not lie" —
+        # and an independent lane refuted it with committed content alone:
+        #   (a) `link -> build/out.txt`, `build/` gitignored, the artifact PRESENT here: status
+        #       EMPTY (ignored != untracked), clean-tree constant, `cat link` SERVES BYTES —
+        #       and every receiver gets a DANGLING link. Working here, broken there.
+        #   (b) the same with an ABSOLUTE target into one's own checkout. P3-131 called that
+        #       "outside the census by design"; it is the same false-green channel respelled.
+        # FOUR-WAY: (1) tracked both sides = PASS · (2) resolves HERE via untracked/ignored =
+        # DIVERGENCE · (3) ABSOLUTE landing INSIDE this checkout = DIVERGENCE · (4) DANGLING on
+        # BOTH sides = HYGIENE, NOT refused — that is the one shape where the round-13 sentence
+        # actually holds, so a committed build-artifact link is legitimate in a clean checkout
+        # and becomes a divergence only once the local artifact exists to make our evidence lie.
+        # Also NOT refused: an absolute target OUTSIDE this checkout, a relative target that
+        # ESCAPES the repository (the receiver's surroundings are not ours to audit — that IS
+        # the boundary P3-131 named correctly), and a link that resolves at the receiver but not
+        # here (a false-RED, never a false-green). Symmetric with the fingerprint helper's
+        # `_receiver_resolves` / `_symlink_receiver_divergences`.
+        _trackeddirs = set()
+        for _p in _fullpaths:
+            _acc = b""
+            for _c in _p.split(b"/")[:-1]:
+                _acc = (_acc + b"/" + _c) if _acc else _c
+                _trackeddirs.add(_acc)
+        _linktargets = dict(_symlinks)
+
+        def _recv_resolves(_lp, _tg):
+            """True iff a fresh clone — tracked paths and nothing else — resolves <_lp>."""
+            if _tg.startswith(b"/"):
+                return False                    # resolved against the RECEIVER's root
+            _st2 = _lp.split(b"/")[:-1]
+            _q2 = list(_tg.split(b"/"))
+            _f2 = 0
+            _s2 = 0
+            while _q2:
+                _c2 = _q2.pop(0)
+                _s2 += 1
+                if _s2 > _STEP_BUDGET:
+                    return False
+                if _c2 in (b"", b"."):
+                    continue
+                if _c2 == b"..":
+                    if not _st2:
+                        return False            # escapes the clone
+                    _st2.pop()
+                    continue
+                _st2.append(_c2)
+                _cur2 = b"/".join(_st2)
+                if not _q2:
+                    return _cur2 in _fullpaths or _cur2 in _trackeddirs
+                if _cur2 in _linktargets:
+                    _f2 += 1
+                    if _f2 > _FOLLOW_BUDGET:
+                        return False
+                    _nx2 = _linktargets[_cur2]
+                    if _nx2.startswith(b"/"):
+                        return False
+                    _st2.pop()
+                    _q2 = _nx2.split(b"/") + _q2
+                    continue
+                if _cur2 not in _trackeddirs:
+                    return False
+            return bool(_st2)
+
+        _symdiverged = []
+        _rootreal = os.path.realpath(_rootb)
+        _rootsep = _rootreal if _rootreal.endswith(b"/") else _rootreal + b"/"
+        for _lpath, _tgt in _symlinks:
+            _hok = os.path.exists(os.path.join(_rootb, _lpath))
+            if _tgt.startswith(b"/"):
+                _treal = os.path.realpath(_tgt)
+                if _hok and (_treal == _rootreal or _treal.startswith(_rootsep)):
+                    _symdiverged.append(
+                        "%s -> %s (ABSOLUTE target landing INSIDE this checkout; it resolves "
+                        "here and the receiver resolves it against THEIR root)"
+                        % (_lpath.decode(errors="replace"), _tgt.decode(errors="replace")))
+                continue
+            if not _hok:
+                continue                        # class 4 (or receiver-only): never a false-green
+            if _recv_resolves(_lpath, _tgt):
+                continue                        # class 1
+            # Does it merely leave the repository? Then it is not this census.
+            _st3 = _lpath.split(b"/")[:-1]
+            _q3 = list(_tgt.split(b"/"))
+            _left = False
+            _n3 = 0
+            while _q3:
+                _c3 = _q3.pop(0)
+                _n3 += 1
+                if _n3 > _STEP_BUDGET:
+                    break
+                if _c3 in (b"", b"."):
+                    continue
+                if _c3 == b"..":
+                    if not _st3:
+                        _left = True
+                        break
+                    _st3.pop()
+                    continue
+                _st3.append(_c3)
+                if not _q3:
+                    break
+                _cur3 = b"/".join(_st3)
+                try:
+                    _is3 = os.lstat(os.path.join(_rootb, _cur3))
+                except OSError:
+                    continue
+                if not stat.S_ISLNK(_is3.st_mode):
+                    continue
+                try:
+                    _nx3 = os.readlink(os.path.join(_rootb, _cur3))
+                except OSError:
+                    continue
+                if not isinstance(_nx3, bytes):
+                    _nx3 = os.fsencode(_nx3)
+                if _nx3.startswith(b"/"):
+                    _left = True
+                    break
+                _st3.pop()
+                _q3 = _nx3.split(b"/") + _q3
+            if _left or not _st3:
+                continue                        # leaves the repository, or IS the root
+            _symdiverged.append(
+                "%s -> %s (resolves HERE through content git does NOT ship — untracked or "
+                "gitignored — so a fresh clone gets a DANGLING link while this run read "
+                "through it)"
+                % (_lpath.decode(errors="replace"), _tgt.decode(errors="replace")))
+        _symdiverged.sort()
         if _execbits:
             emit_fail(
                 "GIT_EXEC_BIT_DIVERGENCE",
@@ -2068,6 +2200,23 @@ if live_git_root and not expected_head_file.is_file() and guard_repo is not None
                 "while `-> DIRLINK/` and `-> DIRLINK/real.txt` passed over the very same tracked "
                 "`dirlink`, a one-character bypass. Spell the target the way the index records "
                 "the path (`ln -sf <recorded-spelling>`) and re-run R25."
+            )
+        if _symdiverged:
+            emit_fail(
+                "GIT_SYMLINK_RECEIVER_DIVERGENCE",
+                "tracked SYMLINKS that RESOLVE HERE but cannot resolve from tracked content at "
+                "a receiver: " + ", ".join(_symdiverged[:8]) + ". This is RECEIVER-RESOLUTION "
+                "PARITY, not the alias census: the question is not how the target is SPELLED but "
+                "whether git SHIPS what it points at. Both refused shapes are reachable with "
+                "committed content alone and both produce FALSE-GREEN push evidence — "
+                "`link -> build/out.txt` with `build/` gitignored and the artifact present "
+                "leaves `git status --porcelain -uall` EMPTY, returns the clean-tree constant "
+                "and SERVES BYTES here, while a fresh clone gets a DANGLING link; an absolute "
+                "target landing inside this checkout is the same channel respelled. A link that "
+                "dangles on BOTH sides is NOT refused (nothing here reads through it, so nothing "
+                "produced here lies about the receiver), nor is one whose target leaves the "
+                "repository, nor one that resolves at the receiver but not here. Track the "
+                "target, or do not commit the link, and re-run R25."
             )
         if _symunbounded:
             emit_fail(

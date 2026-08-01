@@ -388,6 +388,62 @@ class SymlinkResolutionUnbounded(GitFiltersPresent):
     """
 
 
+class SymlinkReceiverDivergence(GitFiltersPresent):
+    """A tracked SYMLINK that RESOLVES HERE but CANNOT resolve from tracked content at a receiver.
+
+    BACKLOG P3-131 + P3-132, sealed together 2026-08-01 because an independent lane REFUTED the
+    premise BOTH rows rested on. Rounds 13/14/14b deliberately did not block two shapes, and both
+    exemptions were argued from the same sentence: "a dangling link is identically broken here and
+    at the receiver, so the evidence does not lie."
+
+    THAT SENTENCE IS FALSE FOR THE SHAPES THAT MATTER, and the refutation is constructible with
+    COMMITTED CONTENT ALONE — no environment control, no filesystem trick:
+      (a) commit `link -> build/out.txt` where `build/` is gitignored and `build/out.txt` EXISTS
+          here. `git status --porcelain -uall` is EMPTY (ignored content is not untracked
+          content), this fingerprint returns the clean-tree constant, and `cat link` SERVES BYTES.
+          At ANY receiver — a fresh clone contains tracked paths and nothing else — the link is
+          DANGLING. It is not "identically broken"; it is working here and broken there, which is
+          the definition of false-green evidence.
+      (b) the same shape with an ABSOLUTE target pointing into one's own checkout
+          (`link -> /Users/me/repo/build/out.txt`). P3-131 called absolute targets "outside the
+          census by design, portability is a separate defect". That UNDERCLAIMS: when the absolute
+          path lands inside THIS checkout it is not merely non-portable, it is the same
+          false-green channel wearing a different spelling — R25 reads through it, the receiver
+          gets a link into a directory that does not exist on their machine.
+
+    SO THE QUESTION THIS GATE ASKS IS NOT "does the target alias a recorded spelling" (round 13's
+    question) NOR "does it resolve here" — it is RECEIVER-RESOLUTION PARITY: does the answer
+    change between this checkout and a checkout that contains ONLY what git ships? Four-way:
+
+      1. resolves to TRACKED content, here AND at the receiver .............. PASS
+      2. resolves HERE only, via UNTRACKED-or-IGNORED content ............... EVIDENCE DIVERGENCE
+      3. ABSOLUTE target landing INSIDE this checkout, resolving here ....... EVIDENCE DIVERGENCE
+      4. DANGLING on BOTH sides ............................................ HYGIENE ONLY, not blocked
+
+    Class 4 is the ONE shape where the round-13 sentence actually holds, and it stays unblocked
+    for exactly that reason: nothing here reads through it, so no evidence produced here claims
+    anything false about the receiver. A committed link into a build directory is therefore
+    LEGITIMATE in a clean checkout (class 4) and becomes a divergence only once the local build
+    output exists to make our evidence lie — which is precisely the condition, not an inch more.
+
+    WHY BLOCK RATHER THAN RECORD, for classes 2 and 3. The premise the two rows were closed
+    against was that the evidence does not lie; the true premise is that it does. This gate family
+    exists for exactly one proposition — "the tree R25 verified is the tree that will be pushed" —
+    and classes 2/3 falsify it while every local signal (status, digest, the R25 buckets) stays
+    green. Recording it would leave a shipped refusal with a documented hole, which is the
+    conversion of "cannot answer" into "nothing found" that every round since 8 has closed. The
+    remedy is cheap and local: track the target, or do not commit the link.
+
+    NOT REFUSED, deliberately, so the census stays a measurement rather than a policy:
+      · an absolute target landing OUTSIDE this checkout (`/usr/bin/env`) — the receiver's root
+        filesystem is not ours to audit, and that IS the design boundary P3-131 named correctly;
+      · a relative target that ESCAPES the repository (`../../outside/x`) — same reason;
+      · dangling on both sides (class 4);
+      · resolving at the RECEIVER but not here — that is a false-RED, not a false-green: our
+        evidence is more pessimistic than the receiver's reality, which this gate never refuses.
+    """
+
+
 class SymlinkTargetAlias(GitFiltersPresent):
     """A tracked SYMLINK whose TARGET spells a tracked path with an ALIAS of its recorded spelling.
 
@@ -976,6 +1032,121 @@ def _resolve_link_target(rootb, linkpath, target):
     return ("inside", b"/".join(stack), walked)
 
 
+def _receiver_resolves(linkpath, target, tracked, trackeddirs, linktargets):
+    """Would <linkpath> resolve at a RECEIVER, using ONLY what git ships?
+
+    BACKLOG P3-131/P3-132. A fresh clone holds the tracked paths and nothing else — no gitignored
+    build output, no untracked scratch, and no directory that exists here only because something
+    untracked lives in it. So the receiver's answer is computed from the INDEX, not from disk:
+      · <tracked>     — every tracked path (files, symlinks, gitlinks)
+      · <trackeddirs> — every directory component of a tracked path (a directory exists at the
+                        receiver iff git ships something under it)
+      · <linktargets> — {tracked symlink path: its recorded target bytes}
+    The walk is the SAME kernel walk `_resolve_link_target` performs (follow intermediates, never
+    the final component, pop `..` AFTER the follow), under the SAME two budgets, so the two
+    answers differ only in WHICH FILESYSTEM they ask. An absolute target is unresolvable from
+    tracked content by construction: the receiver resolves it against THEIR root.
+    Returns True iff the receiver reaches an existing tracked path.
+    """
+    if target.startswith(b"/"):
+        return False
+    stack = linkpath.split(b"/")[:-1]
+    queue = list(target.split(b"/"))
+    follows = 0
+    steps = 0
+    while queue:
+        comp = queue.pop(0)
+        steps += 1
+        if steps > _SYMLINK_STEP_BUDGET:
+            return False                        # unresolvable within any kernel's budget
+        if comp in (b"", b"."):
+            continue
+        if comp == b"..":
+            if not stack:
+                return False                    # escapes the clone: not reachable from tracked content
+            stack.pop()
+            continue
+        stack.append(comp)
+        cur = b"/".join(stack)
+        if not queue:
+            # FINAL component — lstat does not follow it, so it need only EXIST at the receiver.
+            return cur in tracked or cur in trackeddirs
+        if cur in linktargets:
+            follows += 1
+            if follows > _SYMLINK_FOLLOW_BUDGET:
+                return False
+            nxt = linktargets[cur]
+            if nxt.startswith(b"/"):
+                return False                    # leaves for the receiver's root filesystem
+            stack.pop()
+            queue = nxt.split(b"/") + queue
+            continue
+        if cur not in trackeddirs:
+            return False                        # a non-final component that is not a directory there
+    return bool(stack)                          # the target reduced to the clone root
+
+
+def _symlink_receiver_divergences(rootb, symlinks, tracked, trackeddirs, linktargets):
+    """The RECEIVER-RESOLUTION PARITY census. See SymlinkReceiverDivergence.__doc__ for the
+    four-way classification, the refuted premise, and every shape deliberately NOT refused.
+
+    Returns (divergences, hygiene): the first list BLOCKS (classes 2 and 3 — the link works here
+    and cannot work there, so evidence produced here is false about the pushed tree); the second
+    is class 4, dangling on BOTH sides, which is recorded for hygiene and never blocks because the
+    round-13 sentence — "identically broken here and there, so the evidence does not lie" — is
+    TRUE for that shape and only that shape.
+    """
+    diverged = []
+    hygiene = []
+    rootreal = os.path.realpath(rootb)
+    if not rootreal.endswith(b"/"):
+        rootsep = rootreal + b"/"
+    else:
+        rootsep = rootreal
+    for path, target in symlinks:
+        full = os.path.join(rootb, path)
+        here_ok = os.path.exists(full)          # follows the whole chain, exactly as a reader would
+        if target.startswith(b"/"):
+            # CLASS 3. Only an absolute target that lands INSIDE this checkout is this class; one
+            # that leaves for the receiver's root filesystem is the design boundary P3-131 named
+            # correctly and is not refused. realpath, not the literal bytes, so `/a/./b` and a
+            # symlinked prefix are judged by where they actually land.
+            treal = os.path.realpath(target)
+            inside = treal == rootreal or treal.startswith(rootsep)
+            if here_ok and inside:
+                diverged.append(
+                    "%s -> %s (ABSOLUTE target landing INSIDE this checkout; it resolves here and "
+                    "the receiver resolves it against THEIR root, where this path does not exist)"
+                    % (path.decode(errors="replace"), target.decode(errors="replace")))
+            elif not here_ok and not inside:
+                hygiene.append("%s -> %s (absolute, outside this checkout, dangling here)"
+                               % (path.decode(errors="replace"), target.decode(errors="replace")))
+            continue
+        recv_ok = _receiver_resolves(path, target, tracked, trackeddirs, linktargets)
+        if here_ok and recv_ok:
+            continue                            # CLASS 1 — tracked content on both sides
+        if here_ok and not recv_ok:
+            kind, _cand, _walked = _resolve_link_target(rootb, path, target)
+            if kind in ("escapes", "root"):
+                continue                        # leaves the repository: not this census (P3-131 boundary)
+            diverged.append(
+                "%s -> %s (resolves HERE through content git does NOT ship — untracked or "
+                "gitignored — so a fresh clone gets a DANGLING link while this run read through it)"
+                % (path.decode(errors="replace"), target.decode(errors="replace")))
+            continue
+        if not here_ok and not recv_ok:
+            # CLASS 4 — hygiene only. This is the ONE shape where "identically broken here and at
+            # the receiver, so the evidence does not lie" is actually true.
+            hygiene.append("%s -> %s (dangling here AND at a receiver)"
+                           % (path.decode(errors="replace"), target.decode(errors="replace")))
+            continue
+        # resolves at the receiver but not here: a false-RED, never refused. Recorded so the
+        # asymmetry is visible rather than silently dropped.
+        hygiene.append("%s -> %s (resolves from tracked content at a receiver but NOT here)"
+                       % (path.decode(errors="replace"), target.decode(errors="replace")))
+    return sorted(diverged), sorted(hygiene)
+
+
 def _symlink_target_verdicts(rootb, symlinks, inodes, foldcache):
     """ROUND 13 / P1 + ROUND 14 / P1-A: the alias census, applied to what a symlink POINTS AT.
 
@@ -1273,9 +1444,24 @@ def _raw_index_sweep(repo, gbin, genv, dirty):
         if st is not None:
             inodes.setdefault((st.st_dev, st.st_ino), set()).add(rel)
     symaliased, symunbounded = _symlink_target_verdicts(rootb, symlinks, inodes, foldcache)
+    # BACKLOG P3-131/P3-132: RECEIVER-RESOLUTION PARITY. The registry above answers "does the
+    # target ALIAS a recorded spelling"; this one answers the strictly different question "does
+    # the link resolve from CONTENT GIT SHIPS". `trackeddirs` is derived from the index paths
+    # (NOT from disk) precisely because a directory that exists here only by virtue of untracked
+    # content does not exist at the receiver at all.
+    trackeddirs = set()
+    for p in fullpaths:
+        comps = p.split(b"/")
+        acc = b""
+        for c in comps[:-1]:
+            acc = (acc + b"/" + c) if acc else c
+            trackeddirs.add(acc)
+    linktargets = dict(symlinks)
+    symdiverged, symhygiene = _symlink_receiver_divergences(
+        rootb, symlinks, fullpaths, trackeddirs, linktargets)
     return (diverged[:8], mistyped[:8], unreadable[:8], flagged[:8], gitlinks[:8],
             execbits[:8], gldirt[:8], aliased[:8], diraliased[:8], symaliased[:8],
-            symunbounded[:8])
+            symunbounded[:8], symdiverged[:8], symhygiene[:8])
 
 
 def fingerprint(repo):
@@ -1350,8 +1536,12 @@ def fingerprint(repo):
     # ROUND 13 / P1, (TD-2026-08-01-(P1-symlink-target-alias)): every alias round so far registered
     # only INDEX PATHS, and a symlink's TARGET is not one — it is blob content, read as bytes and
     # never resolved, so the four-round census did not apply to it on ANY axis. It does now.
+    # BACKLOG P3-131/P3-132 (2026-08-01): `symdiverged` is the RECEIVER-RESOLUTION PARITY verdict
+    # (classes 2 and 3 — blocking); `symhygiene` is class 4, dangling on BOTH sides, which is
+    # deliberately NOT a refusal and is carried only so the shape is visible.
     (diverged, mistyped, unreadable, flagged, gitlinks,
-     execbits, gldirt, aliased, diraliased, symaliased, symunbounded) = _raw_index_sweep(
+     execbits, gldirt, aliased, diraliased, symaliased, symunbounded,
+     symdiverged, symhygiene) = _raw_index_sweep(
         repo, gbin, genv, set(modified) | set(untracked))
     if flagged:
         raise IndexFlagsSet(
@@ -1435,6 +1625,21 @@ def fingerprint(repo):
               "blocked while `-> DIRLINK/` and `-> DIRLINK/real.txt` passed over the very same "
               "tracked `dirlink`, a one-character bypass. Spell the target the way the index "
               "records the path (`ln -sf <recorded-spelling>`) and re-run.")
+    if symdiverged:
+        raise SymlinkReceiverDivergence(
+            "tracked SYMLINKS that RESOLVE HERE but cannot resolve from tracked content at a "
+            "receiver: " + ", ".join(symdiverged)
+            + ". This is RECEIVER-RESOLUTION PARITY, not the alias census: the question is not "
+              "how the target is SPELLED but whether git SHIPS what it points at. Both refused "
+              "shapes are reachable with committed content alone and both produce FALSE-GREEN "
+              "evidence — `link -> build/out.txt` with `build/` gitignored and the artifact "
+              "present leaves `git status --porcelain -uall` EMPTY, returns the clean-tree "
+              "constant and SERVES BYTES here, while a fresh clone gets a DANGLING link; an "
+              "absolute target landing inside this checkout is the same channel with a different "
+              "spelling. A link that dangles on BOTH sides is NOT refused (nothing here reads "
+              "through it, so nothing produced here lies about the receiver), nor is one whose "
+              "target leaves the repository, nor one that resolves at the receiver but not here. "
+              "Track the target, or do not commit the link.")
     if symunbounded:
         raise SymlinkResolutionUnbounded(
             "tracked SYMLINKS whose target could not be resolved within the budget every kernel "
@@ -1559,6 +1764,9 @@ if __name__ == "__main__":
     except SymlinkResolutionUnbounded as exc:
         print(f"tree_fingerprint: GIT_SYMLINK_RESOLUTION_UNBOUNDED — {exc}", file=sys.stderr)
         sys.exit(16)
+    except SymlinkReceiverDivergence as exc:
+        print(f"tree_fingerprint: GIT_SYMLINK_RECEIVER_DIVERGENCE — {exc}", file=sys.stderr)
+        sys.exit(17)
     except RawIndexDivergence as exc:
         # Ordered BEFORE GitFiltersPresent: RawIndexDivergence subclasses it so that callers
         # written against the older type still block, but the code printed must be the specific

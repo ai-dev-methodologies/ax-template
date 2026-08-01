@@ -1250,13 +1250,25 @@ R9_GUARD = [(GUARD, "        if _execbits:"), (GUARD, "        if _gldirt:"),
 R9_FP = [(FP, "    if execbits:"), (FP, "    if gldirt:"), (FP, "    if aliased:")]
 R10_GUARD = [(GUARD, "        if _diraliased:")]
 R10_FP = [(FP, "    if diraliased:")]
+# BACKLOG P3-126 (2026-08-01) MOVED THESE ANCHORS. The key is now ACCUMULATED (parent key +
+# b"/" + the folded COMPONENT) instead of folded whole, so the round-11 neuter — "put
+# `bytes.lower()` back" — is expressed on the two accumulation lines rather than on the
+# setdefault. It is the SAME semantics: `b"/".join(c.lower() for c in comps)` is byte-for-byte
+# `prefix.lower()`, because `/` is unaffected by lowering. Everything else (the round-10 report,
+# the discriminator, the Cf strip inside the fold) stays live, so what lands again under it is
+# still attributable to the FOLD and to nothing else.
 R11_GUARD = [(GUARD,
-              "                _casefold.setdefault(_ax_fold_path_key(_pfx, _foldcache), "
-              "{}).setdefault(",
-              "                _casefold.setdefault(_pfx.lower(), {}).setdefault(")]
+              "                    _key = _key + b\"/\" + _ax_fold_path_key(_comp, _foldcache)",
+              "                    _key = _key + b\"/\" + _comp.lower()"),
+             (GUARD,
+              "                    _key = _ax_fold_path_key(_comp, _foldcache)",
+              "                    _key = _comp.lower()")]
 R11_FP = [(FP,
-           "        casefold.setdefault(_fold_path_key(prefix, foldcache), {}).setdefault(",
-           "        casefold.setdefault(prefix.lower(), {}).setdefault(")]
+           "            key = key + b\"/\" + _fold_path_key(comp, foldcache)",
+           "            key = key + b\"/\" + comp.lower()"),
+          (FP,
+           "            key = _fold_path_key(comp, foldcache)",
+           "            key = comp.lower()")]
 # ROUND 12's fix is a COMPUTATION too, and the honest neuter is the SAME shape: put the round-11
 # key back EXACTLY as it was — canonical caseless, but with ignorable format characters PRESERVED.
 # It removes ONLY the strip, so anything that lands again is attributable to the strip and to
@@ -1291,6 +1303,13 @@ R14_FP = [(FP,
 # must keep blocking THROUGH the neuter, which is what makes the attribution checkable.
 R14B_GUARD = [(GUARD, "            if _walked:")]
 R14B_FP = [(FP, "        if walked:")]
+# ROUND 15 / BACKLOG P3-131 + P3-132. RECEIVER-RESOLUTION PARITY is a NEW REPORT about a NEW
+# QUESTION ("does git SHIP what this points at", as against "is the target SPELLED as an alias"),
+# so the honest neuter is the round-9/10/13/14b shape: kill the `if`. The whole round-13/14/14b
+# alias census stays live underneath it, which is what makes anything that lands again under the
+# neuter attributable to the parity census and to nothing else.
+R15_GUARD = [(GUARD, "        if _symdiverged:")]
+R15_FP = [(FP, "    if symdiverged:")]
 pairs = {
     "all": R9_GUARD + R9_FP,
     "guard": R9_GUARD,
@@ -1313,6 +1332,9 @@ pairs = {
     "r14ball": R14B_GUARD + R14B_FP,
     "r14bguard": R14B_GUARD,
     "r14bfp": R14B_FP,
+    "r15all": R15_GUARD + R15_FP,
+    "r15guard": R15_GUARD,
+    "r15fp": R15_FP,
 }
 if what not in pairs:
     print(f"unknown round9/10/11/12/13/14/14b neuter: {what}", file=sys.stderr)
@@ -1516,7 +1538,70 @@ PY
 #                                  untracked final candidate. What the receiver gets there is
 #                                  governed by whether the path is shipped at all — the dangling
 #                                  class (P3-132) — not by this census.
+r15_plant() {   # r15_plant <sb> <shape>
+    # ROUND 15 / BACKLOG P3-131 + P3-132 — the four RECEIVER-RESOLUTION PARITY topologies. All
+    # four are COMMITTED CONTENT ONLY: no environment control, no filesystem trick, nothing that
+    # a fork-receiver could not reach by accident. Each pair (attack, control) differs in exactly
+    # one fact, which is what makes the exit codes attributable.
+    #
+    #   ignored-present        `pkg/link -> build/out.txt`, `build/` gitignored, out.txt PRESENT.
+    #                          `git status --porcelain -uall` is EMPTY (ignored is not untracked),
+    #                          `cat pkg/link` SERVES BYTES, and a fresh clone gets a DANGLING
+    #                          link. Working here, broken there = false-green evidence. CLASS 2.
+    #                          Its control is legit/buildlink in r13_legit: the SAME link with the
+    #                          artifact ABSENT, dangling on both sides, CLASS 4, exit 0.
+    #   untracked-intermediate `pkg/link -> build/blink/real.txt` where `build/blink -> ../real`
+    #                          is an UNTRACKED symlink and `pkg/real/real.txt` IS tracked. The
+    #                          FINAL target is tracked, so the round-13/14b alias census is
+    #                          content — but the ROUTE is not shipped, so the receiver still gets
+    #                          a dangling link. CLASS 2 through a different door. (R14b named this
+    #                          shape and deferred it to "the dangling class, P3-132" — here it is.)
+    #   absolute-inside        `pkg/link -> <this checkout>/pkg/real/real.txt`. The target is
+    #                          TRACKED and resolves here; the receiver resolves the absolute path
+    #                          against THEIR root, where this checkout does not exist. P3-131
+    #                          called this "outside the census by design"; it is the same
+    #                          false-green channel respelled. CLASS 3.
+    #   absolute-outside       `pkg/link -> /usr/bin/env` (or a host path outside the checkout).
+    #                          THE BOUNDARY P3-131 NAMED CORRECTLY, and the control that keeps
+    #                          this census a measurement: the receiver's root filesystem is not
+    #                          ours to audit, so this must stay exit 0.
+    local sb="$1" shape="$2"
+    mkdir -p "$sb/repo/pkg/real" "$sb/repo/pkg/build" || return 2
+    printf 'REAL\n' > "$sb/repo/pkg/real/real.txt" || return 2
+    printf 'build/\n' > "$sb/repo/pkg/.gitignore" || return 2
+    case "$shape" in
+        ignored-present)
+            printf 'ARTIFACT\n' > "$sb/repo/pkg/build/out.txt" || return 2
+            ( builtin cd "$sb/repo/pkg" && ln -s build/out.txt link ) || return 2 ;;
+        untracked-intermediate)
+            ( builtin cd "$sb/repo/pkg" && ln -s ../real build/blink && ln -s build/blink/real.txt link ) \
+                || return 2 ;;
+        absolute-inside)
+            ( builtin cd "$sb/repo/pkg" && ln -s "$sb/repo/pkg/real/real.txt" link ) || return 2 ;;
+        absolute-outside)
+            mkdir -p "$sb/outside15" || return 2
+            printf 'HOST\n' > "$sb/outside15/host.txt" || return 2
+            ( builtin cd "$sb/repo/pkg" && ln -s "$sb/outside15/host.txt" link ) || return 2 ;;
+        *) return 2 ;;
+    esac
+    ( builtin cd "$sb/repo" && git add -- pkg \
+      && git "${GIT_ID[@]}" commit -q -m "r15 $shape" ) >/dev/null 2>&1 || return 2
+    return 0
+}
+
+
 r13_legit() {
+    # ROUND 15 / BACKLOG P3-131 + P3-132 — TWO SHAPES LEFT THIS SET, AND THAT IS THE POINT.
+    # Until now `untracked -> build/artifact.txt` (with `build/` gitignored and the artifact
+    # PRESENT) and `viaunt -> build/blink/real.txt` (routed through an UNTRACKED intermediate)
+    # were both asserted here as LEGITIMATE, exit 0. An independent lane refuted the premise that
+    # licensed them: they RESOLVE HERE and DANGLE AT EVERY RECEIVER, because a fresh clone
+    # contains tracked paths and nothing else — so they are false-green evidence, not legitimacy.
+    # (R14b explicitly deferred exactly this to "the dangling class, P3-132"; this is that class.)
+    # They now appear as RED arms (BA)/(BB) below, and what remains here in their place is the
+    # shape that IS legitimate: `buildlink -> build/artifact-absent.txt` with NO artifact on disk
+    # — a committed build-artifact link in a clean checkout, dangling on BOTH sides, class 4,
+    # exit 0. That is the false-positive control the parity check must never break.
     local sb="$1"
     mkdir -p "$sb/outside" || return 2
     printf 'OUT\n' > "$sb/outside/host.txt" || return 2
@@ -1530,7 +1615,7 @@ r13_legit() {
       && ln -s ../legit/sub/real.txt dotdot \
       && ln -s "$sb/outside/host.txt" absolute \
       && ln -s ../../outside/host.txt escapes \
-      && ln -s build/artifact.txt untracked \
+      && ln -s build/artifact-absent.txt buildlink \
       && ln -s nowhere-at-all.txt dangling \
       && ln -s sub/exact chain \
       && ln -s sub dirlink \
@@ -1540,8 +1625,7 @@ r13_legit() {
       && ln -s chainmid d1 \
       && ln -s ../sub chainmid/d2 \
       && ln -s d1/d2/real.txt deep \
-      && ln -s ../sub build/blink \
-      && ln -s build/blink/real.txt viaunt ) || return 2
+      && ln -s ../sub build/blink ) || return 2
     ( builtin cd "$sb/repo" && git add -- legit \
       && git "${GIT_ID[@]}" commit -q -m "legitimate symlinks" ) >/dev/null 2>&1 || return 2
     return 0
@@ -1718,6 +1802,13 @@ r9_setup() {
                  r13_plant "$sb" 736166652d7265616c 736166652d7265616ce2808c || return 2 ;;
         symlegit) # ROUND 13 + 14b FALSE-POSITIVE CONTROL: thirteen legitimate symlinks, exit 0.
                  r13_legit "$sb" || return 2 ;;
+        # ROUND 15 / BACKLOG P3-131 + P3-132 — RECEIVER-RESOLUTION PARITY. Four trees, built by
+        # one helper so the ONLY difference between the attack and its control is the one fact
+        # under test. See r15_plant.
+        symrecvign)  r15_plant "$sb" ignored-present || return 2 ;;
+        symrecvmid)  r15_plant "$sb" untracked-intermediate || return 2 ;;
+        symrecvabs)  r15_plant "$sb" absolute-inside || return 2 ;;
+        symrecvout)  r15_plant "$sb" absolute-outside || return 2 ;;
         # ROUND 14b / P1 — THE INTERMEDIATE COMPONENT. Recorded spelling `mid/dirlink -> real`;
         # the attack link `mid/x` spells it ALIASED. With NO tail the alias is the FINAL component
         # and rounds 13/14 already refused it (symmidfinal, the control that must not change);
@@ -1774,6 +1865,7 @@ r9_attack() {
                   # ROUND 13: likewise — the symlink and its target are COMMITTED by the setup, so
                   # there is nothing to do on disk afterwards and `git status` stays EMPTY
         symmidfinal|symmidslash|symmidsub|symmidnfd|symmidign) : ;;
+        symrecvign|symrecvmid|symrecvabs|symrecvout) : ;;
                   # ROUND 14b: same — the intermediate alias IS the committed content
         symreg)   git -C "$sb/repo" update-index --assume-unchanged linkpath.txt || return 2
                   rm -f "$sb/repo/linkpath.txt" || return 2
@@ -2019,11 +2111,11 @@ PY
 import os, subprocess, sys
 repo = sys.argv[1]
 want = {b"legit/sub/exact", b"legit/dotdot", b"legit/absolute", b"legit/escapes",
-        b"legit/untracked", b"legit/dangling", b"legit/chain", b"legit/dirlink",
+        b"legit/buildlink", b"legit/dangling", b"legit/chain", b"legit/dirlink",
         b"legit/viadir",
         # ROUND 14b — the intermediate-position shapes
         b"legit/slashdir", b"legit/slashlink", b"legit/d1", b"legit/chainmid/d2",
-        b"legit/deep", b"legit/viaunt"}
+        b"legit/deep"}
 idx = subprocess.run(["git", "-C", repo, "ls-files", "-s", "-z"],
                      stdout=subprocess.PIPE, check=True).stdout.split(b"\0")
 tracked = {rec.partition(b"\t")[2]: rec.split(b" ")[0] for rec in idx if rec}
@@ -2036,7 +2128,7 @@ if missing:
 if os.path.realpath(os.path.join(rootb, b"legit/dotdot")) != \
         os.path.realpath(os.path.join(rootb, b"legit/sub/real.txt")):
     why.append("legit/dotdot does not reach the tracked file, so nothing here is compared")
-for rel in (b"legit/slashdir", b"legit/slashlink", b"legit/deep", b"legit/viaunt"):
+for rel in (b"legit/slashdir", b"legit/slashlink", b"legit/deep"):
     try:
         os.stat(os.path.join(rootb, rel))
     except OSError as exc:
@@ -2044,6 +2136,17 @@ for rel in (b"legit/slashdir", b"legit/slashlink", b"legit/deep", b"legit/viaunt
                    f"control that dangles exercises no intermediate at all")
 if b"legit/build/blink" in tracked or b"legit/build/artifact.txt" in tracked:
     why.append("legit/build is TRACKED, so the untracked-intermediate treatment is untested")
+# ROUND 15 — the build-artifact link is the class-4 control, so it MUST dangle on both sides:
+# if the artifact were present the shape would be the (BA) attack and this control would be
+# asserting exit 0 for a divergence.
+if os.path.exists(os.path.join(rootb, b"legit/build/artifact-absent.txt")):
+    why.append("legit/build/artifact-absent.txt EXISTS, so legit/buildlink is the class-2 "
+               "attack rather than the class-4 control")
+try:
+    os.stat(os.path.join(rootb, b"legit/buildlink"))
+    why.append("legit/buildlink RESOLVES here, so it is not the dangling-both-sides control")
+except OSError:
+    pass
 if why:
     print("; ".join(why), file=sys.stderr)
 sys.exit(1 if why else 0)
@@ -2053,6 +2156,63 @@ PY
                           "not all present, or none of them reaches a tracked path, or the" \
                           "intermediate-position shapes do not resolve — a false-positive control" \
                           "that has nothing to look at proves nothing."
+                return 1
+            fi ;;
+        symrecvign|symrecvmid|symrecvabs|symrecvout)
+            # ROUND 15 / BACKLOG P3-131 + P3-132. THE PREMISE IS THE WHOLE ARGUMENT here, because
+            # the refutation these arms encode is a claim about what is TRUE OF THIS TREE, not
+            # about what some code does: (1) pkg/link is a tracked mode-120000 entry; (2) the tree
+            # is CLEAN to `git status --porcelain -uall` — if the shape only worked on a dirty
+            # tree it would already be refused by the clean-tree precondition and the parity check
+            # would be proving nothing; (3) the link RESOLVES HERE (otherwise there is no
+            # false-green to catch); (4) for the two class-2 shapes the content it resolves
+            # THROUGH is genuinely NOT tracked, and for absolute-inside the target genuinely IS
+            # inside this checkout.
+            if ! "${AX_PY_BIN:-python3}" - "$sb/repo" "$kind" <<'PY'
+import os, subprocess, sys
+repo, kind = sys.argv[1], sys.argv[2]
+rootb = os.fsencode(repo)
+why = []
+idx = subprocess.run(["git", "-C", repo, "ls-files", "-s", "-z"],
+                     stdout=subprocess.PIPE, check=True).stdout.split(b"\0")
+tracked = {rec.partition(b"\t")[2]: rec.split(b" ")[0] for rec in idx if rec}
+if tracked.get(b"pkg/link") != b"120000":
+    why.append("pkg/link is not a tracked symlink entry")
+st = subprocess.run(["git", "-C", repo, "status", "--porcelain", "-uall"],
+                    stdout=subprocess.PIPE, check=True).stdout
+if st.strip():
+    why.append("the tree is NOT clean (%r), so the clean-tree precondition would refuse it "
+               "first and this arm would prove nothing" % st[:120])
+if not os.path.exists(os.path.join(rootb, b"pkg/link")):
+    why.append("pkg/link does NOT resolve here, so there is no false-green to catch")
+if kind == "symrecvign":
+    if b"pkg/build/out.txt" in tracked:
+        why.append("pkg/build/out.txt is TRACKED, so the receiver would get it too")
+    if not os.path.exists(os.path.join(rootb, b"pkg/build/out.txt")):
+        why.append("pkg/build/out.txt is absent here, so this is class 4 rather than class 2")
+if kind == "symrecvmid":
+    if b"pkg/build/blink" in tracked:
+        why.append("pkg/build/blink is TRACKED, so the route IS shipped")
+    if tracked.get(b"pkg/real/real.txt") != b"100644":
+        why.append("pkg/real/real.txt is not tracked, so the FINAL target is not the tracked one")
+if kind in ("symrecvabs", "symrecvout"):
+    tgt = os.readlink(os.path.join(rootb, b"pkg/link"))
+    if not isinstance(tgt, bytes):
+        tgt = os.fsencode(tgt)
+    inside = os.path.realpath(tgt).startswith(os.path.realpath(rootb) + b"/")
+    if not tgt.startswith(b"/"):
+        why.append("the target is not absolute")
+    elif kind == "symrecvabs" and not inside:
+        why.append("the absolute target does not land inside this checkout")
+    elif kind == "symrecvout" and inside:
+        why.append("the boundary control's absolute target lands INSIDE the checkout")
+if why:
+    print("; ".join(why), file=sys.stderr)
+sys.exit(1 if why else 0)
+PY
+            then
+                violation "premise broken ($kind): the receiver-parity topology is not the one" \
+                          "this arm claims to test, so its exit code is not attributable."
                 return 1
             fi ;;
         symmidfinal|symmidslash|symmidsub|symmidnfd|symmidign)
@@ -2582,6 +2742,53 @@ r9_case AR2 symmidsub   empty "same, round-14b census removed (both)     " "" r1
 r9_case AS  symmidnfd   empty "INTERMEDIATE alias by NORMALIZATION       " \
     "GIT_SYMLINK_TARGET_ALIAS" "" "$CLEAN_FP_R13"
 r9_case AS2 symmidnfd   empty "same, round-14b census removed (both)     " "" r14ball "$CLEAN_FP_R13"
+
+# ══ ROUND 15 (BACKLOG P3-131 + P3-132) — RECEIVER-RESOLUTION PARITY ═══════════════════
+# Rounds 13/14/14b asked ONE question about a symlink target: is it SPELLED as an alias of a
+# recorded path? Two shapes were deliberately left unrefused, and BOTH exemptions rested on a
+# single sentence — "a dangling link is identically broken here and at the receiver, so the
+# evidence does not lie." An independent verification lane REFUTED that sentence with committed
+# content alone:
+#   (BA) `pkg/link -> build/out.txt`, `build/` gitignored, out.txt PRESENT. `git status
+#        --porcelain -uall` is EMPTY (ignored content is not untracked content), the fingerprint
+#        is the clean-tree constant, and `cat pkg/link` SERVES BYTES — while a fresh clone, which
+#        contains tracked paths and NOTHING ELSE, gets a DANGLING link. Not "identically broken":
+#        working here, broken there. That is false-green evidence, which is the one proposition
+#        this whole gate family exists to defend.
+#   (BB) the same divergence through the ROUTE rather than the destination: the final target IS
+#        tracked, but it is reached through an UNTRACKED intermediate symlink inside the ignored
+#        directory. R14b named this shape, found it unrefused, and deferred it to "the dangling
+#        class (P3-132)". This is that class.
+#   (BC) `pkg/link -> <this checkout>/pkg/real/real.txt` — an ABSOLUTE target landing INSIDE the
+#        checkout. P3-131 called absolute targets "outside the census by design, portability is a
+#        separate defect". That UNDERCLAIMS: when the path lands inside THIS checkout it is the
+#        same false-green channel respelled, because the receiver resolves it against THEIR root.
+#   (BD) is the BOUNDARY CONTROL that keeps this census a measurement rather than a policy: an
+#        absolute target landing OUTSIDE the checkout stays exit 0. That IS the part of P3-131
+#        which was right — the receiver's root filesystem is not ours to audit.
+#   (AM) above is the other false-positive control, and it CHANGED: the two shapes (BA)/(BB)
+#        encode used to sit INSIDE it as "legitimate", which is precisely the claim that was
+#        refuted. What stands in their place is `legit/buildlink -> build/artifact-absent.txt`
+#        with NO artifact on disk — a committed build-artifact link in a clean checkout, dangling
+#        on BOTH sides, CLASS 4, exit 0. So a build-artifact link is legitimate exactly while the
+#        evidence is honest, and becomes a divergence exactly when the local artifact makes it lie.
+#   The twins (BA2)/(BB2)/(BC2) remove ONLY the new report (the round-13/14/14b census stays
+#        live), so what lands again under them is attributable to the parity check alone;
+#        (BA3)/(BA4) split it per implementation.
+r9_case BA  symrecvign empty "IGNORED target present: works here, not there" \
+    "GIT_SYMLINK_RECEIVER_DIVERGENCE" "" "$CLEAN_FP_R13"
+r9_case BA2 symrecvign empty "same, round-15 parity census removed (both) " "" r15all "$CLEAN_FP_R13"
+r9_case BA3 symrecvign empty "ignored target, only the SWEEP neutered     " \
+    "AUDIT_FINGERPRINT_UNVERIFIABLE" r15guard "$CLEAN_FP_R13"
+r9_case BA4 symrecvign empty "ignored target, only the HELPER neutered    " \
+    "GIT_SYMLINK_RECEIVER_DIVERGENCE" r15fp "$CLEAN_FP_R13"
+r9_case BB  symrecvmid empty "tracked target via UNTRACKED route          " \
+    "GIT_SYMLINK_RECEIVER_DIVERGENCE" "" "$CLEAN_FP_R13"
+r9_case BB2 symrecvmid empty "same, round-15 parity census removed (both) " "" r15all "$CLEAN_FP_R13"
+r9_case BC  symrecvabs empty "ABSOLUTE target INSIDE this checkout        " \
+    "GIT_SYMLINK_RECEIVER_DIVERGENCE" "" "$CLEAN_FP_R13"
+r9_case BC2 symrecvabs empty "same, round-15 parity census removed (both) " "" r15all "$CLEAN_FP_R13"
+r9_case BD  symrecvout empty "ABSOLUTE target OUTSIDE: boundary, exit 0   " ""
 
 # (AD) ROUND 11 — THE TWO IMPLEMENTATIONS MUST AGREE ON THE FOLD, and (AE) the NORMALIZATION
 # false-positive control, which is SIMULATED and says so.
