@@ -962,7 +962,21 @@ PROTECTED_LEDGER_REL = os.path.join("practices", "evals",
 # 18 + 46 = 64, and the 46 are disjoint from the existing 18 (verified by set comparison, not
 # assumed: the overlapping FILES — checkbox.tsx, skeleton.tsx, sonner.tsx — carry a DIFFERENT
 # upstream_id in each set, and identity is the (path, upstream_id) pair).
-LIVE_MIN_PROTECTED_ENTRIES = 64
+#
+# BACKLOG P2-73 B-class / Lane G (2026-08-01): 64 → 66, ADDITIVE. Lane A's B-class row
+# prescribed RESPELLING skeleton.tsx's and sonner.tsx's SC 4.1.3 anchor from
+# wcag-22-techniques-2026-05 to wcag-2-2. Measured, at a CONSTANT count of 64, that is the
+# substitution the subset check exists to refuse: ledger-only respell →
+# PROTECTED_LEDGER_REQUIRED_IDENTITY_MISSING (exit 2); both in-tree surfaces respelled and
+# COMMITTED in a throwaway clone → PROTECTED_IDENTITY_REMOVED (exit 5) vs origin/main. It is
+# also unnecessary: a templates/** citation resolves practices-FIRST, and
+# practices/upstream/wcag-22-techniques-2026-05.snapshot.md is the SC 4.1.3 UNDERSTANDING
+# page (receipt r158, HTTP 200), which carries the sentence verbatim — only the
+# practices-react copy of that id is the Techniques INDEX that does not. So each file GAINS a
+# second anchor against wcag-2-2 (the WCAG 2.2 Recommendation, tier 1) instead of moving the
+# first: nothing leaves the fatal set, the citation stops depending on resolution order, and
+# the ratchet moves the only direction it is allowed to move.
+LIVE_MIN_PROTECTED_ENTRIES = 66
 
 # Identity pinning (codex round-3). A COUNT is not an identity: min_entries=2 was satisfied
 # by duplicating one clean row after deleting the row that actually matters. These exact
@@ -1054,6 +1068,12 @@ LIVE_REQUIRED_PROTECTED_IDENTITIES = frozenset({
     ("templates/L2/blocks/theme-switcher.tsx", "next-themes-2026-05"),
     ("templates/L2/blocks/toast-queue.tsx", "shadcn-registry-2026-05"),
     ("templates/L2/blocks/toast.tsx", "shadcn-registry-2026-05"),
+    # ── P2-73 B-class / Lane G (2026-08-01): the WCAG 2.2 RECOMMENDATION anchors added to
+    # skeleton.tsx and sonner.tsx so the SC 4.1.3 normative sentence is no longer true only
+    # by practices-first resolution order. Both quotes verified as substrings of a
+    # NON-HEADING prose block of practices-react/upstream/wcag-2-2.snapshot.md.
+    ("templates/L1/components/skeleton.tsx", "wcag-2-2"),
+    ("templates/L1/components/sonner.tsx", "wcag-2-2"),
 })
 # FIVE-SURFACE EQUALITY CENSUS (PRD-final-4 C3, 2026-07-30). Until now this was a
 # ONE-DIRECTIONAL `<=`: the pinned set merely had to not EXCEED the floor. That permitted the

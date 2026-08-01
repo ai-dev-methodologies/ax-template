@@ -140,12 +140,35 @@
 # require: templates/L2/blocks/toast-queue.tsx::shadcn-registry-2026-05
 # require: templates/L2/blocks/toast.tsx::shadcn-registry-2026-05
 #
+# ── P2-73 B-class / Lane G (2026-08-01): 64 → 66. FIVE-SURFACE RATCHET, ADDITIVE ─────
+# Lane A's B-class finding said skeleton.tsx and sonner.tsx cite the SC 4.1.3 NORMATIVE
+# sentence against `wcag-22-techniques-2026-05`, an INDEX page that does not carry it, and
+# prescribed replacing the upstream_id with `wcag-2-2`. Measured, that prescription is both
+# unnecessary and ILLEGAL here:
+#   · UNNECESSARY — a templates/** citation resolves PRACTICES-FIRST, and the two catalogs
+#     register that one id against DIFFERENT pages: practices/upstream/ holds the SC 4.1.3
+#     UNDERSTANDING page (re-fetched 2026-08-01, receipt r158, HTTP 200), which contains the
+#     sentence VERBATIM and a `## Success Criterion (SC)` heading; practices-react/upstream/
+#     holds the Techniques INDEX, which does not. The live protected sweep is green because
+#     the Understanding body is what actually resolves — not because the gate is asleep.
+#   · ILLEGAL — a RESPELL removes a protected identity. Measured in a throwaway clone at the
+#     same count of 64: ledger-only respell → PROTECTED_LEDGER_REQUIRED_IDENTITY_MISSING
+#     (exit 2); both surfaces respelled and committed → PROTECTED_IDENTITY_REMOVED (exit 5)
+#     against origin/main, which is exactly the SUBSTITUTION case the subset check exists for.
+# So the citation is ANCHORED HARDER instead of moved: each file gains a SECOND anchor stating
+# the same normative sentence against `wcag-2-2` — the WCAG 2.2 Recommendation itself
+# (practices-react/upstream, tier 1, W3C REC 2024-12-12), verified as a substring of a
+# NON-HEADING prose block. Nothing leaves the fatal set; the set grows by two, and the claim
+# stops depending on cross-catalog resolution order.
+# require: templates/L1/components/skeleton.tsx::wcag-2-2
+# require: templates/L1/components/sonner.tsx::wcag-2-2
+#
 # min_entries — the protected set MAY NOT BE REDUCED below this count, and on the live
-# tree it may not EXCEED it either: the guard pins LIVE_MIN_PROTECTED_ENTRIES=64 in
+# tree it may not EXCEED it either: the guard pins LIVE_MIN_PROTECTED_ENTRIES=66 in
 # evidence_quote_spotcheck_guard.sh and census-compares row count, `# require:` count, this
 # directive, its own pin-set size and its own floor for EQUALITY. Lowering the directive here
 # does not silently shrink the gate; raising it alone does not silently fake a ratchet.
-# min_entries: 64
+# min_entries: 66
 
 # The anchor P2-40 found fabricated and re-anchored. This is the RED-on-revert subject:
 # restoring the pre-P2-40 quote makes the registered live guard exit 1.
@@ -240,3 +263,11 @@ templates/L2/blocks/pricing-table.tsx::stripe-billing-2026-05
 templates/L2/blocks/theme-switcher.tsx::next-themes-2026-05
 templates/L2/blocks/toast-queue.tsx::shadcn-registry-2026-05
 templates/L2/blocks/toast.tsx::shadcn-registry-2026-05
+
+# ── P2-73 B-class / Lane G ratchet (2026-08-01): 2 further anchors promoted to FATAL ──
+# The WCAG 2.2 Recommendation anchors added to skeleton.tsx and sonner.tsx (see the require
+# directives above for the full rationale and the measured refusal of the respell route).
+# Both were verified as substrings of a NON-HEADING prose block of
+# practices-react/upstream/wcag-2-2.snapshot.md before being listed here.
+templates/L1/components/skeleton.tsx::wcag-2-2
+templates/L1/components/sonner.tsx::wcag-2-2
