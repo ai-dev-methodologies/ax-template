@@ -2669,9 +2669,9 @@ echo "  case-INSENSITIVE, so the distinct-inode A/·a/ and É/·é/ controls wer
 echo "  run (export AX_PROVE_CS_DIR=<case-sensitive dir> for those); the two implementations' folds"
 fi
 echo "  agree over every prefix of every"
-echo "  tracked path, and every round-5/6/7/8/9/10/11/12 addition has a neutered twin in which its"
+echo "  tracked path, and every round-5..14b addition has a neutered twin in which its"
 echo "  attack lands again — including a bits-only twin for the round-8 representation backstop"
-echo "  and, for every round-9, round-10, round-11 and round-12 refusal, SEPARATE sweep-only and helper-only"
+echo "  and, for every round-9 through round-14b refusal, SEPARATE sweep-only and helper-only"
 echo "  twins proving each implementation load-bearing on its own — so the refusals are"
 echo "  attributable to the fixes, not the sandbox."
 exit 0
