@@ -65,11 +65,12 @@ Pick **one** of the three branches below based on what the project already uses
 neither is present).
 
 Before writing the commands, check `ax.config.json`'s `stacks` field to decide
-which lines belong in the hook: `stacks.react: true` → the npm `lint`/`test`
-lines; `stacks.java: true` → a Gradle verification task line (`./gradlew
+which lines belong in the hook — `stacks` is an array (e.g. `["react", "java"]`),
+not a boolean map: `"react"` in the array → the npm `lint`/`test` lines;
+`"java"` in the array → a Gradle verification task line (`./gradlew
 testPractices` below is the ax-template default — adjust the module path and
-task name to whatever the target project actually registers); both `true` →
-include both. Omit whichever block the project's `stacks` doesn't have.
+task name to whatever the target project actually registers); both present →
+include both. Omit whichever block the project's `stacks` array doesn't contain.
 
 ### Branch A — `core.hooksPath` (no dependency, default recommendation)
 

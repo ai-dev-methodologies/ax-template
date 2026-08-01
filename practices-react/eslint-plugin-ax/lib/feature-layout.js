@@ -93,15 +93,7 @@ export function layoutFrom(settings) {
       }
     : DEFAULT_LAYOUT.layers
 
-  return Object.freeze({
-    srcDir,
-    alias: Object.freeze({ ...alias }),
-    layers: Object.freeze({
-      app: Object.freeze(rawLayers.app.slice()),
-      features: Object.freeze(rawLayers.features.slice()),
-      shared: Object.freeze(rawLayers.shared.slice()),
-    }),
-  })
+  return cloneLayout({ srcDir, alias, layers: rawLayers })
 }
 
 /** Deep-copy-and-freeze a layout so callers never share DEFAULT_LAYOUT's own arrays/objects by reference. */

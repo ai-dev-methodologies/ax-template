@@ -7,7 +7,7 @@
 # registration must be TRUE, not just PRESENT. A prior draft of this guard checked only
 # that fields were non-empty, which lets an arbitrary fake `upstream`, a duplicated path,
 # or `included_in_package: false` pass silently — this guard checks the ledger's CONTENT
-# against the disk, not merely its existence. Six invariants, each independently BLOCKING:
+# against the disk, not merely its existence. Seven invariants, each independently BLOCKING:
 #   (1) COMPLETENESS   — every header-bearing file on disk is registered (no silent gap).
 #   (2) REVERSE EXISTS — every registered `path` still exists on disk (no orphaned entry).
 #   (3) ONE-TO-ONE     — no `path` is registered twice.
@@ -18,6 +18,11 @@
 #                        decision recorded in the ledger's `policy:` block, made real).
 #   (6) FIELD BLANKS   — path/upstream/upstream_license/included_in_package/codified_at
 #                        are all non-blank.
+#   (7) MALFORMED_HEADER — a file carries the `@ax-codified-from` tag but its header does
+#                        not match the expected `@ax-codified-from <citation>` shape; a
+#                        prior draft silently excluded these from `disk` (never entering
+#                        the completeness check), letting a broken/truncated header evade
+#                        every other invariant.
 #
 # Non-vacuity: zero header-bearing files found is NOT a green "nothing to check" — it is
 # NO_DERIVED_BLOCKS_FOUND (exit 2), because a broken glob or a relocated templates/ tree
@@ -93,8 +98,9 @@ HEADER_RE = re.compile(r'@ax-codified-from\s+(.+)')
 
 def find_header_files():
     found = {}
+    malformed = []
     if not templates_dir.is_dir():
-        return found
+        return found, malformed
     for path in sorted(templates_dir.rglob("*")):
         if not path.is_file():
             continue
@@ -109,17 +115,22 @@ def find_header_files():
             continue
         if "@ax-codified-from" not in text:
             continue
+        rel = path.relative_to(scan_root).as_posix()
         m = HEADER_RE.search(text)
         if not m:
+            # Tag is present but the header doesn't match the expected shape (e.g. no
+            # citation after the tag) — record it as MALFORMED_HEADER (invariant 7)
+            # instead of silently dropping it; a prior draft did the latter, which let
+            # a broken header evade the completeness check entirely.
+            malformed.append(rel)
             continue
-        rel = path.relative_to(scan_root).as_posix()
         found[rel] = m.group(1).strip()
-    return found
+    return found, malformed
 
-disk = find_header_files()
+disk, malformed = find_header_files()
 
 # ── non-vacuity (any root) ────────────────────────────────────────────────────
-if not disk:
+if not disk and not malformed:
     print("derived_block_license_guard: BLOCK — NO_DERIVED_BLOCKS_FOUND: zero "
           "@ax-codified-from files under templates/ — a collapsed glob or relocated "
           "tree would otherwise report PASS about an empty set.", file=sys.stderr)
@@ -197,6 +208,12 @@ registered_paths = set(seen_paths.keys())
 for path in sorted(disk.keys()):
     if path not in registered_paths:
         violations.append(f"UNREGISTERED — '{path}' carries @ax-codified-from but is not in the ledger")
+
+# (7) malformed header — tag present, header shape does not match
+for path in malformed:
+    violations.append(
+        f"MALFORMED_HEADER — '{path}' contains '@ax-codified-from' but the header does "
+        f"not match the expected '@ax-codified-from <upstream-citation>' shape")
 
 if violations:
     print("derived_block_license_guard: FAIL — provenance ledger invariant(s) violated:", file=sys.stderr)

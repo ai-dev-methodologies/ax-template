@@ -2666,6 +2666,8 @@ if [ "$INCLUDE_FIXTURES" -eq 1 ]; then
         bash "$SCRIPT_DIR/derived_block_license_guard.sh" --root "$SCRIPT_DIR/fixtures/derived-block-license/fail_duplicate_path"
     run_guard "derived_block_license/fixture_fail_false_inclusion" 1 \
         bash "$SCRIPT_DIR/derived_block_license_guard.sh" --root "$SCRIPT_DIR/fixtures/derived-block-license/fail_false_inclusion"
+    run_guard "derived_block_license/fixture_fail_malformed_header" 1 \
+        bash "$SCRIPT_DIR/derived_block_license_guard.sh" --root "$SCRIPT_DIR/fixtures/derived-block-license/fail_malformed_header"
 fi
 
 # ── Summary ──────────────────────────────────────────────────────────────────

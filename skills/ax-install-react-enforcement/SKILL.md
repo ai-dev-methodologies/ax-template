@@ -133,11 +133,14 @@ right" are not evidence it is actually catching anything. Prove it:
 
 1. Create a probe file in a shared-layer directory (one of
    `axConfig.react?.layers?.shared` entries — `lib` or `components` by default)
-   with an import that reaches into a higher layer (`app` or `features`):
+   with an import that reaches into a higher layer. The import target must use
+   the project's actual `axConfig.react?.layers?.app[0]` directory name (or
+   `layers?.features[0]`) — a hardcoded `app` will silently fail to trigger the
+   rule on a custom layout:
 
    ```ts
    // <srcDir>/lib/__ax_probe.ts  (or <srcDir>/components/__ax_probe.ts)
-   import { probe } from '../app/__ax_probe_target'
+   import { probe } from '../<layers.app[0]>/__ax_probe_target'
    export const __axProbe = probe
    ```
 

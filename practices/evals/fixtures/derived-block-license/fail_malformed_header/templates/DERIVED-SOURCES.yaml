@@ -1,0 +1,5 @@
+# fixture: fail_malformed_header — one file carries the @ax-codified-from tag but its
+# header does not match the expected "@ax-codified-from <citation>" shape (invariant 7).
+# The ledger is intentionally empty: a malformed header can never be registered against,
+# since there is no citation to record — the guard must still BLOCK on this alone.
+derived: []

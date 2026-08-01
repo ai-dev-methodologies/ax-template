@@ -25,7 +25,8 @@
         },
         "srcDir": {
           "type": "string",
-          "description": "Top-level source directory name, relative to react.root (e.g. src)."
+          "pattern": "^[^/]+$",
+          "description": "Top-level source directory name, relative to react.root (e.g. src). Must be a single path segment — a multi-segment path (e.g. 'a/b') silently no-ops the layer glob instead of erroring."
         },
         "alias": {
           "type": "object",
