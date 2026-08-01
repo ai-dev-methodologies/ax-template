@@ -1,0 +1,217 @@
+name: practices-case-normalization
+
+# BACKLOG P2-72 + P3-138 — the non-aliasing-filesystem sweep, scheduled.
+#
+# WHY THIS EXISTS. Every macOS checkout of this tree lives on a filesystem that FOLDS
+# case, and every macOS filesystem measured so far also folds unicode normalization
+# (including the `hdiutil create -fs "Case-sensitive APFS"` volume that
+# `practices/scripts/ax-case-sensitive-sweep.sh` builds — it gets the case half only).
+# On a folding filesystem a committed path string can name a file by a spelling git never
+# recorded, the command still runs, the tree still looks clean, and a gate reports GREEN on
+# evidence it never produced. That is a FALSE GREEN, and it was measured in this repo
+# (round 14 / P1-B). The only complete prescription is to run the suite on a filesystem
+# that does not alias. A Linux runner is that filesystem for free: ext4/overlayfs is
+# case-sensitive AND byte-preserving, i.e. it covers BOTH halves where hdiutil covers one.
+#
+# WHY ADVISORY. Whether this tree's 107 guards are clean on Linux has never been measured —
+# they have only ever been run on macOS. Shipping a BLOCKING job on an unmeasured premise
+# would be the failure mode this catalog punishes. An advisory cron measures without gating;
+# once a baseline exists, promoting it to blocking is a separate, evidence-backed decision.
+#
+# WHAT IT DOES NOT COVER (and it prints this itself, every run): R25's gradle steps and
+# R25's npm step and therefore R25 as a whole — no JDK and no node_modules are provisioned
+# here on purpose, because provisioning them would muddy the first run's signal. This job
+# answers exactly one question: does `run-all-guards.sh --include-fixtures` pass on a
+# non-aliasing filesystem?
+
+on:
+  schedule:
+    - cron: "0 8 * * 1"     # every Monday 08:00 UTC (one hour after portability)
+  workflow_dispatch:
+
+jobs:
+  case-normalization-sweep:
+    runs-on: ubuntu-latest
+    continue-on-error: true   # advisory — never blocks
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install PyYAML
+        run: pip install --quiet pyyaml
+
+      # ── Premise first. A pass reported on a filesystem that folds would be meaningless,
+      #    so the premise is MEASURED, not assumed — and a runner that fails the probe
+      #    FAILS LOUDLY rather than skipping quietly.
+      - name: Filesystem capability probe (fail loudly — never skip)
+        id: probe
+        continue-on-error: true   # so the Summary step still runs and says WHY
+        run: |
+          # GitHub runs `run:` under `bash -e`. Turn -e OFF here on purpose: this step does
+          # its own rc accounting, and an -e abort would skip the $GITHUB_OUTPUT write, so a
+          # runner that FAILED the probe would render as "unknown" instead of as a failure.
+          set +e -u
+          # Probe INSIDE the checkout: that is the filesystem the guards will actually
+          # read and write. Probing $RUNNER_TEMP would answer a question nobody asked.
+          probe=".ax-fs-probe"
+          rm -rf "$probe"; mkdir -p "$probe"
+          rc=0
+
+          # --- case sensitivity: A vs a must be two distinct files -------------------
+          : > "$probe/A"; printf 'upper' > "$probe/A"
+          : > "$probe/a"; printf 'lower' > "$probe/a"
+          case_n=$(ls -1 "$probe" | grep -cx '[Aa]')
+          ia=$(stat -c '%d %i' "$probe/A" 2>/dev/null || echo "?")
+          ib=$(stat -c '%d %i' "$probe/a" 2>/dev/null || echo "?")
+          echo "case:  entries=${case_n}  A=(${ia})  a=(${ib})"
+          if [ "$case_n" = "2" ] && [ "$ia" != "$ib" ] && [ "$ia" != "?" ]; then
+            echo "case:  MEASURED case-SENSITIVE (two distinct inodes)"
+          else
+            echo "case:  MEASURED case-FOLDING or unreadable — premise NOT established" >&2
+            rc=1
+          fi
+
+          # --- normalization: NFC café vs NFD cafe+U+0301 must be two distinct files --
+          nfc=$(printf 'caf\303\251')                # c a f U+00E9
+          nfd=$(printf 'cafe\314\201')               # c a f e U+0301
+          printf 'nfc' > "$probe/$nfc"
+          printf 'nfd' > "$probe/$nfd"
+          norm_n=$(ls -1 "$probe" | grep -c 'caf')
+          ja=$(stat -c '%d %i' "$probe/$nfc" 2>/dev/null || echo "?")
+          jb=$(stat -c '%d %i' "$probe/$nfd" 2>/dev/null || echo "?")
+          echo "norm:  entries=${norm_n}  NFC=(${ja})  NFD=(${jb})"
+          if [ "$norm_n" = "2" ] && [ "$ja" != "$jb" ] && [ "$ja" != "?" ]; then
+            echo "norm:  MEASURED normalization-SENSITIVE / byte-preserving (two distinct inodes)"
+          else
+            echo "norm:  MEASURED normalization-FOLDING or unreadable — premise NOT established" >&2
+            rc=1
+          fi
+
+          # --- leave no trace: the guards below inspect the working tree --------------
+          rm -rf "$probe"
+          dirty="$(git status --porcelain 2>/dev/null)"
+          if [ -n "$dirty" ]; then
+            echo "probe: REFUSING — the probe left the tree dirty, which would corrupt the sweep:" >&2
+            echo "$dirty" >&2
+            rc=1
+          else
+            echo "probe: tree clean after cleanup (git status --porcelain empty)"
+          fi
+
+          {
+            echo "case_sensitive=$([ "$case_n" = "2" ] && [ "$ia" != "$ib" ] && echo yes || echo no)"
+            echo "normalization_sensitive=$([ "$norm_n" = "2" ] && [ "$ja" != "$jb" ] && echo yes || echo no)"
+          } >> "$GITHUB_OUTPUT"
+
+          if [ "$rc" -ne 0 ]; then
+            echo "::error::filesystem capability probe FAILED — this runner's filesystem is not the one this job assumes. The guard sweep is NOT run, because a pass measured on a folding filesystem would be meaningless."
+          fi
+          exit "$rc"
+
+      - name: run-all-guards.sh --include-fixtures
+        id: guards
+        if: steps.probe.outcome == 'success'
+        continue-on-error: true
+        run: |
+          # -e off: PIPESTATUS must be read before bash aborts, so the exit code reported
+          # is run-all-guards.sh's own and not tee's.
+          set +e -u -o pipefail
+          # The log MUST NOT be written into the working tree: run-all-guards.sh and
+          # midrun_tree_mutation_guard.sh both assert `git status --porcelain` is empty,
+          # so a log file next to the checkout would fabricate its own failure.
+          bash practices/evals/run-all-guards.sh --include-fixtures 2>&1 \
+            | tee "$RUNNER_TEMP/guards.log"
+          rc="${PIPESTATUS[0]}"
+          echo "run-all-guards.sh exit=$rc"
+          exit "$rc"
+
+      - name: Upload guard log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: case-normalization-guard-log
+          path: ${{ runner.temp }}/guards.log
+          if-no-files-found: ignore
+
+      # ── Publish the answer where a human reading the run can see it without digging.
+      - name: Summary
+        if: always()
+        run: |
+          set +e -u
+          S="$GITHUB_STEP_SUMMARY"
+          {
+            echo "## practices-case-normalization (advisory — never blocks)"
+            echo ""
+            echo "Answers one question: does \`run-all-guards.sh --include-fixtures\` pass on a"
+            echo "filesystem that folds neither case nor unicode normalization?"
+            echo ""
+            echo "### 1. Filesystem premise"
+            echo ""
+            echo "| property | measured |"
+            echo "|---|---|"
+            echo "| case-sensitive (\`A\` vs \`a\` are two files) | \`${{ steps.probe.outputs.case_sensitive || 'unknown' }}\` |"
+            echo "| normalization-sensitive (NFC \`café\` vs NFD \`cafe\`+U+0301 are two files) | \`${{ steps.probe.outputs.normalization_sensitive || 'unknown' }}\` |"
+            echo "| probe step outcome | \`${{ steps.probe.outcome }}\` |"
+            echo ""
+          } >> "$S"
+
+          if [ "${{ steps.probe.outcome }}" != "success" ]; then
+            {
+              echo "> **PREMISE NOT ESTABLISHED — no measurement was taken.**"
+              echo ">"
+              echo "> This runner's filesystem is not the non-aliasing filesystem this job assumes,"
+              echo "> so the guard sweep was **not run**. This run reports *nothing* about the guard"
+              echo "> suite — it is not a pass and it is not a failure. Read the probe step log for"
+              echo "> the exact measurement, then fix the runner or the probe before reading anything"
+              echo "> into subsequent runs."
+            } >> "$S"
+            echo "::warning::premise not established — guard sweep skipped, this run measured nothing"
+            exit 0
+          fi
+
+          {
+            echo "### 2. Guard sweep result"
+            echo ""
+            echo "- step outcome: \`${{ steps.guards.outcome }}\`"
+          } >> "$S"
+
+          LOG="$RUNNER_TEMP/guards.log"
+          if [ -f "$LOG" ]; then
+            total="$(grep -E '^Total: [0-9]+ passed, [0-9]+ failed' "$LOG" | tail -1 || true)"
+            echo "- \`${total:-（no Total line — the sweep did not reach its summary）}\`" >> "$S"
+            echo "" >> "$S"
+            fails="$(grep -n 'FAIL \[' "$LOG" || true)"
+            if [ -n "$fails" ]; then
+              {
+                echo "#### Failing guards"
+                echo ""
+                echo '```'
+                echo "$fails"
+                echo '```'
+              } >> "$S"
+              echo "::warning::guard sweep reported failures on a non-aliasing filesystem — see the summary. Advisory only, does not block merges."
+            else
+              echo "_No \`FAIL [\` lines in the log._" >> "$S"
+            fi
+          else
+            echo "- \`$LOG\` is missing — the sweep step did not produce a log." >> "$S"
+          fi
+
+          {
+            echo ""
+            echo "### 3. What this run does NOT cover"
+            echo ""
+            echo "- **R25's gradle steps** — no JDK is provisioned here, deliberately."
+            echo "- **R25's npm step** — no \`node_modules\` is provisioned here, deliberately."
+            echo "- **R25 as a whole** — \`verify-completion.sh\` is not invoked."
+            echo "  Provisioning a toolchain would muddy the one signal this job exists to produce."
+            echo "- **uncommitted work** — this sweeps the checked-out ref, nothing else."
+            echo ""
+            echo "The macOS counterpart, \`practices/scripts/ax-case-sensitive-sweep.sh\`, is local and"
+            echo "manual and covers the **case half only** (its \`hdiutil\` volume folds NFC/NFD — measured)."
+            echo "This job is the scheduled counterpart and covers **both halves**."
+          } >> "$S"

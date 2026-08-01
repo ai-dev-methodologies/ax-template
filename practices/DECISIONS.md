@@ -3359,3 +3359,189 @@ chain already covers per catalog — but the two guards only meet at the id, so 
 BODY divergence under one url is unowned by either. No instance exists today (the three
 agreeing ids are also byte-consistent in the census printed by `--show`); it is named here so
 the boundary is not mistaken for coverage.
+
+---
+
+## TD-2026-08-01-Lane-I — the Linux advisory cron: the portability objection re-measured, and an unmeasured premise given an instrument instead of a verdict
+
+- Status: ACCEPT — `.github/workflows/practices-case-normalization.yml` shipped (advisory).
+  P2-72 and P3-138 both CLOSE **as mechanism**; the Linux *result* stays explicitly unmeasured.
+- Date: 2026-08-01
+- Maintainer: Lane I (branch `lane-i-linux-advisory`)
+- Evidence: the greps and the container rehearsal recorded below; the workflow as committed;
+  `.github/workflows/practices-portability.yml` as the shape precedent
+- Re-evaluation trigger: the first scheduled or dispatched run of the new workflow — whatever
+  it reports is the first real measurement and must be written back here; also any proposal to
+  promote the job from advisory to blocking, which requires that baseline first
+
+### 1. The stated reason for not shipping was half wrong, and the half that was wrong is checkable
+
+Lane H declined to ship this workflow and recorded two reasons: (a) the guard suite has only
+ever run on macOS, so Linux cleanliness is unmeasured; (b) *"가드 4개+가 BSD `stat -f` 사용"* —
+i.e. the suite is presumed to contain BSD-only code that would fail on GNU coreutils.
+
+Reason (b) does not survive a grep. Every executable site that spells `stat -f` in this tree
+already carries a GNU `stat -c` fallback immediately after it, in the shape this very wave
+introduced (P2-67, *BSD then GNU, BLOCK if neither answers*). Measured at `54463a9`, per file,
+as `(count of "stat -f", count of "stat -c")`:
+
+| file | `stat -f` | `stat -c` |
+|---|---|---|
+| `.githooks/pre-push` | 2 | 2 |
+| `.githooks/pre-push-lib.sh` | 1 | 1 |
+| `practices/evals/completion_checklist_recency_guard.sh` | 1 | 1 |
+| `practices/evals/evidence_quote_spotcheck_guard.sh` | 1 | 1 |
+| `practices/evals/manifest_snapshot_integrity_guard.sh` | 1 | 1 |
+| `practices/evals/run-all-guards.sh` | 1 | 1 |
+| `practices/scripts/ax-prove-evidence-gate-blocks-agent.sh` | 1 | 1 |
+| `practices/scripts/ax-prove-gate-blocks-agent.sh` | 1 | 1 |
+| `practices/scripts/ax-prove-helper-injection-blocked.sh` | 1 | 1 |
+| `practices/scripts/ax-prove-hermetic-runtime.sh` | 11 | 11 |
+| `practices/scripts/lib/release_anchor.sh` | 1 | 1 |
+| `practices/scripts/verify-completion.sh` | 1 | 1 |
+
+**Files using one spelling without the other: zero.** The only unpaired mentions in the tree are
+prose — `docs/BACKLOG.md` (the P2-72 and P3-138 rows, which state the objection) and one
+sentence in this file. Both fallback halves are also *fail-closed*, not best-effort: where the
+value is used, an unanswered `stat` yields the `HERMETIC_TEMPDIR_UNVERIFIABLE` refusal rather
+than a permissive default, so a platform where **neither** spelling answers blocks instead of
+proceeding. No gaps were found and therefore none were fixed.
+
+The lesson is narrow and worth stating plainly: **a portability objection is a claim about the
+tree, and claims about the tree are grep-checkable.** Lane H's own wave had already closed the
+gap it went on to cite as a blocker. Carrying a fixed problem forward as a live reason is the
+same failure mode as a stale absence-assertion — the belief outlived the code.
+
+### 2. Reason (a) is genuine, and an advisory cron is the honest instrument for it
+
+What remains true is that **nobody has ever run this suite on Linux.** That is a real unknown,
+and the catalog's own discipline forbids two responses to it: do not assert cleanliness
+(unmeasured), and do not ship a *blocking* gate on the assumption (an unmeasured premise
+promoted to a merge gate is exactly the false-green shape this repo keeps punishing).
+
+The third response is the correct one and the repo already owns the pattern:
+`practices-portability.yml` is a weekly `ubuntu-latest` cron with `continue-on-error: true`. An
+advisory job **measures without gating**. It cannot produce a false green, because it produces
+no verdict at all — only a report a human reads. It also imposes nothing on any fork-receiver,
+so the autonomy boundary (which Lane H had already tested and rejected as a closure argument)
+is untouched by construction.
+
+Linux rather than a macOS cron, for a reason that is not cost: `hdiutil`'s
+`Case-sensitive APFS` volume **folds NFC/NFD — measured** — so the macOS script can never sweep
+the normalization half no matter how often it runs. ext4/overlayfs is case-sensitive *and*
+byte-preserving, so one Linux job covers both halves. That is why P2-72 and P3-138, filed
+separately because their remainders were unrelated (operational vs. capability), are answered by
+the same artifact.
+
+### 3. Premise first, and loudly — the design that keeps this from becoming its own false green
+
+A sweep whose whole point is "run where the filesystem does not alias" is worthless if the
+runner's filesystem quietly aliases. GitHub's `ubuntu-latest` is ext4 today; that is an
+assumption, and this catalog does not let assumptions stand in for measurements. So the **first**
+step of the job is a capability probe, run **inside the checkout** (the filesystem the guards
+will actually touch, not `$RUNNER_TEMP`):
+
+- creates `A` and `a` and requires **two distinct inodes**, printing `%d %i` for each;
+- creates NFC `café` (`63 61 66 c3a9`) and NFD `cafe`+U+0301 (`63 61 66 65 cc81`) and requires
+  **two distinct inodes**, printing the same;
+- then deletes its own directory and requires `git status --porcelain` to be empty — the suite
+  itself asserts that, so a probe that dirtied the tree would fabricate a failure.
+
+If any assertion fails the job **does not run the sweep** and writes
+*PREMISE NOT ESTABLISHED — no measurement was taken* into the job summary, plus a
+`::error::` annotation. It does not skip quietly and it does not report a pass. A pass measured
+on a folding filesystem is worse than no run, because someone would cite it.
+
+The guard log is written to `$RUNNER_TEMP`, never next to the checkout, for the same reason:
+`run-all-guards.sh` and `midrun_tree_mutation_guard.sh` both assert a clean porcelain, so a log
+file in the workspace would be a self-inflicted failure. Each `run:` block turns `-e` **off**
+deliberately and does its own exit accounting, so a failing probe renders as a failure rather
+than as a step that aborted before it could write its outputs.
+
+The summary publishes the `Total: N passed, M failed` line and every `FAIL [` line, and prints
+its own exclusions every run: **gradle steps, the npm step, and therefore R25 as a whole.** No
+JDK and no `node_modules` are provisioned, on purpose — the first run should answer one question
+cleanly rather than three questions muddily.
+
+### 4. What was measured here, and what was not
+
+A local rehearsal WAS obtained, which is more than Lane H got (its four docker attempts returned
+no output). `docker run ubuntu:24.04` with `git python3 python3-yaml curl jq unzip`, cloning
+`54463a9` into the container's own overlayfs and running
+`bash practices/evals/run-all-guards.sh --include-fixtures`:
+
+| what | measured |
+|---|---|
+| filesystem probe (case) | `entries=2`, distinct inodes — **case-SENSITIVE** |
+| filesystem probe (normalization) | `entries=2`, distinct inodes — **byte-preserving** |
+| `run-all-guards.sh --include-fixtures` | **358 passed / 4 failed, exit 1**, n=362 invocations, 7m24s wall |
+
+The same probe block, run on this Mac's ordinary APFS as a NEGATIVE control, exits **1** with
+`case: entries=1` / `norm: entries=1` and writes `case_sensitive=no` /
+`normalization_sensitive=no` to `$GITHUB_OUTPUT` — i.e. the probe is not vacuous, it discriminates,
+and (because `-e` is off) a failed probe still renders as a measured *no* rather than as `unknown`.
+
+The four failures are worth naming, because their character is the whole argument for shipping
+this advisory rather than a blocking job:
+
+- `vacuity_class_proof/live` — runs a scoped `./gradlew pitest`; **no JDK in the container**
+  (`which java` → nothing). Toolchain absence, not portability.
+- `fixture_kill_proof/live` and `pyyaml_preflight_coverage/live` — both exercise surfaces that
+  reach the R25 toolchain preflight; the container had no JDK, no node and no `yq`. Plausibly the
+  same cause, **not confirmed**.
+- `hermetic_runtime/inherited_runtime_blocked` — **this one is not a toolchain artifact and it is
+  the interesting result.** Several of its cases refuse to run with
+  *"VIOLATION: premise broken (symmidslash / symmidsub / symmidnfd): this class needs a committed
+  link whose target reaches a tracked path THROUGH an aliased spelling of a recorded one. Without
+  the alias … the case measures the round-13/14 refusal instead."* The prover's own attack cases
+  were authored on a **folding** filesystem and require folding to construct their premise; on
+  ext4 the alias simply does not resolve, so the prover honestly reports that it could not set up
+  the false-green it exists to demonstrate. Its `(AD)` fold-parity census still ran clean (8517
+  inputs, 0 disagreements) and its simulated `(AE)`/`(AI)` controls still discriminate.
+
+So the first thing a non-aliasing filesystem finds is **a proof harness that is premised on
+aliasing** — not a defect in the guarded code. That is a genuine portability finding and it is
+also exactly the kind of finding that would have been a catastrophe as a merge gate: a blocking
+job would have gone red on day one over a premise mismatch, taught everyone to ignore it, and
+proven nothing. Advisory is not timidity here; it is the correct instrument for a first
+measurement. Fixing (or explicitly exempting on non-aliasing filesystems) the three
+`symmid*` cases is follow-up work this lane does not do and does not claim.
+
+
+**This is a rehearsal, not the runner.** A container on a developer's Mac differs from
+`ubuntu:24.04` on GitHub in filesystem driver, tool versions, git version, locale and network
+posture. It raises confidence; it is not the measurement. The measurement is the first
+scheduled or dispatched run, and until that exists **nobody may write that the guard suite
+passes on Linux.**
+
+### 5. Closure judgement, stated precisely
+
+Both rows asked for a mechanism, and each row's stated remainder is now answered:
+
+- **P2-72** — remainder was *"아무도 스케줄하지 않는다"* (operational). Something now does:
+  a weekly cron plus `workflow_dispatch`. **CLOSED.**
+- **P3-138** — remainder was *"이 기계에는 능력 자체가 없다"* (capability: no
+  normalization-sensitive volume is constructible on macOS). The runner has the capability, and
+  the row's own `done-when` demanded a normalization probe that **fails loudly rather than
+  skipping** — which is precisely the first step of the job, evaluated per run rather than
+  assumed once. **CLOSED.**
+
+Neither closure asserts a green suite on Linux. Both rows were about *the absence of an
+instrument*; the instrument exists. If a future reader wants the rows to have required a green
+**result**, the precise condition to reopen is: *the first scheduled or dispatched run of
+`practices-case-normalization` reports `Total: N passed, 0 failed` with both probe properties
+measured `yes`.* Anything less than that — including this session's container rehearsal — is
+evidence, not closure of a result-shaped row. The rows as written were not result-shaped.
+
+**Residual, stated:** (i) the *runner* result is unmeasured — the container rehearsal above is
+evidence, not the measurement, and what it does show is **4 failures**, so nobody may write that
+this suite is clean on Linux; the first scheduled run is what settles it, and the four names above
+are the prediction it will test; (ii) the job is advisory, so a red run blocks nothing and depends
+on a human reading the summary — promoting it to blocking is a separate decision that must wait
+for a baseline, and on this evidence it must ALSO wait for the `symmid*` premise problem to be
+resolved, or the first blocking run would be red for a reason that is not a defect; (iii) `stat` is the only BSD-ism this lane
+audited — other GNU/BSD divergences (`sed -i`, `date -r`, `readlink -f`, `base64 -d/-D`,
+`shasum` vs `sha256sum`) were **not** swept by grep, deliberately, because the workflow is the
+instrument that finds them empirically and a hand-audit would only anticipate a subset;
+(iv) the probe measures case and NFC/NFD only — other aliasing families (e.g. filesystems that
+strip trailing dots or fold width) are not probed and would not be detected.

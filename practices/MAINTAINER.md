@@ -331,38 +331,62 @@ contract as any other rule.
 
 ---
 
-## 5d. Periodic jobs — nobody schedules these, you do (added 2026-08-01)
+## 5d. Periodic jobs — one is scheduled, one you run yourself (added 2026-08-01)
 
-Two checks in this repo are **invocable but unscheduled**. No hook, no CI workflow and no R25
-step calls them, so they run exactly as often as a maintainer runs them. The natural moment is
-**once before a release**, and that is the only cadence this section prescribes.
+Three periodic checks exist. **One is now scheduled** (`practices-case-normalization`, weekly,
+advisory); the other two are **invocable but unscheduled** — no hook, no CI workflow and no R25
+step calls them, so they run exactly as often as a maintainer runs them. For those two the
+natural moment is **once before a release**, and that is the only cadence this section prescribes.
 
-| Job | Command | Cost | What it answers |
+| Job | How it runs | Cost | What it answers |
 |---|---|---|---|
-| upstream URL spot audit | `bash practices/scripts/external_url_spot_audit.sh` | network, minutes | do `source_type: external` citation URLs still resolve, and does the page still carry the id the citation claims? Three buckets: OK / SUSPICIOUS / UNREACHABLE. |
-| non-aliasing filesystem sweep | `bash practices/scripts/ax-case-sensitive-sweep.sh` | macOS only (`hdiutil`), ~16 min | does the guard suite still pass when the filesystem **does not fold case**? A committed path string can name a file by a spelling git never recorded, and the default case-insensitive APFS every macOS checkout lives on serves it anyway — the command runs, the tree is clean, R25 reports GREEN on evidence it never produced. |
+| upstream URL spot audit | manual: `bash practices/scripts/external_url_spot_audit.sh` | network, minutes | do `source_type: external` citation URLs still resolve, and does the page still carry the id the citation claims? Three buckets: OK / SUSPICIOUS / UNREACHABLE. |
+| non-aliasing filesystem sweep (**case half only**) | manual: `bash practices/scripts/ax-case-sensitive-sweep.sh` | macOS only (`hdiutil`), ~16 min | does the guard suite still pass when the filesystem **does not fold case**? A committed path string can name a file by a spelling git never recorded, and the default case-insensitive APFS every macOS checkout lives on serves it anyway — the command runs, the tree is clean, R25 reports GREEN on evidence it never produced. |
+| non-aliasing filesystem sweep (**case + normalization**) | **scheduled**: `.github/workflows/practices-case-normalization.yml` — Mondays 08:00 UTC + `workflow_dispatch` | GitHub-hosted `ubuntu-latest`, minutes | the same question on a filesystem that folds **neither** case **nor** unicode normalization. ext4/overlayfs is case-sensitive *and* byte-preserving by default, so a Linux runner gets both halves for free where `hdiutil` gets only one. **Advisory (`continue-on-error: true`) — never blocks a merge.** |
 
-**What the sweep does NOT cover, and it prints this itself at the end of every run:** R25's
+**What the macOS sweep does NOT cover, and it prints this itself at the end of every run:** R25's
 gradle steps (no JDK is provisioned on the volume), R25's npm step (no `node_modules`), R25 as a
 whole, and **unicode normalization** — the volume `hdiutil` creates folds NFC/NFD, measured, so
 only the case half of the aliasing family is swept. Uncommitted work is also out of scope: the
 sweep clones a **committed revision**.
 
-Both jobs fail loudly rather than skipping: a missing `hdiutil`, a volume that turns out to
-alias, or a leaked attachment is a distinct non-zero exit with its reason printed.
+**What the Linux workflow does NOT cover, and it prints this itself in its job summary:** the
+same gradle / npm / R25 exclusions, deliberately — provisioning a JDK and `node_modules` on the
+runner would muddy the one signal the job exists to produce. It runs exactly
+`bash practices/evals/run-all-guards.sh --include-fixtures` and reports pass/fail counts plus
+every `FAIL [` line into the job summary.
 
-**Why this is a section and not a cron.** It is tempting to read ax-template's autonomy
-boundary — *"Fork받은 팀의 정책을 skill이 강제 ❌ … catalog 품질을 넘는 CI gate"* — as saying
-this project does not schedule things. It does not say that, and the repo does not behave that
-way: `.github/workflows/` carries three scheduled jobs today (`practices-drift` weekly,
-`practices-portability` weekly and advisory, `practices-chub-feedback` monthly) plus a
-push/PR-triggered `practices-sentinel`. The boundary is about **not imposing gates on
-fork-receivers**, not about refusing to schedule our own probes. So "nothing schedules the
-sweep" is a genuine remainder (BACKLOG P2-72), not a design decision — and the cheapest closure
-is not a macOS cron but a **Linux runner**, whose filesystem is case-sensitive *and*
-byte-preserving by default, i.e. gets both halves for free where `hdiutil` gets only one. That
-job has not been written, and the claim that the guard suite is clean on Linux has **not been
-measured** — every guard in this tree has only ever run on macOS.
+All three fail loudly rather than skipping. For the macOS script: a missing `hdiutil`, a volume
+that turns out to alias, or a leaked attachment is a distinct non-zero exit with its reason
+printed. For the Linux workflow: the **first** step is a filesystem capability probe that creates
+`A`/`a` and NFC `café`/NFD `cafe`+U+0301 and asserts two distinct inodes in each pair. If either
+assertion fails — i.e. the runner's filesystem is not the one the job assumes — the guard sweep
+is **not run at all** and the summary says *PREMISE NOT ESTABLISHED — no measurement was taken*,
+because a pass reported on a folding filesystem would be worse than no run. The probe also
+asserts it left `git status --porcelain` empty, since the suite itself checks that.
+
+**Why one of these is a cron and the others are not.** It is tempting to read ax-template's
+autonomy boundary — *"Fork받은 팀의 정책을 skill이 강제 ❌ … catalog 품질을 넘는 CI gate"* — as
+saying this project does not schedule things. It does not say that, and the repo does not behave
+that way: `.github/workflows/` carries scheduled jobs today (`practices-drift` weekly,
+`practices-portability` weekly and advisory, `practices-chub-feedback` monthly,
+`practices-case-normalization` weekly and advisory) plus a push/PR-triggered
+`practices-sentinel`. The boundary is about **not imposing gates on fork-receivers**, not about
+refusing to schedule our own probes — and an advisory job imposes nothing on anyone by
+construction. The two manual jobs stay manual because they cost network calls against third-party
+sites (URL audit) or a macOS-only disk image (`hdiutil`), neither of which a hosted Linux runner
+can do.
+
+**Honest status of the Linux claim.** That the guard suite is clean on Linux is **not a settled
+fact of this repo**. The mechanism is shipped and scheduled; the measurement is whatever the
+first scheduled or dispatched run reports. Until then, read the workflow as an instrument, not as
+a result. A local `docker run ubuntu:24.04` rehearsal of the same command was performed when the
+workflow was written — **358 passed / 4 failed** — but a container on a developer's machine is a
+rehearsal, not the runner. Of those four, three are plausibly explained by that container having
+no JDK / no node / no `yq`; the fourth, `ax-prove-hermetic-runtime`, is not: several of its attack
+cases require a **folding** filesystem to construct their premise and therefore refuse to run on
+ext4. See `DECISIONS.md`, entry of 2026-08-01 (Lane I), for the exact output. Expect the first
+scheduled run to be RED, and read it before believing it.
 
 ---
 

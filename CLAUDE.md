@@ -534,7 +534,8 @@ fork-receiver의 활성화는 opt-in이다.
 | `.githooks/pre-push` (49th guard) | `.githooks/pre-push` | 커밋을 ship하는 모든 push 시 (delete-only push는 제외) — `completion_checklist_recency_guard.sh`가 HEAD에 대한 최신 R25 audit log 항목을 요구 | **push-blocking** (audit log 없으면 push 불가) | **opt-in per clone**: `bash practices/scripts/install-hooks.sh` |
 | `run-all-guards.sh` (102 live guards) | `practices/evals/run-all-guards.sh` | R25 완료 선언 시 수동 호출 (verify-completion.sh 내부에서 실행) | **manual / R25 run** — 자동 트리거 없음 | 항상 사용 가능, 자동 실행 아님 |
 | `per-domain ./gradlew test{Domain}` | `backend/build.gradle.kts` | 수동 또는 fork-receiver CI에서 호출 | **manual / CI** — 자동 트리거 없음 | 항상 사용 가능; CI 통합은 fork-receiver 자율 |
-| `ax-case-sensitive-sweep.sh` (P2-72 standing job) | `practices/scripts/ax-case-sensitive-sweep.sh` | 사람이 주기적으로 호출 (릴리스 전 1회 권장) — 대소문자-**민감** APFS 볼륨을 만들어 HEAD를 클론하고 그 위에서 `run-all-guards.sh --include-fixtures`를 돌린다 | **periodic / manual** — 자동 트리거 없음, merge gate 아님 | 항상 사용 가능(macOS `hdiutil` 필요; 없으면 **소리내어 실패**하고 skip하지 않는다) |
+| `ax-case-sensitive-sweep.sh` (P2-72 로컬/수동 절반) | `practices/scripts/ax-case-sensitive-sweep.sh` | 사람이 주기적으로 호출 (릴리스 전 1회 권장) — 대소문자-**민감** APFS 볼륨을 만들어 HEAD를 클론하고 그 위에서 `run-all-guards.sh --include-fixtures`를 돌린다. **정규화 반쪽은 못 덮는다**(이 볼륨이 NFC/NFD를 접는 것이 측정됨) | **periodic / manual** — 자동 트리거 없음, merge gate 아님 | 항상 사용 가능(macOS `hdiutil` 필요; 없으면 **소리내어 실패**하고 skip하지 않는다) |
+| `practices-case-normalization.yml` (P2-72+P3-138 **스케줄된** 짝) | `.github/workflows/practices-case-normalization.yml` | 매주 월 08:00 UTC 크론 + `workflow_dispatch` — `ubuntu-latest`에서 **먼저 파일시스템 능력 프로브**(`A`/`a` 두 inode, NFC `café`/NFD `cafe`+U+0301 두 inode)를 돌리고, 통과할 때만 `run-all-guards.sh --include-fixtures`를 돌려 pass/fail 수와 `FAIL [` 라인을 job summary에 싣는다 | **advisory** (`continue-on-error: true`) — 절대 머지를 막지 않음. 프로브 실패 시 스윕을 **돌리지 않고** "PREMISE NOT ESTABLISHED — no measurement was taken"이라고 적는다(무의미한 pass 금지) | GitHub Actions에 스케줄됨. ext4/overlayfs가 대소문자-민감 **+ 바이트 보존**이라 macOS 스크립트가 못 덮는 **정규화 반쪽까지** 덮는다 |
 
 ### 핵심 설명
 
@@ -556,14 +557,22 @@ fork-receiver의 활성화는 opt-in이다.
   ```
   **커버 안 하는 것을 스스로 출력한다**: gradle 스텝(JDK 미프로비저닝) · npm 스텝(node_modules 미프로비저닝) ·
   R25 전체 · 유니코드 정규화(이 볼륨은 NFC/NFD를 접는다 — 측정됨). 볼륨은 EXIT trap에서 detach되고
-  `hdiutil info`로 잔류 없음을 **검증**한다(잔류 시 exit 5). **아무도 스케줄하지 않는다** — 호출은 사람 몫이다.
-  호출 시점(릴리스 전 1회)과 함께 도는 다른 주기 작업은 **`practices/MAINTAINER.md` §5d**에 정리돼 있다.
-  그 절은 "우리는 스케줄을 안 한다"가 **repo의 사실이 아님**도 기록한다 — `.github/workflows/`에 크론 3개
-  (`practices-drift` 주간 · `practices-portability` 주간 advisory · `practices-chub-feedback` 월간)가 이미 돈다.
+  `hdiutil info`로 잔류 없음을 **검증**한다(잔류 시 exit 5). 이것은 **로컬/수동** 절반이다 — 호출은 사람 몫이고,
+  정규화 반쪽은 원리적으로 못 덮는다.
+- **`practices-case-normalization.yml`이 그 스케줄된 짝이다** (P2-72 운영 잔여 + P3-138 능력 잔여).
+  `.github/workflows/`에 이미 도는 크론들(`practices-drift` 주간 · `practices-portability` 주간 advisory ·
+  `practices-chub-feedback` 월간)과 같은 모양으로, **주간 `ubuntu-latest` advisory 크론 + `workflow_dispatch`**다.
   자율성 경계는 **fork-receiver에게 게이트를 강제하지 않는다**는 뜻이지 우리 프로브를 스케줄하지 않는다는
-  뜻이 아니므로, P2-72는 설계 경계가 아니라 **열린 잔여**다. 가장 싼 처방은 macOS 크론이 아니라 **Linux
-  러너**다(대소문자-민감 + 바이트 보존 = 두 반쪽을 동시에 얻는다). 단 이 트리의 가드는 **macOS에서만
-  실행된 적이 있고**, Linux 청결성은 **측정된 바 없다**.
+  뜻이 아니고, advisory 잡은 구조적으로 누구에게도 아무것도 강제하지 않는다. Linux 러너를 고른 이유는
+  ext4/overlayfs가 대소문자-민감 **+ 바이트 보존**이라 `hdiutil`이 한쪽만 주는 자리에서 **두 반쪽을 공짜로**
+  주기 때문이다. 순서가 핵심이다 — **전제를 먼저 측정한다**: `A`/`a`와 NFC `café`/NFD `cafe`+U+0301을 만들어
+  각각 **다른 inode 2개**임을 단언하고, 하나라도 실패하면 스윕을 **아예 돌리지 않고** "PREMISE NOT ESTABLISHED"를
+  summary에 적는다(접는 파일시스템 위의 pass는 무측정보다 나쁘다). 프로브는 자기가 `git status --porcelain`을
+  더럽히지 않았음도 단언한다(스위트 자신이 그것을 검사하므로).
+  **커버 안 하는 것을 job summary에 스스로 출력한다**: gradle 스텝 · npm 스텝 · R25 전체(러너에 JDK·node_modules를
+  일부러 프로비저닝하지 않는다 — 첫 실행의 신호를 흐리기 때문).
+  **정직한 상태**: 이 트리의 가드가 Linux에서 청결한지는 **여전히 미측정**이다. 메커니즘은 출하·스케줄됐고,
+  **측정치는 첫 스케줄/디스패치 실행이 만든다**. 주기 작업 전체 목록과 근거는 **`practices/MAINTAINER.md` §5d**.
 
 ### Surface별 binary 테스트 커버리지 (P2-3)
 
