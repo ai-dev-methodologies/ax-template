@@ -3001,9 +3001,15 @@ echo "  case-INSENSITIVE, so the distinct-inode A/·a/ and É/·é/ controls wer
 echo "  run (export AX_PROVE_CS_DIR=<case-sensitive dir> for those); the two implementations' folds"
 fi
 echo "  agree over every prefix of every"
-echo "  tracked path, and every round-5..14b addition has a neutered twin in which its"
+echo "  tracked path, and every round-5..15 addition has a neutered twin in which its"
 echo "  attack lands again — including a bits-only twin for the round-8 representation backstop"
-echo "  and, for every round-9 through round-14b refusal, SEPARATE sweep-only and helper-only"
+echo "  and, for every round-9 through round-15 refusal, SEPARATE sweep-only and helper-only"
 echo "  twins proving each implementation load-bearing on its own — so the refusals are"
-echo "  attributable to the fixes, not the sandbox."
+echo "  attributable to the fixes, not the sandbox. Round 15 is RECEIVER-RESOLUTION PARITY"
+echo "  (BACKLOG P3-131 + P3-132): (BA) an IGNORED target present here, (BB) a tracked target"
+echo "  reached through an UNTRACKED route, (BC) an ABSOLUTE target inside this checkout — all"
+echo "  three block; (BD) an absolute target OUTSIDE the checkout and (AM)'s build-artifact link"
+echo "  with the artifact ABSENT (dangling on both sides) stay exit 0, which is what keeps the"
+echo "  parity census a measurement rather than a policy. Twins whose tree round 15 now catches"
+echo "  independently neuter BOTH rounds, so each refusal stays attributable to exactly one."
 exit 0
