@@ -3601,4 +3601,12 @@ strip trailing dots or fold width) are not probed and would not be detected.
   전달 의미가 바뀔 수 있음) 또는 **Claude Code plugin/marketplace 스키마 변경**(`${CLAUDE_PLUGIN_ROOT}`
   해석·스킬 탐지 방식이 바뀔 수 있음) 시 §6 V1 절차를 **대조군 포함 전체** 재실행한다 — 두 경우
   모두 설치 경로가 조용히 0위반으로 퇴화할 수 있는 표면이고, 그 퇴화는 정의상 침묵한다.
-- Commits: <pending — D-5 finalization에서 실제 sha로 채움>
+- Kill-proof 등재 결과 (D-4 실행 기록): `derived_block_license/fail_unregistered` 를
+  `fixture_kill_manifest.yaml` 에 정상 등재 (anchor `path not in registered_paths` 소스 내
+  유일성 검증, 1-item 미니 manifest로 non-vacuity 증명 original=exit1→neutered=exit0,
+  `min_items`/`LIVE_MIN_ITEMS` 72→73 lockstep). 등재 불가 사유 없음. 추가 실측: `claude
+  plugin validate <repo>` 는 marketplace.json 존재 시 비-strict·strict 모두 rc=0 —
+  F14-a 잔여 경고는 `plugin.json` 을 직접 지정해 검증할 때만 발화한다 (PRD 예상보다 강한 결과).
+- Commits: 5412fb2 (D-0 거버넌스) · f4c4b59 (D-1 ESLint 레이아웃 변수화) · 5d85876
+  (D-2 INDEX 생성기 + 진입 스킬) · 86186d4 (D-3 설치 가이드 3종) · f8be8fd (D-4
+  marketplace + provenance guard [108]) · D-5 finalization은 본 커밋.
