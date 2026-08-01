@@ -344,6 +344,28 @@ natural moment is **once before a release**, and that is the only cadence this s
 | non-aliasing filesystem sweep (**case half only**) | manual: `bash practices/scripts/ax-case-sensitive-sweep.sh` | macOS only (`hdiutil`), ~16 min | does the guard suite still pass when the filesystem **does not fold case**? A committed path string can name a file by a spelling git never recorded, and the default case-insensitive APFS every macOS checkout lives on serves it anyway — the command runs, the tree is clean, R25 reports GREEN on evidence it never produced. |
 | non-aliasing filesystem sweep (**case + normalization**) | **scheduled**: `.github/workflows/practices-case-normalization.yml` — Mondays 08:00 UTC + `workflow_dispatch` | GitHub-hosted `ubuntu-latest`, minutes | the same question on a filesystem that folds **neither** case **nor** unicode normalization. ext4/overlayfs is case-sensitive *and* byte-preserving by default, so a Linux runner gets both halves for free where `hdiutil` gets only one. **Advisory (`continue-on-error: true`) — never blocks a merge.** |
 
+**Rule INDEX regeneration — not in the table above (it is triggered by an edit, not a
+schedule), but the same "runs when a human runs it" shape.** `practices/INDEX.md` and
+`practices-react/INDEX.md` are generated, not hand-maintained, by
+`practices/generate_index.sh`. Nothing calls it automatically — it is deliberately
+**not** wired into `generate_agents.sh` on either side (D-2 / PRD d-track F10: both
+`agents_md_toc_disk_truth_guard.sh` and `practices_react_sentinel_disk_truth_guard.sh`
+already re-run `generate_agents.sh` *during* a guard pass, and chaining
+`generate_index.sh` off the end of that would make every guard-suite run mutate the
+working tree and would let a parser bug in the index generator take down two unrelated
+guards). After adding, editing, or removing a rule file in either catalog, regenerate
+before committing:
+
+```bash
+bash practices/generate_index.sh --catalog practices
+bash practices/generate_index.sh --catalog practices-react
+```
+
+then commit the resulting `INDEX.md` diff alongside the rule change. Until that manual
+step is run, `INDEX.md` can be stale relative to `rules/*.md` — this is accepted as a
+**P3 doc-drift** risk (no guard diffs INDEX.md against a fresh regeneration), which is
+judged cheaper than the tree-mutation and guard-coupling failure mode above.
+
 **What the macOS sweep does NOT cover, and it prints this itself at the end of every run:** R25's
 gradle steps (no JDK is provisioned on the volume), R25's npm step (no `node_modules`), R25 as a
 whole, and **unicode normalization** — the volume `hdiutil` creates folds NFC/NFD, measured, so
