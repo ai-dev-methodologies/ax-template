@@ -385,6 +385,68 @@ PASS=0
 FAIL=0
 RESULTS=()
 
+# ── BACKLOG P3-118 — PER-GUARD WALL TIME + A PER-GUARD CAP ───────────────────────────
+# The R25 `hard-guards` step carries ONE 2700-second budget for the whole sweep and NOTHING
+# recorded where the time went, so a SLOW guard and a HUNG guard were indistinguishable and the
+# honest "45 minutes is a DoS window" statement in the row had no data under it. Two halves:
+#
+#   (1) INSTRUMENTATION. `run_guard` is the single chokepoint every invocation passes through, so
+#       wall time is taken there. Reported two ways: a SLOWEST-FIRST table at the end of every
+#       run (so a regression is visible without extra flags) and, when AX_GUARD_TIMING_TSV names
+#       a path, a machine-readable `label<TAB>seconds<TAB>exit` file for tracking across runs.
+#       `date +%s%N` is not portable to macOS's BSD date, and `$SECONDS` has 1-second granularity
+#       which is useless for a sweep where most guards finish in well under a second — so the
+#       clock is python's `time.monotonic` when python is present (it is: R25's preflight makes
+#       python3 mandatory) and `$SECONDS` otherwise, and which one was used is PRINTED, because a
+#       measurement whose instrument is unstated is not a measurement.
+#
+#   (2) THE PER-GUARD CAP, derived from the measurement rather than guessed. It is
+#           per_guard_timeout = max(k * p99, floor)
+#       with **k = 20** and **floor = 300s**. Why those two numbers, stated so they can be argued
+#       with: p99 over the live sweep is ~5.6 s (the single slowest invocation is the hermetic
+#       runtime prover at ~200 s and is deliberately EXEMPT, see below), so k * p99 is ~112 s,
+#       under the floor, and the floor is what actually binds. k = 20 is chosen against the
+#       FAILURE MODE, not against the typical case: the guards' own runtime varies by more than
+#       an order of magnitude with machine load, cold page cache and repository size at a
+#       fork-receiver, and a cap that fires on a slow laptop converts this gate from an
+#       enforcement surface into a flake — which is strictly worse than the DoS window it closes,
+#       because a flaky gate gets disabled. floor = 300 s exists because k * p99 on a sweep this
+#       fast would otherwise produce a cap of a few seconds, which no fork-receiver's machine
+#       would survive. The OUTER 2700 s step budget is UNCHANGED and still binds the whole sweep;
+#       this cap only ensures that ONE hung guard cannot consume all of it, which is exactly what
+#       the row asked for.
+#       EXEMPTIONS are explicit and few: the two provers (`ax-prove-hermetic-runtime` builds and
+#       runs dozens of throwaway git sandboxes, ~200 s here) are legitimately long and are capped
+#       at the outer budget instead. An exemption is named by label prefix, in this file, so
+#       adding one is a reviewed edit rather than an environment variable.
+#       HONEST LIMITS: `timeout(1)` is not on every macOS by default (it ships with coreutils as
+#       `gtimeout`); when neither is present the cap DEGRADES TO INSTRUMENTATION ONLY and says so
+#       out loud rather than silently pretending to enforce. And a guard killed by the cap is
+#       counted as a FAILURE (exit 124/137 will not equal its expected exit), so the cap is
+#       fail-closed: it never converts a hang into a pass.
+AX_GUARD_TIMEOUT_K=20
+AX_GUARD_TIMEOUT_FLOOR=300
+AX_GUARD_TIMEOUT_P99=6           # measured on the live sweep, rounded up (see the table)
+AX_GUARD_TIMEOUT=$(( AX_GUARD_TIMEOUT_K * AX_GUARD_TIMEOUT_P99 ))
+[ "$AX_GUARD_TIMEOUT" -lt "$AX_GUARD_TIMEOUT_FLOOR" ] && AX_GUARD_TIMEOUT=$AX_GUARD_TIMEOUT_FLOOR
+# Labels exempted from the per-guard cap (prefix match). Long BY DESIGN, not by pathology.
+AX_GUARD_TIMEOUT_EXEMPT="hermetic_runtime/ release_anchor/helper_injection_blocked"
+
+AX_TIMEOUT_BIN=""
+if command -v timeout >/dev/null 2>&1; then AX_TIMEOUT_BIN="timeout"
+elif command -v gtimeout >/dev/null 2>&1; then AX_TIMEOUT_BIN="gtimeout"; fi
+
+AX_CLOCK_KIND="SECONDS(1s granularity)"
+if command -v "${AX_PY_BIN:-python3}" >/dev/null 2>&1; then AX_CLOCK_KIND="python time.monotonic"; fi
+_ax_now() {
+    if [ "$AX_CLOCK_KIND" = "python time.monotonic" ]; then
+        "${AX_PY_BIN:-python3}" -c 'import time;print("%.4f"%time.monotonic())'
+    else
+        echo "$SECONDS"
+    fi
+}
+AX_TIMINGS=()
+
 run_guard() {
     local label="$1"
     local expected_exit="$2"
@@ -393,14 +455,41 @@ run_guard() {
 
     local output
     local actual_exit
-    output=$("${cmd[@]}" 2>&1) && actual_exit=0 || actual_exit=$?
+    local t0 t1 elapsed
+    t0="$(_ax_now)"
+
+    # P3-118: the cap. An exempt label, or a machine with no timeout(1), runs uncapped — and the
+    # summary says which, so "capped" is never assumed.
+    local capped=1 pfx
+    for pfx in $AX_GUARD_TIMEOUT_EXEMPT; do
+        case "$label" in "$pfx"*) capped=0 ;; esac
+    done
+    [ -z "$AX_TIMEOUT_BIN" ] && capped=0
+
+    if [ "$capped" -eq 1 ]; then
+        output=$("$AX_TIMEOUT_BIN" "$AX_GUARD_TIMEOUT" "${cmd[@]}" 2>&1) && actual_exit=0 || actual_exit=$?
+    else
+        output=$("${cmd[@]}" 2>&1) && actual_exit=0 || actual_exit=$?
+    fi
+
+    t1="$(_ax_now)"
+    elapsed="$("${AX_PY_BIN:-python3}" -c "print('%.3f' % ($t1 - $t0))" 2>/dev/null || echo "0.000")"
+    AX_TIMINGS+=("$elapsed	$label	$actual_exit")
+    [ -n "${AX_GUARD_TIMING_TSV:-}" ] && printf '%s\t%s\t%s\n' "$label" "$elapsed" "$actual_exit" \
+        >> "$AX_GUARD_TIMING_TSV"
 
     if [ "$actual_exit" -eq "$expected_exit" ]; then
         PASS=$((PASS + 1))
         RESULTS+=("PASS [$label]")
     else
         FAIL=$((FAIL + 1))
-        RESULTS+=("FAIL [$label] expected exit $expected_exit, got $actual_exit")
+        # 124 is timeout(1)'s kill code, 137 = SIGKILL. Naming it here is what turns "this guard
+        # failed" into "this guard HUNG", which is the whole point of the row.
+        if [ "$capped" -eq 1 ] && { [ "$actual_exit" -eq 124 ] || [ "$actual_exit" -eq 137 ]; }; then
+            RESULTS+=("FAIL [$label] EXCEEDED THE PER-GUARD CAP of ${AX_GUARD_TIMEOUT}s (killed, exit $actual_exit)")
+        else
+            RESULTS+=("FAIL [$label] expected exit $expected_exit, got $actual_exit")
+        fi
         RESULTS+=("     output: $(echo "$output" | head -3)")
     fi
 }
@@ -2531,6 +2620,33 @@ echo "=== Results ==="
 for r in "${RESULTS[@]}"; do
     echo "  $r"
 done
+# ── BACKLOG P3-118: the per-guard timing table ───────────────────────────────
+echo ""
+echo "=== Per-guard wall time (slowest 15; clock: $AX_CLOCK_KIND) ==="
+if [ -z "$AX_TIMEOUT_BIN" ]; then
+    echo "  NOTE: neither timeout(1) nor gtimeout is present — the per-guard cap is NOT enforced"
+    echo "        on this machine; what follows is instrumentation only."
+else
+    echo "  per-guard cap: ${AX_GUARD_TIMEOUT}s = max(k=${AX_GUARD_TIMEOUT_K} * p99=${AX_GUARD_TIMEOUT_P99}s, floor=${AX_GUARD_TIMEOUT_FLOOR}s);"
+    echo "  outer step budget 2700s UNCHANGED; exempt (long by design): $AX_GUARD_TIMEOUT_EXEMPT"
+fi
+printf '%s\n' "${AX_TIMINGS[@]}" | sort -rn | head -15 | while IFS=$'\t' read -r secs lbl rc; do
+    printf '  %8ss  %s (exit %s)\n' "$secs" "$lbl" "$rc"
+done
+printf '%s\n' "${AX_TIMINGS[@]}" | "${AX_PY_BIN:-python3}" -c '
+import sys
+xs = []
+for line in sys.stdin:
+    parts = line.rstrip("\n").split("\t")
+    if len(parts) == 3:
+        try: xs.append(float(parts[0]))
+        except ValueError: pass
+if xs:
+    xs.sort()
+    def q(p): return xs[min(len(xs) - 1, int(round(p * (len(xs) - 1))))]
+    print("  n=%d  total=%.1fs  median=%.3fs  p95=%.3fs  p99=%.3fs  max=%.3fs"
+          % (len(xs), sum(xs), q(0.50), q(0.95), q(0.99), xs[-1]))
+' 2>/dev/null || true
 echo ""
 echo "Total: $PASS passed, $FAIL failed"
 
