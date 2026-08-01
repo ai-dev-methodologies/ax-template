@@ -166,7 +166,9 @@ items = doc.get('items') or []
 # manifest_snapshot_integrity_guard (fail_diverged + fail_stale_allowlist), so the floor moves
 # to the new disk truth in the same commit — otherwise the two new proofs would be removable
 # without breaching the registry floor, which is exactly the shrink [87] exists to reject.
-LIVE_MIN_ITEMS = 72
+# 2026-08-02 (D-4): 72 → 73. One kill-proof was appended for the new
+# derived_block_license_guard (fail_unregistered), same reasoning.
+LIVE_MIN_ITEMS = 73
 
 structural = []
 

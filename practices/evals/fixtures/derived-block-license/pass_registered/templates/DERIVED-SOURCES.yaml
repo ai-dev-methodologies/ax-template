@@ -1,0 +1,7 @@
+# fixture: pass_registered — one header-bearing file, fully and correctly registered.
+derived:
+  - path: templates/L2/blocks/sample-block.tsx
+    upstream: "21st.dev/fixtureauthor/sample-block"
+    upstream_license: UNVERIFIED
+    included_in_package: true
+    codified_at: UNKNOWN

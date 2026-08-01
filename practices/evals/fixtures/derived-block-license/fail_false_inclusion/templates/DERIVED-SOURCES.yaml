@@ -1,0 +1,9 @@
+# fixture: fail_false_inclusion — registered and correct, but `included_in_package: false`
+# (invariant 5 — the maintainer decision says packages ship these blocks; false is a
+# contradiction between the ledger and the shipped artifact).
+derived:
+  - path: templates/L2/blocks/sample-block.tsx
+    upstream: "21st.dev/fixtureauthor/sample-block"
+    upstream_license: UNVERIFIED
+    included_in_package: false
+    codified_at: UNKNOWN

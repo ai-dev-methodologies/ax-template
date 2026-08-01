@@ -1,0 +1,109 @@
+# templates/DERIVED-SOURCES.yaml — derived-block provenance ledger (D-4, BACKLOG D-4).
+#
+# ⚠️ SELF-MATCH HAZARD — DO NOT write the literal tag "at-sign + ax-codified-from" (the
+# JSDoc header string block files carry) anywhere in THIS file, including in comments.
+# This ledger lives under templates/, which is exactly the tree the guard and the census
+# command below scan for that tag — a comment that quotes the tag verbatim registers this
+# ledger file AS a block needing a ledger entry, which is a self-referential loop. The
+# guard also excludes this file's own path from its scan as defense in depth, but the
+# census command a human runs by hand does not, so the discipline is: never spell the tag
+# out here with its leading "at" sign attached (write it split, as done throughout this
+# file, or refer to it as "the codified-from header").
+#
+# WHY THIS FILE EXISTS
+#   Every templates/L2/blocks/*.tsx file that carries a codified-from header is a block
+#   CODIFIED FROM a community 21st.dev component (hardcoded hex extracted to --ax-c-*
+#   design tokens, provenance-stamped, verified to pass all 7 ax/* own-block rules — see
+#   each file's own frontmatter `evidence:` block). The maintainer decision below is what
+#   makes shipping those blocks in the distributed package legitimate; this ledger is the
+#   single place that decision is recorded PER FILE, and
+#   practices/evals/derived_block_license_guard.sh mechanically enforces that:
+#     (1) every header-bearing file on disk is registered here (no silent omission),
+#     (2) every registered path still exists on disk (no orphaned entries),
+#     (3) no path is registered twice,
+#     (4) the recorded `upstream` matches the file's OWN header verbatim (no drift/forgery),
+#     (5) `included_in_package: true` for every entry (the decision below, made real),
+#     (6) all required fields are non-blank.
+#
+# `upstream` values below are MACHINE-EXTRACTED from each file's own codified-from header
+# line (never hand-transcribed). The exact census/extraction commands (which must spell the
+# tag out in full, "at" sign attached) are documented instead in
+# practices/evals/derived_block_license_guard.sh's own header comment — that file lives
+# outside templates/, so quoting the tag there cannot register itself in this ledger.
+#
+# `codified_at` is UNKNOWN for every entry below because none of the 13 headers carry a
+# date (checked: `grep -iE "date|20[0-9]{2}-[0-9]{2}-[0-9]{2}"` over each header — zero
+# matches). This is not an omission in this ledger; it is an honest absence in the source.
+
+policy:
+  maintainer_decision: >-
+    21st.dev 파생 블록은 내부 사용 전제로 배포 패키지에 포함한다. provenance는 이
+    대장으로 관리하고 derived_block_license_guard가 등재 누락을 BLOCK한다.
+  decided_at: "2026-08-01"
+
+derived:
+  - path: templates/L2/blocks/ai-image-generator-hero.tsx
+    upstream: "21st.dev/ravikatiyar162/ai-image-generator-hero"
+    upstream_license: UNVERIFIED
+    included_in_package: true
+    codified_at: UNKNOWN
+  - path: templates/L2/blocks/animated-arrow-button.tsx
+    upstream: "21st.dev/nextjsshop/animated-arrow-button"
+    upstream_license: UNVERIFIED
+    included_in_package: true
+    codified_at: UNKNOWN
+  - path: templates/L2/blocks/animated-badge.tsx
+    upstream: "21st.dev/karthikmudunuri/animated-badge"
+    upstream_license: UNVERIFIED
+    included_in_package: true
+    codified_at: UNKNOWN
+  - path: templates/L2/blocks/animated-feature-card.tsx
+    upstream: "21st.dev/ravikatiyar162/animated-feature-card"
+    upstream_license: UNVERIFIED
+    included_in_package: true
+    codified_at: UNKNOWN
+  - path: templates/L2/blocks/auto-layout-card.tsx
+    upstream: "21st.dev/ln-dev7/auto-layout-card"
+    upstream_license: UNVERIFIED
+    included_in_package: true
+    codified_at: UNKNOWN
+  - path: templates/L2/blocks/category-bar-chart.tsx
+    upstream: "21st.dev/ahmedmayara/category-bar-chart"
+    upstream_license: UNVERIFIED
+    included_in_package: true
+    codified_at: UNKNOWN
+  - path: templates/L2/blocks/cybernetic-grid-shader.tsx
+    upstream: "21st.dev/dhileepkumargm/cybernetic-grid-shader"
+    upstream_license: UNVERIFIED
+    included_in_package: true
+    codified_at: UNKNOWN
+  - path: templates/L2/blocks/futurastic-hero-section.tsx
+    upstream: "21st.dev/uniquesonu/futurastic-hero-section"
+    upstream_license: UNVERIFIED
+    included_in_package: true
+    codified_at: UNKNOWN
+  - path: templates/L2/blocks/image-swiper.tsx
+    upstream: "21st.dev/lukacho/image-swiper"
+    upstream_license: UNVERIFIED
+    included_in_package: true
+    codified_at: UNKNOWN
+  - path: templates/L2/blocks/interfaces-card.tsx
+    upstream: "21st.dev/jshguo/interfaces-card"
+    upstream_license: UNVERIFIED
+    included_in_package: true
+    codified_at: UNKNOWN
+  - path: templates/L2/blocks/prime-button.tsx
+    upstream: "21st.dev/iamsatish4564/prime-button"
+    upstream_license: UNVERIFIED
+    included_in_package: true
+    codified_at: UNKNOWN
+  - path: templates/L2/blocks/social-button.tsx
+    upstream: "21st.dev/Shatlyk1011/social-button"
+    upstream_license: UNVERIFIED
+    included_in_package: true
+    codified_at: UNKNOWN
+  - path: templates/L2/blocks/split-text-effect.tsx
+    upstream: "21st.dev/bucharitesh/split-text-effect"
+    upstream_license: UNVERIFIED
+    included_in_package: true
+    codified_at: UNKNOWN

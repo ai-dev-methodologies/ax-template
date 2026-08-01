@@ -33,11 +33,11 @@
 
 # min_items — the unique item count MAY NOT BE REDUCED below this number, and it is the ONLY
 # place in this file that states it (BACKLOG P3-104 — a prose restatement rotted to 57 while the
-# directive read 62). Re-measured from disk 2026-07-30 after the PRD-final-4 W5b append: items,
-# distinct ids and distinct (guard, fixture) pairs are all equal to the value below.
-# fixture_kill_proof_guard.sh pins the same number as LIVE_MIN_ITEMS, so lowering the gate takes
-# two coordinated edits rather than one silent deletion.
-min_items: 72
+# directive read 62). Re-measured from disk 2026-08-02 after the D-4 append (derived_block_license
+# [108] kill-proof): items, distinct ids and distinct (guard, fixture) pairs are all equal to the
+# value below. fixture_kill_proof_guard.sh pins the same number as LIVE_MIN_ITEMS, so lowering the
+# gate takes two coordinated edits rather than one silent deletion.
+min_items: 73
 
 items:
 
@@ -1143,4 +1143,20 @@ items:
     fixture: practices/evals/fixtures/cross-catalog-upstream-id/fail_same_id_two_sources
     fixture_arg: '--root'
     anchor: 'a != b'
+    neuter: 'False'
+
+  # [108] D-4 — the derived-block provenance ledger's COMPLETENESS invariant.
+  # subject: fail_unregistered has two @ax-codified-from files and only one registered in
+  #          templates/DERIVED-SOURCES.yaml. The fixture must exit 1 BECAUSE the guard
+  #          checks each disk file for ledger membership, not because some other invariant
+  #          (duplicate path / wrong upstream / false inclusion / missing field) happens to
+  #          also fire on this fixture's ledger.
+  # anchor:  the membership test itself.
+  # neuter:  condition-constant False → the completeness branch never executes → every
+  #          header-bearing file is treated as registered regardless of the ledger → exit 0.
+  - id: derived_block_license/fail_unregistered
+    guard: practices/evals/derived_block_license_guard.sh
+    fixture: practices/evals/fixtures/derived-block-license/fail_unregistered
+    fixture_arg: '--root'
+    anchor: 'path not in registered_paths'
     neuter: 'False'

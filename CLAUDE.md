@@ -168,7 +168,7 @@ template**. 모든 layer에서 **규칙을 기계적으로 강제하는 선 순�
 
 ```
 fork ax-template
-    ↓ (25 L4 domains + 11 active recipes + 233 Java rules + 102 React rules + 15 ESLint rules + 107 hard guards + AGENTS.md sentinel)
+    ↓ (25 L4 domains + 11 active recipes + 233 Java rules + 102 React rules + 15 ESLint rules + 108 hard guards + AGENTS.md sentinel)
 새 도메인 추가 — METHODOLOGY.md의 5-step 따라
     ↓
 AI agent가 Spring + React 코드 작성
@@ -464,7 +464,7 @@ ax-template/
 ├── practices/                 # AI-targeted catalog (skill 핵심 자산)
 │   ├── rules/                 # 233룰, 22+ categories (R50/R58/R61 추가분 포함)
 │   ├── upstream/              # 외부 사실 snapshot
-│   ├── evals/                 # 4 hard gates + 107 hard guards
+│   ├── evals/                 # 4 hard gates + 108 hard guards
 │   ├── AGENTS.md              # AI agent 진입점 (sha sentinel)
 │   ├── SKILL.md               # practices 서브시스템 skill
 │   ├── MAINTAINER.md
@@ -532,14 +532,14 @@ fork-receiver의 활성화는 opt-in이다.
 | PreToolUse hook (Claude Code) | `.claude/settings.local.json` | Write/Edit이 `practices/rules/` 파일에 닿을 때 | session-bound advisory (commit 시 재검증 필요) | claude 세션 자동 |
 | `.githooks/pre-commit` | `.githooks/pre-commit` | `practices/` 또는 `practices-react/` 변경 포함 커밋 — **spec_ref · substance · evidence · time_decay** 4개 binary gate 실행 | **commit-blocking** (exit 1이면 커밋 불가) | **opt-in per clone**: `bash practices/scripts/install-hooks.sh` |
 | `.githooks/pre-push` (49th guard) | `.githooks/pre-push` | 커밋을 ship하는 모든 push 시 (delete-only push는 제외) — `completion_checklist_recency_guard.sh`가 HEAD에 대한 최신 R25 audit log 항목을 요구 | **push-blocking** (audit log 없으면 push 불가) | **opt-in per clone**: `bash practices/scripts/install-hooks.sh` |
-| `run-all-guards.sh` (102 live guards) | `practices/evals/run-all-guards.sh` | R25 완료 선언 시 수동 호출 (verify-completion.sh 내부에서 실행) | **manual / R25 run** — 자동 트리거 없음 | 항상 사용 가능, 자동 실행 아님 |
+| `run-all-guards.sh` (103 live guards) | `practices/evals/run-all-guards.sh` | R25 완료 선언 시 수동 호출 (verify-completion.sh 내부에서 실행) | **manual / R25 run** — 자동 트리거 없음 | 항상 사용 가능, 자동 실행 아님 |
 | `per-domain ./gradlew test{Domain}` | `backend/build.gradle.kts` | 수동 또는 fork-receiver CI에서 호출 | **manual / CI** — 자동 트리거 없음 | 항상 사용 가능; CI 통합은 fork-receiver 자율 |
 | `ax-case-sensitive-sweep.sh` (P2-72 로컬/수동 절반) | `practices/scripts/ax-case-sensitive-sweep.sh` | 사람이 주기적으로 호출 (릴리스 전 1회 권장) — 대소문자-**민감** APFS 볼륨을 만들어 HEAD를 클론하고 그 위에서 `run-all-guards.sh --include-fixtures`를 돌린다. **정규화 반쪽은 못 덮는다**(이 볼륨이 NFC/NFD를 접는 것이 측정됨) | **periodic / manual** — 자동 트리거 없음, merge gate 아님 | 항상 사용 가능(macOS `hdiutil` 필요; 없으면 **소리내어 실패**하고 skip하지 않는다) |
 | `practices-case-normalization.yml` (P2-72+P3-138 **스케줄된** 짝) | `.github/workflows/practices-case-normalization.yml` | 매주 월 08:00 UTC 크론 + `workflow_dispatch` — `ubuntu-latest`에서 **먼저 파일시스템 능력 프로브**(`A`/`a` 두 inode, NFC `café`/NFD `cafe`+U+0301 두 inode)를 돌리고, 통과할 때만 `run-all-guards.sh --include-fixtures`를 돌려 pass/fail 수와 `FAIL [` 라인을 job summary에 싣는다 | **advisory** (`continue-on-error: true`) — 절대 머지를 막지 않음. 프로브 실패 시 스윕을 **돌리지 않고** "PREMISE NOT ESTABLISHED — no measurement was taken"이라고 적는다(무의미한 pass 금지) | GitHub Actions에 스케줄됨. ext4/overlayfs가 대소문자-민감 **+ 바이트 보존**이라 macOS 스크립트가 못 덮는 **정규화 반쪽까지** 덮는다 |
 
 ### 핵심 설명
 
-- **가드 파일(`*_guard.sh`)은 107개다** (practices/evals 105 + practices-react/evals 2 — `doc_headline_count_guard`가 이 수를 헤드라인과 대조해 강제; 정확한 수는 항상 `ls practices/evals/*_guard.sh practices-react/evals/*_guard.sh | wc -l`의 disk truth를 따른다). `run-all-guards.sh`는 R25 완료 선언 시 수동 호출된다(커밋마다 자동 실행되지 않는다). 일부 가드는 추가 진입점을 갖는다 — pre-commit 4 hard gates(`spec_ref`·`substance`·`evidence`·`time_decay`)는 practices/ 변경 커밋에서, `completion_checklist_recency`는 pre-push에서 돈다.
+- **가드 파일(`*_guard.sh`)은 108개다** (practices/evals 106 + practices-react/evals 2 — `doc_headline_count_guard`가 이 수를 헤드라인과 대조해 강제; 정확한 수는 항상 `ls practices/evals/*_guard.sh practices-react/evals/*_guard.sh | wc -l`의 disk truth를 따른다). `run-all-guards.sh`는 R25 완료 선언 시 수동 호출된다(커밋마다 자동 실행되지 않는다). 일부 가드는 추가 진입점을 갖는다 — pre-commit 4 hard gates(`spec_ref`·`substance`·`evidence`·`time_decay`)는 practices/ 변경 커밋에서, `completion_checklist_recency`는 pre-push에서 돈다.
   R25 완료 선언 전에 `verify-completion.sh`를 실행하면 이 guard들이 모두 돌아간다.
 - **pre-commit / pre-push hook은 opt-in이다.** `install-hooks.sh`를 실행한 클론에서만 활성화된다.
   ax-template 자체 HEAD에서는 활성화되어 있다; fork-receiver가 활성화 여부를 결정한다.

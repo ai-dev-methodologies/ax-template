@@ -2649,6 +2649,25 @@ if [ "$INCLUDE_FIXTURES" -eq 1 ]; then
         bash "$SCRIPT_DIR/cross_catalog_upstream_id_collision_guard.sh" --root "$SCRIPT_DIR/fixtures/cross-catalog-upstream-id/fail_shared_body_unregistered"
 fi
 
+# ── 108. derived_block_license_guard ────────────────────────────────────────
+echo "[108] derived_block_license_guard.sh (D-4 — every templates/**/*.tsx file carrying an @ax-codified-from header (a block CODIFIED FROM a community 21st.dev component; 13 such files today, all under templates/L2/blocks/) must be registered in templates/DERIVED-SOURCES.yaml, and the registration must be TRUE, not merely present. A guard that checked only 'is every field non-empty' would let an arbitrary fake upstream, a duplicated path, or included_in_package:false all pass silently — this guard checks the ledger's CONTENT against disk, not its existence. Six independently-blocking invariants: (1) COMPLETENESS — every header-bearing file on disk is registered (UNREGISTERED); (2) REVERSE EXISTENCE — every registered path still exists on disk (STALE_ENTRY); (3) ONE-TO-ONE — no path registered twice (DUPLICATE_PATH); (4) PROVENANCE — the registered upstream matches the file's OWN header verbatim modulo whitespace-trim (WRONG_UPSTREAM) — the ONLY check that catches a forged upstream citation, and the one a field-non-emptiness-only draft of this guard lacked; (5) INCLUSION — included_in_package must be boolean true for every entry (FALSE_INCLUSION), making the maintainer decision recorded in the ledger's policy block real; (6) FIELD BLANKS — path/upstream/upstream_license/included_in_package/codified_at all non-blank (MISSING_FIELD). SELF-MATCH HAZARD closed: templates/DERIVED-SOURCES.yaml itself lives under templates/, the tree scanned for the @ax-codified-from tag, so the guard explicitly excludes the ledger's own path from its scan and the ledger's comments describe the tag without ever spelling it out with its leading @ attached — without both, the ledger would register itself as a block needing a ledger entry. Non-vacuity: zero header-bearing files found is NO_DERIVED_BLOCKS_FOUND (exit 2) on ANY root, and a LIVE root (no --root override) is additionally floored at LIVE_MIN_DERIVED=13 (a mass de-registration cannot silently shrink the census). Fixtures: pass_registered 0 / fail_unregistered 1 (invariant 1) / fail_missing_field 1 (invariant 6, also trips invariant 4 as an honest side effect since a blank upstream cannot match the header) / fail_wrong_upstream 1 (invariant 4 — the fixture a field-emptiness-only guard would have passed) / fail_duplicate_path 1 (invariant 3) / fail_false_inclusion 1 (invariant 5). Live exits 0 at 13 derived blocks.)"
+run_guard "derived_block_license/live" 0 \
+    bash "$SCRIPT_DIR/derived_block_license_guard.sh"
+if [ "$INCLUDE_FIXTURES" -eq 1 ]; then
+    run_guard "derived_block_license/fixture_pass_registered" 0 \
+        bash "$SCRIPT_DIR/derived_block_license_guard.sh" --root "$SCRIPT_DIR/fixtures/derived-block-license/pass_registered"
+    run_guard "derived_block_license/fixture_fail_unregistered" 1 \
+        bash "$SCRIPT_DIR/derived_block_license_guard.sh" --root "$SCRIPT_DIR/fixtures/derived-block-license/fail_unregistered"
+    run_guard "derived_block_license/fixture_fail_missing_field" 1 \
+        bash "$SCRIPT_DIR/derived_block_license_guard.sh" --root "$SCRIPT_DIR/fixtures/derived-block-license/fail_missing_field"
+    run_guard "derived_block_license/fixture_fail_wrong_upstream" 1 \
+        bash "$SCRIPT_DIR/derived_block_license_guard.sh" --root "$SCRIPT_DIR/fixtures/derived-block-license/fail_wrong_upstream"
+    run_guard "derived_block_license/fixture_fail_duplicate_path" 1 \
+        bash "$SCRIPT_DIR/derived_block_license_guard.sh" --root "$SCRIPT_DIR/fixtures/derived-block-license/fail_duplicate_path"
+    run_guard "derived_block_license/fixture_fail_false_inclusion" 1 \
+        bash "$SCRIPT_DIR/derived_block_license_guard.sh" --root "$SCRIPT_DIR/fixtures/derived-block-license/fail_false_inclusion"
+fi
+
 # ── Summary ──────────────────────────────────────────────────────────────────
 echo ""
 echo "=== Results ==="

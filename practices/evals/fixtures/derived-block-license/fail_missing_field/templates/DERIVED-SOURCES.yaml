@@ -1,0 +1,7 @@
+# fixture: fail_missing_field — registered, but `upstream` is a blank string (invariant 6).
+derived:
+  - path: templates/L2/blocks/sample-block.tsx
+    upstream: ""
+    upstream_license: UNVERIFIED
+    included_in_package: true
+    codified_at: UNKNOWN

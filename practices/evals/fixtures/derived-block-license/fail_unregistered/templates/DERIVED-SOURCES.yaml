@@ -1,0 +1,7 @@
+# fixture: fail_unregistered — two header-bearing files, only ONE registered (invariant 1).
+derived:
+  - path: templates/L2/blocks/sample-block-a.tsx
+    upstream: "21st.dev/fixtureauthor/sample-block-a"
+    upstream_license: UNVERIFIED
+    included_in_package: true
+    codified_at: UNKNOWN

@@ -1,0 +1,35 @@
+{
+  "name": "ax-transform",
+  "owner": {
+    "name": "AI Dev Methodologies",
+    "email": "ai-dev-methodologies@users.noreply.github.com"
+  },
+  "metadata": {
+    "description": "AI transformation starter — bootstraps a project (or transforms an existing one) into an AI-agent-friendly codebase using contract-first Spec Trio, evidence-anchored Java/Spring + React practices catalogs, and single-command verification feedback loops.",
+    "version": "0.1.0"
+  },
+  "plugins": [
+    {
+      "name": "ax-transform",
+      "description": "AI transformation starter — bootstraps a project (or transforms an existing one) into an AI-agent-friendly codebase using contract-first Spec Trio, evidence-anchored Java/Spring practices catalog (233 rules across 22+ categories), and single-command verification feedback loops (testAsvs / testCrud / testPractices).",
+      "source": "./",
+      "version": "0.1.0",
+      "author": {
+        "name": "AI Dev Methodologies",
+        "url": "https://github.com/ai-dev-methodologies"
+      },
+      "homepage": "https://github.com/ai-dev-methodologies/ax-template",
+      "keywords": [
+        "ai-transformation",
+        "spring-boot",
+        "react",
+        "eslint-plugin",
+        "spec-first",
+        "contract-first",
+        "best-practices",
+        "evidence-anchored",
+        "auth-blueprint"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,12 @@
+# fixture: fail_duplicate_path — the same `path` registered twice (invariant 3).
+derived:
+  - path: templates/L2/blocks/sample-block.tsx
+    upstream: "21st.dev/fixtureauthor/sample-block"
+    upstream_license: UNVERIFIED
+    included_in_package: true
+    codified_at: UNKNOWN
+  - path: templates/L2/blocks/sample-block.tsx
+    upstream: "21st.dev/fixtureauthor/sample-block"
+    upstream_license: UNVERIFIED
+    included_in_package: true
+    codified_at: UNKNOWN

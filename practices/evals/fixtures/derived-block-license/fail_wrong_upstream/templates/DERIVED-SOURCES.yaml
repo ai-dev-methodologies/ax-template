@@ -1,0 +1,9 @@
+# fixture: fail_wrong_upstream — registered and fully filled in, but the recorded
+# `upstream` does NOT match the file's own header (invariant 4 — the ONLY check that
+# catches a forged upstream citation; a prior draft of this guard had no such check).
+derived:
+  - path: templates/L2/blocks/sample-block.tsx
+    upstream: "21st.dev/fixtureauthor/a-totally-different-component"
+    upstream_license: UNVERIFIED
+    included_in_package: true
+    codified_at: UNKNOWN
