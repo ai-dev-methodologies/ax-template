@@ -3323,3 +3323,39 @@ Headline reconciliation: guard files 106 → 107 on disk, bumped in README ×3, 
 ESLint · 25 L4 · 107 guards). Two unguarded CLAUDE.md prose counts that had already rotted were
 corrected in the same pass: `*_guard.sh` 105 → 107 (practices/evals 103 → 105) and the
 enforcement table's "95 live guards" → 102 (`run_guard "*/live"` census).
+
+### Lane H addendum — an existing meta-guard caught the new guard, and the verification numbers
+
+The first version of [107] carried a hand-rolled line reader as a PyYAML fallback. [95]
+`pyyaml_preflight_coverage_guard` caught it on the first full sweep: under simulated PyYAML
+absence the fallback read **46** practices-react ids where PyYAML reads **42**, and the guard
+still printed PASS — a green verdict about a census that was not the tree's. That is the same
+unsound-static-parse class this catalog has repeatedly burned itself on, arriving in a guard
+written to prevent a truth defect. The fallback was deleted rather than fixed: [107] now fails
+closed on PyYAML absence like the other 28 dependent scripts (`exit 2`, no verdict without a
+real parser). Recorded because the catch is the interesting part — the meta-guard was doing
+exactly its job on a same-wave addition.
+
+Verification at `c19965b` (post-fix), every number as printed:
+
+| check | result |
+|---|---|
+| `run-all-guards.sh --include-fixtures` | **362 passed / 0 failed, exit 0** (357 → 362: the five new [107] invocations) |
+| [107] live | exit 0 — 4 shared ids across 61 practices + 42 practices-react, 3 agree, 1 grandfathered, 0 new |
+| [107] fixtures | pass 0 · same_id_two_sources 1 · stale_grandfather 1 · shared_body_unregistered 1 |
+| [95] `pyyaml_preflight_coverage` | exit 0 |
+| [87] `fixture_kill_proof` | exit 0 — **72 items all non-vacuous**, floor 72 (was 71) |
+| `evidence_quote_spotcheck` — all **33** registered invocations | every one matched its expected exit; protected census **66 file(s) / 70 anchor(s) / 0 finding(s)**, five surfaces == 66, ratchet floor 66 → 66, pin set 66 → 66 (superset) — **not shrunk** |
+| `evidence_guard` practices / practices-react | exit 0 / exit 0 |
+| `time_decay_guard` practices / practices-react | exit 0 / exit 0 |
+| `manifest_snapshot_integrity` live | exit 0 — 92 ids checksummed, 90 through the full chain, 0 changed vs origin/main |
+| `manifest_snapshot_integrity` fixtures (9) | 1/2/2/2/2/2/1/0/0 — all as registered |
+| `doc_headline_count_guard` | exit 0 — 233 Java · 102 React · 15 ESLint · 25 L4 · **107 guards** |
+
+Residual, stated: [107] compares the manifests' `source` field. Two catalogs could register one
+id against the SAME url and still hold different BODIES (a re-fetch of a page that changed).
+That is not this guard's subject — it is what `manifest_snapshot_integrity`'s file←body←receipt
+chain already covers per catalog — but the two guards only meet at the id, so a cross-catalog
+BODY divergence under one url is unowned by either. No instance exists today (the three
+agreeing ids are also byte-consistent in the census printed by `--show`); it is named here so
+the boundary is not mistaken for coverage.
