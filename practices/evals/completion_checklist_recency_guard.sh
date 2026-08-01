@@ -260,6 +260,33 @@
 # `exec` IS shadowable, so the SECOND case re-asserts privileged mode AFTER it: a neutered exec
 # falls through to a non-zero abort instead of quietly continuing unprivileged (measured: a
 # BASH_ENV defining exec(){ :; } exits 1 here, it does not proceed).
+# ── BACKLOG P2-70: THE RE-EXEC USES AN ENVIRONMENT ALLOWLIST (`env -i`) ─────────────
+# The re-exec below hands the child a MEASURED allowlist instead of the parent's whole
+# environment. Round 8 refused this for three reasons and round 9 MEASURED all three to be wrong:
+# (i) the allowlist preserves the AX_RELEASE_ANCHOR_* pins (every consumer tests `[ -n "${V:-}" ]`,
+# so empty == unset and forwarding them by prefix is exact); (ii) STRICT / LIVE_ROOT /
+# GIT_ANCHOR are set INSIDE the guards AFTER the re-exec, so they were never inherited to begin
+# with; (iii) BASH_ENV/ENV are forwarded ON PURPOSE — dropping them would SILENCE the
+# HERMETIC_PREFLIGHT_HOSTILE refusal that is the point of seeing them, and forwarding them keeps
+# that loud refusal firing exactly as before.
+# WHAT IT BUYS: everything NOT on the list stops reaching this process — LD_PRELOAD /
+# DYLD_INSERT_LIBRARIES, LC_*/LANG, and every variable a future dependency might read. The
+# bootstrap below scrubs the GIT_* and PYTHON* families by name; a denylist can only remove what
+# somebody thought of, and this is the same argument that made the GIT_* scrub a family sweep.
+# WHY THE MARKER IS APPENDED LAST: `env` applies assignments left to right, so a hostile
+# AX_PRIV_REEXEC=0 arriving through the AX_ prefix must not be able to overwrite the marker and
+# turn the re-exec into an infinite loop.
+# CONSTRUCTS: array assignment / append, `for`, `case`, and the indirect expansions
+# ${!AX_@} · ${!v+s} · ${!v} — none of them is a command lookup, so invariant (α) (NOTHING
+# OVERRIDABLE MAY EXECUTE BEFORE THE SCRUB THAT DETECTS OVERRIDES) still holds: the only command
+# on this path is still /usr/bin/env, by absolute path.
+# SCOPE, and why it is not all six: this form is applied ONLY to the entries whose process
+# subtree execs NO FOREIGN TOOLCHAIN. `.githooks/pre-push` execs `./gradlew` directly,
+# `run-all-guards.sh` does so transitively (vacuity_class_proof_guard's live PIT run), and
+# `verify-completion.sh` execs BOTH gradle and npm. Those three keep the inheriting form with the
+# reason recorded inline, because the environment surface of a foreign toolchain
+# (GRADLE_*/JDK_*/NODE_*/npm_config_*) is not enumerable from this repository, and shipping an
+# allowlist for a toolchain nobody ran under it would be an unmeasured change to the release gate.
 # THE LOOP MARKER IS NOT TRUSTED. AX_PRIV_REEXEC means only "a re-exec was already attempted".
 # An attacker who PRESETS it does not skip the re-exec — that branch ABORTS (measured, exit 1).
 # It is unset the moment privileged mode holds, so it never reaches a child entry and cannot turn
@@ -273,7 +300,12 @@ case $- in
     *) case "${AX_PRIV_REEXEC-}" in
            1) _AX_PV_NULL=; _AX_PV_DIE=${_AX_PV_NULL:?"completion_checklist_recency_guard: HERMETIC_PRIVILEGED_UNREACHABLE — a re-exec into bash privileged mode was already attempted and this shell is STILL unprivileged. Either exec is shadowed by a function, or AX_PRIV_REEXEC was preset in the environment to skip the re-exec. Both are refused; nothing in this gate runs unprivileged. Start it from a clean shell."} ;;
            *) case "${BASH:-}" in
-                  /*) exec /usr/bin/env AX_PRIV_REEXEC=1 "$BASH" -p "$0" "$@" ;;
+                  /*) _AX_PV_ENV=()
+                      for _AX_PV_N in PATH HOME TMPDIR JAVA_HOME BASH_ENV ENV ${!AX_@}; do
+                          case "${!_AX_PV_N+s}" in s) _AX_PV_ENV+=("$_AX_PV_N=${!_AX_PV_N}") ;; esac
+                      done
+                      _AX_PV_ENV+=(AX_PRIV_REEXEC=1)
+                      exec /usr/bin/env -i "${_AX_PV_ENV[@]}" "$BASH" -p "$0" "$@" ;;
                   *) _AX_PV_NULL=; _AX_PV_DIE=${_AX_PV_NULL:?"completion_checklist_recency_guard: HERMETIC_PRIVILEGED_UNREACHABLE — the running interpreter (BASH) is not an absolute path, so the SAME interpreter cannot be named unambiguously for the privileged re-exec."} ;;
               esac ;;
        esac ;;
@@ -504,6 +536,81 @@ export AX_GIT_BIN AX_PY_BIN
 # PUBLISHED, NOT CONSUMED IN-TREE: every in-tree call site spells the flags LITERALLY so that
 # `grep -n ' -I -S '` finds all of them; this export exists for fork-receiver call sites.
 export AX_PY_ISO="-I -S"
+# ── BACKLOG P2-67: mktemp IS A TOOL THIS GATE RUNS, AND ITS ANSWER IS A TRUST BOUNDARY ──
+# Every entry and every proof harness called `mktemp -d` as a BARE WORD, and then used the
+# directory it handed back to extract PREVIOUS-RELEASE BLOBS out of git and to build the
+# sandboxes whose verdicts decide whether a release ships. Two unexamined assumptions sat in
+# that one word:
+#   · WHICH mktemp. A bare word resolves through PATH — the same channel the round-6 smoke test
+#     exists to refuse for git and python3. A PATH-earlier shim can return a directory the
+#     attacker already owns (this catalog SHIPS such a shim, deliberately, in
+#     resume_provenance_guard.sh, which is proof the channel is not hypothetical).
+#   · WHAT IT RETURNED. Nothing checked the returned path at all. `mktemp -d` is documented to
+#     create mode-0700, but the gate never verified it — and a shim, an inherited umask quirk or
+#     a pre-existing path is exactly the case where the documentation stops applying. A
+#     group/other-writable extraction directory means another process can replace the extracted
+#     previous-release implementation between the extraction and the run.
+# So mktemp is resolved ONCE, absolutely, from the same relative-entry-stripped PATH as git and
+# python3, and `_ax_mktemp_d` VERIFIES what came back: a real directory (not a symlink), owned by
+# THIS euid, with no group/other write bit. Anything else BLOCKS — this is the directory the gate
+# is about to trust, and an unverifiable one is not a safe one. The verification doubles as the
+# functional smoke test the other two tools get: a /usr/bin/true shim returns nothing and dies at
+# the first branch.
+AX_MKTEMP_BIN="$(PATH="$_AX_HRM_PATH" command -v mktemp 2>/dev/null || true)"
+if [ -z "$AX_MKTEMP_BIN" ] || [ "${AX_MKTEMP_BIN#/}" = "$AX_MKTEMP_BIN" ] \
+   || [ ! -f "$AX_MKTEMP_BIN" ] || [ ! -x "$AX_MKTEMP_BIN" ]; then
+    { echo "$_AX_HRM_LABEL: HERMETIC_TOOL_UNUSABLE — mktemp did not resolve to an executable"
+      echo "  regular file on an absolute path (got '${AX_MKTEMP_BIN:-<nothing>}'). This gate"
+      echo "  extracts previous-release blobs and builds sandboxes inside the directory that"
+      echo "  program returns; it will not take that directory from whatever PATH offers."; } >&2
+    exit $_AX_HRM_EXIT
+fi
+_ax_hdir="$(builtin cd "$(dirname "$AX_MKTEMP_BIN")" 2>/dev/null && builtin pwd -P)" || _ax_hdir=""
+if [ -z "$_ax_hdir" ]; then
+    { echo "$_AX_HRM_LABEL: HERMETIC_TOOL_UNUSABLE — the directory of mktemp ('$AX_MKTEMP_BIN')"
+      echo "  could not be canonicalised, so this gate cannot say where the program it is about"
+      echo "  to run actually lives."; } >&2
+    exit $_AX_HRM_EXIT
+fi
+AX_MKTEMP_BIN="$_ax_hdir/$(basename "$AX_MKTEMP_BIN")"
+export AX_MKTEMP_BIN
+# _ax_mktemp_d <label> — echo a VERIFIED private temp directory, or return non-zero having said
+# why on stderr. Callers treat non-zero as blocking; nothing here falls back to an unverified
+# directory. `stat` is tried in BSD then GNU spelling; if neither answers, the mode is UNKNOWN
+# and unknown never passes.
+_ax_mktemp_d() {
+    local _ax_md_lbl="$1" _ax_md_d _ax_md_st _ax_md_uid _ax_md_mode
+    _ax_md_d="$("$AX_MKTEMP_BIN" -d "${TMPDIR:-/tmp}/ax-priv.XXXXXXXX" 2>/dev/null)" || _ax_md_d=""
+    if [ -z "$_ax_md_d" ] || [ -L "$_ax_md_d" ] || [ ! -d "$_ax_md_d" ]; then
+        { echo "${_ax_md_lbl}: HERMETIC_TEMPDIR_UNUSABLE — the resolved mktemp did not return a"
+          echo "  real directory (got '${_ax_md_d:-<nothing>}'). A symlink or a non-directory is"
+          echo "  refused outright: this gate is about to extract release blobs into it."; } >&2
+        return 1
+    fi
+    _ax_md_st="$(stat -f '%u %Lp' "$_ax_md_d" 2>/dev/null)" || _ax_md_st=""
+    [ -n "$_ax_md_st" ] || _ax_md_st="$(stat -c '%u %a' "$_ax_md_d" 2>/dev/null)" || _ax_md_st=""
+    case "$_ax_md_st" in
+        [0-9]*" "[0-7][0-7][0-7]|[0-9]*" "[0-7][0-7][0-7][0-7]) ;;
+        *)  { echo "${_ax_md_lbl}: HERMETIC_TEMPDIR_UNVERIFIABLE — the owner/mode of ${_ax_md_d}"
+              echo "  could not be read (stat said '${_ax_md_st:-<nothing>}'), so this gate cannot"
+              echo "  tell whether another user can write into the directory it is about to trust."; } >&2
+            rm -rf "$_ax_md_d" 2>/dev/null || true
+            return 1 ;;
+    esac
+    _ax_md_uid="${_ax_md_st%% *}"
+    _ax_md_mode="${_ax_md_st##* }"
+    if [ "$_ax_md_uid" != "${EUID:-$(id -u)}" ] || [ $(( 8#$_ax_md_mode & 8#22 )) -ne 0 ]; then
+        { echo "${_ax_md_lbl}: HERMETIC_TEMPDIR_HOSTILE — ${_ax_md_d} is owned by uid"
+          echo "  ${_ax_md_uid} (this process is ${EUID:-?}) and/or is group/other-writable"
+          echo "  (mode ${_ax_md_mode}). The previous release's implementation is extracted into"
+          echo "  this directory and then RUN; a directory somebody else can write is a directory"
+          echo "  somebody else chooses the implementation in."; } >&2
+        rm -rf "$_ax_md_d" 2>/dev/null || true
+        return 1
+    fi
+    echo "$_ax_md_d"
+    return 0
+}
 unset _ax_hn _ax_hb _ax_hdir _ax_hver _AX_HRM_BAD _AX_HRM_PATH
 
 SCRIPT_DIR="$(builtin cd "$(dirname "${BASH_SOURCE[0]}")" && builtin pwd)"
@@ -1573,6 +1680,34 @@ if live_git_root and not expected_head_file.is_file() and guard_repo is not None
                     elif _have != _blob:
                         _glbad.append("%s (superproject records %s, work tree is at %s)"
                                       % (_show, _blob[:12].decode(), _have[:12].decode()))
+                    else:
+                        # BACKLOG P3-119 (escalated to P1 — a CONFIG-CONTROLLED FAIL-OPEN), the
+                        # symmetric half of the same addition in practices/scripts/lib/
+                        # tree_fingerprint.py. Being AT the recorded commit says nothing about
+                        # whether the submodule's own work tree was edited, and the superproject
+                        # cannot be asked: MEASURED, `diff.ignoreSubmodules=all` OR
+                        # `submodule.<name>.ignore=all` — the latter settable in .gitmodules,
+                        # i.e. COMMITTED CONTENT — empties the superproject status and returns
+                        # the digest to EXACTLY the clean-tree constant while
+                        # `git -C <sub> status --porcelain` still reports ` M a.txt`. Same class
+                        # as GIT_CONTEXT_REDIRECTED: the tree decides what the verifier may see.
+                        # The submodule's own status does not consult that config, so it is asked
+                        # instead; a failed read is unknown, and unknown never passes.
+                        _pst = subprocess.run([GIT_BIN, "--no-replace-objects", "-C",
+                                               os.fsdecode(_full), "status", "--porcelain"],
+                                              stdout=subprocess.PIPE,
+                                              stderr=subprocess.DEVNULL, env=GIT_ENV)
+                        if _pst.returncode != 0:
+                            _glbad.append("%s (initialized and at the recorded commit, but its "
+                                          "own `git status` could not be read)" % _show)
+                        elif _pst.stdout.strip():
+                            _lines = _pst.stdout.decode(errors="replace").strip().splitlines()
+                            _glbad.append(
+                                "%s (at the recorded commit %s, but ITS OWN work tree is dirty: "
+                                "%s%s — the push ships only the recorded commit, so those edits "
+                                "are bytes this run may have read and the receiver does not get)"
+                                % (_show, _blob[:12].decode(), "; ".join(_lines[:4]),
+                                   "" if len(_lines) <= 4 else " (+%d more)" % (len(_lines) - 4)))
                 elif os.path.exists(_full):
                     # ROUND 9 / P1-2: no gitdir is a pass ONLY when there is nothing there.
                     if not os.path.isdir(_full):
@@ -1586,11 +1721,24 @@ if live_git_root and not expected_head_file.is_file() and guard_repo is not None
                             _gldirt.append("%s (uninitialized gitlink whose directory could not "
                                            "be listed: %s)" % (_show, _e.strerror or _e))
                         if _kids:
+                            # BACKLOG P3-123 — CLOSED BY DECISION: KEEP THE REFUSAL, IMPROVE THE
+                            # MESSAGE (symmetric with practices/scripts/lib/tree_fingerprint.py).
+                            # A NAME ALLOWLIST for `.DS_Store` was considered and REJECTED: it is
+                            # a real file with arbitrary, attacker-controllable bytes, and the
+                            # invariant is about ANY bytes the receiver will not get, so a
+                            # name-based exception cannot discharge "cannot hide real content".
+                            # (Gitignoring it does not help: the test is os.listdir.)
+                            _hint = ""
+                            if any(os.fsdecode(_k) == ".DS_Store" for _k in _kids):
+                                _hint = (" — this looks like macOS Finder noise: `.DS_Store` is "
+                                         "present. It is still REAL CONTENT with arbitrary bytes, "
+                                         "so it is not exempted by name; remove it with `find %s "
+                                         "-name .DS_Store -delete` and re-run" % _show)
                             _gldirt.append(
                                 "%s (uninitialized gitlink — no gitdir — yet its directory holds "
-                                "%d entr%s: %s)"
+                                "%d entr%s: %s)%s"
                                 % (_show, len(_kids), "y" if len(_kids) == 1 else "ies",
-                                   ", ".join(sorted(os.fsdecode(_k) for _k in _kids)[:4])))
+                                   ", ".join(sorted(os.fsdecode(_k) for _k in _kids)[:4]), _hint))
                 continue
             # ROUND 9 / P1-1 + (e): read BEFORE the `dirty` continue — neither fact is carried by
             # the digest, and `git status` reports neither once core.fileMode is false.

@@ -626,8 +626,22 @@ def _gitlink_uninitialized_dirt(full, show):
     if not kids:
         return None                                     # empty: the ordinary post-clone shape
     names = ", ".join(sorted(os.fsdecode(k) for k in kids)[:4])
-    return ("%s (uninitialized gitlink — no gitdir — yet its directory holds %d entr%s: %s)"
-            % (show, len(kids), "y" if len(kids) == 1 else "ies", names))
+    # BACKLOG P3-123 — CLOSED BY DECISION: KEEP THE REFUSAL, IMPROVE THE MESSAGE.
+    # The overwhelmingly common way to reach this on macOS is a Finder-created `.DS_Store` inside
+    # an otherwise empty uninitialized gitlink. A NAME ALLOWLIST was considered and REJECTED:
+    # `.DS_Store` is a real file with arbitrary, attacker-controllable bytes, and the invariant
+    # here is about ANY bytes the receiver will not get — so exempting a NAME cannot discharge
+    # "this directory cannot hide real content". (Gitignoring it does not help either: the test is
+    # `os.listdir`, not `git status`.) The cost of keeping the refusal is one confusing message,
+    # so the message now names the likely cause and the one-line fix instead of leaving an
+    # operator to guess.
+    hint = ""
+    if any(os.fsdecode(k) == ".DS_Store" for k in kids):
+        hint = (" — this looks like macOS Finder noise: `.DS_Store` is present. It is still REAL "
+                "CONTENT with arbitrary bytes, so it is not exempted by name; remove it with "
+                "`find %s -name .DS_Store -delete` and re-run" % show)
+    return ("%s (uninitialized gitlink — no gitdir — yet its directory holds %d entr%s: %s)%s"
+            % (show, len(kids), "y" if len(kids) == 1 else "ies", names, hint))
 
 
 def _lstat_cached(cache, rootb, rel):
@@ -1045,6 +1059,43 @@ def _gitlink_divergence(repo, gbin, genv, path, want):
     if not have:
         return ("diverged", "%s (initialized but its HEAD could not be read, so the commit this "
                 "run tested cannot be compared with the one the push ships)" % show)
+    # ── BACKLOG P3-119 (escalated to P1: a CONFIG-CONTROLLED FAIL-OPEN) ──────────────
+    # The commit comparison above says WHICH commit the submodule is on. It says nothing about
+    # whether that submodule's own work tree has been edited, and until now that residue was
+    # merely "registered rather than hidden". It is worse than registered — it is REACHABLE WITH
+    # COMMITTED CONTENT. MEASURED in an isolated repo:
+    #   · dirt inside an initialized submodule moves the superproject digest OFF the clean-tree
+    #     constant, but EVERY KIND of dirt yields the SAME digest (d965e058…), because the
+    #     gitlink path hits open() → OSError → "<absent>". So the digest is not a faithful
+    #     witness of what changed — it is a single "something" marker;
+    #   · and with `diff.ignoreSubmodules=all` OR `submodule.<name>.ignore=all` the superproject
+    #     status goes EMPTY and the digest returns to EXACTLY the clean-tree constant
+    #     (0a815065…), while `git -C <sub> status --porcelain` still reports ` M a.txt`.
+    #     `submodule.<name>.ignore` can be set in `.gitmodules`, which is COMMITTED CONTENT.
+    # That is the same class as GIT_CONTEXT_REDIRECTED, which this file already refuses: a
+    # configuration the tree itself carries decides what the verifier is allowed to see, and the
+    # answer it produces is false-green push evidence.
+    # THE FIX: ask the SUBMODULE, whose own status does not consult the superproject's ignore
+    # config. Non-empty is blocking — the receiver of this push gets the recorded commit, not the
+    # edits, so any output here is bytes a run may have read that the push does not ship.
+    ps = subprocess.run([gbin, "--no-replace-objects", "-C", os.fsdecode(full),
+                         "status", "--porcelain"],
+                        stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, env=genv)
+    if ps.returncode != 0:
+        return ("diverged", "%s (initialized, at the recorded commit, but its own `git status` "
+                "could not be read — so whether its work tree carries edits this push does not "
+                "ship has no answer, and unknown never passes)" % show)
+    if ps.stdout.strip():
+        first = ps.stdout.decode(errors="replace").strip().splitlines()
+        return ("diverged", "%s (initialized and at the recorded commit %s, but ITS OWN work tree "
+                "is dirty: %s%s). A gitlink ships only the commit it records, so those edits are "
+                "bytes this run may have read and the push does not carry. NOTE: the "
+                "superproject's status can be made to hide this entirely with "
+                "diff.ignoreSubmodules=all or submodule.<name>.ignore=all — and the latter lives "
+                "in .gitmodules, i.e. in COMMITTED CONTENT — which is why the question is put to "
+                "the submodule instead of to the superproject."
+                % (show, want[:12].decode(), "; ".join(first[:4]),
+                   "" if len(first) <= 4 else " (+%d more)" % (len(first) - 4)))
     return None
 
 

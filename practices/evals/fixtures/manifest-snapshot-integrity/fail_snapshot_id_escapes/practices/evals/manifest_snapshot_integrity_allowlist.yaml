@@ -1,0 +1,11 @@
+# fail_snapshot_id_escapes — byte-copy of pass_clean except that the `legacy-src` id is respelled
+# as the PATH FRAGMENT `../evals/escaped` and its body moved to practices/evals/escaped.snapshot.md,
+# i.e. OUTSIDE <catalog>/upstream/. The manifest records that file's TRUE sha/bytes, so nothing
+# else in the guard has any reason to object: the pre-P3-111 guard resolves the path, checksums a
+# file outside the snapshot tree, and exits 0 — a manifest entry "verifying" something that is not
+# a snapshot. No residual entry here: an entry would make the fixture fail for the unrelated
+# ALLOWLIST_STALE reason and mask what is being proven.
+baseline_count: 1
+baseline_universe:
+  - practices::../evals/escaped
+entries: []

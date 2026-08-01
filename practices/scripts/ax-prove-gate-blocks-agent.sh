@@ -40,7 +40,24 @@ agent_events() {
 }
 BEFORE="$(agent_events)"
 
-TMP="$(mktemp -d)"
+# BACKLOG P2-67: mktemp is resolved to an ABSOLUTE path (a PATH-earlier shim can return a
+# directory the attacker owns — this catalog ships exactly such a shim in
+# resume_provenance_guard.sh) and the returned directory is verified: a real directory, owned by
+# this euid, with no group/other write. This harness builds SANDBOXES in it and runs gates there.
+_AX_MK="$(PATH=/usr/bin:/bin:/usr/local/bin command -v mktemp 2>/dev/null || true)"
+case "$_AX_MK" in /*) ;; *) echo "$(basename "$0"): mktemp did not resolve to an absolute path" >&2; exit 2 ;; esac
+TMP="$("$_AX_MK" -d "${TMPDIR:-/tmp}/ax-prove.XXXXXXXX")"
+_AX_ST="$(stat -f '%u %Lp' "$TMP" 2>/dev/null)" || _AX_ST=""
+[ -n "$_AX_ST" ] || _AX_ST="$(stat -c '%u %a' "$TMP" 2>/dev/null)" || _AX_ST=""
+case "$_AX_ST" in
+    [0-9]*" "[0-7][0-7][0-7]|[0-9]*" "[0-7][0-7][0-7][0-7]) ;;
+    *) echo "$(basename "$0"): the owner/mode of $TMP could not be read (stat said '${_AX_ST:-<nothing>}')" >&2; exit 2 ;;
+esac
+if [ ! -d "$TMP" ] || [ -L "$TMP" ] || [ "${_AX_ST%% *}" != "${EUID:-$(id -u)}" ] \
+   || [ $(( 8#${_AX_ST##* } & 8#22 )) -ne 0 ]; then
+    echo "$(basename "$0"): refusing a temp dir that is not a private directory owned by this uid ($TMP, stat '$_AX_ST')" >&2
+    exit 2
+fi
 trap 'rm -rf "$TMP"' EXIT
 
 PKG="$TMP/backend/src/main/java/com/ax/template/authblueprint/demo"

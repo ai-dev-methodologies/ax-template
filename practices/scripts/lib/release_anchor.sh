@@ -481,6 +481,81 @@ export AX_GIT_BIN AX_PY_BIN
 # PUBLISHED, NOT CONSUMED IN-TREE: every in-tree call site spells the flags LITERALLY so that
 # `grep -n ' -I -S '` finds all of them; this export exists for fork-receiver call sites.
 export AX_PY_ISO="-I -S"
+# ── BACKLOG P2-67: mktemp IS A TOOL THIS GATE RUNS, AND ITS ANSWER IS A TRUST BOUNDARY ──
+# Every entry and every proof harness called `mktemp -d` as a BARE WORD, and then used the
+# directory it handed back to extract PREVIOUS-RELEASE BLOBS out of git and to build the
+# sandboxes whose verdicts decide whether a release ships. Two unexamined assumptions sat in
+# that one word:
+#   · WHICH mktemp. A bare word resolves through PATH — the same channel the round-6 smoke test
+#     exists to refuse for git and python3. A PATH-earlier shim can return a directory the
+#     attacker already owns (this catalog SHIPS such a shim, deliberately, in
+#     resume_provenance_guard.sh, which is proof the channel is not hypothetical).
+#   · WHAT IT RETURNED. Nothing checked the returned path at all. `mktemp -d` is documented to
+#     create mode-0700, but the gate never verified it — and a shim, an inherited umask quirk or
+#     a pre-existing path is exactly the case where the documentation stops applying. A
+#     group/other-writable extraction directory means another process can replace the extracted
+#     previous-release implementation between the extraction and the run.
+# So mktemp is resolved ONCE, absolutely, from the same relative-entry-stripped PATH as git and
+# python3, and `_ax_mktemp_d` VERIFIES what came back: a real directory (not a symlink), owned by
+# THIS euid, with no group/other write bit. Anything else BLOCKS — this is the directory the gate
+# is about to trust, and an unverifiable one is not a safe one. The verification doubles as the
+# functional smoke test the other two tools get: a /usr/bin/true shim returns nothing and dies at
+# the first branch.
+AX_MKTEMP_BIN="$(PATH="$_AX_HRM_PATH" command -v mktemp 2>/dev/null || true)"
+if [ -z "$AX_MKTEMP_BIN" ] || [ "${AX_MKTEMP_BIN#/}" = "$AX_MKTEMP_BIN" ] \
+   || [ ! -f "$AX_MKTEMP_BIN" ] || [ ! -x "$AX_MKTEMP_BIN" ]; then
+    { echo "$_AX_HRM_LABEL: HERMETIC_TOOL_UNUSABLE — mktemp did not resolve to an executable"
+      echo "  regular file on an absolute path (got '${AX_MKTEMP_BIN:-<nothing>}'). This gate"
+      echo "  extracts previous-release blobs and builds sandboxes inside the directory that"
+      echo "  program returns; it will not take that directory from whatever PATH offers."; } >&2
+    exit $_AX_HRM_EXIT
+fi
+_ax_hdir="$(builtin cd "$(dirname "$AX_MKTEMP_BIN")" 2>/dev/null && builtin pwd -P)" || _ax_hdir=""
+if [ -z "$_ax_hdir" ]; then
+    { echo "$_AX_HRM_LABEL: HERMETIC_TOOL_UNUSABLE — the directory of mktemp ('$AX_MKTEMP_BIN')"
+      echo "  could not be canonicalised, so this gate cannot say where the program it is about"
+      echo "  to run actually lives."; } >&2
+    exit $_AX_HRM_EXIT
+fi
+AX_MKTEMP_BIN="$_ax_hdir/$(basename "$AX_MKTEMP_BIN")"
+export AX_MKTEMP_BIN
+# _ax_mktemp_d <label> — echo a VERIFIED private temp directory, or return non-zero having said
+# why on stderr. Callers treat non-zero as blocking; nothing here falls back to an unverified
+# directory. `stat` is tried in BSD then GNU spelling; if neither answers, the mode is UNKNOWN
+# and unknown never passes.
+_ax_mktemp_d() {
+    local _ax_md_lbl="$1" _ax_md_d _ax_md_st _ax_md_uid _ax_md_mode
+    _ax_md_d="$("$AX_MKTEMP_BIN" -d "${TMPDIR:-/tmp}/ax-priv.XXXXXXXX" 2>/dev/null)" || _ax_md_d=""
+    if [ -z "$_ax_md_d" ] || [ -L "$_ax_md_d" ] || [ ! -d "$_ax_md_d" ]; then
+        { echo "${_ax_md_lbl}: HERMETIC_TEMPDIR_UNUSABLE — the resolved mktemp did not return a"
+          echo "  real directory (got '${_ax_md_d:-<nothing>}'). A symlink or a non-directory is"
+          echo "  refused outright: this gate is about to extract release blobs into it."; } >&2
+        return 1
+    fi
+    _ax_md_st="$(stat -f '%u %Lp' "$_ax_md_d" 2>/dev/null)" || _ax_md_st=""
+    [ -n "$_ax_md_st" ] || _ax_md_st="$(stat -c '%u %a' "$_ax_md_d" 2>/dev/null)" || _ax_md_st=""
+    case "$_ax_md_st" in
+        [0-9]*" "[0-7][0-7][0-7]|[0-9]*" "[0-7][0-7][0-7][0-7]) ;;
+        *)  { echo "${_ax_md_lbl}: HERMETIC_TEMPDIR_UNVERIFIABLE — the owner/mode of ${_ax_md_d}"
+              echo "  could not be read (stat said '${_ax_md_st:-<nothing>}'), so this gate cannot"
+              echo "  tell whether another user can write into the directory it is about to trust."; } >&2
+            rm -rf "$_ax_md_d" 2>/dev/null || true
+            return 1 ;;
+    esac
+    _ax_md_uid="${_ax_md_st%% *}"
+    _ax_md_mode="${_ax_md_st##* }"
+    if [ "$_ax_md_uid" != "${EUID:-$(id -u)}" ] || [ $(( 8#$_ax_md_mode & 8#22 )) -ne 0 ]; then
+        { echo "${_ax_md_lbl}: HERMETIC_TEMPDIR_HOSTILE — ${_ax_md_d} is owned by uid"
+          echo "  ${_ax_md_uid} (this process is ${EUID:-?}) and/or is group/other-writable"
+          echo "  (mode ${_ax_md_mode}). The previous release's implementation is extracted into"
+          echo "  this directory and then RUN; a directory somebody else can write is a directory"
+          echo "  somebody else chooses the implementation in."; } >&2
+        rm -rf "$_ax_md_d" 2>/dev/null || true
+        return 1
+    fi
+    echo "$_ax_md_d"
+    return 0
+}
 unset _ax_hn _ax_hb _ax_hdir _ax_hver _AX_HRM_BAD _AX_HRM_PATH
 
 # ── P1-3(a): LOAD-TIME INJECTION CHECK ───────────────────────────────────────────────

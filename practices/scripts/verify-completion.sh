@@ -151,6 +151,19 @@
 # `exec` IS shadowable, so the SECOND case re-asserts privileged mode AFTER it: a neutered exec
 # falls through to a non-zero abort instead of quietly continuing unprivileged (measured: a
 # BASH_ENV defining exec(){ :; } exits 1 here, it does not proceed).
+# ── BACKLOG P2-70: THIS ENTRY DELIBERATELY KEEPS THE INHERITING RE-EXEC ─────────────
+# The three entries that exec no foreign toolchain (the recency, spotcheck and manifest guards)
+# re-exec through `env -i` with a measured allowlist — PATH HOME TMPDIR JAVA_HOME BASH_ENV ENV
+# plus AX_*. THIS entry does not, and the reason is recorded here rather than left as an
+# asymmetry a reader has to guess at: it execs a FOREIGN TOOLCHAIN, whose environment surface
+# (GRADLE_*/JDK_*/NODE_*/npm_config_* and whatever a future version reads) cannot be enumerated
+# from this repository. An allowlist is only as honest as the enumeration behind it; shipping one
+# for a toolchain that was never run under it would trade a stated residual for an unstated
+# regression in the gate that decides whether a release ships.
+# The residual this leaves is therefore REAL and named: variables outside the GIT_*/PYTHON*
+# families this bootstrap already scrubs — LD_PRELOAD, DYLD_INSERT_LIBRARIES, LC_*/LANG — still
+# reach this process. Closing it requires a session that can actually run the toolchain steps
+# under the allowlist and compare, which is what docs/BACKLOG.md records.
 # THE LOOP MARKER IS NOT TRUSTED. AX_PRIV_REEXEC means only "a re-exec was already attempted".
 # An attacker who PRESETS it does not skip the re-exec — that branch ABORTS (measured, exit 1).
 # It is unset the moment privileged mode holds, so it never reaches a child entry and cannot turn
@@ -395,6 +408,81 @@ export AX_GIT_BIN AX_PY_BIN
 # PUBLISHED, NOT CONSUMED IN-TREE: every in-tree call site spells the flags LITERALLY so that
 # `grep -n ' -I -S '` finds all of them; this export exists for fork-receiver call sites.
 export AX_PY_ISO="-I -S"
+# ── BACKLOG P2-67: mktemp IS A TOOL THIS GATE RUNS, AND ITS ANSWER IS A TRUST BOUNDARY ──
+# Every entry and every proof harness called `mktemp -d` as a BARE WORD, and then used the
+# directory it handed back to extract PREVIOUS-RELEASE BLOBS out of git and to build the
+# sandboxes whose verdicts decide whether a release ships. Two unexamined assumptions sat in
+# that one word:
+#   · WHICH mktemp. A bare word resolves through PATH — the same channel the round-6 smoke test
+#     exists to refuse for git and python3. A PATH-earlier shim can return a directory the
+#     attacker already owns (this catalog SHIPS such a shim, deliberately, in
+#     resume_provenance_guard.sh, which is proof the channel is not hypothetical).
+#   · WHAT IT RETURNED. Nothing checked the returned path at all. `mktemp -d` is documented to
+#     create mode-0700, but the gate never verified it — and a shim, an inherited umask quirk or
+#     a pre-existing path is exactly the case where the documentation stops applying. A
+#     group/other-writable extraction directory means another process can replace the extracted
+#     previous-release implementation between the extraction and the run.
+# So mktemp is resolved ONCE, absolutely, from the same relative-entry-stripped PATH as git and
+# python3, and `_ax_mktemp_d` VERIFIES what came back: a real directory (not a symlink), owned by
+# THIS euid, with no group/other write bit. Anything else BLOCKS — this is the directory the gate
+# is about to trust, and an unverifiable one is not a safe one. The verification doubles as the
+# functional smoke test the other two tools get: a /usr/bin/true shim returns nothing and dies at
+# the first branch.
+AX_MKTEMP_BIN="$(PATH="$_AX_HRM_PATH" command -v mktemp 2>/dev/null || true)"
+if [ -z "$AX_MKTEMP_BIN" ] || [ "${AX_MKTEMP_BIN#/}" = "$AX_MKTEMP_BIN" ] \
+   || [ ! -f "$AX_MKTEMP_BIN" ] || [ ! -x "$AX_MKTEMP_BIN" ]; then
+    { echo "$_AX_HRM_LABEL: HERMETIC_TOOL_UNUSABLE — mktemp did not resolve to an executable"
+      echo "  regular file on an absolute path (got '${AX_MKTEMP_BIN:-<nothing>}'). This gate"
+      echo "  extracts previous-release blobs and builds sandboxes inside the directory that"
+      echo "  program returns; it will not take that directory from whatever PATH offers."; } >&2
+    exit $_AX_HRM_EXIT
+fi
+_ax_hdir="$(builtin cd "$(dirname "$AX_MKTEMP_BIN")" 2>/dev/null && builtin pwd -P)" || _ax_hdir=""
+if [ -z "$_ax_hdir" ]; then
+    { echo "$_AX_HRM_LABEL: HERMETIC_TOOL_UNUSABLE — the directory of mktemp ('$AX_MKTEMP_BIN')"
+      echo "  could not be canonicalised, so this gate cannot say where the program it is about"
+      echo "  to run actually lives."; } >&2
+    exit $_AX_HRM_EXIT
+fi
+AX_MKTEMP_BIN="$_ax_hdir/$(basename "$AX_MKTEMP_BIN")"
+export AX_MKTEMP_BIN
+# _ax_mktemp_d <label> — echo a VERIFIED private temp directory, or return non-zero having said
+# why on stderr. Callers treat non-zero as blocking; nothing here falls back to an unverified
+# directory. `stat` is tried in BSD then GNU spelling; if neither answers, the mode is UNKNOWN
+# and unknown never passes.
+_ax_mktemp_d() {
+    local _ax_md_lbl="$1" _ax_md_d _ax_md_st _ax_md_uid _ax_md_mode
+    _ax_md_d="$("$AX_MKTEMP_BIN" -d "${TMPDIR:-/tmp}/ax-priv.XXXXXXXX" 2>/dev/null)" || _ax_md_d=""
+    if [ -z "$_ax_md_d" ] || [ -L "$_ax_md_d" ] || [ ! -d "$_ax_md_d" ]; then
+        { echo "${_ax_md_lbl}: HERMETIC_TEMPDIR_UNUSABLE — the resolved mktemp did not return a"
+          echo "  real directory (got '${_ax_md_d:-<nothing>}'). A symlink or a non-directory is"
+          echo "  refused outright: this gate is about to extract release blobs into it."; } >&2
+        return 1
+    fi
+    _ax_md_st="$(stat -f '%u %Lp' "$_ax_md_d" 2>/dev/null)" || _ax_md_st=""
+    [ -n "$_ax_md_st" ] || _ax_md_st="$(stat -c '%u %a' "$_ax_md_d" 2>/dev/null)" || _ax_md_st=""
+    case "$_ax_md_st" in
+        [0-9]*" "[0-7][0-7][0-7]|[0-9]*" "[0-7][0-7][0-7][0-7]) ;;
+        *)  { echo "${_ax_md_lbl}: HERMETIC_TEMPDIR_UNVERIFIABLE — the owner/mode of ${_ax_md_d}"
+              echo "  could not be read (stat said '${_ax_md_st:-<nothing>}'), so this gate cannot"
+              echo "  tell whether another user can write into the directory it is about to trust."; } >&2
+            rm -rf "$_ax_md_d" 2>/dev/null || true
+            return 1 ;;
+    esac
+    _ax_md_uid="${_ax_md_st%% *}"
+    _ax_md_mode="${_ax_md_st##* }"
+    if [ "$_ax_md_uid" != "${EUID:-$(id -u)}" ] || [ $(( 8#$_ax_md_mode & 8#22 )) -ne 0 ]; then
+        { echo "${_ax_md_lbl}: HERMETIC_TEMPDIR_HOSTILE — ${_ax_md_d} is owned by uid"
+          echo "  ${_ax_md_uid} (this process is ${EUID:-?}) and/or is group/other-writable"
+          echo "  (mode ${_ax_md_mode}). The previous release's implementation is extracted into"
+          echo "  this directory and then RUN; a directory somebody else can write is a directory"
+          echo "  somebody else chooses the implementation in."; } >&2
+        rm -rf "$_ax_md_d" 2>/dev/null || true
+        return 1
+    fi
+    echo "$_ax_md_d"
+    return 0
+}
 unset _ax_hn _ax_hb _ax_hdir _ax_hver _AX_HRM_BAD _AX_HRM_PATH
 
 # ── ROUND 7 / P1-2: TOOL PATH TRANSPARENCY — THIS IS NOT AUTHENTICATION ─────────────
@@ -593,7 +681,55 @@ if [ ! -f "$SCRIPT_DIR/lib/release_anchor.sh" ]; then
     exit 2
 fi
 # shellcheck source=practices/scripts/lib/release_anchor.sh
-. "$SCRIPT_DIR/lib/release_anchor.sh"
+# ── BACKLOG P3-116: THE THING VERIFIED MUST BE THE THING SOURCED ────────────────────
+# The three checks above (lstat walk · git mode at HEAD · existence) all name a PATH, and the
+# `.` below resolves that path AGAIN. Check and use were therefore two separate resolutions with
+# a window between them: rename the file — or the directory holding it — after the lstat and
+# before the source, and every check passed while a different file was executed. That is an
+# ordinary local race (the threat model already grants a concurrent local process), and the
+# checks that exist are exactly the ones it defeats, because they ask about the path's TYPE
+# rather than its CONTENT: any regular file substituted in the window satisfies all of them.
+# BOUND, not re-checked: the bytes are copied ONCE into a PRIVATE directory (mode 0700, owned by
+# this euid — verified by _ax_mktemp_d, BACKLOG P2-67), that COPY is hashed against the blob git
+# records for the path at HEAD, and that same copy — not the path — is what gets sourced. There
+# is no window left, because after the copy the only file involved lives in a directory nobody
+# else can write. A corrupted copy (a hostile `cat` on PATH) is caught by the same hash, so the
+# copy step is not trusted either.
+# APPLIED ONLY WHERE IT CAN BE VERIFIED, deliberately: with no committed blob for the path (an
+# untracked helper, or the relocated-copy sandbox that is not a git tree at all) there is nothing
+# to bind the copy TO, and copying without verifying would trade a stated race for an unstated
+# one. Those roots keep sourcing the path exactly as before — stated rather than hidden.
+# COST, disclosed: an UNCOMMITTED edit to the helper now blocks at LOAD time instead of a few
+# hundred lines later at RATCHET_TOOLCHAIN_MODIFIED. Same rule ("commit, then verify"), same
+# tree, earlier and with a message that names the cause.
+_ax_pf_priv=""
+_ax_pf_load="$SCRIPT_DIR/lib/release_anchor.sh"
+if [ -n "${AX_GIT_BIN:-}" ] \
+   && "$AX_GIT_BIN" --no-replace-objects -C "$REPO_ROOT" rev-parse --git-dir >/dev/null 2>&1; then
+    _ax_pf_want="$("$AX_GIT_BIN" --no-replace-objects -C "$REPO_ROOT" rev-parse --verify --quiet "HEAD:practices/scripts/lib/release_anchor.sh" 2>/dev/null)"
+    if [ -n "$_ax_pf_want" ]; then
+        _ax_pf_priv="$(_ax_mktemp_d "verify-completion: R25 BLOCK")" || exit 2
+        if ! cat -- "$SCRIPT_DIR/lib/release_anchor.sh" > "$_ax_pf_priv/release_anchor.sh" 2>/dev/null; then
+            echo "verify-completion: R25 BLOCK: HELPER_BYTES_UNBOUND — practices/scripts/lib/release_anchor.sh could not be copied into a" >&2
+            echo "  private directory, so the bytes that would be SOURCED cannot be bound to the" >&2
+            echo "  bytes that were CHECKED. Unknown never passes." >&2
+            rm -rf "$_ax_pf_priv"; exit 2
+        fi
+        _ax_pf_have="$("$AX_GIT_BIN" --no-replace-objects -C "$REPO_ROOT" hash-object --no-filters -t blob --stdin < "$_ax_pf_priv/release_anchor.sh" 2>/dev/null)"
+        if [ "$_ax_pf_want" != "$_ax_pf_have" ]; then
+            echo "verify-completion: R25 BLOCK: HELPER_BYTES_UNBOUND — the copy of practices/scripts/lib/release_anchor.sh this run is" >&2
+            echo "  about to source hashes ${_ax_pf_have:-<unreadable>}, but git records ${_ax_pf_want}" >&2
+            echo "  for that path at HEAD. Either the file is edited but uncommitted, or it was" >&2
+            echo "  replaced between the checks above and this read. The gate does not load its own" >&2
+            echo "  policy from an implementation nobody has committed: commit it and re-run." >&2
+            rm -rf "$_ax_pf_priv"; exit 2
+        fi
+        _ax_pf_load="$_ax_pf_priv/release_anchor.sh"
+    fi
+fi
+. "$_ax_pf_load"
+[ -n "$_ax_pf_priv" ] && rm -rf "$_ax_pf_priv"
+unset _ax_pf_priv _ax_pf_load _ax_pf_want _ax_pf_have
 # P1-1: a tree carrying git REPLACEMENT REFS can answer every ancestry/history question out of a
 # fabricated object graph while every sha stays authentic. The guards refuse to ratchet on such a
 # tree; the runner refuses to certify one, for the same reason and before spending the run.
@@ -814,10 +950,10 @@ observe_tree() {
 # ── 1. Parse the checklist into a flat command plan via python3 ───────────────
 # Output schema (one line per command, tab-separated):
 #   <step_id>\t<step_title>\t<command>\t<working_directory>\t<expected_exit>\t<advisory>\t<timeout_seconds>
-PLAN_FILE=$(mktemp)
-RESULTS_FILE=$(mktemp)
-PLAYBOOK_DIR=$(mktemp -d)
-RESUME_TMP=$(mktemp)
+PLAN_FILE=$("$AX_MKTEMP_BIN")
+RESULTS_FILE=$("$AX_MKTEMP_BIN")
+PLAYBOOK_DIR=$(_ax_mktemp_d verify-completion) || exit 2
+RESUME_TMP=$("$AX_MKTEMP_BIN")
 # The logical steps the checklist DEMANDED for this run (<index>\t<id>), written by the
 # emitter beside the plan. Independent of the plan so "a step vanished" is detectable.
 DECLARED_STEPS="$PLAN_FILE.steps"
@@ -1286,7 +1422,7 @@ fi
 # ── 3. Atomic resume-log writer ──────────────────────────────────────────────
 # .ax-verify/last_run.jsonl is rewritten atomically every step so a Ctrl-C or
 # SIGKILL never leaves a half-line. Pattern: write tmp → mv -f.
-RESUME_NEW=$(mktemp)
+RESUME_NEW=$("$AX_MKTEMP_BIN")
 # Seed RESUME_NEW with any PASS lines for OTHER head_shas we'd want to overwrite.
 # Simpler: start fresh each run; resume only consults prior file. So no seed.
 : > "$RESUME_NEW"
@@ -1467,7 +1603,7 @@ for sid in $STEP_ORDER; do
     fi
 
     # Try collapse for this step.
-    COLLAPSED_PLAN=$(mktemp)
+    COLLAPSED_PLAN=$("$AX_MKTEMP_BIN")
     if [ "$COLLAPSE" -eq 1 ]; then
         "$AX_PY_BIN" -I -S "$COLLAPSE_HELPER" "$PLAN_FILE" "$sid" > "$COLLAPSED_PLAN" 2>/dev/null || true
     fi
@@ -1875,13 +2011,53 @@ printf '{"ts":"%s","head_sha":"%s","exit":%d,"pass":%d,"warn_advisory":%d,"hard_
 # is overwritten each run, is never read by any gate, and proves nothing — it exists so a human
 # reviewing a run can SEE a wrapper path instead of having to guess that one was possible.
 # TWO CONSTRAINTS, both learned the hard way in this round's own sweep: it must come AFTER the
-# audit printf and it must NOT begin with {"ts". The recency guard re-derives the audit schema by
-# regex from the FIRST `printf '{"ts"…\n'` in this file, so an earlier line of that shape becomes
-# the schema — measured: with this block above the audit printf, AUDIT_WRITER_SCHEMA_DRIFT failed
-# two PASS fixtures and blocked the honest pushes in push_evidence_tree_binding and
-# midrun_tree_mutation. Keep the leading key as "kind" and keep this block last.
-printf '{"kind":"toolpaths","run_ts":"%s","head_sha":"%s","git":"%s","python3":"%s","note":"transparency only — a PATH executable cannot authenticate itself against a wrapper answering a fixed public challenge"}\n' \
-    "$TS" "$CURRENT_HEAD" "$AX_GIT_BIN" "${AX_PY_BIN:-}" > "$AUDIT_DIR/toolpaths.json" 2>/dev/null || true
+# audit printf and it must NOT begin with {"ts". The recency guard re-derives the audit schema
+# from the audit-log printf in this file, and an earlier line of that shape competes with it —
+# measured: with this block above the audit printf, AUDIT_WRITER_SCHEMA_DRIFT failed two PASS
+# fixtures and blocked the honest pushes in push_evidence_tree_binding and midrun_tree_mutation.
+# (BACKLOG P3-114 has since made that extraction single-authoritative — line-initial printf,
+# exactly one, bound to the `>> "$AUDIT_LOG"` redirection — so the accident is now a BLOCK rather
+# than a silent substitution. Keep the leading key as "kind" and keep this block last anyway.)
+#
+# ── BACKLOG P2-69: THE EVIDENCE FILE WAS ITSELF FORGEABLE, AND ITS PATH WAS FOLLOWED ─────
+# The previous form was `printf '…"git":"%s"…' "$AX_GIT_BIN" > "$AUDIT_DIR/toolpaths.json"`, and
+# it had two defects that are both about the same thing — bytes nobody escaped, written through a
+# name nobody checked:
+#   (a) THE VALUES WERE INTERPOLATED RAW. A path component may contain `"`, `\` and newlines
+#       (everything but `/` and NUL). A tool resolved from a directory spelled with a quote
+#       therefore produced BROKEN JSON or, worse, ATTACKER-CHOSEN KEYS AND VALUES — in a file
+#       whose entire purpose is to let a human SEE which binaries answered. Manufacturing the
+#       transparency record is a strictly better attack than hiding from it. The document is now
+#       built by `json.dumps`, so a path is a STRING VALUE whatever bytes it holds.
+#   (b) `>` FOLLOWS A SYMLINK. If `.ax-verify/toolpaths.json` is a link — into or out of the tree
+#       — the shell truncates and overwrites THE TARGET. The gate that certifies a release would
+#       then clobber whatever that link names (the ax-ledger, a config file, a source file) on
+#       every run. The write is now `O_NOFOLLOW|O_EXCL` after an unlink, so the file this run
+#       creates is the file this run writes and no link is ever traversed.
+# NOT BLOCKING, deliberately and consistently with what this sidecar is: it is written AFTER the
+# audit line, is read by no gate, and proves nothing. Turning a sidecar problem into a non-zero
+# exit here would contradict the audit line already on disk (which says the run passed). The
+# danger was the WRITE, and refusing the write removes it; a refusal is printed loudly to stderr
+# so a hostile path is visible rather than silently skipped.
+"$AX_PY_BIN" -I -S -c '
+import json, os, sys
+path, ts, head, gitbin, pybin = sys.argv[1:6]
+doc = {"kind": "toolpaths", "run_ts": ts, "head_sha": head, "git": gitbin, "python3": pybin,
+       "note": "transparency only — a PATH executable cannot authenticate itself against a "
+               "wrapper answering a fixed public challenge"}
+try:
+    if os.path.lexists(path):
+        os.unlink(path)
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o644)
+    with os.fdopen(fd, "w", encoding="utf-8") as fh:
+        fh.write(json.dumps(doc, ensure_ascii=False) + "\n")
+except OSError as exc:
+    sys.stderr.write(
+        "verify-completion: toolpaths sidecar NOT written (%s: %s).\n"
+        "  This file is transparency only and no gate reads it, so the run is unaffected — but\n"
+        "  the write was refused rather than allowed to follow whatever that name resolves to.\n"
+        % (exc.__class__.__name__, exc))
+' "$AUDIT_DIR/toolpaths.json" "$TS" "$CURRENT_HEAD" "$AX_GIT_BIN" "${AX_PY_BIN:-}" || true
 
 # ── ax-ledger capture — every verify run leaves a per-project usage trace (progress / violation),
 # so a fork-receiver's gate history is reviewable (복기) and improvable. Never fails the gate. ──

@@ -175,6 +175,33 @@
 # `exec` IS shadowable, so the SECOND case re-asserts privileged mode AFTER it: a neutered exec
 # falls through to a non-zero abort instead of quietly continuing unprivileged (measured: a
 # BASH_ENV defining exec(){ :; } exits 1 here, it does not proceed).
+# ── BACKLOG P2-70: THE RE-EXEC USES AN ENVIRONMENT ALLOWLIST (`env -i`) ─────────────
+# The re-exec below hands the child a MEASURED allowlist instead of the parent's whole
+# environment. Round 8 refused this for three reasons and round 9 MEASURED all three to be wrong:
+# (i) the allowlist preserves the AX_RELEASE_ANCHOR_* pins (every consumer tests `[ -n "${V:-}" ]`,
+# so empty == unset and forwarding them by prefix is exact); (ii) STRICT / LIVE_ROOT /
+# GIT_ANCHOR are set INSIDE the guards AFTER the re-exec, so they were never inherited to begin
+# with; (iii) BASH_ENV/ENV are forwarded ON PURPOSE — dropping them would SILENCE the
+# HERMETIC_PREFLIGHT_HOSTILE refusal that is the point of seeing them, and forwarding them keeps
+# that loud refusal firing exactly as before.
+# WHAT IT BUYS: everything NOT on the list stops reaching this process — LD_PRELOAD /
+# DYLD_INSERT_LIBRARIES, LC_*/LANG, and every variable a future dependency might read. The
+# bootstrap below scrubs the GIT_* and PYTHON* families by name; a denylist can only remove what
+# somebody thought of, and this is the same argument that made the GIT_* scrub a family sweep.
+# WHY THE MARKER IS APPENDED LAST: `env` applies assignments left to right, so a hostile
+# AX_PRIV_REEXEC=0 arriving through the AX_ prefix must not be able to overwrite the marker and
+# turn the re-exec into an infinite loop.
+# CONSTRUCTS: array assignment / append, `for`, `case`, and the indirect expansions
+# ${!AX_@} · ${!v+s} · ${!v} — none of them is a command lookup, so invariant (α) (NOTHING
+# OVERRIDABLE MAY EXECUTE BEFORE THE SCRUB THAT DETECTS OVERRIDES) still holds: the only command
+# on this path is still /usr/bin/env, by absolute path.
+# SCOPE, and why it is not all six: this form is applied ONLY to the entries whose process
+# subtree execs NO FOREIGN TOOLCHAIN. `.githooks/pre-push` execs `./gradlew` directly,
+# `run-all-guards.sh` does so transitively (vacuity_class_proof_guard's live PIT run), and
+# `verify-completion.sh` execs BOTH gradle and npm. Those three keep the inheriting form with the
+# reason recorded inline, because the environment surface of a foreign toolchain
+# (GRADLE_*/JDK_*/NODE_*/npm_config_*) is not enumerable from this repository, and shipping an
+# allowlist for a toolchain nobody ran under it would be an unmeasured change to the release gate.
 # THE LOOP MARKER IS NOT TRUSTED. AX_PRIV_REEXEC means only "a re-exec was already attempted".
 # An attacker who PRESETS it does not skip the re-exec — that branch ABORTS (measured, exit 1).
 # It is unset the moment privileged mode holds, so it never reaches a child entry and cannot turn
@@ -188,7 +215,12 @@ case $- in
     *) case "${AX_PRIV_REEXEC-}" in
            1) _AX_PV_NULL=; _AX_PV_DIE=${_AX_PV_NULL:?"manifest_snapshot_integrity_guard: HERMETIC_PRIVILEGED_UNREACHABLE — a re-exec into bash privileged mode was already attempted and this shell is STILL unprivileged. Either exec is shadowed by a function, or AX_PRIV_REEXEC was preset in the environment to skip the re-exec. Both are refused; nothing in this gate runs unprivileged. Start it from a clean shell."} ;;
            *) case "${BASH:-}" in
-                  /*) exec /usr/bin/env AX_PRIV_REEXEC=1 "$BASH" -p "$0" "$@" ;;
+                  /*) _AX_PV_ENV=()
+                      for _AX_PV_N in PATH HOME TMPDIR JAVA_HOME BASH_ENV ENV ${!AX_@}; do
+                          case "${!_AX_PV_N+s}" in s) _AX_PV_ENV+=("$_AX_PV_N=${!_AX_PV_N}") ;; esac
+                      done
+                      _AX_PV_ENV+=(AX_PRIV_REEXEC=1)
+                      exec /usr/bin/env -i "${_AX_PV_ENV[@]}" "$BASH" -p "$0" "$@" ;;
                   *) _AX_PV_NULL=; _AX_PV_DIE=${_AX_PV_NULL:?"manifest_snapshot_integrity_guard: HERMETIC_PRIVILEGED_UNREACHABLE — the running interpreter (BASH) is not an absolute path, so the SAME interpreter cannot be named unambiguously for the privileged re-exec."} ;;
               esac ;;
        esac ;;
@@ -419,6 +451,81 @@ export AX_GIT_BIN AX_PY_BIN
 # PUBLISHED, NOT CONSUMED IN-TREE: every in-tree call site spells the flags LITERALLY so that
 # `grep -n ' -I -S '` finds all of them; this export exists for fork-receiver call sites.
 export AX_PY_ISO="-I -S"
+# ── BACKLOG P2-67: mktemp IS A TOOL THIS GATE RUNS, AND ITS ANSWER IS A TRUST BOUNDARY ──
+# Every entry and every proof harness called `mktemp -d` as a BARE WORD, and then used the
+# directory it handed back to extract PREVIOUS-RELEASE BLOBS out of git and to build the
+# sandboxes whose verdicts decide whether a release ships. Two unexamined assumptions sat in
+# that one word:
+#   · WHICH mktemp. A bare word resolves through PATH — the same channel the round-6 smoke test
+#     exists to refuse for git and python3. A PATH-earlier shim can return a directory the
+#     attacker already owns (this catalog SHIPS such a shim, deliberately, in
+#     resume_provenance_guard.sh, which is proof the channel is not hypothetical).
+#   · WHAT IT RETURNED. Nothing checked the returned path at all. `mktemp -d` is documented to
+#     create mode-0700, but the gate never verified it — and a shim, an inherited umask quirk or
+#     a pre-existing path is exactly the case where the documentation stops applying. A
+#     group/other-writable extraction directory means another process can replace the extracted
+#     previous-release implementation between the extraction and the run.
+# So mktemp is resolved ONCE, absolutely, from the same relative-entry-stripped PATH as git and
+# python3, and `_ax_mktemp_d` VERIFIES what came back: a real directory (not a symlink), owned by
+# THIS euid, with no group/other write bit. Anything else BLOCKS — this is the directory the gate
+# is about to trust, and an unverifiable one is not a safe one. The verification doubles as the
+# functional smoke test the other two tools get: a /usr/bin/true shim returns nothing and dies at
+# the first branch.
+AX_MKTEMP_BIN="$(PATH="$_AX_HRM_PATH" command -v mktemp 2>/dev/null || true)"
+if [ -z "$AX_MKTEMP_BIN" ] || [ "${AX_MKTEMP_BIN#/}" = "$AX_MKTEMP_BIN" ] \
+   || [ ! -f "$AX_MKTEMP_BIN" ] || [ ! -x "$AX_MKTEMP_BIN" ]; then
+    { echo "$_AX_HRM_LABEL: HERMETIC_TOOL_UNUSABLE — mktemp did not resolve to an executable"
+      echo "  regular file on an absolute path (got '${AX_MKTEMP_BIN:-<nothing>}'). This gate"
+      echo "  extracts previous-release blobs and builds sandboxes inside the directory that"
+      echo "  program returns; it will not take that directory from whatever PATH offers."; } >&2
+    exit $_AX_HRM_EXIT
+fi
+_ax_hdir="$(builtin cd "$(dirname "$AX_MKTEMP_BIN")" 2>/dev/null && builtin pwd -P)" || _ax_hdir=""
+if [ -z "$_ax_hdir" ]; then
+    { echo "$_AX_HRM_LABEL: HERMETIC_TOOL_UNUSABLE — the directory of mktemp ('$AX_MKTEMP_BIN')"
+      echo "  could not be canonicalised, so this gate cannot say where the program it is about"
+      echo "  to run actually lives."; } >&2
+    exit $_AX_HRM_EXIT
+fi
+AX_MKTEMP_BIN="$_ax_hdir/$(basename "$AX_MKTEMP_BIN")"
+export AX_MKTEMP_BIN
+# _ax_mktemp_d <label> — echo a VERIFIED private temp directory, or return non-zero having said
+# why on stderr. Callers treat non-zero as blocking; nothing here falls back to an unverified
+# directory. `stat` is tried in BSD then GNU spelling; if neither answers, the mode is UNKNOWN
+# and unknown never passes.
+_ax_mktemp_d() {
+    local _ax_md_lbl="$1" _ax_md_d _ax_md_st _ax_md_uid _ax_md_mode
+    _ax_md_d="$("$AX_MKTEMP_BIN" -d "${TMPDIR:-/tmp}/ax-priv.XXXXXXXX" 2>/dev/null)" || _ax_md_d=""
+    if [ -z "$_ax_md_d" ] || [ -L "$_ax_md_d" ] || [ ! -d "$_ax_md_d" ]; then
+        { echo "${_ax_md_lbl}: HERMETIC_TEMPDIR_UNUSABLE — the resolved mktemp did not return a"
+          echo "  real directory (got '${_ax_md_d:-<nothing>}'). A symlink or a non-directory is"
+          echo "  refused outright: this gate is about to extract release blobs into it."; } >&2
+        return 1
+    fi
+    _ax_md_st="$(stat -f '%u %Lp' "$_ax_md_d" 2>/dev/null)" || _ax_md_st=""
+    [ -n "$_ax_md_st" ] || _ax_md_st="$(stat -c '%u %a' "$_ax_md_d" 2>/dev/null)" || _ax_md_st=""
+    case "$_ax_md_st" in
+        [0-9]*" "[0-7][0-7][0-7]|[0-9]*" "[0-7][0-7][0-7][0-7]) ;;
+        *)  { echo "${_ax_md_lbl}: HERMETIC_TEMPDIR_UNVERIFIABLE — the owner/mode of ${_ax_md_d}"
+              echo "  could not be read (stat said '${_ax_md_st:-<nothing>}'), so this gate cannot"
+              echo "  tell whether another user can write into the directory it is about to trust."; } >&2
+            rm -rf "$_ax_md_d" 2>/dev/null || true
+            return 1 ;;
+    esac
+    _ax_md_uid="${_ax_md_st%% *}"
+    _ax_md_mode="${_ax_md_st##* }"
+    if [ "$_ax_md_uid" != "${EUID:-$(id -u)}" ] || [ $(( 8#$_ax_md_mode & 8#22 )) -ne 0 ]; then
+        { echo "${_ax_md_lbl}: HERMETIC_TEMPDIR_HOSTILE — ${_ax_md_d} is owned by uid"
+          echo "  ${_ax_md_uid} (this process is ${EUID:-?}) and/or is group/other-writable"
+          echo "  (mode ${_ax_md_mode}). The previous release's implementation is extracted into"
+          echo "  this directory and then RUN; a directory somebody else can write is a directory"
+          echo "  somebody else chooses the implementation in."; } >&2
+        rm -rf "$_ax_md_d" 2>/dev/null || true
+        return 1
+    fi
+    echo "$_ax_md_d"
+    return 0
+}
 unset _ax_hn _ax_hb _ax_hdir _ax_hver _AX_HRM_BAD _AX_HRM_PATH
 
 SCRIPT_DIR="$(builtin cd "$(dirname "${BASH_SOURCE[0]}")" && builtin pwd)"
@@ -588,7 +695,55 @@ if [ ! -f "$AX_ANCHOR_LIB" ]; then
     echo "  that has lost its committed helper is a tampered tree, not a sandbox." >&2
     exit 2
 fi
-. "$AX_ANCHOR_LIB"
+# ── BACKLOG P3-116: THE THING VERIFIED MUST BE THE THING SOURCED ────────────────────
+# The three checks above (lstat walk · git mode at HEAD · existence) all name a PATH, and the
+# `.` below resolves that path AGAIN. Check and use were therefore two separate resolutions with
+# a window between them: rename the file — or the directory holding it — after the lstat and
+# before the source, and every check passed while a different file was executed. That is an
+# ordinary local race (the threat model already grants a concurrent local process), and the
+# checks that exist are exactly the ones it defeats, because they ask about the path's TYPE
+# rather than its CONTENT: any regular file substituted in the window satisfies all of them.
+# BOUND, not re-checked: the bytes are copied ONCE into a PRIVATE directory (mode 0700, owned by
+# this euid — verified by _ax_mktemp_d, BACKLOG P2-67), that COPY is hashed against the blob git
+# records for the path at HEAD, and that same copy — not the path — is what gets sourced. There
+# is no window left, because after the copy the only file involved lives in a directory nobody
+# else can write. A corrupted copy (a hostile `cat` on PATH) is caught by the same hash, so the
+# copy step is not trusted either.
+# APPLIED ONLY WHERE IT CAN BE VERIFIED, deliberately: with no committed blob for the path (an
+# untracked helper, or the relocated-copy sandbox that is not a git tree at all) there is nothing
+# to bind the copy TO, and copying without verifying would trade a stated race for an unstated
+# one. Those roots keep sourcing the path exactly as before — stated rather than hidden.
+# COST, disclosed: an UNCOMMITTED edit to the helper now blocks at LOAD time instead of a few
+# hundred lines later at RATCHET_TOOLCHAIN_MODIFIED. Same rule ("commit, then verify"), same
+# tree, earlier and with a message that names the cause.
+_ax_pf_priv=""
+_ax_pf_load="$AX_ANCHOR_LIB"
+if [ -n "${AX_GIT_BIN:-}" ] \
+   && "$AX_GIT_BIN" --no-replace-objects -C "$SELF_REPO_ROOT" rev-parse --git-dir >/dev/null 2>&1; then
+    _ax_pf_want="$("$AX_GIT_BIN" --no-replace-objects -C "$SELF_REPO_ROOT" rev-parse --verify --quiet "HEAD:practices/scripts/lib/release_anchor.sh" 2>/dev/null)"
+    if [ -n "$_ax_pf_want" ]; then
+        _ax_pf_priv="$(_ax_mktemp_d "manifest_snapshot_integrity_guard")" || exit 2
+        if ! cat -- "$AX_ANCHOR_LIB" > "$_ax_pf_priv/release_anchor.sh" 2>/dev/null; then
+            echo "manifest_snapshot_integrity_guard: HELPER_BYTES_UNBOUND — practices/scripts/lib/release_anchor.sh could not be copied into a" >&2
+            echo "  private directory, so the bytes that would be SOURCED cannot be bound to the" >&2
+            echo "  bytes that were CHECKED. Unknown never passes." >&2
+            rm -rf "$_ax_pf_priv"; exit 2
+        fi
+        _ax_pf_have="$("$AX_GIT_BIN" --no-replace-objects -C "$SELF_REPO_ROOT" hash-object --no-filters -t blob --stdin < "$_ax_pf_priv/release_anchor.sh" 2>/dev/null)"
+        if [ "$_ax_pf_want" != "$_ax_pf_have" ]; then
+            echo "manifest_snapshot_integrity_guard: HELPER_BYTES_UNBOUND — the copy of practices/scripts/lib/release_anchor.sh this run is" >&2
+            echo "  about to source hashes ${_ax_pf_have:-<unreadable>}, but git records ${_ax_pf_want}" >&2
+            echo "  for that path at HEAD. Either the file is edited but uncommitted, or it was" >&2
+            echo "  replaced between the checks above and this read. The gate does not load its own" >&2
+            echo "  policy from an implementation nobody has committed: commit it and re-run." >&2
+            rm -rf "$_ax_pf_priv"; exit 2
+        fi
+        _ax_pf_load="$_ax_pf_priv/release_anchor.sh"
+    fi
+fi
+. "$_ax_pf_load"
+[ -n "$_ax_pf_priv" ] && rm -rf "$_ax_pf_priv"
+unset _ax_pf_priv _ax_pf_load _ax_pf_want _ax_pf_have
 
 # Anchor-critical paths. The guard file itself lives in the REAL repo; the ledger, allowlist and
 # manifests are read from the SCANNED root (a fixture ships its own copies).

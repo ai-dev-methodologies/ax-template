@@ -36,6 +36,19 @@
 # `exec` IS shadowable, so the SECOND case re-asserts privileged mode AFTER it: a neutered exec
 # falls through to a non-zero abort instead of quietly continuing unprivileged (measured: a
 # BASH_ENV defining exec(){ :; } exits 1 here, it does not proceed).
+# ── BACKLOG P2-70: THIS ENTRY DELIBERATELY KEEPS THE INHERITING RE-EXEC ─────────────
+# The three entries that exec no foreign toolchain (the recency, spotcheck and manifest guards)
+# re-exec through `env -i` with a measured allowlist — PATH HOME TMPDIR JAVA_HOME BASH_ENV ENV
+# plus AX_*. THIS entry does not, and the reason is recorded here rather than left as an
+# asymmetry a reader has to guess at: it execs a FOREIGN TOOLCHAIN, whose environment surface
+# (GRADLE_*/JDK_*/NODE_*/npm_config_* and whatever a future version reads) cannot be enumerated
+# from this repository. An allowlist is only as honest as the enumeration behind it; shipping one
+# for a toolchain that was never run under it would trade a stated residual for an unstated
+# regression in the gate that decides whether a release ships.
+# The residual this leaves is therefore REAL and named: variables outside the GIT_*/PYTHON*
+# families this bootstrap already scrubs — LD_PRELOAD, DYLD_INSERT_LIBRARIES, LC_*/LANG — still
+# reach this process. Closing it requires a session that can actually run the toolchain steps
+# under the allowlist and compare, which is what docs/BACKLOG.md records.
 # THE LOOP MARKER IS NOT TRUSTED. AX_PRIV_REEXEC means only "a re-exec was already attempted".
 # An attacker who PRESETS it does not skip the re-exec — that branch ABORTS (measured, exit 1).
 # It is unset the moment privileged mode holds, so it never reaches a child entry and cannot turn
@@ -280,6 +293,81 @@ export AX_GIT_BIN AX_PY_BIN
 # PUBLISHED, NOT CONSUMED IN-TREE: every in-tree call site spells the flags LITERALLY so that
 # `grep -n ' -I -S '` finds all of them; this export exists for fork-receiver call sites.
 export AX_PY_ISO="-I -S"
+# ── BACKLOG P2-67: mktemp IS A TOOL THIS GATE RUNS, AND ITS ANSWER IS A TRUST BOUNDARY ──
+# Every entry and every proof harness called `mktemp -d` as a BARE WORD, and then used the
+# directory it handed back to extract PREVIOUS-RELEASE BLOBS out of git and to build the
+# sandboxes whose verdicts decide whether a release ships. Two unexamined assumptions sat in
+# that one word:
+#   · WHICH mktemp. A bare word resolves through PATH — the same channel the round-6 smoke test
+#     exists to refuse for git and python3. A PATH-earlier shim can return a directory the
+#     attacker already owns (this catalog SHIPS such a shim, deliberately, in
+#     resume_provenance_guard.sh, which is proof the channel is not hypothetical).
+#   · WHAT IT RETURNED. Nothing checked the returned path at all. `mktemp -d` is documented to
+#     create mode-0700, but the gate never verified it — and a shim, an inherited umask quirk or
+#     a pre-existing path is exactly the case where the documentation stops applying. A
+#     group/other-writable extraction directory means another process can replace the extracted
+#     previous-release implementation between the extraction and the run.
+# So mktemp is resolved ONCE, absolutely, from the same relative-entry-stripped PATH as git and
+# python3, and `_ax_mktemp_d` VERIFIES what came back: a real directory (not a symlink), owned by
+# THIS euid, with no group/other write bit. Anything else BLOCKS — this is the directory the gate
+# is about to trust, and an unverifiable one is not a safe one. The verification doubles as the
+# functional smoke test the other two tools get: a /usr/bin/true shim returns nothing and dies at
+# the first branch.
+AX_MKTEMP_BIN="$(PATH="$_AX_HRM_PATH" command -v mktemp 2>/dev/null || true)"
+if [ -z "$AX_MKTEMP_BIN" ] || [ "${AX_MKTEMP_BIN#/}" = "$AX_MKTEMP_BIN" ] \
+   || [ ! -f "$AX_MKTEMP_BIN" ] || [ ! -x "$AX_MKTEMP_BIN" ]; then
+    { echo "$_AX_HRM_LABEL: HERMETIC_TOOL_UNUSABLE — mktemp did not resolve to an executable"
+      echo "  regular file on an absolute path (got '${AX_MKTEMP_BIN:-<nothing>}'). This gate"
+      echo "  extracts previous-release blobs and builds sandboxes inside the directory that"
+      echo "  program returns; it will not take that directory from whatever PATH offers."; } >&2
+    exit $_AX_HRM_EXIT
+fi
+_ax_hdir="$(builtin cd "$(dirname "$AX_MKTEMP_BIN")" 2>/dev/null && builtin pwd -P)" || _ax_hdir=""
+if [ -z "$_ax_hdir" ]; then
+    { echo "$_AX_HRM_LABEL: HERMETIC_TOOL_UNUSABLE — the directory of mktemp ('$AX_MKTEMP_BIN')"
+      echo "  could not be canonicalised, so this gate cannot say where the program it is about"
+      echo "  to run actually lives."; } >&2
+    exit $_AX_HRM_EXIT
+fi
+AX_MKTEMP_BIN="$_ax_hdir/$(basename "$AX_MKTEMP_BIN")"
+export AX_MKTEMP_BIN
+# _ax_mktemp_d <label> — echo a VERIFIED private temp directory, or return non-zero having said
+# why on stderr. Callers treat non-zero as blocking; nothing here falls back to an unverified
+# directory. `stat` is tried in BSD then GNU spelling; if neither answers, the mode is UNKNOWN
+# and unknown never passes.
+_ax_mktemp_d() {
+    local _ax_md_lbl="$1" _ax_md_d _ax_md_st _ax_md_uid _ax_md_mode
+    _ax_md_d="$("$AX_MKTEMP_BIN" -d "${TMPDIR:-/tmp}/ax-priv.XXXXXXXX" 2>/dev/null)" || _ax_md_d=""
+    if [ -z "$_ax_md_d" ] || [ -L "$_ax_md_d" ] || [ ! -d "$_ax_md_d" ]; then
+        { echo "${_ax_md_lbl}: HERMETIC_TEMPDIR_UNUSABLE — the resolved mktemp did not return a"
+          echo "  real directory (got '${_ax_md_d:-<nothing>}'). A symlink or a non-directory is"
+          echo "  refused outright: this gate is about to extract release blobs into it."; } >&2
+        return 1
+    fi
+    _ax_md_st="$(stat -f '%u %Lp' "$_ax_md_d" 2>/dev/null)" || _ax_md_st=""
+    [ -n "$_ax_md_st" ] || _ax_md_st="$(stat -c '%u %a' "$_ax_md_d" 2>/dev/null)" || _ax_md_st=""
+    case "$_ax_md_st" in
+        [0-9]*" "[0-7][0-7][0-7]|[0-9]*" "[0-7][0-7][0-7][0-7]) ;;
+        *)  { echo "${_ax_md_lbl}: HERMETIC_TEMPDIR_UNVERIFIABLE — the owner/mode of ${_ax_md_d}"
+              echo "  could not be read (stat said '${_ax_md_st:-<nothing>}'), so this gate cannot"
+              echo "  tell whether another user can write into the directory it is about to trust."; } >&2
+            rm -rf "$_ax_md_d" 2>/dev/null || true
+            return 1 ;;
+    esac
+    _ax_md_uid="${_ax_md_st%% *}"
+    _ax_md_mode="${_ax_md_st##* }"
+    if [ "$_ax_md_uid" != "${EUID:-$(id -u)}" ] || [ $(( 8#$_ax_md_mode & 8#22 )) -ne 0 ]; then
+        { echo "${_ax_md_lbl}: HERMETIC_TEMPDIR_HOSTILE — ${_ax_md_d} is owned by uid"
+          echo "  ${_ax_md_uid} (this process is ${EUID:-?}) and/or is group/other-writable"
+          echo "  (mode ${_ax_md_mode}). The previous release's implementation is extracted into"
+          echo "  this directory and then RUN; a directory somebody else can write is a directory"
+          echo "  somebody else chooses the implementation in."; } >&2
+        rm -rf "$_ax_md_d" 2>/dev/null || true
+        return 1
+    fi
+    echo "$_ax_md_d"
+    return 0
+}
 unset _ax_hn _ax_hb _ax_hdir _ax_hver _AX_HRM_BAD _AX_HRM_PATH
 
 SCRIPT_DIR="$(builtin cd "$(dirname "${BASH_SOURCE[0]}")" && builtin pwd)"
@@ -2379,6 +2467,17 @@ if [ "$INCLUDE_FIXTURES" -eq 1 ]; then
     # (structural), so the [87] exit-1 kill-proof floor is unchanged.
     run_guard "manifest_snapshot_integrity/fixture_fail_receipts_symlink" 2 \
         bash "$SCRIPT_DIR/manifest_snapshot_integrity_guard.sh" --root "$SCRIPT_DIR/fixtures/manifest-snapshot-integrity/fail_receipts_symlink"
+    # BACKLOG P3-111 — the DYNAMIC snapshot paths now get the treatment the STATIC ratchet-
+    # critical paths get. The snapshot body path is built by concatenating a manifest id, and the
+    # manifest is an ordinary editable file: an id spelled as a PATH FRAGMENT addresses a file
+    # outside <catalog>/upstream/ entirely, and that file is then what the census checksums and
+    # ratchets. This fixture is a copy of pass_clean whose `legacy-src` id is respelled
+    # `../evals/escaped` with its body moved to practices/evals/escaped.snapshot.md and its TRUE
+    # sha/bytes recorded, so nothing else has any reason to object — measured, the pre-P3-111
+    # guard exits 0 and PRINTS the escaped file as a verified id. Exit 2 (structural), so the [87]
+    # exit-1 kill-proof floor is unchanged.
+    run_guard "manifest_snapshot_integrity/fixture_fail_snapshot_id_escapes" 2 \
+        bash "$SCRIPT_DIR/manifest_snapshot_integrity_guard.sh" --root "$SCRIPT_DIR/fixtures/manifest-snapshot-integrity/fail_snapshot_id_escapes"
 fi
 
 # ── 104. checklist_command_path_spelling_guard ──────────────────────────────
@@ -2401,6 +2500,15 @@ if [ "$INCLUDE_FIXTURES" -eq 1 ]; then
         bash "$SCRIPT_DIR/sealed_verdict_transcript_integrity_guard.sh" --root "$SCRIPT_DIR/fixtures/sealed-verdict-transcript-integrity/fail_tampered_transcript"
     run_guard "sealed_verdict_transcript_integrity/fixture_fail_unregistered_reference" 1 \
         bash "$SCRIPT_DIR/sealed_verdict_transcript_integrity_guard.sh" --root "$SCRIPT_DIR/fixtures/sealed-verdict-transcript-integrity/fail_unregistered_reference"
+fi
+
+# ── 106. hermetic_bootstrap_parity_guard ────────────────────────────────────
+echo "[106] hermetic_bootstrap_parity_guard.sh (BACKLOG P2-64 — the hermetic bootstrap (privileged re-exec → pure-keyword preflight → runtime scrub) is DUPLICATED in EIGHT entries on purpose: it is the code that decides whether \`source\` is safe, so it cannot live in a sourced file, and every copy says 'the duplication IS the bootstrap'. A deliberate duplication has a failure mode a shared function does not — UPDATE ONE COPY AND SEVEN GATES KEEP THE OLD BEHAVIOUR, silently, with no test failing, because each copy is independently valid shell. Every hardening round (round-5 scrub, round-6 preflight, round-7 privileged re-exec, P2-67 mktemp, P2-70 env allowlist) was applied eight times BY HAND and nothing checked that it was. This guard extracts the three blocks from all eight and asserts BYTE IDENTITY modulo exactly three sanctioned parameters (label / _AX_HRM_EXIT / _AX_HRM_NEED_PY): preflight + scrub across ALL EIGHT, privileged block WITHIN a registered class. THREE classes, because the privileged block legitimately differs — exec-hermetic-env (3: the entries whose subtree execs no foreign toolchain, re-execing through \`env -i\` with the P2-70 allowlist), exec-inheriting-env (3: pre-push / run-all-guards / verify-completion, which exec gradle or npm directly or transitively and keep the inheriting form with the reason recorded inline), sourced-assert (2: a sourced file cannot re-exec without replacing its caller, so it asserts). THE CLASS IS PINNED, not inferred: rewriting an env-i entry back to the inheriting form is a legal-looking edit that removes a control from ONE gate while the other two keep claiming it, so the guard compares the registered class to the block's actual shape and BLOCKS on disagreement. THE ROSTER IS ALSO A CENSUS — any file whose column-0 text carries \`_AX_HRM_LABEL=\` must be registered (a ninth unregistered copy BLOCKS) and every registered entry must still carry the bootstrap (deleting a copy must not be a way to make 'all copies agree' true). This guard deliberately does NOT carry the bootstrap itself: it would then be a ninth copy whose drift nothing checks, and it would be comparing its own text against the thing it compares. Non-vacuity: committed fixture DIRECTORIES cannot express this subject — the subject IS the eight live multi-thousand-line entries and a fixture copy would be a ninth set of duplicates to keep in sync, i.e. the problem itself — so --fixtures follows the pre_push_decision_guard selfproof precedent: the live entries are copied to a throwaway tree and ONE copy is mutated in each block in turn. Six self-proof cases, all measured: pass_unmutated_copies 0 · fail_scrub_drift 1 · fail_preflight_drift 1 · fail_privileged_class_downgrade 1 · fail_entry_lost_bootstrap 1 · fail_unregistered_ninth_copy 1. Live exits 0 at 8 entries.)"
+run_guard "hermetic_bootstrap_parity/live" 0 \
+    bash "$SCRIPT_DIR/hermetic_bootstrap_parity_guard.sh"
+if [ "$INCLUDE_FIXTURES" -eq 1 ]; then
+    run_guard "hermetic_bootstrap_parity/selfproof" 0 \
+        bash "$SCRIPT_DIR/hermetic_bootstrap_parity_guard.sh" --fixtures
 fi
 
 # ── Summary ──────────────────────────────────────────────────────────────────
