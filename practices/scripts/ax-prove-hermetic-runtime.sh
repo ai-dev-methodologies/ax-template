@@ -343,6 +343,36 @@ build_sb() {
     mkdir -p "$sb/repo/backend" || return 2
     printf '#!/bin/sh\nexit 0\n' > "$sb/repo/backend/gradlew" || return 2
     chmod +x "$sb/repo/backend/gradlew" || return 2
+    # ── OPENING THE CHANNEL THAT BACKLOG P2-70 CLOSED (applies to EVERY sandbox here) ────
+    # Every case in this prover is about an IN-SCRIPT control: the round-5 scrub, the round-6
+    # keyword preflight, the round-7 privileged re-exec, the raw index sweep. Those controls all
+    # operate on things that ARRIVED IN THE ENVIRONMENT. P2-70 gave the gate under test
+    # (completion_checklist_recency_guard.sh) an `env -i` privileged re-exec with a measured
+    # allowlist, and `env -i` DELETES the BASH_FUNC_* entries — so the injected functions never
+    # reach the process and there is nothing in-script left to refuse. MEASURED when P2-70 landed:
+    # (B) exported `git`, (C) exported `cd`+`pwd`, (D) exported `python3` all went from a loud
+    # refusal to a clean exit 0 with the honest verdict.
+    # That is the invocation-boundary control WORKING — strictly stronger than refusing, because
+    # the hostile definition is never in the process at all — but it would make every in-script
+    # control here unobservable, and an unobservable control rots. So the sandbox copy is reverted
+    # to the INHERITING re-exec (the form the three foreign-toolchain entries still ship, and the
+    # form every entry had before P2-70), which is the world those controls exist for. The NEW
+    # boundary control gets its own case, (BI), below. The revert is anchored and goes stale
+    # LOUDLY, exactly like round7_neuter.
+    python3 - "$sb/repo/$RECENCY_REL" \
+             "$sb/repo/practices/evals/evidence_quote_spotcheck_guard.sh" \
+             "$sb/repo/practices/evals/manifest_snapshot_integrity_guard.sh" <<'PYOPENENV' || return 3
+import sys, pathlib
+OLD = 'exec /usr/bin/env -i "${_AX_PV_ENV[@]}" "$BASH" -p "$0" "$@"'
+NEW = 'exec /usr/bin/env AX_PRIV_REEXEC=1 "$BASH" -p "$0" "$@"'
+for path in sys.argv[1:]:
+    p = pathlib.Path(path); t = p.read_text(encoding="utf-8")
+    n = t.count(OLD)
+    if n != 1:
+        print("env -i re-exec anchor occurs %dx (expected 1) in %s" % (n, path), file=sys.stderr)
+        sys.exit(3)
+    p.write_text(t.replace(OLD, NEW), encoding="utf-8")
+PYOPENENV
     # The PRE-fix shape is committed as the sandbox's whole history, so the "must reproduce" probe
     # is a genuine pre-round-5 world rather than a live tree with a patch on top.
     if [ -n "$prefix" ]; then prefix_neuter "$sb" || return 3; fi
@@ -709,6 +739,63 @@ export -f cd pwd'
 inject_case D "exported \`python3\` returning 0       " \
     'python3() { return 0; }
 export -f python3'
+
+# ── (BI) THE BOUNDARY LAYER: BACKLOG P2-70's `env -i` MUST MAKE (B)/(C)/(D) INERT ────
+# (B)/(C)/(D) run against a sandbox whose privileged re-exec build_sb reverted to the INHERITING
+# form, because their subject is the IN-SCRIPT refusal and `env -i` would leave nothing in-script
+# to refuse. This case is the other half: the guard AS SHIPPED. `env -i` deletes the BASH_FUNC_*
+# entries before the process starts, so the expected outcome is not a refusal but a NORMAL,
+# HONEST verdict — exit 0, and NO refusal code, because there was nothing to refuse. The
+# load-bearing assertion is the second one: a guard that had ADOPTED the attacker's `git` would
+# have read the all-zero sha it returns; a guard that never saw it reports its own PASS signal.
+SB_BI="$WORK/inject-shipped-envi"
+build_sb_shipped() {   # build_sb without the env-channel revert — the form that actually ships
+    local sb="$1"
+    mkdir -p "$sb/repo" || return 2
+    ( builtin cd "$sb/repo" && git init -q . ) >/dev/null 2>&1 || return 2
+    local rel
+    for rel in "${COPY_RELS[@]}"; do
+        mkdir -p "$sb/repo/$(dirname "$rel")" || return 2
+        cp "$REPO_ROOT/$rel" "$sb/repo/$rel" || return 2
+    done
+    mkdir -p "$sb/repo/backend" || return 2
+    printf '#!/bin/sh\nexit 0\n' > "$sb/repo/backend/gradlew" || return 2
+    chmod +x "$sb/repo/backend/gradlew" || return 2
+    ( builtin cd "$sb/repo" && git add -A && git "${GIT_ID[@]}" commit -q -m "gate" ) >/dev/null 2>&1 || return 2
+    git init -q --bare "$sb/remote.git" >/dev/null 2>&1 || return 2
+    ( builtin cd "$sb/repo" && git remote add origin "$sb/remote.git" \
+      && git push -q origin HEAD:refs/heads/main && git fetch -q origin ) >/dev/null 2>&1 || return 2
+    ( builtin cd "$sb/repo" && git update-ref refs/remotes/origin/main HEAD ) >/dev/null 2>&1 || return 2
+    return 0
+}
+build_sb_shipped "$SB_BI" || { echo "harness setup failed (BI)" >&2; exit 2; }
+write_audit "$SB_BI"
+{ printf 'set -uo pipefail\n'
+  printf 'git() { case " $* " in *"rev-parse"*) echo 0000000000000000000000000000000000000000; return 0 ;; esac; command git "$@"; }\n'
+  printf 'python3() { return 0; }\n'
+  printf 'export -f git python3\n'
+  printf 'builtin cd "$1" && bash "%s"\n' "$RECENCY_REL"; } > "$WORK/attack-BI.sh"
+bash "$WORK/attack-BI.sh" "$SB_BI/repo" > "$WORK/bi.log" 2>&1; BI_RC=$?
+note "(BI) exported git+python3 vs the SHIPPED env -i form: exit=$BI_RC (want 0 = inert)"
+if [ "$BI_RC" -ne 0 ]; then
+    violation "the P2-70 env -i re-exec did not make the exported-function attack inert" \
+              "(exit=$BI_RC). \`env -i\` deletes BASH_FUNC_* before the process starts, so this" \
+              "entry should reach its honest verdict with nothing to refuse; a non-zero exit means" \
+              "either the measured allowlist is missing something this gate needs, or the channel" \
+              "is still open and something in-script refused."
+    head -3 "$WORK/bi.log" >&2
+elif grep -qE "HELPER_FUNCTION_INJECTED|HERMETIC_PREFLIGHT_HOSTILE" "$WORK/bi.log"; then
+    violation "the exported functions REACHED the shipped form of this gate (its log carries an" \
+              "injection/hostile-environment refusal), so \`env -i\` did not delete BASH_FUNC_*."
+    head -3 "$WORK/bi.log" >&2
+elif ! grep -q "recency_pass" "$WORK/bi.log"; then
+    violation "the shipped form exited 0 but printed no recency_pass signal, so this case cannot" \
+              "distinguish 'the attack was inert' from 'the guard ran the attacker's git and" \
+              "short-circuited'."
+    head -3 "$WORK/bi.log" >&2
+else
+    note "     the gate reached its own PASS signal — the attacker's git/python3 never ran"
+fi
 
 # ── (E1) THE FINGERPRINT HELPER, TAMPERED AND UNCOMMITTED ────────────────────────────
 SB_E1="$WORK/tamper-uncommitted"; build_sb "$SB_E1" || { echo "harness setup failed (E1)" >&2; exit 2; }

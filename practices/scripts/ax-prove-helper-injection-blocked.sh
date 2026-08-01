@@ -83,8 +83,40 @@ run_guard() {  # run_guard <sb> <logfile> [env assignments...] — returns the g
 
 echo "=== ax-prove-helper-injection-blocked — P1-3, ROUND 4 ==="
 
+# ── OPENING THE CHANNEL THAT BACKLOG P2-70 CLOSED ────────────────────────────────────
+# The subject of (a)/(a2) is an IN-SCRIPT refusal of an exported shell function. P2-70 gave this
+# entry an `env -i` privileged re-exec with a measured allowlist, and `env -i` DELETES the
+# BASH_FUNC_* entries from the environ — so the injected functions never reach the process and
+# there is nothing in-script left to refuse. MEASURED when P2-70 landed: (a) went from a loud
+# HERMETIC_PREFLIGHT_HOSTILE / non-zero exit to a clean exit 0 with the honest verdict.
+# That is the invocation-boundary control WORKING (it is strictly stronger than refusing: the
+# hostile definition is never in the process at all), but it would make the in-script checks
+# unobservable — and an unobservable check rots, which is the exact failure this prover exists to
+# prevent. So the two layers are proven SEPARATELY:
+#   · (a) / (a2) keep proving the IN-SCRIPT refusals non-vacuous, on a sandbox copy whose
+#     privileged block is reverted to the INHERITING form — i.e. the channel the three
+#     inheriting entries (.githooks/pre-push, run-all-guards.sh, verify-completion.sh) still have,
+#     and the channel every entry had before P2-70;
+#   · (a3) proves the NEW control on the SHIPPED form: the same attack must be INERT.
+# The revert is anchored and goes stale LOUDLY, exactly like the (a2) preflight strip.
+open_env_channel() {   # <sandbox> — revert the guard copy's env -i re-exec to the inheriting form
+    python3 - "$1/$GUARD_REL" <<'PYOPEN'
+import sys, pathlib
+p = pathlib.Path(sys.argv[1]); t = p.read_text(encoding="utf-8")
+old = 'exec /usr/bin/env -i "${_AX_PV_ENV[@]}" "$BASH" -p "$0" "$@"'
+new = 'exec /usr/bin/env AX_PRIV_REEXEC=1 "$BASH" -p "$0" "$@"'
+n = t.count(old)
+if n != 1:
+    print("env -i re-exec anchor occurs %dx (expected 1) in %s" % (n, sys.argv[1]), file=sys.stderr)
+    sys.exit(3)
+p.write_text(t.replace(old, new), encoding="utf-8")
+PYOPEN
+}
+
 # ── (a) FUNCTION INJECTION ───────────────────────────────────────────────────────────
 SB_A="$WORK/inject"; build_sb "$SB_A" || { echo "harness setup failed (a)" >&2; exit 2; }
+open_env_channel "$SB_A" || { echo "harness setup failed (a — env -i anchor stale)" >&2; exit 2; }
+( cd "$SB_A" && git add -A && git -c user.email=p@x -c user.name=p commit -q -m "inheriting env" ) >/dev/null 2>&1
 cat > "$WORK/attack_a.sh" <<'ATTACK'
 set -uo pipefail
 # The attacker's policy: no anchor at all, everything permitted. Under the round-3 helper this
@@ -116,6 +148,7 @@ fi
 # anchor is asserted to occur exactly once in each, so this goes stale LOUDLY), leaving the
 # round-4 helper-namespace refusal as the only thing that can block the same attack.
 SB_A2="$WORK/inject-nopreflight"; build_sb "$SB_A2" || { echo "harness setup failed (a2)" >&2; exit 2; }
+open_env_channel "$SB_A2" || { echo "harness setup failed (a2 — env -i anchor stale)" >&2; exit 2; }
 python3 - "$SB_A2/$GUARD_REL" "$SB_A2/$HELPER_REL" <<'PYSTRIP'
 import sys, pathlib
 anchor = '_AX_PF_ENV="$(/usr/bin/env)"'
@@ -136,6 +169,38 @@ if ! grep -q "HELPER_FUNCTION_INJECTED" "$WORK/a2.log" || [ "$A2_RC" -eq 0 ]; th
               "fire (exit=$A2_RC). (a) would then be proving only that the preflight works, and" \
               "the namespace check would be dead code nobody notices."
     head -5 "$WORK/a2.log" >&2
+fi
+
+# ── (a3) THE SHIPPED FORM: BACKLOG P2-70's env -i MUST MAKE THE SAME ATTACK INERT ────
+# (a)/(a2) run against a sandbox whose privileged block was reverted to the inheriting form, so
+# they prove the in-script refusals. THIS case runs the guard AS SHIPPED. The exported functions
+# must never reach the process — so the expected outcome is not a refusal but a NORMAL, HONEST
+# verdict: exit 0, no HELPER_FUNCTION_INJECTED/HERMETIC_PREFLIGHT_HOSTILE (there is nothing left
+# to refuse), and — the load-bearing half — NO EVIDENCE THAT THE ATTACKER'S POLICY TOOK EFFECT.
+# The attacker's ax_anchor_resolve sets AX_ANCHOR_KIND="unavailable"; a guard that had adopted it
+# would report the anchor as unavailable and skip its ratchet. A guard that never saw it reports
+# the real anchor. That distinction is what is asserted.
+SB_A3="$WORK/inject-shipped"; build_sb "$SB_A3" || { echo "harness setup failed (a3)" >&2; exit 2; }
+bash "$WORK/attack_a.sh" "$SB_A3" "$SB_A3/$GUARD_REL" > "$WORK/a3.log" 2>&1; A3_RC=$?
+note "(a3) same attack vs the SHIPPED env -i form: exit=$A3_RC (want 0 = inert)"
+if [ "$A3_RC" -ne 0 ]; then
+    violation "the P2-70 env -i re-exec did not make the exported-function attack inert" \
+              "(exit=$A3_RC). \`env -i\` deletes the BASH_FUNC_* entries, so this entry should" \
+              "reach its honest verdict with nothing to refuse; a non-zero exit means either the" \
+              "allowlist is missing something the guard needs, or the channel is still open."
+    head -5 "$WORK/a3.log" >&2
+elif grep -qE "HELPER_FUNCTION_INJECTED|HERMETIC_PREFLIGHT_HOSTILE" "$WORK/a3.log"; then
+    violation "the exported functions REACHED the shipped form of this entry (its log carries an" \
+              "injection/hostile-environment refusal). P2-70's allowlist re-exec is supposed to" \
+              "delete BASH_FUNC_* before the process starts; if a refusal fired, it did not."
+    head -5 "$WORK/a3.log" >&2
+elif grep -q "ANCHOR_FALLBACK\|anchor ratchet OK" "$WORK/a3.log"; then
+    note "     the guard resolved its own anchor — the attacker's ax_anchor_resolve never ran"
+else
+    violation "the shipped form exited 0 but its log shows no sign that the guard resolved its" \
+              "OWN anchor, so this case cannot distinguish 'the attack was inert' from 'the guard" \
+              "adopted the attacker's ax_anchor_resolve and skipped its ratchet'."
+    head -5 "$WORK/a3.log" >&2
 fi
 
 # ── (e) PRE-FIX REPRODUCTION of (a) ──────────────────────────────────────────────────
