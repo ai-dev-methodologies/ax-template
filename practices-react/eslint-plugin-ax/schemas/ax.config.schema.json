@@ -1,0 +1,87 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/ai-dev-methodologies/ax-template/practices-react/eslint-plugin-ax/schemas/ax.config.schema.json",
+  "title": "ax.config",
+  "description": "Fork-receiver project layout config consumed by ax-transform installer skills and the ax/* ESLint plugin (react.* is injected as ESLint flat-config settings.ax verbatim).",
+  "type": "object",
+  "required": ["version"],
+  "properties": {
+    "version": {
+      "type": "integer",
+      "description": "Config schema version. Currently 1."
+    },
+    "stacks": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Which stacks this project uses (e.g. react, java)."
+    },
+    "react": {
+      "type": "object",
+      "description": "Shape matches layoutFrom()'s expected settings.ax input in practices-react/eslint-plugin-ax/lib/feature-layout.js.",
+      "properties": {
+        "root": {
+          "type": "string",
+          "description": "Repo-relative path to the React app root (e.g. frontend)."
+        },
+        "srcDir": {
+          "type": "string",
+          "description": "Top-level source directory name, relative to react.root (e.g. src)."
+        },
+        "alias": {
+          "type": "object",
+          "additionalProperties": { "type": "string" },
+          "description": "Import alias prefix -> srcDir-relative replacement (e.g. '@/': 'src/')."
+        },
+        "layers": {
+          "type": "object",
+          "properties": {
+            "app": { "type": "array", "items": { "type": "string" } },
+            "features": { "type": "array", "items": { "type": "string" } },
+            "shared": { "type": "array", "items": { "type": "string" } }
+          }
+        }
+      }
+    },
+    "java": {
+      "type": "object",
+      "properties": {
+        "root": {
+          "type": "string",
+          "description": "Repo-relative path to the Spring Boot app root (e.g. backend)."
+        },
+        "buildTool": {
+          "type": "string",
+          "description": "gradle or maven."
+        },
+        "rootPackage": {
+          "type": "string",
+          "description": "Base Java package for the project."
+        }
+      }
+    },
+    "design": {
+      "type": "object",
+      "properties": {
+        "useCatalog": {
+          "type": "boolean",
+          "description": "Whether to apply the ax design-system catalog."
+        }
+      }
+    },
+    "rules": {
+      "type": "object",
+      "properties": {
+        "excludeTags": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "practices rule tags to exclude from consumption."
+        },
+        "disabled": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Individual rule ids to disable."
+        }
+      }
+    }
+  }
+}

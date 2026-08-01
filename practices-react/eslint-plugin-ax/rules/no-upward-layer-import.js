@@ -12,7 +12,7 @@
  * Backend analog: layering (controller->service->repository direction).
  */
 
-import { toSrcRelative, resolveImport, classifySrcPath, rankOf, importVisitors } from '../lib/feature-layout.js'
+import { toSrcRelative, resolveImport, classifySrcPath, rankOf, importVisitors, layoutFrom } from '../lib/feature-layout.js'
 
 /** @type {import("eslint").Rule.RuleModule} */
 const rule = {
@@ -32,14 +32,15 @@ const rule = {
   },
 
   create(context) {
+    const layout = layoutFrom(context.settings)
     const filename =
       typeof context.filename === 'string' ? context.filename : context.getFilename()
-    const importerSrcRel = toSrcRelative(filename)
-    const importer = classifySrcPath(importerSrcRel)
+    const importerSrcRel = toSrcRelative(filename, layout)
+    const importer = classifySrcPath(importerSrcRel, layout)
     if (!importer.layer || rankOf(importer.layer) === 0) return {} // outside the layered tree
 
     return importVisitors((source, node) => {
-      const target = classifySrcPath(resolveImport(source, importerSrcRel))
+      const target = classifySrcPath(resolveImport(source, importerSrcRel, layout), layout)
       if (rankOf(target.layer) === 0) return // bare/out-of-tree import — not our concern
       // same-layer feature<->feature is handled by no-cross-feature-deep-import
       if (target.layer === 'features' && importer.layer === 'features') return

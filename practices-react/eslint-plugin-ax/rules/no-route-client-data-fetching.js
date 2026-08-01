@@ -22,7 +22,7 @@
  * Backend analog: thin-controller.
  */
 
-import { isRouteFile, hasUseClientDirective } from '../lib/feature-layout.js'
+import { isRouteFile, hasUseClientDirective, layoutFrom } from '../lib/feature-layout.js'
 
 // Packages whose imported bindings are client-side data orchestration.
 const DATA_LIB = /^(swr|swr\/.*|@tanstack\/react-query|axios)$/
@@ -50,9 +50,10 @@ const rule = {
   },
 
   create(context) {
+    const layout = layoutFrom(context.settings)
     const filename =
       typeof context.filename === 'string' ? context.filename : context.getFilename()
-    if (!isRouteFile(filename)) return {}
+    if (!isRouteFile(filename, layout)) return {}
 
     let isClientRoute = false
     // local binding names imported from a data lib — name-agnostic, so `import { useSWR

@@ -16,7 +16,7 @@
  * Backend analog: HG-ANTI-GODSERVICE-TX (heuristic with honest limit).
  */
 
-import { isRouteFile, hasUseClientDirective } from '../lib/feature-layout.js'
+import { isRouteFile, hasUseClientDirective, layoutFrom } from '../lib/feature-layout.js'
 
 const DEFAULT_MAX_LINES = 100
 
@@ -44,9 +44,10 @@ const rule = {
   },
 
   create(context) {
+    const layout = layoutFrom(context.settings)
     const filename =
       typeof context.filename === 'string' ? context.filename : context.getFilename()
-    if (!isRouteFile(filename)) return {}
+    if (!isRouteFile(filename, layout)) return {}
     const max = (context.options[0] && context.options[0].maxLines) || DEFAULT_MAX_LINES
     const sourceCode = context.sourceCode || context.getSourceCode()
 

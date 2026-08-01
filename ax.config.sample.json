@@ -1,0 +1,13 @@
+{
+  "version": 1,
+  "stacks": ["react", "java"],
+  "react": {
+    "root": "frontend",
+    "srcDir": "src",
+    "alias": { "@/": "src/" },
+    "layers": { "app": ["app"], "features": ["features"], "shared": ["components", "lib"] }
+  },
+  "java": { "root": "backend", "buildTool": "gradle", "rootPackage": "com.example.app" },
+  "design": { "useCatalog": true },
+  "rules": { "excludeTags": [], "disabled": [] }
+}

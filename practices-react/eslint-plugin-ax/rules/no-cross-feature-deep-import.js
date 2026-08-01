@@ -15,7 +15,7 @@
  * Backend analog: HG-FEAT-ISOLATION.
  */
 
-import { toSrcRelative, resolveImport, classifySrcPath, importVisitors } from '../lib/feature-layout.js'
+import { toSrcRelative, resolveImport, classifySrcPath, importVisitors, layoutFrom } from '../lib/feature-layout.js'
 
 /** @type {import("eslint").Rule.RuleModule} */
 const rule = {
@@ -35,15 +35,16 @@ const rule = {
   },
 
   create(context) {
+    const layout = layoutFrom(context.settings)
     const filename =
       typeof context.filename === 'string' ? context.filename : context.getFilename()
-    const importerSrcRel = toSrcRelative(filename)
-    const importer = classifySrcPath(importerSrcRel)
+    const importerSrcRel = toSrcRelative(filename, layout)
+    const importer = classifySrcPath(importerSrcRel, layout)
     // Only files inside a feature are governed by this rule.
     if (importer.layer !== 'features' || !importer.feature) return {}
 
     return importVisitors((source, node) => {
-      const target = classifySrcPath(resolveImport(source, importerSrcRel))
+      const target = classifySrcPath(resolveImport(source, importerSrcRel, layout), layout)
       if (target.layer !== 'features' || !target.feature) return
       if (target.feature === importer.feature) return // own feature — fine
       if (target.isBarrel) return // cross-feature BARREL import is allowed

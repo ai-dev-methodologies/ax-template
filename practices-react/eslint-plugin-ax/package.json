@@ -10,6 +10,8 @@
   "files": [
     "index.js",
     "rules/",
+    "lib/",
+    "schemas/",
     "README.md",
     "LICENSE"
   ],
