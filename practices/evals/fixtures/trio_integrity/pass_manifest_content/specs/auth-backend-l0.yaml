@@ -1,0 +1,9 @@
+domain: auth
+frontend_required: true
+items:
+  - id: AUTH-BE-001
+    requirement: "User can register with email and password"
+    frontend_required: true
+  - id: AUTH-BE-002
+    requirement: "User can log in with valid credentials"
+    frontend_required: true

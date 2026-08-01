@@ -1083,25 +1083,147 @@ if line_keys != pinned:
         f'writer exactly, and any field added to the writer later becomes a new detector. '
         f'Re-run `bash practices/scripts/verify-completion.sh` to get a genuine line.'
     )
-if guard_repo is not None:
-    writer = guard_repo / "practices" / "scripts" / "verify-completion.sh"
-    if writer.is_file():
-        # The audit printf is the schema. Extract the key names from the FORMAT STRING of the
-        # line that appends to $AUDIT_LOG, so the pin above is checked against the code that
-        # actually writes, not against a comment.
-        wtext = writer.read_text(errors="replace")
-        m = re.search(r"printf\s+'(\{\"ts\".*?)\\n'", wtext, re.S)
-        if m:
-            emitted = tuple(re.findall(r'"([a-z_]+)":', m.group(1)))
-            if tuple(AUDIT_SCHEMA_KEYS) != emitted:
-                emit_fail(
-                    "AUDIT_WRITER_SCHEMA_DRIFT",
-                    f'this guard pins the audit-line shape as {list(AUDIT_SCHEMA_KEYS)} but the '
-                    f'committed writer (practices/scripts/verify-completion.sh) emits {list(emitted)}. '
-                    f'The pin exists so a hand-authored line cannot pass as genuine; a pin that no '
-                    f'longer matches the writer either rejects every honest run or accepts a shape '
-                    f'nobody reviewed. Update BOTH in the same commit.'
-                )
+# 11b. THE INTROSPECTION ITSELF MUST BE DETERMINISTIC (BACKLOG P3-114).
+#     Until now this cross-check was three nested "if it worked" branches: no guard_repo → skip,
+#     writer not a file → skip, regex did not match → skip. A pin whose corroboration is
+#     SKIPPABLE is not a pin — the shape that makes it skip (delete the writer from the tree the
+#     guard resolves, or respell the printf so the pattern misses) is cheaper to produce than the
+#     shape it refuses. And `re.search` takes the FIRST regex-shaped hit, so an ADDED earlier
+#     `printf '{"ts"…\n'` anywhere in the writer becomes "the schema" — the writer's own comment
+#     already records that this happened once by accident (the round-7 toolpaths sidecar had to
+#     be moved BELOW the audit printf and renamed to a leading "kind" key precisely because it
+#     was being read as the schema). An accident that changes which line is authoritative is a
+#     decoy channel whether or not anyone aimed it.
+#     So: guard_repo is always supplied by this file's own shell half (argv[4] = the repo THIS
+#     GUARD lives in, never the scanned root), an unreadable writer BLOCKS, and the extraction
+#     must be SINGLE-AUTHORITATIVE — exactly one `printf '{"ts"…\n'` in the file. Zero means the
+#     writer no longer writes what this guard verifies; two or more means the guard cannot say
+#     WHICH of them is the schema, and unknown never passes.
+if guard_repo is None:
+    emit_fail(
+        "AUDIT_WRITER_UNREADABLE",
+        'this guard was invoked without the path of the repository it lives in, so it cannot '
+        'cross-check its pinned audit-line schema against the committed writer '
+        '(practices/scripts/verify-completion.sh). The pin is what makes a hand-authored line '
+        'reproduce the writer or fail; a pin nobody corroborated is a comment. This argument is '
+        'supplied by this file\'s own shell half, so reaching this message means the python body '
+        'was invoked directly by something else.'
+    )
+writer = guard_repo / "practices" / "scripts" / "verify-completion.sh"
+try:
+    wtext = writer.read_text(errors="replace")
+except OSError as _exc:
+    emit_fail(
+        "AUDIT_WRITER_UNREADABLE",
+        f'the committed audit writer could not be read at {writer} ({_exc.__class__.__name__}). '
+        f'This guard pins the exact field set a genuine audit line carries and corroborates that '
+        f'pin against the code that actually writes it. With the writer unreadable the pin stands '
+        f'alone and unverified, which is the state an attacker who wants the pin unenforced would '
+        f'engineer. Restore practices/scripts/verify-completion.sh and re-run.'
+    )
+# The audit printf is the schema. Extract the key names from the FORMAT STRING of the line that
+# appends to $AUDIT_LOG, so the pin above is checked against the code that actually writes, not
+# against a comment.
+#     THE EXTRACTION POINT, spelled exactly (all three clauses are load-bearing):
+#       (i)  a LINE-INITIAL `printf '{"ts"…` — the writer's audit printf is a top-level statement
+#            at column 0. Anchoring there is also what distinguishes CODE from PROSE: the writer's
+#            own explanatory comment quotes the pattern, and an unanchored `re.findall` counts
+#            that comment as a second schema (measured: 2 hits, and the pre-fix `re.search` was
+#            simply taking whichever came first in the file);
+#       (ii) EXACTLY ONE such line — zero means the writer stopped emitting the record this guard
+#            verifies; two or more means the guard cannot say which is authoritative;
+#       (iii) that one statement must be the one that APPENDS TO THE AUDIT LOG. The schema is not
+#            "a line shaped like the schema", it is "the format string of the write this guard
+#            reads back", and only the redirection says which write that is.
+_writer_lines = wtext.split("\n")
+_cands = [i for i, _l in enumerate(_writer_lines) if re.match(r"printf\s+'\{\"ts\"", _l)]
+if len(_cands) != 1:
+    emit_fail(
+        "AUDIT_WRITER_SCHEMA_UNRESOLVED",
+        f'the committed writer (practices/scripts/verify-completion.sh) contains '
+        f'{len(_cands)} line-initial printf statements of the audit-line shape, and this guard '
+        f'requires EXACTLY ONE. Zero means the writer no longer emits the record this guard '
+        f'verifies — the schema pin would then be corroborated by nothing and the check would '
+        f'silently stand down. Two or more means the guard cannot say WHICH one is the schema, '
+        f'and taking "the first regex-shaped hit" is a decoy channel: an added earlier line of '
+        f'that shape silently becomes the authority. Keep exactly one audit printf in the writer '
+        f'(the transparency sidecar deliberately leads with a "kind" key for this reason).'
+    )
+_i = _cands[0]
+_stmt = [_writer_lines[_i]]
+while _stmt[-1].endswith("\\") and _i + 1 < len(_writer_lines):
+    _i += 1
+    _stmt.append(_writer_lines[_i])
+_stmt = "\n".join(_stmt)
+if '>> "$AUDIT_LOG"' not in _stmt:
+    emit_fail(
+        "AUDIT_WRITER_SCHEMA_UNRESOLVED",
+        'the single audit-shaped printf in practices/scripts/verify-completion.sh does not '
+        'append to "$AUDIT_LOG". This guard reads .ax-verify/runs.jsonl and pins the field set '
+        'of the record it finds there; the pin is only meaningful if it was taken from the '
+        'statement that WRITES that file. A format string that is no longer wired to the audit '
+        'log is a schema for nothing, and the guard will not adopt it by resemblance.'
+    )
+_m_schema = re.search(r"printf\s+'(\{\"ts\".*?)\\n'", _stmt, re.S)
+if _m_schema is None:
+    emit_fail(
+        "AUDIT_WRITER_SCHEMA_UNRESOLVED",
+        'the audit printf statement in practices/scripts/verify-completion.sh was located but '
+        'its format string could not be parsed, so this guard cannot corroborate its pinned '
+        'field set against the writer. Unknown never passes.'
+    )
+emitted = tuple(re.findall(r'"([a-z_]+)":', _m_schema.group(1)))
+if tuple(AUDIT_SCHEMA_KEYS) != emitted:
+    emit_fail(
+        "AUDIT_WRITER_SCHEMA_DRIFT",
+        f'this guard pins the audit-line shape as {list(AUDIT_SCHEMA_KEYS)} but the '
+        f'committed writer (practices/scripts/verify-completion.sh) emits {list(emitted)}. '
+        f'The pin exists so a hand-authored line cannot pass as genuine; a pin that no '
+        f'longer matches the writer either rejects every honest run or accepts a shape '
+        f'nobody reviewed. Update BOTH in the same commit.'
+    )
+
+# 11c. THE ANCHOR'S *KIND* IS ALSO A CLAIM (BACKLOG P3-113).
+#     The record carries anchor_kind ∈ {origin/main, HEAD, unavailable} and until now it was
+#     printed in failure text and NEVER VERIFIED. The two kinds are not equivalent: "origin/main"
+#     is the release the remote actually has, while "HEAD" is this repository's own tip — an
+#     anchor that ALREADY CONTAINS whatever was committed locally, so every ratchet measured
+#     against it compares the downgrade to itself. The helper's header says so ("weaker"), the
+#     spotcheck guard's ledger says so, and nothing enforced it: a HEAD-fallback record was
+#     consumed exactly like an origin/main record.
+#     Verified, not merely recorded: on a LIVE git root this re-resolves the anchor the same way
+#     practices/scripts/lib/release_anchor.sh does (origin/main^{commit} → HEAD^{commit} →
+#     unavailable) and requires the recorded kind to be the one this tree actually yields. That
+#     refuses BOTH directions — a line claiming the strong kind in a tree that has no origin/main
+#     (the hand-authored upgrade), and a genuine weak record being consumed where the strong one
+#     was available (the silent downgrade). Fixture roots are not git trees and are skipped, as
+#     everywhere else in this guard.
+if live_git_root:
+    _rc_om, _ = git_out("rev-parse", "--verify", "--quiet", "origin/main^{commit}",
+                        root=root, check=False)
+    if _rc_om == 0:
+        _expected_kind = "origin/main"
+    else:
+        _rc_hd, _ = git_out("rev-parse", "--verify", "--quiet", "HEAD^{commit}",
+                            root=root, check=False)
+        _expected_kind = "HEAD" if _rc_hd == 0 else "unavailable"
+    _recorded_kind = latest.get("anchor_kind")
+    if _recorded_kind != _expected_kind:
+        emit_fail(
+            "AUDIT_ANCHOR_KIND_MISMATCH",
+            f'the audit line records anchor_kind={_recorded_kind!r}, but this repository resolves '
+            f'the release anchor as {_expected_kind!r} (same order as '
+            f'practices/scripts/lib/release_anchor.sh: origin/main → HEAD → unavailable).\n'
+            f'  · {_recorded_kind!r} where {_expected_kind!r} was available is a WEAKER anchor '
+            f'consumed as if it were the strong one: "HEAD" anchors the ratchet to this '
+            f'repository\'s own tip, which already contains anything committed locally, so a '
+            f'downgrade is compared against itself. It is a documented fallback for a '
+            f'fork-fresh/detached clone, not a substitute for the release the remote has.\n'
+            f'  · The reverse — claiming {_recorded_kind!r} in a tree that cannot resolve it — is '
+            f'a hand-authored upgrade of the record.\n'
+            f'  Re-run `bash practices/scripts/verify-completion.sh` in this repository '
+            f'(`git fetch origin` first if origin/main is simply missing).'
+        )
 
 # 12. RECOMPUTE the tree fingerprint rather than believing it.
 #     The record says which working tree was verified. Until now nothing checked that the value

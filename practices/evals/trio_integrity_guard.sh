@@ -77,6 +77,24 @@ else:
 violations = []
 files_scanned = 0
 
+# ── Manifest-content census (P2-59) ──────────────────────────────────────────
+# Before P2-59 the guard only asserted that blueprints/<domain>-ui-manifest.yaml
+# EXISTED. Its CONTENT — the operation ids each surface claims, the spec items each
+# policy block backlinks, the page/view files the render boundary names — was never
+# parsed, so all of it could drift to nonsense while the guard stayed green.
+#
+# The three checks below are structure-conditional: a manifest that declares no
+# routes/spec_item/render_boundary contributes nothing (the older manifests use a
+# different, older shape). That makes vacuity the failure mode, so the live catalog
+# run additionally asserts CENSUS FLOORS — shrink-only ratchets. Deleting the
+# manifest content the checks read can no longer buy a green run.
+MANIFEST_OP_FLOOR = 5          # webhook 2 + scheduled-task 2 + email-outbox 1
+MANIFEST_SPEC_ITEM_FLOOR = 30  # observed 36 (audit-log 9, billing 4, email 8, sched 8, webhook 7)
+MANIFEST_ROUTE_SOURCE_FLOOR = 6  # 3 manifests x (page, view)
+manifest_op_refs = 0
+manifest_spec_items = 0
+manifest_route_sources = 0
+
 
 def glob_expand(pattern_str, root):
     """Expand a shell-style glob pattern rooted at root. Returns list of matching paths."""
@@ -88,6 +106,136 @@ def glob_expand(pattern_str, root):
     # Try as glob relative to root
     matches = glob_module.glob(str(root / pattern_str), recursive=True)
     return matches
+
+
+# Keys the manifest walker recognises. Everything else in a manifest is prose/policy
+# and is deliberately NOT interpreted — this guard checks resolvable references, it is
+# not a schema validator.
+_OP_SCALAR_KEYS = ("backend_operation_id",)
+_OP_LIST_KEYS = ("backend_operation_ids", "secondary_operation_ids")
+_SPEC_ITEM_SCALAR_KEYS = ("spec_item",)
+_SPEC_ITEM_LIST_KEYS = ("spec_items",)
+_ROUTE_SOURCE_SCALAR_KEYS = ("page", "view")
+_ROUTE_SOURCE_LIST_KEYS = ("views",)
+
+
+def _walk_manifest(node, path, ops, spec_items, route_sources, in_render_boundary=False):
+    """Collect (value, yaml-path) pairs for the reference kinds the guard resolves."""
+    if isinstance(node, dict):
+        for key, val in node.items():
+            here = f"{path}.{key}" if path else key
+            if key in _OP_SCALAR_KEYS and not isinstance(val, (dict, list)):
+                ops.append((val, here))
+                continue
+            if key in _OP_LIST_KEYS and isinstance(val, list):
+                for i, v in enumerate(val):
+                    ops.append((v, f"{here}[{i}]"))
+                continue
+            if key in _SPEC_ITEM_SCALAR_KEYS and not isinstance(val, (dict, list)):
+                spec_items.append((val, here))
+                continue
+            if key in _SPEC_ITEM_LIST_KEYS or (key in _SPEC_ITEM_SCALAR_KEYS and isinstance(val, list)):
+                if isinstance(val, list):
+                    for i, v in enumerate(val):
+                        spec_items.append((v, f"{here}[{i}]"))
+                    continue
+            # page/view are only file refs inside the render_boundary block; the same
+            # word elsewhere in a policy manifest is prose.
+            if in_render_boundary and key in _ROUTE_SOURCE_SCALAR_KEYS and isinstance(val, str):
+                route_sources.append((val, here))
+                continue
+            if in_render_boundary and key in _ROUTE_SOURCE_LIST_KEYS and isinstance(val, list):
+                for i, v in enumerate(val):
+                    route_sources.append((v, f"{here}[{i}]"))
+                continue
+            _walk_manifest(
+                val, here, ops, spec_items, route_sources,
+                in_render_boundary or key == "render_boundary",
+            )
+    elif isinstance(node, list):
+        for i, v in enumerate(node):
+            _walk_manifest(v, f"{path}[{i}]", ops, spec_items, route_sources, in_render_boundary)
+
+
+def check_manifest(domain, root, manifest_path, mode, known_ops, fe_item_ids, contract_route_paths):
+    """P2-59 — parse blueprints/<domain>-ui-manifest.yaml and resolve what it CLAIMS.
+
+    Before this the guard asserted only that the file existed. Checks added:
+      1. MANIFEST_UNPARSEABLE          — the file must be a YAML mapping.
+      2. MANIFEST_UNRESOLVED_OPERATION_ID / MANIFEST_OPERATION_ID_IN_FRONTEND_ONLY
+         — every operation id the manifest names resolves in the backend OpenAPI
+           (full_trio); a frontend_only manifest may name none.
+      3. MANIFEST_DANGLING_SPEC_ITEM   — every spec_item backlink resolves to a real
+           item id in specs/<domain>-frontend-l0.yaml.
+      4. MANIFEST_MISSING_ROUTE_SOURCE — every render_boundary page/view file exists.
+      5. MANIFEST_ROUTE_NOT_IN_CONTRACT — every routes.surfaces[].path is also a route
+           in contracts/<domain>-ui.yaml (the manifest cannot police a surface the
+           contract does not publish).
+    """
+    global manifest_op_refs, manifest_spec_items, manifest_route_sources
+    errs = []
+    try:
+        manifest = yaml.safe_load(manifest_path.read_text())
+    except Exception as exc:  # noqa: BLE001 — any parse failure is the same verdict
+        return [f"MANIFEST_UNPARSEABLE: blueprints/{domain}-ui-manifest.yaml ({exc.__class__.__name__}: {exc})"]
+    if manifest is None:
+        return [f"MANIFEST_UNPARSEABLE: blueprints/{domain}-ui-manifest.yaml is empty"]
+    if not isinstance(manifest, dict):
+        return [f"MANIFEST_UNPARSEABLE: blueprints/{domain}-ui-manifest.yaml is not a mapping ({type(manifest).__name__})"]
+
+    ops, spec_items, route_sources = [], [], []
+    _walk_manifest(manifest, "", ops, spec_items, route_sources)
+
+    for value, where in ops:
+        if value is None:
+            if mode == "full_trio":
+                errs.append(f"MANIFEST_NULL_OPERATION_ID: {where} is null in full_trio mode")
+            continue
+        manifest_op_refs += 1
+        if mode == "frontend_only":
+            errs.append(f"MANIFEST_OPERATION_ID_IN_FRONTEND_ONLY: {where} = {value!r}")
+            continue
+        if known_ops is not None and value not in known_ops:
+            errs.append(
+                f"MANIFEST_UNRESOLVED_OPERATION_ID: {where} = {value!r} not published by the backend contract"
+            )
+
+    for value, where in spec_items:
+        if value is None:
+            continue
+        manifest_spec_items += 1
+        if fe_item_ids is not None and value not in fe_item_ids:
+            errs.append(
+                f"MANIFEST_DANGLING_SPEC_ITEM: {where} = {value!r} is not an item id in specs/{domain}-frontend-l0.yaml"
+            )
+
+    for value, where in route_sources:
+        if not isinstance(value, str) or not value.strip():
+            errs.append(f"MANIFEST_MISSING_ROUTE_SOURCE: {where} is empty")
+            continue
+        manifest_route_sources += 1
+        # Literal resolution only: these are concrete files, and Next.js route
+        # segments ("[id]", "(admin)") are glob metacharacters that would make a
+        # glob-based check silently match the wrong thing.
+        if not (root / value).exists():
+            errs.append(f"MANIFEST_MISSING_ROUTE_SOURCE: {where} = {value!r} does not exist")
+
+    routes_block = manifest.get("routes")
+    if isinstance(routes_block, dict) and contract_route_paths is not None:
+        for i, surface in enumerate(routes_block.get("surfaces") or []):
+            if not isinstance(surface, dict):
+                continue
+            path_val = surface.get("path")
+            if path_val is None:
+                errs.append(f"MANIFEST_ROUTE_NOT_IN_CONTRACT: routes.surfaces[{i}] has no path")
+                continue
+            if path_val not in contract_route_paths:
+                errs.append(
+                    f"MANIFEST_ROUTE_NOT_IN_CONTRACT: routes.surfaces[{i}].path = {path_val!r} "
+                    f"is not a route in contracts/{domain}-ui.yaml"
+                )
+
+    return errs
 
 
 def check_full_trio(domain, root):
@@ -181,6 +329,14 @@ def check_full_trio(domain, root):
     if required_count > 0 and covered_count < required_count:
         errs.append(f"COVERAGE_SHORTFALL: {covered_count}/{required_count}")
 
+    # P2-59 — the manifest's own content, not just its existence.
+    errs.extend(check_manifest(
+        domain, root, ui_manifest_path, "full_trio",
+        known_ops,
+        {i.get("id") for i in (fe_spec.get("items") or []) if isinstance(i, dict)},
+        {r.get("path") for r in (ui_contract.get("routes") or []) if isinstance(r, dict)},
+    ))
+
     return errs
 
 
@@ -254,6 +410,14 @@ def check_frontend_only(domain, root):
             if not matches:
                 errs.append(f"static_source_ref resolves to zero files: {ref_entry} (item: {item_id})")
 
+    # P2-59 — the manifest's own content, not just its existence.
+    errs.extend(check_manifest(
+        domain, root, ui_manifest_path, "frontend_only",
+        None,
+        {i.get("id") for i in (fe_spec.get("items") or []) if isinstance(i, dict)},
+        {r.get("path") for r in (ui_contract.get("routes") or []) if isinstance(r, dict)},
+    ))
+
     return errs
 
 
@@ -270,6 +434,26 @@ for domain, mode in domains.items():
     for e in errs:
         violations.append(f"[{domain}] {e}")
 
+# ── P2-59 census floors (live catalog run only) ──────────────────────────────
+# The manifest checks are structure-conditional, so their failure mode is vacuity:
+# strip routes/spec_item/render_boundary out of every manifest and the checks would
+# assert nothing while still printing PASS. On the catalog tree (full sweep, no
+# --domain filter) the guard therefore asserts shrink-only floors on how much it
+# actually resolved. Fixture roots are exempt — they are minimal by construction.
+catalog_allowlist = (repo_root / "practices" / "evals" / "trio_integrity_allowlist.yaml").resolve()
+is_catalog_sweep = (allowlist_path == catalog_allowlist) and not domain_filter
+if is_catalog_sweep:
+    for label, observed, floor in (
+        ("operation ids", manifest_op_refs, MANIFEST_OP_FLOOR),
+        ("spec_item backlinks", manifest_spec_items, MANIFEST_SPEC_ITEM_FLOOR),
+        ("route sources", manifest_route_sources, MANIFEST_ROUTE_SOURCE_FLOOR),
+    ):
+        if observed < floor:
+            violations.append(
+                f"[census] MANIFEST_CENSUS_SHRANK: resolved {observed} manifest {label}, floor is {floor} "
+                f"— manifest content was deleted rather than fixed (raise the floor only when it grows)"
+            )
+
 # Zero-scan guard
 if files_scanned == 0:
     print("ZERO_SCAN: no files were scanned — allowlist may point to non-existent domains", file=sys.stderr)
@@ -282,6 +466,10 @@ if violations:
     print(f"trio_integrity_guard: {len(violations)} violation(s) — merge BLOCKED", file=sys.stderr)
     sys.exit(1)
 
-print(f"trio_integrity_guard: all domains pass ({files_scanned} files scanned)")
+print(
+    f"trio_integrity_guard: all domains pass ({files_scanned} files scanned; "
+    f"manifest refs resolved — {manifest_op_refs} operation ids, "
+    f"{manifest_spec_items} spec_item backlinks, {manifest_route_sources} route sources)"
+)
 sys.exit(0)
 PY

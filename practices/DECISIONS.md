@@ -2859,3 +2859,211 @@ path-like literals in the shell scripts the checklist **itself names** (one leve
 alias is reported). **The row stays open.**
 
 - Commits: (this commit — PRD-final-4 wave, P1-seal round-14)
+
+## TD-2026-08-01-(backlog-decision-closures) — eleven decision-class rows adjudicated with REFUSE-TO-CLOSE as the default
+
+- Date: 2026-08-01
+- Status: accepted
+- Trigger: final-4 wave, Lane E. Eleven open BACKLOG rows whose honest resolution might be a
+  recorded decision rather than code. "Close it as a decision" is exactly how a catalog launders
+  work it did not do, so each row was held against four closure grounds — (A) premise REFUTED by
+  measurement, (B) OUT OF DECLARED SCOPE per TD-2026-07-30-(ratchet-threat-model), (C) DESIGN
+  BOUNDARY with recorded reversal condition, (D) UNVERIFIABLE ON ANY AVAILABLE PLATFORM, bounded
+  and converted to a platform-gated done-when — and any row naming real work this project can do
+  stays OPEN. Result: **6 closed / 5 stay open**, with two of the open verdicts resting on NEW
+  refuting measurements taken for this adjudication.
+
+### New measurements (2026-08-01, this machine, read-only scratch repos; helper = `practices/scripts/lib/tree_fingerprint.py` at 6242e65)
+
+1. **P3-132's premise is FALSE for a reachable shape.** Scratch repo: `.gitignore` = `build/`,
+   untracked-but-EXISTING `build/out.txt`, committed symlink `link -> build/out.txt`. `git status
+   --porcelain -uall` EMPTY; `cat link` serves `payload-bytes` HERE; fingerprint = clean-tree
+   constant `0a815065…`, **exit 0**. A fresh clone has no `build/out.txt` → the receiver gets a
+   DANGLING link. So "identically broken here and at the receiver, the evidence does not lie"
+   holds ONLY for the dangling-on-both-sides subclass; the resolves-here-via-ignored-path shape is
+   an evidence-divergence channel (verified tree reads bytes the push does not carry).
+2. **Same shape via an ABSOLUTE target** (P3-131): committed `abslink -> <abs path of this
+   checkout>/real.txt` resolves here (serves bytes), fingerprint clean-tree constant, exit 0;
+   dangling at any receiver whose checkout path differs (i.e. all of them).
+3. **Live-tree boundedness for both**: the catalog's only two tracked symlinks
+   (`…/fail_protected_ledger_symlink/…` and `…/fail_receipts_symlink/…`) both resolve to TRACKED
+   targets (measured via index + normpath) — the gap is a class gap, not a live defect.
+4. **Turkish I/ı refutation confirmed on the live volume** (P3-130): on this case-insensitive
+   APFS data volume, `I`(U+0049)·`ı`(U+0131)·`İ`(U+0130) coexist as THREE distinct inodes
+   (35920221/2/3) while the control `touch i` after `I` COLLIDES (1 entry) — the volume folds
+   ordinary case and does NOT fold the Turkish pairs. `str.casefold()` is locale-independent
+   (`casefold('I')=='i'` regardless of `tr_TR`), so there is no environment-control path on our
+   side either.
+5. **NFKC distinctness re-confirmed on the live volume** (P3-128): `A`≠`Ａ`(U+FF21) and
+   `IV`≠`Ⅳ`(U+2163), 4 entries / 4 distinct inodes — consistent with R12's three-volume sweep.
+6. **P3-118 window boundedness verified in source**: the hard-guards step is ONE command
+   (`run-all-guards.sh --include-fixtures`) under `timeout_seconds: 2700`;
+   `verify-completion.sh` `run_with_timeout` watchdog SIGTERMs at the cap, SIGKILLs after a 30s
+   grace, and propagates the exit code → a stalled guard ends in a BLOCK, never a pass. The
+   window is bounded and stated; what is missing is per-guard attribution (grep: no per-guard
+   timing instrumentation exists in `run-all-guards.sh`).
+
+### Verdicts
+
+- **P2-68 — CLOSE (B).** TD-2026-07-30-(ratchet-threat-model) declares the surface out of scope
+  verbatim: "It does NOT defend against an adversary who already controls the execution
+  environment — `PATH` wrappers, shell startup files, the user account, the kernel. … A catalog
+  gate is a correctness ratchet, not a sandbox," and registers this very row as "gated on
+  ax-template ever running in an untrusted-environment context (hosted CI for third-party forks,
+  an agent sandbox with an attacker-writable PATH). Until then it would be cost without a threat."
+  The row duplicates a shipped decision as open inventory. Reclassified as a trigger-bound
+  deferral (P4 discipline); the reopen trigger is the quoted condition, unchanged.
+- **P2-71 — CLOSE (C), done-when branch (b).** Blocking every representation mismatch is the
+  DEFINITION of push evidence (that tree is not the tree that ships); the cost surfaces as a loud
+  refusal with a documented recovery (unset the bits, restore the files, run the release gate).
+  The alternative — a labelled, non-refusing "resume" digest — is declined on this catalog's own
+  measured grounds: an always-weaker artifact distinguished only by a label is the habituation
+  failure recorded at P3-134/[104] ("an advisory that always fires is read by no one") and the
+  loud-refusal-over-silent-tolerance principle in the threat-model AMENDMENT. REVERSAL CONDITION:
+  a demonstrated fork-receiver workflow where restoring the bits is infeasible — then build (a)
+  as a STRUCTURALLY distinct artifact (different filename, different schema, never prints a bare
+  digest), not a labelled variant.
+- **P2-72 — MUST STAY OPEN.** "Undecidable by inspection" justifies not shipping a heuristic
+  scanner; it does not close the row, because the complete remedy is not inspection but
+  EXECUTION on a non-aliasing filesystem, and that remedy is CONSTRUCTIBLE today — this project
+  already proved the volume (`hdiutil create -fs "Case-sensitive APFS"`, used by the round-10..13
+  provers), and a plain Linux ext4 runner (no casefold feature) is byte-preserving, i.e. both
+  case- and normalization-sensitive, for free. Closing a row whose remedy is available
+  infrastructure would launder an unbuilt job as a logical impossibility. Sharpened done-when:
+  (1) one-time baseline NOW — clone HEAD onto a case-sensitive volume (or a Linux host) and run
+  R25 full, recording the outcome (this alone converts "undecidable" into a measured baseline);
+  (2) standing — an R25 `--case-sensitive-volume` opt-in mode or a release-cadence BLOCKING job.
+- **P3-118 — MUST STAY OPEN.** The premise is honest but the window is bounded AND fail-closed
+  (measurement 6): delay-then-BLOCK, not a bypass — availability cost, same family as P3-126.
+  It stays open because the done-when names real, cheap work: the 103-guard sweep shares ONE
+  2700s budget with zero per-guard attribution. Sharpened done-when: instrument per-guard wall
+  time in `run-all-guards.sh` → derive observed p99 → wrap each guard in an individual timeout
+  `max(k·p99, floor)`, keeping 2700s as the outer aggregate cap.
+- **P3-126 — MUST STAY OPEN (should simply be implemented).** Done-when (c) (close by showing
+  real trees cannot reach it) is not honestly satisfiable — pathological depth is COMMITTED
+  content, so a fork can reach it by construction; only the availability grade (fail-closed,
+  never a bypass) is confirmed. Done-when (a) is a trivial fix: build each prefix key as
+  parent-key + `/` + component (O(d) instead of O(d²)), symmetric in both implementations.
+- **P3-127 — CLOSE (D).** No Windows host; both preconditions ((1) NTFS serves the trailing-dot/
+  space spelling as one file, (2) git for Windows can index such entries) unverifiable here; the
+  row already refuses unverified fold changes — the same no-anchorless-expansion principle R12
+  recorded. Platform-gated done-when preserved verbatim, plus one sharpening for the platform
+  holder: measure whether `core.protectNTFS` (default-on for Windows git) already refuses the
+  checkout, which would bound the receiver-side risk before any fold work.
+- **P3-128 — CLOSE (D).** Refuted on every locally constructible target filesystem (R12's three
+  volumes) and re-confirmed on the live volume today (measurement 5). The only residue — OpenZFS
+  `normalization=formKC/formKD` — is a non-default creation-time option with no live ZFS
+  available here; R13 already promoted it into the concrete reopen condition, and the astral gap
+  is closed by argument (R13, TN1150 surrogate-identity). Reopen trigger: measured single-inode
+  `Ａ`/`A` on a formKC dataset, or a server-side-folding SMB/NFS mount. Until then a fold
+  expansion is exactly the anchorless expansion R12 refused.
+- **P3-129 — CLOSE (D).** 8.3 generation is per-volume policy (`fsutil 8dot3name`), the premise
+  of the alias family (two index entries / one file) is itself unconfirmed for short names (they
+  are a lookup namespace, not a spelling git records), and no Windows host exists here. Platform-
+  gated done-when preserved: measure (1) whether the two-entries/one-file shape is constructible
+  at all, (2) whether `core.protectNTFS` already refuses `GIT~1`-class names, before touching any
+  fold.
+- **P3-130 — CLOSE (A).** The row scheduled its own closure ("close at the next grooming with the
+  measurement record") and the grooming measurement is now taken on the LIVE volume with a
+  positive control (measurement 4): the volume demonstrably folds ordinary case yet serves the
+  Turkish pairs as distinct inodes; exFAT's stored up-case table does not fold U+0131 (R12); our
+  key is locale-independent. Reopen condition unchanged: a real filesystem whose VOLUME TABLE
+  (not process locale) serves the pair from one inode.
+- **P3-131 — MUST STAY OPEN.** The alias-census exclusion itself is a correct design boundary
+  (an absolute target has no recorded spelling to compare) — but the row's "portability is a
+  separate defect" underclaims: measurement 2 shows the absolute-target class CONTAINS a
+  false-green shape (resolves here, clean-tree constant, exit 0, dangling at every receiver),
+  which is this gate family's own theme. It cannot be closed as fork-receiver autonomy while that
+  shape is unhandled; fold it into the P3-132 parity check below.
+- **P3-132 — MUST STAY OPEN.** The stated rationale is REFUTED for a reachable shape
+  (measurement 1); P3-134 explicitly routed untracked-intermediate outcomes to this row, so the
+  row's class includes {dangling-both-sides, resolves-here-via-untracked/ignored,
+  absolute-into-checkout}, and the latter two are evidence-divergence, not hygiene. Live tree is
+  currently clean (measurement 3). Sharpened done-when: a per-tracked-symlink RECEIVER-RESOLUTION
+  PARITY check classifying the resolved target as tracked-content (pass) /
+  untracked-or-ignored-content (evidence divergence — decide block vs. record ON THE TRUE
+  PREMISE) / absolute-into-checkout (same) / dangling-both-sides (hygiene advisory only, where
+  R13's "evidence does not lie" argument actually holds), with a false-positive control for the
+  legitimate build-artifact-link shape R13 named. If the non-blocking choice is kept for the
+  divergence shapes, it must be re-recorded as an ACCEPTED FALSE-GREEN CHANNEL, not as "the
+  evidence does not lie."
+
+Convergence accounting: 6 rows leave the open inventory (1 refuted, 1 out-of-scope duplicate of
+a shipped decision, 1 design boundary with reversal condition, 3 platform-unverifiable converted
+to platform-gated done-whens); 5 rows stay open because each names work this project can do —
+two of them (P3-131/132) now carry refuting measurements that RAISE their honest urgency.
+
+- Commits: (this commit — final-4 wave, Lane E backlog adjudication)
+
+## TD-2026-08-01-(template-lock-boundary-and-manifest-content) — a manifest that is only checked to EXIST, and a lock whose transaction outlives the job
+
+- Date: 2026-08-01
+- Status: accepted
+- Trigger: final-4 wave, Lane C (BACKLOG P2-59 / P2-60 / P2-62 / P2-61 / P3-106).
+
+### P2-59 — the guard read the filename, not the file
+
+`trio_integrity_guard.sh` asserted `blueprints/<domain>-ui-manifest.yaml` EXISTED and stopped
+there. Everything the manifest CLAIMS — which backend operation each surface binds, which spec
+item each policy block backlinks, which page/view file the render boundary governs — could drift
+to nonsense while the guard printed PASS. Five checks now resolve those claims
+(`MANIFEST_UNPARSEABLE`, `MANIFEST_UNRESOLVED_OPERATION_ID` / `MANIFEST_OPERATION_ID_IN_FRONTEND_ONLY`,
+`MANIFEST_DANGLING_SPEC_ITEM`, `MANIFEST_MISSING_ROUTE_SOURCE`, `MANIFEST_ROUTE_NOT_IN_CONTRACT`).
+
+They are STRUCTURE-CONDITIONAL by necessity — the older manifests (auth, crud, payment,
+notification, …) use a different shape and declare none of these keys — so the failure mode is
+vacuity, not false positives. That is answered where it can be: the live catalog sweep asserts
+shrink-only census floors (5 operation ids / 30 spec_item backlinks / 6 route sources against an
+observed 5 / 36 / 6). Deleting the manifest content the checks read is now a FAILING run, not a
+green one. Fixture roots are exempt from the floors; they are minimal by construction.
+
+Route SOURCES resolve LITERALLY, not by glob: Next.js segments (`[id]`, `(admin)`) are glob
+metacharacters, and a glob-based existence check would silently match the wrong file.
+
+### P2-60 — DECISION: align with the production REQUIRES_NEW pattern, but move BOTH boundaries
+
+`templates/backend/scheduled-task` acquired its pessimistic row lock inside the caller's
+transaction, so the lock was held for the whole job and for every remaining task in the poll
+loop; a competing node BLOCKED on the row instead of returning `false`, inverting
+`LockingPolicy`'s own "a lost race returns false, never waits" contract.
+
+Making the acquire `REQUIRES_NEW` **alone** would NOT have been sound, and this is the part worth
+recording. In this template the lock state lives ON the domain row
+(`scheduled_tasks.lock_holder` / `locked_at`), not in a separate table as the production SPI's
+`task_locks` does. An outer transaction would therefore still hold a managed copy of the same row
+whose `@Version` (BaseEntity) the inner commit had bumped, and the end-of-job `lastRunAt` write
+would fail the version check. So: acquire and release are `REQUIRES_NEW`, the two scheduling
+entry points are `NOT_SUPPORTED`, and `recordLastRun` re-reads the row in its own transaction.
+
+RESIDUAL, recorded rather than inherited: because the lock key IS the domain row, a fork calling
+the execute path from inside its own transaction re-opens both hazards and can additionally
+self-deadlock (a `REQUIRES_NEW` acquire waiting on a row lock the suspended outer transaction
+holds). The production SPI is immune because of its key shape; a fork needing transactional
+callers should adopt that shape first. This is stated in the template's own meta block.
+
+### P2-62 — DECISION: harness, not a recorded limit
+
+The row offered "build a template verification harness" or "state the structural limit". The
+harness was chosen because it turned out to be reachable with NO new build infrastructure: a
+JUnit class in the existing `backend/src/test` tree, `@Tag("SCHEDULED_TASK")` so the existing
+`testScheduledTask` task runs it, carrying an executable COPY of the template's
+`tryAcquire`/`release`/`isLockHeld` against hand-rolled collaborators. A copy alone would rot
+within one edit, so the same test re-reads BOTH files from disk and asserts the copy is
+character-identical after whitespace normalisation — comments included, because a comment that
+outlives the code it describes is the same rot in a slower form.
+
+Boundary, stated: this proves the LOGIC, not the Spring wiring. No container runs, so the
+`REQUIRES_NEW` propagation and the JPA `@Lock(PESSIMISTIC_WRITE)` are NOT exercised — an
+in-memory map has no row locks. What WOULD verify those is a fork-side integration test against a
+real datasource, which the catalog cannot run for a skeleton whose package is `com.example.app`.
+
+### P2-61 / P3-106 — corrections, not decisions
+
+`specs/storage-reconciliation-l0.yaml#RECON-IDEMPOTENT-001` still described the scheduled-task
+lock as `FOR UPDATE SKIP LOCKED` after (P2-48) had corrected that claim itself; it now states the
+two-branch semantics (row-present = pessimistic `SELECT ... FOR UPDATE`; row-absent = PK
+arbitration) with the reason SKIP LOCKED is wrong here. `applyOptimisticDelete` decremented
+`totalElements` even when the id was not on the cached page — `Math.max(0, …)` hid the arithmetic
+but not the lie — and now decrements only what the filter actually removed.
+
+- Commits: (this commit — final-4 wave, Lane C)

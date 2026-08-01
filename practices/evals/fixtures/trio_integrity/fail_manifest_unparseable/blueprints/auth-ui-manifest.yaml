@@ -1,0 +1,5 @@
+domain: auth
+routes:
+  surfaces:
+   - path: "/login"
+  bad: [unclosed

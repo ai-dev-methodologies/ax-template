@@ -25,6 +25,39 @@
  *   SPI is now closed (both check the holder before releasing); the lock-KEY-SHAPE divergence
  *   (row-UUID vs taskName-keyed table) is a deliberate template-simplicity choice, documented
  *   here rather than silently inherited by forks.
+ *   BACKLOG P2-60 (lock held for the whole job): tryAcquire/release were plain
+ *   @Transactional (REQUIRED) and both callers in ScheduledTaskService were themselves
+ *   @Transactional, so the acquire JOINED the caller's transaction and its pessimistic row
+ *   lock was held until the OUTER transaction committed — across the entire job, and across
+ *   every remaining task in the poll loop. A competing node then BLOCKED on the row instead
+ *   of returning false, inverting this interface's "a lost race returns false, never waits"
+ *   contract. Closed by moving BOTH boundaries together: acquire and release are now
+ *   REQUIRES_NEW (production parity with DatabaseAdvisoryLock), and the two scheduling entry
+ *   points are NOT_SUPPORTED so no enclosing transaction exists to suspend. Moving only the
+ *   acquire would NOT have been sound here — the lock columns live on the domain row, so an
+ *   outer transaction would still hold a managed copy of that row whose @Version the inner
+ *   commit had bumped, and the end-of-job lastRunAt write would fail the version check;
+ *   ScheduledTaskService.recordLastRun therefore re-reads the row in its own transaction.
+ *   RESIDUAL, by design: because the lock key IS the domain row, a fork that calls the
+ *   execute path from inside its own transaction re-opens both hazards and can additionally
+ *   self-deadlock (a REQUIRES_NEW acquire waiting on a row lock the suspended outer
+ *   transaction holds). The production SPI is immune because its lock lives in a separate
+ *   task_locks table; a fork that needs transactional callers should adopt that key shape.
+ *   BACKLOG P2-62 (this skeleton is now EXECUTED, not just grepped): templates are not on any
+ *   source set, so the P3-102 holder-verification fix above was previously evidenced only by a
+ *   grep plus a structural assertion — the behavioural test named DatabaseAdvisoryLock, the
+ *   PRODUCTION twin, not this file. Closed by a verification harness at
+ *   backend/src/test/java/com/ax/template/authblueprint/scheduledtask/templateharness/
+ *   TemplateLockingPolicyHarnessTest.java (@Tag SCHEDULED_TASK, so ./gradlew testScheduledTask
+ *   runs it): it carries an executable COPY of tryAcquire/release/isLockHeld against hand-rolled
+ *   collaborators, AND re-reads both files from disk to assert the copy is character-identical
+ *   to the bodies below after whitespace normalisation (comments included). EDITING ANY OF THOSE
+ *   THREE METHODS WITHOUT UPDATING THE HARNESS TURNS testScheduledTask RED — that is the point.
+ *   Boundary: the harness proves the LOGIC, not the Spring wiring — no container, so the
+ *   REQUIRES_NEW propagation and the JPA @Lock(PESSIMISTIC_WRITE) on findByIdForUpdate are NOT
+ *   exercised (an in-memory map has no row locks). What WOULD verify those is a fork-side
+ *   integration test against a real datasource, which the catalog cannot run for a skeleton
+ *   whose package is com.example.app.
  * provenance_class: internal_design
  * evidence:
  *   - source_type: external
@@ -48,6 +81,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Duration;
@@ -146,7 +180,7 @@ public interface LockingPolicy {
         }
 
         @Override
-        @Transactional
+        @Transactional(propagation = Propagation.REQUIRES_NEW)
         public boolean tryAcquire(UUID taskId, String lockHolder) {
             // FOR UPDATE, not findById: the row lock must span the isLockHeld() test and the
             // acquireLock() write below, or two nodes both pass the test and both "win".
@@ -166,7 +200,7 @@ public interface LockingPolicy {
         }
 
         @Override
-        @Transactional
+        @Transactional(propagation = Propagation.REQUIRES_NEW)
         public void release(UUID taskId, String lockHolder) {
             // FOR UPDATE, not findById: the holder-match test and the clearing write below
             // must be one indivisible step, or a concurrent stale takeover can commit between

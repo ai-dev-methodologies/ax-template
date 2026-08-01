@@ -32,18 +32,33 @@ import type { OutboxPage } from './email-outbox-view'
  * The query cache holds an OutboxPage pagination envelope
  * (`content: OutboxResponse[]` + `page`/`size`/`totalElements`/`totalPages`),
  * not a bare array. This filters the target row out of `content` and
- * decrements `totalElements` (floored at 0), preserving every other envelope
- * field untouched — mirrors the same convention used by the
- * favorites-bookmarks `remove` mutation's onMutate.
+ * decrements `totalElements`, preserving every other envelope field untouched
+ * — mirrors the same convention used by the favorites-bookmarks `remove`
+ * mutation's onMutate.
+ *
+ * BACKLOG P3-106: the decrement is conditional on the filter having actually
+ * removed something. The previous shape decremented unconditionally (floored at
+ * 0), so deleting a row that is NOT on the currently cached page — a stale row
+ * id, a row that lives on another page, a double-fired confirm — silently
+ * understated the total. `Math.max(0, …)` hid the arithmetic but not the lie:
+ * the count and the list disagreed until the server re-fetch landed. The
+ * `removed` is 0 or 1, and only a real removal spends it; a no-op returns the
+ * SAME object so react-query does not re-render on a write that changed
+ * nothing. `Math.max(0, …)` stays as a floor against inconsistent server data
+ * (a page whose totalElements already undercounts its own content), but it is
+ * no longer load-bearing for the ordinary absent-id path.
  */
 export function applyOptimisticDelete(
   old: OutboxPage | undefined,
   id: string,
 ): OutboxPage | undefined {
   if (!old) return old
+  const content = old.content.filter((r) => r.id !== id)
+  const removed = old.content.length - content.length
+  if (removed === 0) return old
   return {
     ...old,
-    content: old.content.filter((r) => r.id !== id),
-    totalElements: Math.max(0, old.totalElements - 1),
+    content,
+    totalElements: Math.max(0, old.totalElements - removed),
   }
 }

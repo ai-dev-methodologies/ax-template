@@ -1,0 +1,19 @@
+domain: auth
+tokens_override: {}
+
+# P2-59 fixture — the manifest CONTENT the guard now resolves.
+routes:
+  surfaces:
+    - path: "/login"
+      purpose: "login surface"
+      backend_operation_id: loginUser
+      spec_item: AUTH-FE-404
+
+render_boundary:
+  strategy: page_owns_data_view_is_pure
+  page: "app/(admin)/widgets/page.tsx"
+  view: "app/(admin)/widgets/widgets-view.tsx"
+
+a11y:
+  contrast_min: 4.5
+  spec_item: AUTH-FE-001

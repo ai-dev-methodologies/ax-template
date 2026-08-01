@@ -34,6 +34,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
@@ -54,6 +55,38 @@ import java.util.UUID;
  * </ol>
  *
  * <p>Extends {@link BaseService} (SP13) for shared exception helpers.
+ *
+ * <h2>Transaction boundary around the lock (BACKLOG P2-60)</h2>
+ * The two scheduling entry points ({@link #runDueTasksLoop} and {@link #triggerManual})
+ * are declared {@code NOT_SUPPORTED} — they deliberately run OUTSIDE a transaction, and
+ * every step below them opens its own short one. That is not a stylistic choice:
+ * <ul>
+ *   <li>{@link LockingPolicy.DbRowLockingPolicy#tryAcquire} takes a pessimistic
+ *       {@code SELECT ... FOR UPDATE} row lock. If it JOINED a caller's transaction (the
+ *       previous shape — both entry points were plain {@code @Transactional}), that row
+ *       lock would be held until the OUTER transaction committed, i.e. across the whole
+ *       job AND across every remaining task in the poll loop. A second node's acquire
+ *       would then BLOCK on the row for the duration of someone else's job instead of
+ *       returning {@code false} and skipping — the "lost race returns false, never
+ *       waits" contract in {@link LockingPolicy} would be violated by the boundary
+ *       rather than by the implementation.</li>
+ *   <li>Here the lock state lives ON the domain row ({@code scheduled_tasks.lock_holder} /
+ *       {@code locked_at}), so it is not enough to make the acquire {@code REQUIRES_NEW}
+ *       and leave the outer transaction in place: the outer transaction would still hold a
+ *       managed copy of the SAME row whose {@code @Version} the inner commit has since
+ *       bumped, and the {@code lastRunAt} write at the end of the job would fail the
+ *       version check (or, without {@code @Version}, silently write {@code lock_holder}
+ *       back to null). The two boundaries have to move together.</li>
+ * </ul>
+ * FORK BOUNDARY, stated rather than inherited silently: because this template's lock key
+ * is the domain row itself, wrapping {@link #triggerManual} (or your own caller of the
+ * execute path) in an enclosing transaction that has already touched the same
+ * {@code scheduled_tasks} row re-opens both hazards, and a {@code REQUIRES_NEW} acquire
+ * would additionally self-deadlock against the outer transaction's own row lock. The
+ * production SPI in {@code backend/src} ({@code DatabaseAdvisoryLock} +
+ * {@code task_locks}) does not have this constraint precisely because its lock lives in a
+ * SEPARATE table keyed by task name. If your callers need to run inside a transaction,
+ * adopt that key shape first.
  */
 @Service
 @Transactional(readOnly = true)
@@ -107,7 +140,7 @@ public class ScheduledTaskService extends BaseService {
      * Runs every 60 seconds (configurable via ax.scheduler.poll-interval-ms).
      */
     @Scheduled(fixedDelayString = "${ax.scheduler.poll-interval-ms:60000}")
-    @Transactional
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public void runDueTasksLoop() {
         var eligible = taskRepository.findAllEligible();
         if (!eligible.isEmpty()) {
@@ -124,10 +157,13 @@ public class ScheduledTaskService extends BaseService {
      * <p>Uses the same lock path as the scheduled loop — concurrent admin triggers
      * are idempotent (at most one execution per lock TTL, SCHED-IDEMPOTENT-001).
      *
+     * <p>Runs OUTSIDE a transaction (P2-60) — see the class javadoc. Each step below
+     * (the lookup, the lock acquire, the history writes, the release) opens its own.
+     *
      * @param taskId UUID of the task to trigger
      * @return true if execution started; false if lock was held (already running)
      */
-    @Transactional
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public boolean triggerManual(UUID taskId) {
         var task = taskRepository.findById(taskId)
                 .orElseThrow(() -> entityNotFound("ScheduledTask", taskId));
@@ -199,8 +235,7 @@ public class ScheduledTaskService extends BaseService {
             log.info("Executing task '{}' (id={})", task.getName(), task.getId());
             taskExecutor.execute(task);
             history.markSuccess(Instant.now());
-            task.recordLastRun(Instant.now());
-            taskRepository.save(task);
+            recordLastRun(task.getId(), Instant.now());
             log.info("Task '{}' completed successfully", task.getName());
             return true;
         } catch (Exception ex) {
@@ -211,5 +246,22 @@ public class ScheduledTaskService extends BaseService {
             historyRepository.save(history);
             lockingPolicy.release(task.getId(), lockHolderNodeId);
         }
+    }
+
+    /**
+     * Stamps {@code lastRunAt} in its own short transaction, re-reading the row first.
+     *
+     * <p>P2-60: the {@code ScheduledTask} instance the caller is holding was loaded BEFORE
+     * {@link LockingPolicy#tryAcquire} committed its own lock write to the same row, so its
+     * {@code @Version} is stale and its {@code lockHolder} is still null. Saving THAT
+     * instance would either fail the version check or write the lock columns back to null
+     * mid-job. The re-read is what keeps the lock state written by the acquire transaction
+     * intact.
+     */
+    private void recordLastRun(UUID taskId, Instant at) {
+        taskRepository.findById(taskId).ifPresent(fresh -> {
+            fresh.recordLastRun(at);
+            taskRepository.save(fresh);
+        });
     }
 }

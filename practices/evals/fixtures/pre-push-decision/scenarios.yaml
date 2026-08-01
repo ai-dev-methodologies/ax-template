@@ -83,6 +83,14 @@ scenarios:
     stages: [none]     # exercised at the pure-function layer (no side effect)
     assert: "fallback yields 'HEAD <head> HEAD <upstream|ZERO>'; non-empty passthrough verbatim"
 
+  - id: s11-anchor-sha-wired
+    branch: "ANCHOR_ARGS — --expect-anchor-sha carries the REMOTE's advertised sha"
+    input: "(a) push refs/heads/main with a non-ZERO remote_sha; (b) push refs/heads/feature"
+    exit: 0
+    stages: [r25]
+    assert: "tree copy of the recency guard receives --expect-anchor-sha <remote_sha> on the
+             anchor branch and NO anchor arg on a non-anchor branch (documented no-op)"
+
   - id: primary-r25-block
     branch: "PRIMARY block path — stale/missing R25 audit"
     input: "shipping ref; recency guard exits 1 (AX_STUB_RECENCY_EXIT=1)"

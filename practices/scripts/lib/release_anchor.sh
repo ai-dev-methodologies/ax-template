@@ -878,7 +878,43 @@ ax_anchor_check_replace_refs() {
     # indistinguishable from "there are none" — i.e. the one state an attacker can manufacture
     # (break the ref store, or make the command fail) read as clean. An unanswerable question is
     # not an answer.
-    refs="$(ax_git "$repo" for-each-ref --format='%(refname)' refs/replace/ 2>/dev/null)"
+    # ── BACKLOG P3-117 (namespace half) ──────────────────────────────────────────────
+    # ROUND 5 closed the fail-open half (an enumeration ERROR read as "there are none"). The
+    # other half was the VIEW: `for-each-ref refs/replace/` enumerates ONE namespace. MEASURED
+    # (throwaway repo, git 2.x): with `refs/namespaces/evil/refs/replace/<sha>` in the ref store,
+    #     git for-each-ref --format='%(refname)' refs/replace/   → EMPTY, rc 0   ("none")
+    #     git for-each-ref --format='%(refname)'                 → lists it
+    # so the pattern-scoped question answered "clean" about a ref store that carries a staged
+    # object substitution. HONEST SCOPE, stated rather than implied: that parked ref is INERT for
+    # this ratchet's own reads — measured, `git cat-file -p <sha>` unnamespaced returns the
+    # authentic object, and the hermetic bootstrap scrubs GIT_NAMESPACE out of all eight entries'
+    # environments, so no gate here can be pointed at it. What the full scan closes is therefore
+    # (a) the honesty of the CLAIM — "this repository carries replacement refs" is now answered
+    # over the WHOLE ref store instead of over one view, so a ref staged for a later namespaced
+    # run is reported at the release that ships it rather than at the run that trips over it —
+    # and (b) the callers that never ran the bootstrap (a fork-receiver sourcing this helper from
+    # its own harness), where GIT_NAMESPACE can be live. (b) is also refused directly below,
+    # because a function whose whole job is "is the object graph the real one" may not be asked
+    # that question through a redirected view.
+    #   REACHABILITY OF THAT REFUSAL, measured rather than asserted: this file's OWN hermetic
+    #   bootstrap unsets the entire GIT_* family at source time, so a GIT_NAMESPACE already in
+    #   the environment is gone before any definition below exists — measured, set BEFORE the
+    #   source the branch is not reached (exit 0 on a clean repo); set AFTER the source it fires
+    #   (exit 1). It is therefore defense in depth for a caller that sets it later, and the
+    #   full-store scan below is the actual closure of this row.
+    case "${GIT_NAMESPACE:-}" in
+        ?*) {
+                echo "${label}: ANCHOR_REPLACE_REFS_PRESENT — GIT_NAMESPACE is set ('${GIT_NAMESPACE}')."
+                echo "  Every ref read below — including the replacement-ref enumeration itself — is"
+                echo "  then answered out of refs/namespaces/${GIT_NAMESPACE}/, i.e. out of a ref view"
+                echo "  the caller chose. This function exists to establish that the object graph is"
+                echo "  the real one; it will not answer that through a redirected view. The eight ax"
+                echo "  entries scrub this variable in their hermetic bootstrap, so reaching this"
+                echo "  message means the helper was sourced from a harness that did not. Unset it."
+            } >&2
+            return 1 ;;
+    esac
+    refs="$(ax_git "$repo" for-each-ref --format='%(refname)' 2>/dev/null)"
     rc=$?
     if [ "$rc" -ne 0 ]; then
         {
@@ -890,6 +926,10 @@ ax_anchor_check_replace_refs() {
         } >&2
         return 1
     fi
+    # The whole ref store is enumerated and then FILTERED, rather than asking git for one prefix:
+    # `refs/replace/` at ANY position catches both the live spelling and the namespaced parking
+    # spot `refs/namespaces/<ns>/refs/replace/<sha>`.
+    refs="$(printf '%s\n' "$refs" | grep 'refs/replace/' || true)"
     [ -n "$refs" ] || return 0
     {
         echo "${label}: ANCHOR_REPLACE_REFS_PRESENT — this repository carries git REPLACEMENT REFS:"
@@ -957,7 +997,16 @@ ax_anchor_check_ancestry() {
 #   first-release bootstrap; 1 = ANCHOR_BOOTSTRAP_IMPLAUSIBLE (blocking).
 _ax_anchor_bootstrap_implausible() {
     local repo="$1" label="$2" rel="$3" hist last_touch reason="" rc
-    hist="$(ax_git "$repo" rev-list --max-count=1 "$AX_ANCHOR_SHA" -- "$rel" 2>/dev/null)"
+    # `--full-history` (BACKLOG P3-110). `git rev-list <rev> -- <path>` applies HISTORY
+    # SIMPLIFICATION by default: at a merge, if the path's blob at the merge equals the blob at
+    # ANY ONE parent, git follows only that parent and DROPS the other side's commits from the
+    # walk entirely. So a path that lived — and was modified — on a side branch can be reported
+    # as never-touched by the default walk, and this function reads "never touched" as THE
+    # BOOTSTRAP SKIP: the one branch that switches a ratchet off. A cheaper history is exactly
+    # what an attacker wants here, so the walk must be the FULL one. `--full-history` costs a
+    # wider walk and can only ever report MORE history, i.e. it can only move this function
+    # towards BLOCK — the fail-closed direction.
+    hist="$(ax_git "$repo" rev-list --full-history --max-count=1 "$AX_ANCHOR_SHA" -- "$rel" 2>/dev/null)"
     rc=$?
     # ROUND 5 fail-closed sweep: a FAILED rev-list produced an empty `hist`, which this function
     # reads as "the anchor's history never contained the path" — the bootstrap SKIP. The one
@@ -974,7 +1023,10 @@ _ax_anchor_bootstrap_implausible() {
     if [ -n "$hist" ]; then
         reason="the anchor's OWN history contains ${rel} (last touched by ${hist}), so its"$'\n'"    absence at ${AX_ANCHOR_SHA} is a DELETION, not a never-existed"
     else
-        last_touch="$(ax_git "$repo" rev-list --max-count=1 HEAD -- "$rel" 2>/dev/null)"
+        # Same `--full-history` correction (P3-110): the redundant probe exists so a trick that
+        # fools one walk still has to fool the other, and two walks that share a simplification
+        # blind spot are one walk.
+        last_touch="$(ax_git "$repo" rev-list --full-history --max-count=1 HEAD -- "$rel" 2>/dev/null)"
         # Same fail-closed rule for the redundant probe: a failed walk is not a clean one.
         if [ $? -ne 0 ]; then
             {

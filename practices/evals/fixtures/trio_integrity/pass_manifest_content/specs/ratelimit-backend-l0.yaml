@@ -1,0 +1,6 @@
+domain: ratelimit
+frontend_required: false
+items:
+  - id: RATE-BE-001
+    requirement: "API rate limiting is enforced per user per endpoint"
+    frontend_required: false

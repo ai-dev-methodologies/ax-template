@@ -753,6 +753,78 @@ def anchor_yaml(rel, what, strict=False):
         return None
 
 
+# ── DYNAMIC SNAPSHOT PATHS GET THE RATCHET-CRITICAL TREATMENT (BACKLOG P3-111) ────────
+# The ratchet-critical paths are a STATIC list and get three checks (release_anchor.sh:
+# ax_anchor_worktree_paths_regular walks EVERY path component with lstat;
+# ax_anchor_release_paths_regular requires git mode 100644/100755 AT THE ANCHOR). The snapshot
+# bodies are the opposite kind of path — the id comes out of `_MANIFEST.yaml`, which is an
+# ORDINARY EDITABLE FILE in the tree — and they had a single lstat on the LEAF. Three gaps
+# followed, and each is a way to make the filesystem side and the git-object side read different
+# things, which is the entire laundering channel this guard exists to close:
+#   (1) A SYMLINKED INTERMEDIATE. `practices/upstream` (or a directory below it, once an id
+#       carries a separator) being a link launders a "regular" leaf exactly as well as a
+#       symlinked leaf does — os.path.islink(<leaf>) is False the whole time.
+#   (2) NO ANCHOR-SIDE MODE CHECK. The self side lstats; the anchor side only ever called
+#       `git show ANCHOR:<rel>`, which for a mode-120000 entry hands back THE TARGET PATHNAME as
+#       if it were the body. The bytes then differ from the file for a reason no check names.
+#   (3) THE ID IS NOT A NAME, IT IS A PATH FRAGMENT. `sid` was concatenated straight into a
+#       path, so an id containing `/` or `..` addresses a file outside <catalog>/upstream/
+#       entirely — the manifest would then be checksumming, and ratcheting, something else.
+# Structural (exit 2) rather than a finding, matching the leaf check it replaces.
+def snapshot_path_regular(catalog, sid):
+    rel = f"{catalog}/upstream/{sid}.snapshot.md"
+    prefix = f"{catalog}/upstream/"
+    # (3) containment — normalise and require the result to stay under <catalog>/upstream/.
+    norm = os.path.normpath(rel).replace(os.sep, "/")
+    if not norm.startswith(prefix) or "/../" in f"/{norm}/" or norm != rel:
+        die_structural(f"SNAPSHOT_PATH_ESCAPES — the manifest id {catalog}::{sid!r} builds the "
+                       f"path {rel!r}, which does not name a plain file directly under "
+                       f"{prefix}. An id is an identity component, not a path fragment: "
+                       f"accepting a separator or a `..` lets an editable manifest point the "
+                       f"census at a file outside the snapshot tree, which is then the thing "
+                       f"checksummed and ratcheted")
+    # (1) every path component, lstat, from the scanned root down to the leaf.
+    cur = root
+    for part in norm.split("/"):
+        cur = os.path.join(cur, part)
+        if os.path.islink(cur):
+            die_structural(f"SELF_PATH_NOT_REGULAR — {rel} resolves through a SYMLINK at "
+                           f"{os.path.relpath(cur, root)}. Snapshot bodies are compared against "
+                           "git blobs across releases; a link anywhere on the way makes the "
+                           "filesystem side and the git-object side read different bytes by "
+                           "construction. Replace it with the real directory/file")
+    if os.path.exists(cur) and not os.path.isfile(cur):
+        die_structural(f"SELF_PATH_NOT_REGULAR — {rel} exists but is not a regular file. A "
+                       "snapshot body is compared against a git blob; anything that is not a "
+                       "regular file cannot be compared and must not be trusted")
+    # (2) anchor-side git mode. Only on an anchored live root — a fixture root has no anchor,
+    # exactly as everywhere else in this guard. A FAILED ls-tree is not "absent": the mode
+    # question would then be unanswered, and this guard's fail-closed sweep does not accept
+    # unanswered as clean.
+    if not anchored:
+        return
+    proc = subprocess.run(["git", "-C", git_root, "ls-tree", anchor, "--", rel],
+                          stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+    if proc.returncode != 0:
+        die_anchor_auth("ANCHOR_PATH_UNVERIFIABLE",
+                        f"`git ls-tree {anchor_kind} -- {rel}` failed (rc={proc.returncode}), so "
+                        "this run cannot tell what the release anchor records that path AS. The "
+                        "mode is what decides whether `git show ANCHOR:<rel>` hands back the "
+                        "body or a link target, so an unanswerable mode is refused")
+    out = proc.stdout.decode("utf-8", "replace").splitlines()
+    if out:
+        mode = out[0].split()[0]
+        if mode not in ("100644", "100755"):
+            die_anchor_auth("ANCHOR_PATH_NOT_REGULAR",
+                            f"{rel} exists at the release anchor ({anchor_kind} = {anchor[:12]}) "
+                            f"with git mode {mode}, which is not a regular file blob "
+                            "(100644/100755). Mode 120000 is a SYMLINK, and the anchor side of "
+                            "this guard reads GIT OBJECTS — `git show` would hand back the LINK "
+                            "BLOB, i.e. the target PATHNAME, while this process checksums the "
+                            "file the link resolves to. The two sides then disagree by "
+                            "construction, which is the laundering channel")
+
+
 def anchor_changed_paths():
     """Repo-relative paths under either catalog's upstream/ that DIFFER from the anchor.
 
@@ -808,11 +880,10 @@ for catalog in CATALOGS:
         # symlinks (open/isfile use stat), while the anchor side reads git blobs. A symlinked
         # BODY is therefore the same laundering channel as a symlinked ledger — this process
         # checksums the target, the next release's `git show` sees a pathname. lstat, not stat.
-        if os.path.islink(spath):
-            die_structural(f"SELF_PATH_NOT_REGULAR — {catalog}/upstream/{sid}.snapshot.md is a "
-                           "SYMLINK. Snapshot bodies are compared against git blobs across "
-                           "releases; a link makes the filesystem side and the git-object side "
-                           "read different bytes by construction. Replace it with the file")
+        # BACKLOG P3-111: that was a LEAF-ONLY lstat, and these paths are DYNAMIC — the id comes
+        # out of an editable manifest. The ratchet-critical (static) paths get three things and
+        # these got one; snapshot_path_regular() now applies all three here as well.
+        snapshot_path_regular(catalog, sid)
         if not os.path.isfile(spath):
             # No committed body — out of scope by construction (there is nothing to checksum).
             # Reported in the summary so the population is visible, never silently dropped.

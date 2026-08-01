@@ -81,6 +81,38 @@ describe('email-outbox delete mutation cache transform (EMAIL-FE-007 optimistic-
     expect(next?.totalElements).toBe(0)
   })
 
+  // ── P3-106 — absent id must not decrement ────────────────────────────────
+  // The decrement used to be unconditional (clamped at 0), so an id that is not on
+  // the cached page — a stale row, a row on another page, a double-fired confirm —
+  // silently understated the total while the list stayed the same length. The count
+  // and the rows disagreed until the onSettled re-fetch landed.
+
+  it('P3-106: deleting an id that is NOT on the cached page leaves totalElements alone', () => {
+    const next = applyOptimisticDelete(BASE_PAGE, 'row_on_another_page')
+    expect(next?.content.map((r) => r.id)).toEqual(['row_1', 'row_2'])
+    expect(next?.totalElements).toBe(BASE_PAGE.totalElements)
+  })
+
+  it('P3-106: an absent id whose count is NOT at the floor still does not decrement', () => {
+    // The pre-fix bug is invisible whenever Math.max(0, …) clamps. This page's
+    // totalElements (57 across pages) is far from 0, so an unconditional decrement
+    // would show up as 56 here — the clamp cannot mask it.
+    const multiPage: OutboxPage = { ...BASE_PAGE, totalElements: 57, totalPages: 3 }
+    const next = applyOptimisticDelete(multiPage, 'row_on_another_page')
+    expect(next?.totalElements).toBe(57)
+  })
+
+  it('P3-106: a no-op delete returns the SAME object, so no re-render is triggered', () => {
+    expect(applyOptimisticDelete(BASE_PAGE, 'nope')).toBe(BASE_PAGE)
+  })
+
+  it('P3-106 NON-VACUITY: a PRESENT id still decrements exactly once', () => {
+    const multiPage: OutboxPage = { ...BASE_PAGE, totalElements: 57, totalPages: 3 }
+    const next = applyOptimisticDelete(multiPage, 'row_1')
+    expect(next?.totalElements).toBe(56)
+    expect(next).not.toBe(multiPage)
+  })
+
   it('returns old (undefined) unchanged when there is no cached page yet', () => {
     expect(applyOptimisticDelete(undefined, 'row_1')).toBeUndefined()
   })

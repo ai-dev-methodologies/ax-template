@@ -104,11 +104,30 @@ make_scratch() {
 
         # STUB recency guard: parse --expect-sha, append it to AX_STUB_RECENCY_LOG,
         # exit AX_STUB_RECENCY_EXIT (default 0). Never touches the real audit log.
+        # BACKLOG P3-112: the stub records --expect-anchor-sha TOO, and tags WHICH copy of the
+        # guard it is. The hook runs the recency guard twice per shipping ref — the PREVIOUS
+        # RELEASE'S copy, extracted out of git into /tmp/ax-ratchet.*, and then the tree's own —
+        # and only the second one carries the anchor binding conditionally (ANCHOR_ARGS is empty
+        # for a non-anchor branch). Without the tag the two calls are indistinguishable in one
+        # log and an assertion about "the anchor arg" could be satisfied by the wrong call.
         cat > practices/evals/completion_checklist_recency_guard.sh <<'STUB'
 #!/usr/bin/env bash
-sha=""
-while [ $# -gt 0 ]; do case "$1" in --expect-sha) sha="$2"; shift 2 ;; *) shift ;; esac; done
+sha=""; anchor=""
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --expect-sha) sha="$2"; shift 2 ;;
+        --expect-anchor-sha) anchor="$2"; shift 2 ;;
+        *) shift ;;
+    esac
+done
 [ -n "${AX_STUB_RECENCY_LOG:-}" ] && printf '%s\n' "$sha" >> "$AX_STUB_RECENCY_LOG"
+if [ -n "${AX_STUB_ANCHOR_LOG:-}" ]; then
+    case "$0" in
+        */ax-ratchet.*/*) _tag=anchor-copy ;;
+        *) _tag=tree-copy ;;
+    esac
+    printf '%s %s %s\n' "$_tag" "$sha" "${anchor:-<none>}" >> "$AX_STUB_ANCHOR_LOG"
+fi
 exit "${AX_STUB_RECENCY_EXIT:-0}"
 STUB
         chmod +x practices/evals/completion_checklist_recency_guard.sh
@@ -138,9 +157,9 @@ STUB
 OUT=""
 RC=0
 run_hook() {
-    local repo="$1" stdin_str="$2" rexit="${3:-0}" rlog="${4:-}"
+    local repo="$1" stdin_str="$2" rexit="${3:-0}" rlog="${4:-}" alog="${5:-}"
     OUT="$(cd "$repo" && printf '%s' "$stdin_str" | \
-        AX_STUB_RECENCY_EXIT="$rexit" AX_STUB_RECENCY_LOG="$rlog" \
+        AX_STUB_RECENCY_EXIT="$rexit" AX_STUB_RECENCY_LOG="$rlog" AX_STUB_ANCHOR_LOG="$alog" \
         bash .githooks/pre-push origin file://"$repo" 2>&1)"
     RC=$?
 }
@@ -412,6 +431,52 @@ scenario_primary_r25_block() {
     rm -rf "$repo"
 }
 
+# S11 — THE ANCHOR BINDING IS ACTUALLY WIRED (BACKLOG P3-112).
+# The hook's whole layer-3 authentication is one argument: --expect-anchor-sha <the sha GIT took
+# from the remote's own advertisement>. Every scenario above asserted --expect-sha and the stage
+# that fired; none asserted that this argument was passed at all, so deleting `ANCHOR_ARGS` from
+# the hook — which removes the binding entirely and lets a forged refs/remotes/origin/main stand
+# — left the whole table GREEN. Asserted here in BOTH directions, because the binding is
+# deliberately conditional:
+#   · anchor branch (remote ref refs/heads/main), remote already has it → the TREE copy must
+#     receive exactly the advertised remote sha;
+#   · any other ref → the tree copy must receive NOTHING (documented no-op: that push does not
+#     advance origin/main, so there is no remote advertisement to bind to).
+# The anchor-copy call is logged too and deliberately NOT constrained here: it always receives an
+# extraction rev, which may legitimately be the local fallback.
+scenario_s11_anchor_sha_wired() {
+    local id="s11-anchor-sha-wired" repo out
+    repo="$(make_scratch)" || { fail_case "$id" "scratch setup failed"; return; }
+    ( cd "$repo"; echo a >> docs/readme.md && git add -A && git commit -qm c1 ) >/dev/null 2>&1
+    local tip base alog tree_line
+    tip="$(cd "$repo" && git rev-parse main)"
+    base="$(cd "$repo" && git rev-parse HEAD~1)"
+    alog="$repo/.anchor.log"
+
+    # (a) anchor branch: the remote advertises $base for refs/heads/main.
+    run_hook "$repo" "refs/heads/main $tip refs/heads/main $base" 0 "" "$alog"
+    tree_line="$(grep '^tree-copy ' "$alog" 2>/dev/null | head -1)"
+    if [[ "$tree_line" == "tree-copy $tip $base" ]]; then
+        pass_case "$id"
+    else
+        fail_case "$id" "tree-copy call got '<<${tree_line:-<no tree-copy call>}>>'; expected 'tree-copy $tip $base' (rc=$RC)"
+    fi
+
+    # (b) NON-anchor branch: no remote advertisement to bind to → no anchor arg on the tree copy.
+    ( cd "$repo" && git checkout -q -b feature && echo b >> docs/readme.md \
+      && git add -A && git commit -qm c2 ) >/dev/null 2>&1
+    local feat; feat="$(cd "$repo" && git rev-parse feature)"
+    : > "$alog"
+    run_hook "$repo" "refs/heads/feature $feat refs/heads/feature $tip" 0 "" "$alog"
+    tree_line="$(grep '^tree-copy ' "$alog" 2>/dev/null | head -1)"
+    if [[ "$tree_line" == "tree-copy $feat <none>" ]]; then
+        pass_case "${id}-nonanchor-unbound"
+    else
+        fail_case "${id}-nonanchor-unbound" "tree-copy call got '<<${tree_line:-<no tree-copy call>}>>'; expected 'tree-copy $feat <none>'"
+    fi
+    rm -rf "$repo"
+}
+
 # SELF-PROOF — the sweep is NON-VACUOUS: with a MUTATED lib whose deletion
 # predicate never matches, the delete-only decision must REGRESS (R25 gets called
 # with the ZERO sha and SHIPPING becomes 1). If the mutated lib still produced the
@@ -452,6 +517,7 @@ scenario_s7_new_branch_mergebase
 scenario_s8_unresolvable_base_failclosed
 scenario_s9_diff_failure_blocks
 scenario_s10_empty_stdin_fallback
+scenario_s11_anchor_sha_wired
 scenario_primary_r25_block
 scenario_selfproof_nonvacuous
 
