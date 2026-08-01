@@ -123,6 +123,29 @@ ROUND 14 / P1-A (TD-2026-08-01-(P1-posix-resolution-and-runtime-paths)) — ROUN
     this P1; the round-13 over-inclusive counterexample is re-measured under the new resolver in
     DECISIONS.md and no longer over-blocks.
 
+ROUND 14b / P1 (SAME TD ENTRY) — FOLLOWING AN INTERMEDIATE MADE ITS SPELLING UNJUDGED. Round 14
+    resolved correctly and then asked the alias question ONCE, about the FINAL candidate, so any
+    alias sitting in an INTERMEDIATE position was refused by neither implementation. MEASURED by
+    independent verification on one tree (tracked `legit/sub/real.txt`, tracked symlink
+    `legit/dirlink -> sub`), committed content only:
+        ln -s DIRLINK  legit/x   → exit 15   (final component — the round-13/14 class)
+        ln -s DIRLINK/ legit/x   → exit 0    (SAME alias, one keystroke, UNREFUSED)
+        ln -s DIRLINK/real.txt   → exit 0    (the same hole without the keystroke)
+    The trailing slash is honoured LEGITIMATELY — the kernel follows the final component when
+    something follows it — and that legitimacy is exactly what moved the alias out of reach: the
+    follow lands on the correctly-spelled `legit/sub`, which passes on an EXACT match, while
+    `legit/DIRLINK` — the spelling that dangles at a case-sensitive receiver — was never asked
+    about. `_resolve_link_target` now RETURNS every non-final component it resolved and
+    `_symlink_target_verdicts` takes the SAME verdict on each, under the SAME code
+    (GIT_SYMLINK_TARGET_ALIAS): the subject and the remedy are identical, only the sentence
+    changes. An UNTRACKED intermediate has no recorded spelling to alias and is NOT refused,
+    which is the same disposition the final candidate has always had.
+    THE MIS-GRADING IS THE LESSON. This was registered as P3-134 "register-only" on the strength
+    of an attribution-hygiene argument; the row was procedurally defensible and materially wrong,
+    because it recorded the no-slash shape without the one-keystroke route that makes it a live
+    bypass of a shipped refusal. A defect's GRADE follows its reachability, not the tidiness of
+    the argument for deferring it.
+
 HONEST LIMIT, and it matters for how much the recompute proves:
     ON A CLEAN TREE both inputs are EMPTY, so the digest is a CONSTANT — the same value for every
     clean tree of every commit. It is a DIRT fingerprint, not a tree identity. That is exactly
@@ -407,6 +430,11 @@ class SymlinkTargetAlias(GitFiltersPresent):
     Step 6 is where precision lives. "The spelling must EQUAL the record" as a bare rule would
     refuse `..` traversal, absolute targets and legitimate chains; gating the refusal on
     FOLD-EQUALITY refuses EXACTLY the aliases and cannot fire on any of those.
+    ROUND 14b ADDS NO STEP; IT ADDS SUBJECTS. Steps 3-6 are applied to EVERY component the walk
+    resolves — each intermediate it follows and each directory component it traverses — and not
+    to the final candidate alone. A component the receiver's kernel must resolve is a spelling
+    that can dangle there, so it is a subject of the same census; step 4's untracked exit is what
+    keeps this precise, because an intermediate with no recorded spelling has nothing to alias.
 
     DISPOSITION OF EVERY EDGE CASE, and why:
       · `..` TRAVERSAL that stays inside the repo — resolved, then compared. The two live tracked
@@ -434,13 +462,25 @@ class SymlinkTargetAlias(GitFiltersPresent):
         `lstat` does not follow the FINAL component, so the candidate's inode is the second link's
         own inode, which the prefix walk registered. An exact spelling passes; an aliased spelling
         of the second link BLOCKS, which is the same defect one level up.
-      · TARGET THROUGH AN INTERMEDIATE SYMLINK DIRECTORY — NOT BLOCKED, and ROUND 14 changed WHY.
-        Round 13 kept the link's own name in the candidate, so the spelling failed to fold-equal
-        the record and step 6 declined — the right verdict for the wrong reason. Step 1 now
-        FOLLOWS the intermediate, so the candidate is the real file's own path and step 5 passes
-        it on an EXACT spelling match. The verdict is unchanged (exit 0) and it is now reached by
-        agreeing with the record instead of by failing to recognise it — which is what makes the
-        final component's spelling, the thing that actually breaks at the receiver, decisive.
+      · TARGET THROUGH AN INTERMEDIATE SYMLINK DIRECTORY, SPELLED AS THE INDEX RECORDS IT — NOT
+        BLOCKED, and ROUND 14 changed WHY. Round 13 kept the link's own name in the candidate, so
+        the spelling failed to fold-equal the record and step 6 declined — the right verdict for
+        the wrong reason. Step 1 now FOLLOWS the intermediate, so the candidate is the real file's
+        own path and step 5 passes it on an EXACT spelling match. The verdict is unchanged
+        (exit 0) and it is now reached by agreeing with the record instead of by failing to
+        recognise it. The same holds through SEVERAL correctly-spelled intermediates and through a
+        correctly-spelled tracked DIRECTORY component: each is judged by steps 3-6 and each passes
+        at step 5.
+      · TARGET THROUGH AN INTERMEDIATE THAT IS AN ALIAS — BLOCKED, ROUND 14b, and this is the
+        entry round 14 did not have. Steps 3-6 are applied to EVERY component the walk resolves,
+        not to the final candidate alone. `-> DIRLINK/` and `-> DIRLINK/real.txt` over a tracked
+        `dirlink` now block exactly as `-> DIRLINK` already did; before 14b the first two exited
+        0 while the third exited 15, which is a one-character bypass of this very gate.
+      · UNTRACKED INTERMEDIATE — NOT BLOCKED, deliberately, and for the same reason an untracked
+        TARGET is not: there is no recorded spelling for it to be an alias OF, so no comparison
+        exists to make. A link through a gitignored build directory (or through an untracked
+        symlink inside one) is ordinary. The receiver's outcome is governed by whether the
+        intermediate is shipped at all, which is the dangling class (P3-132), not this one.
       · TARGET RESOLVING TO A DIRECTORY THAT IS A TRACKED PREFIX — COMPARED, because the registry
         is the PREFIX map, not the leaf set. `link -> BACKEND` where the index records `backend`
         BLOCKS; `link -> backend` passes.
@@ -768,9 +808,14 @@ def _resolve_link_target(rootb, linkpath, target):
     the resolution starts from an authentic base rather than from anything on disk. (git cannot
     record a path THROUGH a symlink, so every directory component of an index path is a real
     directory; the base therefore needs no resolution of its own.)
-    Returns (kind, candidate):
+    Returns (kind, candidate, walked):
       ("absolute", None) · ("escapes", None) · ("root", None) · ("inside", b"a/b")
       ("unbounded", b"<reason>")  — the walk exceeded a budget; the CALLER BLOCKS, see below.
+    <walked> is the ROUND 14b addition: [(spelling, lstat)] for EVERY NON-FINAL component the walk
+    resolved — every intermediate the receiver's kernel must itself resolve before it can reach
+    the candidate. The caller takes the SAME alias verdict on each of them; see
+    `_symlink_target_verdicts` and SymlinkTargetAlias.__doc__ for why the final component alone
+    was a one-character bypass.
 
     WHY THIS IS NOT LEXICAL ANY MORE. Round 13 collapsed `..` TEXTUALLY, before following
     anything. The kernel pops `..` AFTER following an intermediate symlink, and the two answers
@@ -805,6 +850,18 @@ def _resolve_link_target(rootb, linkpath, target):
     has been closing). A committed link chain that no kernel will resolve is also a defect in its
     own right — the receiver gets ELOOP — so the refusal is not merely conservative.
 
+    ROUND 14b / P1 — AND THAT TRAILING SLASH IS WHY <walked> EXISTS. Following an intermediate is
+    correct, but round 14 then took the ALIAS VERDICT on the FINAL candidate only, so following an
+    intermediate DISCARDED its spelling. One keystroke moved a blocked alias into the unrefused
+    position (measured, same tree, tracked `legit/dirlink -> sub` over tracked `legit/sub`):
+        ln -s DIRLINK  legit/x   → exit 15   (final component: the round-13/14 class)
+        ln -s DIRLINK/ legit/x   → exit 0    (SAME alias, now an INTERMEDIATE, unrefused)
+    The trailing slash is honoured legitimately — the kernel does follow the final component when
+    one is present — and the follow lands on the correctly-spelled `legit/sub`, which passes on an
+    EXACT match while `legit/DIRLINK`, the spelling that actually dangles at a case-sensitive
+    receiver, was never asked about. `-> DIRLINK/real.txt` is the same hole without the keystroke.
+    Every component this walk resolves is now returned and judged.
+
     P3-133 IS SUPERSEDED BY THIS FUNCTION, not by its proposed remedy. That row asked for
     "cross-check the lexical candidate against realpath and go SILENT on divergence"; silence on
     divergence is precisely what the round-14 topology exploits, so adopting it would have
@@ -813,8 +870,9 @@ def _resolve_link_target(rootb, linkpath, target):
     `outdirlink -> ../outside`) now takes the "escapes" exit on the FIRST `..`, because the
     follow has already returned the stack to the repository root.
     """
+    walked = []
     if target.startswith(b"/"):
-        return ("absolute", None)
+        return ("absolute", None, walked)
     stack = linkpath.split(b"/")[:-1]
     queue = list(target.split(b"/"))
     follows = 0
@@ -825,12 +883,12 @@ def _resolve_link_target(rootb, linkpath, target):
         if steps > _SYMLINK_STEP_BUDGET:
             return ("unbounded",
                     b"resolution consumed more than %d path components"
-                    % _SYMLINK_STEP_BUDGET)
+                    % _SYMLINK_STEP_BUDGET, walked)
         if comp in (b"", b"."):
             continue
         if comp == b"..":
             if not stack:
-                return ("escapes", None)
+                return ("escapes", None, walked)
             stack.pop()
             continue
         stack.append(comp)
@@ -841,6 +899,11 @@ def _resolve_link_target(rootb, linkpath, target):
             st = os.lstat(os.path.join(rootb, cur))
         except OSError:
             continue                            # missing intermediate: the final lstat decides
+        # ROUND 14b / P1: this component is NOT the final one, so the receiver's kernel must
+        # resolve THIS SPELLING to get anywhere. Record it before the follow (the follow pops it
+        # off the stack, which is exactly how round 14 lost it) — no extra syscall, the lstat is
+        # the one the walk already needed.
+        walked.append((cur, st))
         if not stat.S_ISLNK(st.st_mode):
             continue
         follows += 1
@@ -848,7 +911,7 @@ def _resolve_link_target(rootb, linkpath, target):
             return ("unbounded",
                     b"resolution followed more than %d symlinks (no kernel resolves this: "
                     b"Linux MAXSYMLINKS is 40, macOS SYMLOOP_MAX is 32)"
-                    % _SYMLINK_FOLLOW_BUDGET)
+                    % _SYMLINK_FOLLOW_BUDGET, walked)
         try:
             nxt = os.readlink(os.path.join(rootb, cur))
         except OSError:
@@ -856,12 +919,12 @@ def _resolve_link_target(rootb, linkpath, target):
         if not isinstance(nxt, bytes):
             nxt = os.fsencode(nxt)
         if nxt.startswith(b"/"):
-            return ("absolute", None)           # leaves for the receiver's root filesystem
+            return ("absolute", None, walked)   # leaves for the receiver's root filesystem
         stack.pop()                             # step back into the LINK'S OWN directory
         queue = nxt.split(b"/") + queue
     if not stack:
-        return ("root", None)
-    return ("inside", b"/".join(stack))
+        return ("root", None, walked)
+    return ("inside", b"/".join(stack), walked)
 
 
 def _symlink_target_verdicts(rootb, symlinks, inodes, foldcache):
@@ -878,7 +941,34 @@ def _symlink_target_verdicts(rootb, symlinks, inodes, foldcache):
     out = []
     unbounded = []
     for path, target in symlinks:
-        kind, cand = _resolve_link_target(rootb, path, target)
+        kind, cand, walked = _resolve_link_target(rootb, path, target)
+        # ROUND 14b / P1: the SAME verdict on EVERY component the walk resolved, not on the final
+        # candidate alone. Round 14 asked the alias question once, at the end, so an alias that
+        # sat in an INTERMEDIATE position was refused by neither resolver — `-> DIRLINK` blocked
+        # (exit 15) while `-> DIRLINK/` and `-> DIRLINK/real.txt` passed (exit 0) over the very
+        # same tracked `dirlink`. The remedy is identical (respell the target), so the CODE is
+        # identical; only the sentence changes, to name the component that dangles. This runs for
+        # EVERY kind, including "escapes"/"root"/"unbounded": an intermediate the receiver cannot
+        # resolve is broken there no matter where the walk ended up afterwards.
+        if walked:
+            seen = set()
+            for wsp, wst in walked:
+                if wsp in seen:
+                    continue                    # a cycle re-visits a spelling; report it once
+                seen.add(wsp)
+                wnames = inodes.get((wst.st_dev, wst.st_ino))
+                if not wnames or wsp in wnames:
+                    continue                    # untracked intermediate, or the recorded spelling
+                wkey = _fold_path_key(wsp, foldcache)
+                walias = sorted(n for n in wnames
+                                if _fold_path_key(n, foldcache) == wkey)
+                if not walias:
+                    continue                    # a tracked inode reached by a non-alias route
+                out.append("%s -> %s (resolves HERE THROUGH the intermediate component %s, which "
+                           "this repository records as %s)"
+                           % (path.decode(errors="replace"), target.decode(errors="replace"),
+                              wsp.decode(errors="replace"),
+                              " / ".join(n.decode(errors="replace") for n in walias)))
         if kind == "unbounded":
             unbounded.append("%s -> %s (%s)"
                              % (path.decode(errors="replace"),
@@ -1254,7 +1344,10 @@ def fingerprint(repo):
               "--porcelain -uall` EMPTY, ran R25 to green and returned the clean-tree constant. "
               "This is a MEASUREMENT of an observed (st_dev, st_ino) identity plus a fold "
               "equality — a target that leaves the repository, names an untracked path, dangles, "
-              "or spells the record EXACTLY is not refused. Spell the target the way the index "
+              "or spells the record EXACTLY is not refused. ROUND 14b: the verdict is taken on "
+              "EVERY component the walk resolves, not on the final one alone — `-> DIRLINK` "
+              "blocked while `-> DIRLINK/` and `-> DIRLINK/real.txt` passed over the very same "
+              "tracked `dirlink`, a one-character bypass. Spell the target the way the index "
               "records the path (`ln -sf <recorded-spelling>`) and re-run.")
     if symunbounded:
         raise SymlinkResolutionUnbounded(

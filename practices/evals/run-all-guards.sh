@@ -1652,7 +1652,8 @@ run_guard "release_anchor/helper_injection_blocked" 0 \
 # --porcelain -uall` EMPTY, the wrapper RESOLVES so R25 executes it and goes green, the fingerprint
 # is the clean-tree constant 0a815065… and the recency guard emits recency_pass — while a
 # case-SENSITIVE receiver gets a DANGLING backend/gradlew. Both implementations now resolve a
-# tracked symlink's target LEXICALLY against the link's own recorded directory and refuse a spelling
+# tracked symlink's target against the link's own recorded directory (LEXICALLY as round 13
+# shipped it; component-by-component as ROUND 14 replaced it — see below) and refuse a spelling
 # that reaches a REGISTERED prefix's (st_dev, st_ino) under a FOLD-EQUAL but textually different
 # spelling → GIT_SYMLINK_TARGET_ALIAS (fingerprint exit 15). A NEW code rather than a widening of
 # 13/14, because the subject (blob content, not an index path) and the remedy (`ln -sf
@@ -1672,6 +1673,39 @@ run_guard "release_anchor/helper_injection_blocked" 0 \
 # refuse six of the nine. Deliberately NOT refused and registered rather than hidden: absolute
 # targets (docs/BACKLOG.md P3-131) and committed DANGLING symlinks (P3-132 — a real defect, but a
 # different class: identically broken here and at the receiver, so the evidence does not lie).
+# ROUND 14 (TD-2026-08-01-(P1-posix-resolution-and-runtime-paths) / P1-A) replaced round 13's
+# LEXICAL resolution with the kernel's. A lexical `..` is popped textually, BEFORE following
+# anything; the kernel pops it AFTER following an intermediate symlink, so any target whose `..`
+# sits behind a symlinked component resolved to a path the receiver never visits. Measured,
+# committed content only: `backend/jump -> real/sub` + `backend/gradlew -> jump/../GRADLEW-REAL`
+# over a tracked `backend/real/gradlew-real` — POSIX reaches `backend/real/GRADLEW-REAL`, which
+# case-insensitive APFS serves as the TRACKED file (so R25 executes the wrapper and goes green),
+# while the lexical candidate `backend/GRADLEW-REAL` is ABSENT and BOTH implementations took the
+# dangling exit and reported nothing. `_resolve_link_target` now walks component by component, and
+# two budgets (40 follows = the LARGER of Linux MAXSYMLINKS 40 and macOS SYMLOOP_MAX 32; 4096
+# components) BLOCK on exhaustion under GIT_SYMLINK_RESOLUTION_UNBOUNDED (fingerprint exit 16)
+# rather than going silent — an unfinished walk has not ANSWERED the alias question, and a
+# committed cycle is ELOOP at the receiver. (AN) is the topology, (AN2) the pre-round-14 twin
+# whose neuter restores the lexical walk, (AN3)/(AN4) the per-implementation splits, (AO) the
+# cycle budget.
+# ROUND 14b (SAME entry, found by INDEPENDENT VERIFICATION) closes what round 14 opened by
+# following correctly and then asking the alias question ONCE, about the FINAL candidate: the
+# follow DISCARDED the intermediate's spelling. Measured on one tree with a tracked
+# `mid/dirlink -> real` — `ln -s DIRLINK mid/x` exit 15, `ln -s DIRLINK/ mid/x` exit 0,
+# `-> DIRLINK/real.txt` exit 0 — i.e. a ONE-CHARACTER bypass of GIT_SYMLINK_TARGET_ALIAS, reachable
+# with committed content only, that ships a dangling link to a case-sensitive receiver while the
+# evidence says clean. The trailing slash is honoured LEGITIMATELY (the kernel follows the final
+# component when something follows it), which is exactly what moved the alias out of reach. The
+# verdict is now taken on EVERY component the walk resolves, under the SAME code (subject and
+# remedy identical). (AP)/(AP2) the final-component control, still blocking THROUGH the 14b neuter;
+# (AQ)-(AQ4) the trailing slash with its twin and per-implementation splits; (AR)/(AR2) the
+# no-slash shape (the one mis-graded P3-134 register-only); (AS)/(AT) the NORMALIZATION and
+# IGNORABLE-Cf variants, proving the intermediate verdict rides the SHARED fold. (AM) grows to
+# THIRTEEN legitimate shapes, the four new ones all in the INTERMEDIATE position — trailing slash
+# on a correctly-spelled tracked directory, the same through a correctly-spelled tracked symlink,
+# SEVERAL correctly-spelled intermediates in one target, and an UNTRACKED intermediate (NOT
+# refused: no recorded spelling exists for it to alias, the same exit an untracked final candidate
+# has always taken) — because precision, not detection, is the risk in this round.
 run_guard "hermetic_runtime/inherited_runtime_blocked" 0 \
     bash "$REPO_ROOT/practices/scripts/ax-prove-hermetic-runtime.sh"
 # ── P1-2/P1-4 ROUND-4: the recency guard's FIXTURE SWEEP ───────────────────────────
@@ -2348,7 +2382,7 @@ if [ "$INCLUDE_FIXTURES" -eq 1 ]; then
 fi
 
 # ── 104. checklist_command_path_spelling_guard ──────────────────────────────
-echo "[104] checklist_command_path_spelling_guard.sh (ROUND 14 / P1-B, TD-2026-08-01-(P1-posix-resolution-and-runtime-paths) — R25 takes `command` and `working_directory` out of practices/verification-checklist.yaml VERBATIM (verify-completion.sh:1086) and executes them through `cd \"\$exec_wd\"` + `bash -c` (:1561), and nothing between the yaml and the shell asked whether those strings name paths the repository RECORDS. MEASURED, committed content only: rewriting ONE checklist command `practices/evals/spec_policy_ref_guard.sh` → `PRACTICES/evals/…` exits 0 on case-insensitive APFS while `git cat-file -e HEAD:PRACTICES/…` exits 128, the tree stays CLEAN, tree_fingerprint returns the clean-tree constant 0a815065…, [58] task-coverage exits 0, and all ten R25 violation buckets stay EMPTY — R25 publishes GREEN EVIDENCE for a command that fails immediately on a case-sensitive receiver. THE RULE: every path-like token of every command + every effective working_directory is resolved repo-relative against its working directory and must BE a recorded spelling (a tracked path or a directory component of one); a token that is not recorded but FOLDS EQUAL to one — via the SHARED _fold_path_key imported from tree_fingerprint.py, so case, normalization, non-ASCII case and ignorable Cf are covered at once — BLOCKS as CHECKLIST_PATH_ALIAS. NO (st_dev, st_ino) discriminator, deliberately: the subject is a STRING in a committed file, not a path on the verifying filesystem, so there is no local identity to measure and the filesystem that decides is the RECEIVER'\''S — which also makes this guard and its fixtures FILESYSTEM-INDEPENDENT. CANDIDATE RULES are enumerated in the guard header (shlex word, not a shell operator, not a flag, no `=`, not absolute, no `://`, not `.`/`..`, no unexpanded metacharacter; working_directory is a repo path by schema). ZERO FALSE POSITIVES MEASURED on the live checklist: 367 tokens examined → 240 recorded / 125 unrelated / 2 skipped flags / 0 aliases, printable with --show. SCOPE, stated honestly: this closes the gate'\''s OWN inputs — the one input the whole R25 evidence chain depends on — and NOT the general class of committed runtime path strings (shell source, gradle/npm/python imports, JSON/YAML references), which is undecidable by inspection and stays OPEN as docs/BACKLOG.md P2-72 with its true remedy (run the suite on a case-sensitive, normalization-sensitive checkout). --advisory-scripts adds a NON-BLOCKING literal scan of the shell scripts the checklist names, one level, labelled advisory and never counted. Fixtures: pass_recorded_spellings / fail_command_case_alias (the reproduction) / fail_working_directory_alias.)"
+echo "[104] checklist_command_path_spelling_guard.sh (ROUND 14 / P1-B, TD-2026-08-01-(P1-posix-resolution-and-runtime-paths) — R25 takes `command` and `working_directory` out of practices/verification-checklist.yaml VERBATIM (verify-completion.sh:1086) and executes them through `cd \"\$exec_wd\"` + `bash -c` (:1561), and nothing between the yaml and the shell asked whether those strings name paths the repository RECORDS. MEASURED, committed content only: rewriting ONE checklist command `practices/evals/spec_policy_ref_guard.sh` → the same path with its FIRST SEGMENT UPPER-CASED (spelled out here rather than quoted verbatim: the literal would otherwise make --advisory-scripts report this narrative as a hit forever, and an advisory that always fires is one nobody reads) exits 0 on case-insensitive APFS while `git cat-file -e HEAD:<that upper-cased spelling>` exits 128, the tree stays CLEAN, tree_fingerprint returns the clean-tree constant 0a815065…, [58] task-coverage exits 0, and all ten R25 violation buckets stay EMPTY — R25 publishes GREEN EVIDENCE for a command that fails immediately on a case-sensitive receiver. THE RULE: every path-like token of every command + every effective working_directory is resolved repo-relative against its working directory and must BE a recorded spelling (a tracked path or a directory component of one); a token that is not recorded but FOLDS EQUAL to one — via the SHARED _fold_path_key imported from tree_fingerprint.py, so case, normalization, non-ASCII case and ignorable Cf are covered at once — BLOCKS as CHECKLIST_PATH_ALIAS. NO (st_dev, st_ino) discriminator, deliberately: the subject is a STRING in a committed file, not a path on the verifying filesystem, so there is no local identity to measure and the filesystem that decides is the RECEIVER'\''S — which also makes this guard and its fixtures FILESYSTEM-INDEPENDENT. CANDIDATE RULES are enumerated in the guard header (shlex word, not a shell operator, not a flag, no `=`, not absolute, no `://`, not `.`/`..`, no unexpanded metacharacter; working_directory is a repo path by schema). ZERO FALSE POSITIVES MEASURED on the live checklist: 367 tokens examined → 240 recorded / 125 unrelated / 2 skipped flags / 0 aliases, printable with --show. SCOPE, stated honestly: this closes the gate'\''s OWN inputs — the one input the whole R25 evidence chain depends on — and NOT the general class of committed runtime path strings (shell source, gradle/npm/python imports, JSON/YAML references), which is undecidable by inspection and stays OPEN as docs/BACKLOG.md P2-72 with its true remedy (run the suite on a case-sensitive, normalization-sensitive checkout). --advisory-scripts adds a NON-BLOCKING literal scan of the shell scripts the checklist names, one level, labelled advisory and never counted. Fixtures: pass_recorded_spellings / fail_command_case_alias (the reproduction) / fail_working_directory_alias.)"
 run_guard "checklist_command_path_spelling/live" 0 \
     bash "$SCRIPT_DIR/checklist_command_path_spelling_guard.sh"
 if [ "$INCLUDE_FIXTURES" -eq 1 ]; then

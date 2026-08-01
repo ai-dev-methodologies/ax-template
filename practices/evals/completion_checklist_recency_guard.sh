@@ -68,14 +68,45 @@
 #   clean and the build passed. (Reviewer confirmed live: `backend/gradlew` and `backend/GRADLEW`
 #   are the same APFS inode, `backend/GRADLEW` is not an indexed spelling, and the shipped detector
 #   produced helper_verdict ([], []).)
-#   THE RULE: resolve the target's bytes LEXICALLY against the link's own (recorded) directory; if
-#   the result stays inside the repository, EXISTS, and its (st_dev, st_ino) is that of a REGISTERED
+#   THE RULE: resolve the target's bytes against the link's own (recorded) directory; if the
+#   result stays inside the repository, EXISTS, and its (st_dev, st_ino) is that of a REGISTERED
 #   prefix, then its spelling must BE a registered spelling — a FOLD-EQUAL but different spelling is
 #   an alias and BLOCKS. Precision comes from gating on fold-equality (`_ax_fold_path_key`, shared
 #   with the fingerprint helper) rather than on bare inequality: `..` traversal, chains through an
 #   intermediate symlinked directory, and absolute targets all differ from the record textually and
 #   none of them is an alias, so none of them is refused. See the 12c comment for the full
 #   disposition table (absolute / escaping / untracked / dangling / chained / directory / exact).
+#
+# Why the round-14 replacement of that resolution (cross-family review ROUND 14, P1-A;
+# TD-2026-08-01-(P1-posix-resolution-and-runtime-paths)). New BLOCKING code:
+# GIT_SYMLINK_RESOLUTION_UNBOUNDED.
+#   Round 13 resolved the target LEXICALLY — it popped `..` textually, BEFORE following anything.
+#   The kernel pops `..` AFTER following an intermediate symlink, so any target whose `..` sits
+#   behind a symlinked component resolved to a path the receiver's kernel never visits. MEASURED,
+#   committed content only: `backend/jump -> real/sub` + `backend/gradlew -> jump/../GRADLEW-REAL`
+#   over a tracked `backend/real/gradlew-real` — POSIX reaches `backend/real/GRADLEW-REAL`, which
+#   case-insensitive APFS serves as the TRACKED file, so R25 executes the wrapper and goes green,
+#   while the lexical candidate `backend/GRADLEW-REAL` is ABSENT and BOTH implementations took the
+#   dangling exit and said nothing. The walk is now component by component, and two budgets
+#   (40 follows — the LARGER of Linux MAXSYMLINKS 40 and macOS SYMLOOP_MAX 32 — and 4096
+#   components) BLOCK on exhaustion instead of going silent: an unfinished walk has not ANSWERED
+#   the alias question, and a committed cycle is ELOOP at the receiver.
+#
+# Why the round-14b widening of the SUBJECT (same TD entry; found by INDEPENDENT VERIFICATION).
+# No new code — GIT_SYMLINK_TARGET_ALIAS, applied to more subjects.
+#   Round 14 followed intermediates correctly and then took the alias verdict ONCE, on the FINAL
+#   candidate, so the follow DISCARDED the intermediate's spelling. MEASURED on one tree with a
+#   tracked `mid/dirlink -> real`, committed content only:
+#       ln -s DIRLINK  mid/x   → exit 15   (final component: the round-13/14 class)
+#       ln -s DIRLINK/ mid/x   → exit 0    (SAME alias, one keystroke, UNREFUSED)
+#       ln -s DIRLINK/real.txt → exit 0    (the same hole without the keystroke)
+#   The trailing slash is honoured LEGITIMATELY — the kernel follows the final component when
+#   something follows it — and that legitimacy is what moved the alias out of reach: the follow
+#   lands on the correctly-spelled `mid/real`, which passes on an EXACT match, while `mid/DIRLINK`,
+#   the spelling that dangles at a case-sensitive receiver, was never asked about. The verdict is
+#   now taken on EVERY component the walk resolves. An UNTRACKED intermediate is NOT refused —
+#   there is no recorded spelling for it to be an alias OF, the same exit an untracked final
+#   candidate has always taken.
 #
 # Why the round-10 addition to 12c (cross-family review ROUND 10, P1; TD-2026-07-31-(P1-casefold-
 # prefix)). New BLOCKING code: GIT_CASEFOLD_DIR_ALIAS.
@@ -1281,15 +1312,23 @@ if live_git_root and not expected_head_file.is_file() and guard_repo is not None
     #      backend/gradlew-real` + `ln -s GRADLEW-REAL backend/gradlew` → on case-insensitive APFS
     #      the link resolves, R25 EXECUTES and goes green, `git status --porcelain -uall` is EMPTY
     #      and the fingerprint is the clean-tree constant, while a case-SENSITIVE receiver gets a
-    #      DANGLING gradlew. The target is now resolved LEXICALLY against the link's own recorded
-    #      directory and must spell the record whenever it lands on a tracked inode by a FOLD-EQUAL
+    #      DANGLING gradlew. The target is now resolved against the link's own recorded directory
+    #      (ROUND 14: component by component, the kernel's way — not lexically) and must spell the
+    #      record whenever it lands on a tracked inode by a FOLD-EQUAL
     #      alias (`_ax_fold_path_key`, so case + normalization + non-ASCII case + ignorable Cf in
     #      one step, and every future axis the fold gains)  → GIT_SYMLINK_TARGET_ALIAS.
+    #      ROUND 14b: that verdict is taken on EVERY component the walk resolves, not on the final
+    #      candidate alone — round 14's follow discarded the intermediate's spelling, so
+    #      `-> DIRLINK` blocked while `-> DIRLINK/` and `-> DIRLINK/real.txt` passed over the very
+    #      same tracked `dirlink`.
     #      NOT REFUSED, by construction and on purpose: an ABSOLUTE target, one that ESCAPES the
     #      repository through `..`, one that names an UNTRACKED path, a DANGLING one (a different
     #      defect class — identically broken here and at the receiver, so the evidence does not lie
     #      about it; docs/BACKLOG.md P3-132), one reached through an intermediate symlinked
-    #      DIRECTORY (the record is not fold-equal, and that link is itself committed), and one
+    #      DIRECTORY SPELLED AS THE INDEX RECORDS IT (round 14 follows it, so the candidate is the
+    #      real file's own path and step 5 passes it on an EXACT match; the intermediate itself is
+    #      judged by the same steps and passes them), one reached through an UNTRACKED intermediate
+    #      (no recorded spelling to alias), and one
     #      that spells the record EXACTLY — which is what both live tracked symlinks in this
     #      catalog do, through `..` traversal. Measured here: 2 tracked symlinks, ZERO refusals.
     rc_of, objfmt = git_out("rev-parse", "--show-object-format", root=root, check=False)
@@ -1526,11 +1565,21 @@ if live_git_root and not expected_head_file.is_file() and guard_repo is not None
         # one), following replaces the component so a later `..` pops the RESOLVED stack, an
         # absolute intermediate leaves for the receiver's root filesystem, and a missing or
         # unreadable intermediate is left alone so the final lstat still decides "dangling".
-        # The two budgets BLOCK on exhaustion (R25_SYMLINK_RESOLUTION_UNBOUNDED) instead of going
+        # The two budgets BLOCK on exhaustion (GIT_SYMLINK_RESOLUTION_UNBOUNDED) instead of going
         # silent: an unfinished walk has not answered the alias question, and 40 follows is the
         # LARGER of the two kernel limits (Linux MAXSYMLINKS 40 / macOS SYMLOOP_MAX 32), so a
         # chain any receiver's kernel would resolve is never refused. Written twice on purpose —
         # the fingerprint helper's `_resolve_link_target` is the same rule.
+        # ROUND 14b / P1 (same TD entry): round 14 followed intermediates CORRECTLY and then took
+        # the alias verdict on the FINAL candidate only, so the follow DISCARDED the intermediate's
+        # spelling and one keystroke moved an alias out of reach. Measured on one tree with a
+        # tracked `legit/dirlink -> sub`: `ln -s DIRLINK legit/x` → exit 15, `ln -s DIRLINK/` →
+        # exit 0, and `-> DIRLINK/real.txt` → exit 0. The trailing slash is honoured LEGITIMATELY
+        # (the kernel follows the final component when one follows it), which is precisely what
+        # turned a refused final-component alias into an unrefused intermediate one. `_walked`
+        # below carries every non-final component the walk resolved and each gets the SAME verdict
+        # under the SAME code — the subject (a committed spelling that dangles at the receiver)
+        # and the remedy (respell it) are identical, so a second code would only fragment it.
         _FOLLOW_BUDGET = 40
         _STEP_BUDGET = 4096
         _symaliased = []
@@ -1540,6 +1589,7 @@ if live_git_root and not expected_head_file.is_file() and guard_repo is not None
                 continue                        # absolute: a location on the receiver's root fs
             _stack = _lpath.split(b"/")[:-1]
             _queue = list(_tgt.split(b"/"))
+            _walked = []                        # ROUND 14b: every NON-FINAL component resolved
             _escaped = False
             _unbounded = ""
             _follows = 0
@@ -1567,6 +1617,9 @@ if live_git_root and not expected_head_file.is_file() and guard_repo is not None
                     _ist = os.lstat(os.path.join(_rootb, _cur))
                 except OSError:
                     continue                    # missing intermediate: the final lstat decides
+                # ROUND 14b: record BEFORE the follow — the follow pops this component off the
+                # stack, which is exactly how round 14 lost the spelling. No extra syscall.
+                _walked.append((_cur, _ist))
                 if not stat.S_ISLNK(_ist.st_mode):
                     continue
                 _follows += 1
@@ -1586,6 +1639,29 @@ if live_git_root and not expected_head_file.is_file() and guard_repo is not None
                     break
                 _stack.pop()                    # step back into the LINK'S OWN directory
                 _queue = _nxt.split(b"/") + _queue
+            # ROUND 14b / P1: the SAME verdict on EVERY component the walk resolved. It runs for
+            # every outcome — escaped, root, unbounded, inside — because an intermediate the
+            # receiver's kernel cannot resolve is broken there regardless of where this walk ended.
+            if _walked:
+                _wseen = set()
+                for _wsp, _wst in _walked:
+                    if _wsp in _wseen:
+                        continue                # a cycle re-visits a spelling; report it once
+                    _wseen.add(_wsp)
+                    _wnames = _inodes.get((_wst.st_dev, _wst.st_ino))
+                    if not _wnames or _wsp in _wnames:
+                        continue                # untracked intermediate, or the recorded spelling
+                    _wkey = _ax_fold_path_key(_wsp, _foldcache)
+                    _walias = sorted(_n for _n in _wnames
+                                     if _ax_fold_path_key(_n, _foldcache) == _wkey)
+                    if not _walias:
+                        continue                # a tracked inode reached by a non-alias route
+                    _symaliased.append(
+                        "%s -> %s (resolves HERE THROUGH the intermediate component %s, which "
+                        "this repository records as %s)"
+                        % (_lpath.decode(errors="replace"), _tgt.decode(errors="replace"),
+                           _wsp.decode(errors="replace"),
+                           " / ".join(_n.decode(errors="replace") for _n in _walias)))
             if _unbounded:
                 _symunbounded.append("%s -> %s (%s)"
                                      % (_lpath.decode(errors="replace"),
@@ -1673,7 +1749,10 @@ if live_git_root and not expected_head_file.is_file() and guard_repo is not None
                 "ran R25 to green and left the fingerprint at the clean-tree constant. This is a "
                 "MEASUREMENT of an observed (st_dev, st_ino) identity plus a fold equality: a "
                 "target that leaves the repository, names an untracked path, dangles, or spells "
-                "the record EXACTLY is NOT refused. Spell the target the way the index records "
+                "the record EXACTLY is NOT refused. ROUND 14b: the verdict is taken on EVERY "
+                "component the walk resolves, not on the final one alone — `-> DIRLINK` blocked "
+                "while `-> DIRLINK/` and `-> DIRLINK/real.txt` passed over the very same tracked "
+                "`dirlink`, a one-character bypass. Spell the target the way the index records "
                 "the path (`ln -sf <recorded-spelling>`) and re-run R25."
             )
         if _symunbounded:

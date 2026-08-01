@@ -196,15 +196,26 @@
 #   (AJ2)/(AK2)/(AL2) pre-round-13 twins: the neuter kills ONLY the new report, so what lands again
 #       is attributable to the symlink-target census alone. (AJ3)/(AJ4)/(AK3)/(AK4) split it per
 #       implementation.
-#   (AM) THE FALSE-POSITIVE CONTROL: nine legitimate tracked symlinks — exact spelling, `..`
+#   (AM) THE FALSE-POSITIVE CONTROL: THIRTEEN legitimate shapes (15 tracked symlinks) — exact spelling, `..`
 #       traversal onto the exact record (the live catalog's own shape), an ABSOLUTE target, a `..`
 #       target that ESCAPES the repository, an UNTRACKED target, a DANGLING target, a CHAIN through
-#       another tracked symlink, a target resolving to a tracked DIRECTORY, and one reached THROUGH
-#       an intermediate symlinked directory — all PASS. A bare "the target must equal the record"
+#       another tracked symlink, a target resolving to a tracked DIRECTORY, one reached THROUGH
+#       an intermediate symlinked directory, and — round 14b, the INTERMEDIATE position — a
+#       TRAILING SLASH on a correctly-spelled tracked directory, the same through a correctly-
+#       spelled tracked symlink, a chain of SEVERAL correctly-spelled intermediates, and an
+#       UNTRACKED intermediate — all PASS. A bare "the target must equal the record"
 #       rule would refuse six of the nine; the shipped rule gates on FOLD-EQUALITY, so it refuses
 #       exactly the aliases. DELIBERATELY NOT REFUSED, and stated rather than hidden: a DANGLING
 #       committed symlink is a real defect but a DIFFERENT class — identically broken here and at
-#       the receiver, so the evidence does not lie about it (docs/BACKLOG.md P3-132).
+#       the receiver, so the evidence does not lie about it (docs/BACKLOG.md P3-132); and an
+#       UNTRACKED INTERMEDIATE has no recorded spelling to be an alias of, which is the same exit
+#       an untracked final candidate has always taken.
+#   ROUND 14b — (AP) the FINAL-component alias still blocks, THROUGH the 14b neuter; (AQ) the same
+#       alias one keystroke away, as an INTERMEDIATE via a TRAILING SLASH, now blocks where it
+#       exited 0 (twin AQ2, splits AQ3/AQ4); (AR) the same without the slash (`-> DIRLINK/
+#       real.txt`, the shape mis-graded P3 as register-only); (AS) NORMALIZATION and (AT, on the
+#       folding volume) IGNORABLE Cf variants, proving the intermediate verdict rides the SHARED
+#       fold.
 #
 # Nothing outside the throwaway directory is touched; the live tree is only ever READ.
 # Exit: 0 all attacks blocked · 1 at least one attack open · 2 harness error.
@@ -1119,7 +1130,7 @@ fi
 # from disk, which on a case-insensitive filesystem HEALS a casefold premise (the two entries
 # collapse onto the one file's bytes) and makes the twin pass for a reason that is not the neuter.
 round9_neuter() {   # round9_neuter <sb> <what>
-                    # what ∈ all|guard|fp|r1Nall|r1Nguard|r1Nfp for N ∈ 10..14
+                    # what ∈ all|guard|fp|r1Nall|r1Nguard|r1Nfp for N ∈ 10..14, 14b
     "${AX_PY_BIN:-python3}" - "$1/repo" "$2" <<'PY'
 import sys, pathlib
 repo, what = pathlib.Path(sys.argv[1]), sys.argv[2]
@@ -1168,6 +1179,14 @@ R14_GUARD = [(GUARD,
 R14_FP = [(FP,
            "        if not stat.S_ISLNK(st.st_mode):",
            "        if True:  # ROUND-14 NEUTER: never follow an intermediate link")]
+# ROUND 14b's fix is a NEW SUBJECT for an existing report (the same verdict, taken on components
+# the round-14 walk resolved and then discarded), so the honest neuter is the round-9/10/13 shape:
+# kill the `if`. The resolution algorithm, the round-13 report on the FINAL candidate, the fold,
+# the discriminator and both budgets all stay live — so what lands again under it is attributable
+# to the intermediate census and to nothing else, and the FINAL-component control (symmidfinal)
+# must keep blocking THROUGH the neuter, which is what makes the attribution checkable.
+R14B_GUARD = [(GUARD, "            if _walked:")]
+R14B_FP = [(FP, "        if walked:")]
 pairs = {
     "all": R9_GUARD + R9_FP,
     "guard": R9_GUARD,
@@ -1187,9 +1206,12 @@ pairs = {
     "r14all": R14_GUARD + R14_FP,
     "r14guard": R14_GUARD,
     "r14fp": R14_FP,
+    "r14ball": R14B_GUARD + R14B_FP,
+    "r14bguard": R14B_GUARD,
+    "r14bfp": R14B_FP,
 }
 if what not in pairs:
-    print(f"unknown round9/10/11/12/13/14 neuter: {what}", file=sys.stderr)
+    print(f"unknown round9/10/11/12/13/14/14b neuter: {what}", file=sys.stderr)
     sys.exit(3)
 for entry in pairs[what]:
     path, anchor = entry[0], entry[1]
@@ -1325,21 +1347,79 @@ PY
     return $?
 }
 
-# r13_legit <sb> — ROUND 13 / P1, THE FALSE-POSITIVE CONTROL. Nine tracked symlinks, every
-# legitimate shape the disposition table declines to refuse, in ONE tree that must exit 0:
+# r14b_plant <sb> <record-hex> <target-hex> — ROUND 14b / P1. THE INTERMEDIATE COMPONENT.
+# Commits, under `mid/`, a tracked directory `real/` holding `real.txt`, a tracked SYMLINK whose
+# name is <record-hex> pointing at `real`, and a tracked symlink `x` whose TARGET BYTES are
+# <target-hex>. When <target-hex> is the record's spelling ALIASED and carries NO tail, the alias
+# is the FINAL component and rounds 13/14 already refused it. When it carries a tail — a bare `/`
+# or `/real.txt` — the very same alias becomes an INTERMEDIATE, the walk FOLLOWS it (correctly:
+# the kernel follows a component when something follows it), lands on the EXACT recorded `mid/real`
+# and round 14 passed it at step 5. One keystroke, opposite verdicts, same defect at the receiver.
+# NO HAND-WRITTEN TREE OBJECT: like r13_plant, the alias lives in a symlink's BLOB, which git
+# stores as opaque bytes, so ordinary plumbing expresses the whole topology.
+r14b_plant() {
+    local sb="$1" rh="$2" th="$3"
+    "${AX_PY_BIN:-python3}" - "$sb/repo" "$rh" "$th" <<'PY'
+import os, subprocess, sys
+repo, rh, th = sys.argv[1], sys.argv[2], sys.argv[3]
+REC, TGT = bytes.fromhex(rh), bytes.fromhex(th)
+os.chdir(repo)
+ENV = {**os.environ,
+       "GIT_AUTHOR_NAME": "ax", "GIT_AUTHOR_EMAIL": "ax@example.invalid",
+       "GIT_COMMITTER_NAME": "ax", "GIT_COMMITTER_EMAIL": "ax@example.invalid",
+       "GIT_AUTHOR_DATE": "2026-08-01T00:00:00Z",
+       "GIT_COMMITTER_DATE": "2026-08-01T00:00:00Z"}
+d = b"mid"
+os.makedirs(os.path.join(d, b"real"), exist_ok=True)
+with open(os.path.join(d, b"real", b"real.txt"), "wb") as fh:
+    fh.write(b"REAL\n")
+for name, tgt in ((REC, b"real"), (b"x", TGT)):
+    p = os.path.join(d, name)
+    if os.path.lexists(p):
+        os.remove(p)
+    os.symlink(tgt, p)
+subprocess.run(["git", "add", "--", "mid"], check=True, env=ENV)
+subprocess.run(["git", "commit", "-q", "-m", "intermediate component alias"], check=True, env=ENV)
+PY
+    return $?
+}
+
+# r13_legit <sb> — ROUND 13 / P1 + ROUND 14b, THE FALSE-POSITIVE CONTROL. THIRTEEN legitimate
+# SHAPES, expressed by FIFTEEN tracked symlinks (`d1` and `chainmid/d2` are the intermediates the
+# `deep` shape traverses, not shapes of their own), every legitimate shape the disposition table declines to refuse, in ONE tree that must
+# exit 0:
 #   exact spelling · `..` traversal onto the exact record (the shape BOTH live tracked symlinks in
 #   this catalog have) · an ABSOLUTE target outside the repository · a `..` target that ESCAPES the
 #   root · a target to an UNTRACKED (gitignored) path · a DANGLING target · a CHAIN through another
 #   tracked symlink · a target that resolves to a tracked DIRECTORY · a target reached THROUGH an
 #   intermediate symlinked directory. If the refusal were "the spelling must equal the record"
 #   rather than "the spelling must not be a FOLD-EQUAL alias of it", six of these nine would block.
+# ROUND 14b JUDGES EVERY COMPONENT THE WALK RESOLVES, so four more shapes are added here — each is
+# a way a legitimate tree puts a spelling in the INTERMEDIATE position, which is precisely where
+# an over-eager check would start refusing honest work:
+#   · `slashdir  -> sub/`          a TRAILING SLASH on a correctly-spelled tracked DIRECTORY. It
+#                                  is the legitimate twin of the attack: the slash makes `sub` an
+#                                  intermediate, and an intermediate spelled as the index records
+#                                  it must pass at step 5.
+#   · `slashlink -> dirlink/`      the same, through a correctly-spelled tracked SYMLINK.
+#   · `deep -> d1/d2/real.txt`     SEVERAL correctly-spelled intermediate symlinks in one target
+#                                  (`d1 -> chainmid`, `chainmid/d2 -> ../sub`), so the walk judges
+#                                  three intermediates in a row and passes all three.
+#   · `viaunt -> build/blink/real.txt`  an UNTRACKED intermediate — `build/` is gitignored and
+#                                  `build/blink` is an untracked symlink. TREATMENT, stated: NOT
+#                                  refused. There is no recorded spelling for it to be an alias
+#                                  OF, which is the same exit step 4 has always taken for an
+#                                  untracked final candidate. What the receiver gets there is
+#                                  governed by whether the path is shipped at all — the dangling
+#                                  class (P3-132) — not by this census.
 r13_legit() {
     local sb="$1"
     mkdir -p "$sb/outside" || return 2
     printf 'OUT\n' > "$sb/outside/host.txt" || return 2
-    mkdir -p "$sb/repo/legit/sub" "$sb/repo/legit/build" || return 2
+    mkdir -p "$sb/repo/legit/sub" "$sb/repo/legit/build" "$sb/repo/legit/chainmid" || return 2
     printf 'REAL\n' > "$sb/repo/legit/sub/real.txt" || return 2
     printf 'ART\n' > "$sb/repo/legit/build/artifact.txt" || return 2
+    printf 'MID\n' > "$sb/repo/legit/chainmid/.keep" || return 2
     printf 'build/\n' > "$sb/repo/legit/.gitignore" || return 2
     ( builtin cd "$sb/repo/legit" \
       && ln -s real.txt sub/exact \
@@ -1350,7 +1430,14 @@ r13_legit() {
       && ln -s nowhere-at-all.txt dangling \
       && ln -s sub/exact chain \
       && ln -s sub dirlink \
-      && ln -s dirlink/real.txt viadir ) || return 2
+      && ln -s dirlink/real.txt viadir \
+      && ln -s sub/ slashdir \
+      && ln -s dirlink/ slashlink \
+      && ln -s chainmid d1 \
+      && ln -s ../sub chainmid/d2 \
+      && ln -s d1/d2/real.txt deep \
+      && ln -s ../sub build/blink \
+      && ln -s build/blink/real.txt viaunt ) || return 2
     ( builtin cd "$sb/repo" && git add -- legit \
       && git "${GIT_ID[@]}" commit -q -m "legitimate symlinks" ) >/dev/null 2>&1 || return 2
     return 0
@@ -1525,8 +1612,27 @@ r9_setup() {
                  # `safe-real` vs `safe-real<U+200C>`. Needs a volume that FOLDS it — case-
                  # insensitive HFS+ — which is why this kind runs only under the (AF/AG) arm.
                  r13_plant "$sb" 736166652d7265616c 736166652d7265616ce2808c || return 2 ;;
-        symlegit) # ROUND 13 FALSE-POSITIVE CONTROL: nine legitimate tracked symlinks, exit 0.
+        symlegit) # ROUND 13 + 14b FALSE-POSITIVE CONTROL: thirteen legitimate symlinks, exit 0.
                  r13_legit "$sb" || return 2 ;;
+        # ROUND 14b / P1 — THE INTERMEDIATE COMPONENT. Recorded spelling `mid/dirlink -> real`;
+        # the attack link `mid/x` spells it ALIASED. With NO tail the alias is the FINAL component
+        # and rounds 13/14 already refused it (symmidfinal, the control that must not change);
+        # with a tail — one keystroke — the SAME alias becomes an intermediate, the walk follows it
+        # and lands on the exact `mid/real`, and round 14 passed it. `dirlink` = 6469726c696e6b,
+        # `DIRLINK` = 4449524c494e4b, `/` = 2f, `/real.txt` = 2f7265616c2e747874.
+        symmidfinal) r14b_plant "$sb" 6469726c696e6b 4449524c494e4b || return 2 ;;
+        symmidslash) r14b_plant "$sb" 6469726c696e6b 4449524c494e4b2f || return 2 ;;
+        symmidsub)   r14b_plant "$sb" 6469726c696e6b 4449524c494e4b2f7265616c2e747874 \
+                         || return 2 ;;
+        # the SAME intermediate hole on the other two fold axes, which is what proves it rides the
+        # SHARED `_fold_path_key` rather than a case-only comparison: NORMALIZATION (record
+        # `é-link` NFC c3a9, target NFD 65cc81) and an IGNORABLE FORMAT CHARACTER (record
+        # `safe-link`, target `safe-link<U+200C>` — needs the folding volume, so it runs in the
+        # (AF)/(AG) arm).
+        symmidnfd)   r14b_plant "$sb" c3a92d6c696e6b 65cc812d6c696e6b2f7265616c2e747874 \
+                         || return 2 ;;
+        symmidign)   r14b_plant "$sb" 736166652d6c696e6b \
+                         736166652d6c696e6be2808c2f7265616c2e747874 || return 2 ;;
         symreg)  # an index-SYMLINK path (mode 120000), consistent on disk
             ( builtin cd "$sb/repo" && ln -s benign-target.txt linkpath.txt \
               && git add linkpath.txt \
@@ -1563,6 +1669,8 @@ r9_attack() {
         symcase|symnfcnfd|symign|symlegit|symjump|symloop) : ;;
                   # ROUND 13: likewise — the symlink and its target are COMMITTED by the setup, so
                   # there is nothing to do on disk afterwards and `git status` stays EMPTY
+        symmidfinal|symmidslash|symmidsub|symmidnfd|symmidign) : ;;
+                  # ROUND 14b: same — the intermediate alias IS the committed content
         symreg)   git -C "$sb/repo" update-index --assume-unchanged linkpath.txt || return 2
                   rm -f "$sb/repo/linkpath.txt" || return 2
                   printf 'a regular file where the index says symlink\n' \
@@ -1796,32 +1904,123 @@ PY
                 return 1
             fi ;;
         symlegit)
-            # ROUND 13 false-positive control. It must not be VACUOUS: all nine shapes have to be
-            # present AND at least one of them has to actually reach a tracked path, or "exit 0"
-            # would only mean "there was nothing to look at".
+            # ROUND 13 + 14b false-positive control. It must not be VACUOUS: all THIRTEEN shapes
+            # have to be present AND at least one of them has to actually reach a tracked path, or
+            # "exit 0" would only mean "there was nothing to look at". ROUND 14b adds two further
+            # premises, because the four new shapes are the ones an over-eager INTERMEDIATE check
+            # would break and a shape that does not exercise an intermediate cannot show that:
+            # every one of the four must RESOLVE here (so a real walk happens), and the untracked
+            # one's intermediate must genuinely be untracked (or its treatment is untested).
             if ! "${AX_PY_BIN:-python3}" - "$sb/repo" <<'PY'
 import os, subprocess, sys
 repo = sys.argv[1]
 want = {b"legit/sub/exact", b"legit/dotdot", b"legit/absolute", b"legit/escapes",
         b"legit/untracked", b"legit/dangling", b"legit/chain", b"legit/dirlink",
-        b"legit/viadir"}
+        b"legit/viadir",
+        # ROUND 14b — the intermediate-position shapes
+        b"legit/slashdir", b"legit/slashlink", b"legit/d1", b"legit/chainmid/d2",
+        b"legit/deep", b"legit/viaunt"}
 idx = subprocess.run(["git", "-C", repo, "ls-files", "-s", "-z"],
                      stdout=subprocess.PIPE, check=True).stdout.split(b"\0")
-links = {rec.partition(b"\t")[2] for rec in idx
-         if rec and rec.split(b" ")[0] == b"120000"}
+tracked = {rec.partition(b"\t")[2]: rec.split(b" ")[0] for rec in idx if rec}
+links = {p for p, m in tracked.items() if m == b"120000"}
 missing = want - links
 rootb = os.fsencode(repo)
-resolves = os.path.realpath(os.path.join(rootb, b"legit/dotdot")) == \
-    os.path.realpath(os.path.join(rootb, b"legit/sub/real.txt"))
-if missing or not resolves:
-    print(f"missing tracked symlinks: {sorted(missing)}; dotdot reaches the tracked file: "
-          f"{resolves}", file=sys.stderr)
-sys.exit(1 if (missing or not resolves) else 0)
+why = []
+if missing:
+    why.append(f"missing tracked symlinks: {sorted(missing)}")
+if os.path.realpath(os.path.join(rootb, b"legit/dotdot")) != \
+        os.path.realpath(os.path.join(rootb, b"legit/sub/real.txt")):
+    why.append("legit/dotdot does not reach the tracked file, so nothing here is compared")
+for rel in (b"legit/slashdir", b"legit/slashlink", b"legit/deep", b"legit/viaunt"):
+    try:
+        os.stat(os.path.join(rootb, rel))
+    except OSError as exc:
+        why.append(f"{rel!r} does not resolve here ({exc.strerror}); an intermediate-position "
+                   f"control that dangles exercises no intermediate at all")
+if b"legit/build/blink" in tracked or b"legit/build/artifact.txt" in tracked:
+    why.append("legit/build is TRACKED, so the untracked-intermediate treatment is untested")
+if why:
+    print("; ".join(why), file=sys.stderr)
+sys.exit(1 if why else 0)
 PY
             then
-                violation "premise broken (symlegit): the nine legitimate tracked symlinks are not" \
-                          "all present, or none of them reaches a tracked path — a false-positive" \
-                          "control that has nothing to look at proves nothing."
+                violation "premise broken (symlegit): the thirteen legitimate tracked symlinks are" \
+                          "not all present, or none of them reaches a tracked path, or the" \
+                          "intermediate-position shapes do not resolve — a false-positive control" \
+                          "that has nothing to look at proves nothing."
+                return 1
+            fi ;;
+        symmidfinal|symmidslash|symmidsub|symmidnfd|symmidign)
+            # ROUND 14b / P1. FIVE facts, and the last two are what separate this class from
+            # round 14's: (1) mid/x is a tracked mode-120000 entry; (2) exactly one OTHER tracked
+            # symlink lives under mid/ and it is the RECORDED spelling; (3) the target's first
+            # component is an ALIAS of that spelling — a different byte string that lstats to the
+            # SAME inode here, so this filesystem really does fold the axis under test; (4) for the
+            # INTERMEDIATE kinds the target carries a tail, so the alias is NOT the final component
+            # and rounds 13/14 could not see it; (5) mid/x RESOLVES here to exactly what the
+            # RECORDED route reaches — the false-green premise: R25 reads it, the receiver cannot.
+            if ! "${AX_PY_BIN:-python3}" - "$sb/repo" "$kind" <<'PY'
+import os, subprocess, sys
+repo, kind = sys.argv[1], sys.argv[2]
+rootb = os.fsencode(repo)
+idx = subprocess.run(["git", "-C", repo, "ls-files", "-s", "-z"],
+                     stdout=subprocess.PIPE, check=True).stdout.split(b"\0")
+entries = {}
+for rec in idx:
+    if rec:
+        meta, _, path = rec.partition(b"\t")
+        entries[path] = meta.split(b" ")[0]
+why = []
+if entries.get(b"mid/x") != b"120000":
+    why.append(f"mid/x index mode is {entries.get(b'mid/x')!r}, want 120000")
+recs = [p for p, m in entries.items()
+        if m == b"120000" and p.startswith(b"mid/") and p != b"mid/x"]
+if len(recs) != 1:
+    why.append(f"expected exactly one RECORDED symlink under mid/, found {sorted(recs)}")
+if not why:
+    rec = recs[0]
+    tgt = os.readlink(os.path.join(rootb, b"mid/x"))
+    first, _, tail = tgt.partition(b"/")
+    alias = b"mid/" + first
+    if alias == rec:
+        why.append("the target's first component IS the recorded spelling — no alias, no case")
+    else:
+        try:
+            sa, sb_ = os.lstat(os.path.join(rootb, alias)), os.lstat(os.path.join(rootb, rec))
+            if (sa.st_dev, sa.st_ino) != (sb_.st_dev, sb_.st_ino):
+                why.append(f"{alias!r} and {rec!r} are DISTINCT inodes here, so this filesystem "
+                           f"does not fold the axis under test and the topology is gone")
+        except OSError as exc:
+            why.append(f"{alias!r} does not exist here ({exc.strerror}); the alias must resolve "
+                       f"locally or there is no false-green to demonstrate")
+    want_tail = kind != "symmidfinal"
+    if want_tail and b"/" not in tgt:
+        why.append(f"target {tgt!r} has NO tail, so the alias is the FINAL component and this "
+                   f"case measures the round-13/14 refusal, not the round-14b one")
+    if not want_tail and b"/" in tgt:
+        why.append(f"target {tgt!r} HAS a tail, so it is not the final-component control")
+    if want_tail:
+        # (5) the alias route and the RECORDED route must reach the same object, and the recorded
+        # route's candidate must be a spelling the index records — that is why round 14 passed it.
+        recroute = rec + (b"/" + tail if tail else b"")
+        try:
+            a, b2 = (os.stat(os.path.join(rootb, b"mid/x")),
+                     os.stat(os.path.join(rootb, recroute)))
+            if (a.st_dev, a.st_ino) != (b2.st_dev, b2.st_ino):
+                why.append(f"mid/x and the recorded route {recroute!r} reach DIFFERENT objects")
+        except OSError as exc:
+            why.append(f"mid/x does not resolve here ({exc.strerror}), so R25 could not have read "
+                       f"through it and the false-green premise is absent")
+if why:
+    print("; ".join(why), file=sys.stderr)
+sys.exit(1 if why else 0)
+PY
+            then
+                violation "premise broken ($kind): this class needs a committed link whose target" \
+                          "reaches a tracked path THROUGH an aliased spelling of a recorded one." \
+                          "Without the alias, the shared inode and (for the intermediate kinds)" \
+                          "the tail, the case measures the round-13/14 refusal instead."
                 return 1
             fi ;;
         csignorable)
@@ -2131,6 +2330,14 @@ if [ -n "$IGN_ROOT" ]; then
     r9_case AL  symign  empty "SYMLINK TARGET aliased by IGNORABLE ZWNJ  " \
         "GIT_SYMLINK_TARGET_ALIAS" "" "$CLEAN_FP"
     r9_case AL2 symign  empty "same, round-13 census removed (both)      " "" r13all "$CLEAN_FP"
+    # (AT) ROUND 14b on the IGNORABLE axis: the SAME alias, in the INTERMEDIATE position. The
+    # index records `mid/safe-link`; the attack link spells it `safe-link<U+200C>/real.txt`, so the
+    # walk follows it, lands on the exact `mid/real/real.txt` and — before 14b — passed. With
+    # (AS)'s normalization variant this is what shows the intermediate verdict reuses the SHARED
+    # fold rather than adding a case-only check one component to the left.
+    r9_case AT  symmidign empty "INTERMEDIATE alias by IGNORABLE ZWNJ      " \
+        "GIT_SYMLINK_TARGET_ALIAS" "" "$CLEAN_FP"
+    r9_case AT2 symmidign empty "same, round-14b census removed (both)     " "" r14ball "$CLEAN_FP"
     R9_ROOT=""
 else
     note "(AF/AG) filesystem arm: NO IGNORABLE-FOLDING VOLUME — could not attach a case-insensitive" \
@@ -2171,7 +2378,8 @@ fi
 #        since the recompute runs the prior release's copy), helper-only must leave the 12c SWEEP
 #        refusing on its own code.
 #   (AM) is the FALSE-POSITIVE control, and it is the one that decides whether this round is
-#        shippable: NINE legitimate tracked symlinks in one tree — exact spelling, `..` traversal
+#        shippable: THIRTEEN legitimate shapes in one tree, 15 tracked symlinks (nine here, four added by
+#        round 14b for the INTERMEDIATE position — see r13_legit) — exact spelling, `..` traversal
 #        onto the exact record (the shape BOTH live tracked symlinks in this catalog have), an
 #        ABSOLUTE target outside the repository, a `..` target that ESCAPES the root, a target to an
 #        UNTRACKED (gitignored) path, a DANGLING target, a CHAIN through another tracked symlink, a
@@ -2193,7 +2401,7 @@ r9_case AK3 symnfcnfd empty "normalization target, SWEEP neutered      " \
     "AUDIT_FINGERPRINT_UNVERIFIABLE" r13guard "$CLEAN_FP_R13"
 r9_case AK4 symnfcnfd empty "normalization target, HELPER neutered     " \
     "GIT_SYMLINK_TARGET_ALIAS" r13fp "$CLEAN_FP_R13"
-r9_case AM  symlegit  empty "NINE legitimate symlinks must NOT block   " ""
+r9_case AM  symlegit  empty "13 legitimate SHAPES must NOT block       " ""
 
 # ══ ROUND 14 (TD-2026-08-01-(P1-posix-resolution-and-runtime-paths)) / P1-A ═══════════
 # Round 13 widened the SUBJECT of the census to symlink targets and then resolved those targets
@@ -2226,6 +2434,50 @@ r9_case AN4 symjump   empty "jump topology, only the HELPER neutered   " \
     "GIT_SYMLINK_TARGET_ALIAS" r14fp "$CLEAN_FP_R13"
 r9_case AO  symloop   empty "committed symlink CYCLE blocks, not silent" \
     "GIT_SYMLINK_RESOLUTION_UNBOUNDED" "" "$CLEAN_FP_R13"
+
+# ══ ROUND 14b (SAME TD ENTRY) / P1 — THE INTERMEDIATE COMPONENT ═══════════════════════
+# Round 14 followed intermediates correctly and then took the alias verdict ONCE, on the FINAL
+# candidate. Following an intermediate therefore DISCARDED its spelling, and one keystroke moved a
+# refused alias into the unrefused position. FOUND BY INDEPENDENT VERIFICATION, on one tree with a
+# tracked `mid/dirlink -> real`, committed content only:
+#     ln -s DIRLINK  mid/x   → exit 15   (final component: the round-13/14 class)
+#     ln -s DIRLINK/ mid/x   → exit 0    (SAME alias, one keystroke, UNREFUSED)
+#     ln -s DIRLINK/real.txt → exit 0    (the same hole without the keystroke)
+# The trailing slash is honoured LEGITIMATELY — the kernel follows the final component when
+# something follows it — and that legitimacy is exactly what moved the alias out of reach: the
+# follow lands on the correctly-spelled `mid/real`, which passes at step 5, while `mid/DIRLINK`,
+# the spelling that dangles at a case-sensitive receiver, was never asked about.
+#   (AP)  is the FINAL-component control: it blocked before and must keep blocking, THROUGH the
+#         round-14b neuter (AP2) — that is what makes the twins below attributable to the new
+#         subject rather than to any change in the old one.
+#   (AQ)  is the verifier's exact keystroke pair's second half, (AQ2) its pre-14b twin (the bypass
+#         lands again: exit 0), and (AQ3)/(AQ4) the per-implementation splits.
+#   (AR)  is the shape originally registered as P3-134 — an intermediate alias with NO trailing
+#         slash — with its own twin. It is the one whose P3 grading understated a live bypass.
+#   (AS)  is the same hole through NORMALIZATION and (AT), under the (AF)/(AG) folding volume,
+#         through an IGNORABLE FORMAT CHARACTER: together they prove the intermediate verdict
+#         rides the SHARED fold rather than a case-only comparison.
+#   (AM)  above is re-run with FOUR MORE legitimate shapes — a trailing slash on a correctly-
+#         spelled tracked directory, the same through a correctly-spelled tracked symlink, a chain
+#         of SEVERAL correctly-spelled intermediates, and an UNTRACKED intermediate — because
+#         precision, not detection, is the risk in this round.
+r9_case AP  symmidfinal empty "FINAL-component alias still blocks        " \
+    "GIT_SYMLINK_TARGET_ALIAS" "" "$CLEAN_FP_R13"
+r9_case AP2 symmidfinal empty "same, 14b census removed: STILL blocks    " \
+    "GIT_SYMLINK_TARGET_ALIAS" r14ball "$CLEAN_FP_R13"
+r9_case AQ  symmidslash empty "INTERMEDIATE alias via trailing slash     " \
+    "GIT_SYMLINK_TARGET_ALIAS" "" "$CLEAN_FP_R13"
+r9_case AQ2 symmidslash empty "same, round-14b census removed (both)     " "" r14ball "$CLEAN_FP_R13"
+r9_case AQ3 symmidslash empty "trailing slash, only the SWEEP neutered   " \
+    "AUDIT_FINGERPRINT_UNVERIFIABLE" r14bguard "$CLEAN_FP_R13"
+r9_case AQ4 symmidslash empty "trailing slash, only the HELPER neutered  " \
+    "GIT_SYMLINK_TARGET_ALIAS" r14bfp "$CLEAN_FP_R13"
+r9_case AR  symmidsub   empty "INTERMEDIATE alias, no trailing slash     " \
+    "GIT_SYMLINK_TARGET_ALIAS" "" "$CLEAN_FP_R13"
+r9_case AR2 symmidsub   empty "same, round-14b census removed (both)     " "" r14ball "$CLEAN_FP_R13"
+r9_case AS  symmidnfd   empty "INTERMEDIATE alias by NORMALIZATION       " \
+    "GIT_SYMLINK_TARGET_ALIAS" "" "$CLEAN_FP_R13"
+r9_case AS2 symmidnfd   empty "same, round-14b census removed (both)     " "" r14ball "$CLEAN_FP_R13"
 
 # (AD) ROUND 11 — THE TWO IMPLEMENTATIONS MUST AGREE ON THE FOLD, and (AE) the NORMALIZATION
 # false-positive control, which is SIMULATED and says so.
@@ -2387,9 +2639,16 @@ else
 echo "  (NFC record, NFD target) — the IGNORABLE variant needs the folding volume above, which this"
 echo "  run did not have — each with"
 fi
-echo "  pre-round-13 and per-implementation twins, while NINE legitimate tracked symlinks (exact,"
-echo "  \`..\`, absolute, escaping, untracked, dangling, chained, directory, via-symlinked-dir) all"
-echo "  PASS in one tree;"
+echo "  pre-round-13 and per-implementation twins, while THIRTEEN legitimate symlink SHAPES"
+echo "  (exact, \`..\`, absolute, escaping, untracked, dangling, chained, directory,"
+echo "  via-symlinked-dir, trailing-slash-on-dir, trailing-slash-on-link, several correctly-spelled"
+echo "  intermediates, and an UNTRACKED intermediate) all PASS in one tree;"
+echo "  the alias verdict is taken on EVERY component the walk resolves, not on the final one"
+echo "  alone — \`-> DIRLINK\` blocked while \`-> DIRLINK/\` and \`-> DIRLINK/real.txt\` passed over the"
+echo "  very same tracked \`dirlink\`, a one-character bypass — so the intermediate shapes are"
+echo "  refused on CASE, NORMALIZATION and (on a folding volume) an IGNORABLE character, each with"
+echo "  a pre-round-14b twin in which the bypass lands again while the FINAL-component refusal"
+echo "  keeps firing through the same neuter;"
 echo "  a symlink target whose \`..\` sits BEHIND an intermediate symlink is resolved the way"
 echo "  the KERNEL resolves it — component by component, popping \`..\` AFTER the follow — so the"
 echo "  reviewer's jump/../GRADLEW-REAL topology, which the round-13 LEXICAL walk reported as"

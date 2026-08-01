@@ -2704,14 +2704,97 @@ construction instead of by argument.
   inode** and that the **lexical candidate be absent**, so the case cannot silently degenerate
   into round 13's.
 
-**Residual, measured and registered (P3-134):** the alias verdict is taken on the **final**
-candidate only, so an aliased **intermediate** spelling (`-> DIRLINK/real.txt` where the record is
-`legit/dirlink`) is refused by **neither** resolver — round 13 declined it at step 6, round 14
-follows it and lands on the exact record. That link dangles at a case-sensitive receiver, so it is
-the same defect class one component to the left. The remedy is known and cheap (apply steps 5/6 to
-every component walked; the registry is already in hand) and was deliberately **not** shipped here:
-it is a surface expansion outside the delegated scope of P1-A/P1-B, and mixing it in would blur
-the attribution of both.
+### P1-A2 (round 14b) — following an intermediate made its spelling unjudged, and the residual above was mis-graded
+
+*This is an **amendment to this entry**, not a new one: same subject, same resolver, same code.
+The round-14 text above shipped the residual below as P3-134 "register-only"; that grade was
+wrong and the correction belongs where the claim was made.*
+
+Round 14 followed intermediates correctly and then asked the alias question **once**, about the
+**final** candidate. Following an intermediate therefore **discarded its spelling**. An
+independent verification lane accepted the attribution-hygiene argument for deferring it as
+procedurally defensible, and then produced the reproduction the row did not record:
+
+| tree: tracked `mid/real/real.txt`, tracked symlink `mid/dirlink -> real` | verdict |
+|---|---|
+| `ln -s DIRLINK  mid/x` | **exit 15** `GIT_SYMLINK_TARGET_ALIAS` — final component, the round-13/14 class |
+| `ln -s DIRLINK/ mid/x` | **exit 0** — the SAME alias, one keystroke, refused by NEITHER resolver |
+| `ln -s DIRLINK/real.txt mid/x` | **exit 0** — the shape actually registered as P3-134 |
+
+The trailing slash is honoured **legitimately** — the kernel follows the final component when
+something follows it, which round 14's own docstring says — and that legitimacy is exactly what
+moved the alias out of reach: the follow lands on the correctly-spelled `mid/real`, which passes
+at step 5, while `mid/DIRLINK`, the spelling that dangles at a case-sensitive receiver, was never
+asked about. So this is a **one-character bypass of a shipped refusal**, reachable with committed
+content only, capable of false-green push evidence.
+
+**THE MIS-GRADING IS THE LESSON, and it is the part worth carrying forward.** P3-134 was graded
+from the shape that had been *measured* (`-> DIRLINK/real.txt`, filed as a surface expansion)
+rather than from the shape's **reachability** — one keystroke away from an attack the same file
+already refuses. A defect's grade follows what an adversary can reach, not the tidiness of the
+argument for deferring it; "attribution hygiene" is a reason to ship a fix in its own commit, never
+a reason to grade it lower. The register-only decision was procedurally defensible and materially
+wrong at the same time, which is the combination that gets things shipped.
+
+**The fix.** `_resolve_link_target` returns every **non-final** component it resolved (recorded
+before the follow pops it off the stack — no extra syscall, the `lstat` is the one the walk
+already needed) and `_symlink_target_verdicts` applies **steps 3-6 unchanged** to each. Same code
+(`GIT_SYMLINK_TARGET_ALIAS`): the subject (a committed spelling that dangles at the receiver) and
+the remedy (respell the target) are identical, so a second code would only fragment one class —
+only the sentence changes, to name the component. It runs for **every** walk outcome, including
+`escapes` / `root` / `unbounded`, because an intermediate the receiver cannot resolve is broken
+there regardless of where this walk ended up. Both implementations, symmetrically. Every
+not-this-class exit is preserved verbatim (absolute · escapes the root · dangling · unregistered
+inode · exact spelling) and both budgets (40 / 4096) are untouched.
+
+**Precision was the risk, so the false-positive control grew rather than the detector.** The
+legitimate-shape tree goes from **nine to thirteen** shapes (15 tracked symlinks — `d1` and
+`chainmid/d2` are the intermediates the `deep` shape traverses), the four new ones all in the intermediate
+position: a trailing slash on a correctly-spelled tracked **directory** (`-> sub/` — the
+legitimate twin of the attack), the same through a correctly-spelled tracked **symlink**
+(`-> dirlink/`), **several** correctly-spelled intermediates in one target (`-> d1/d2/real.txt`
+over `d1 -> chainmid`, `chainmid/d2 -> ../sub`), and an **untracked** intermediate
+(`-> build/blink/real.txt` through a gitignored directory holding an untracked symlink). All
+thirteen **exit 0**.
+
+**UNTRACKED INTERMEDIATE — treatment, stated rather than left implicit: NOT refused.** An
+untracked intermediate has no recorded spelling for it to be an alias *of*, so there is no
+comparison to make; this is exactly the exit step 4 has always taken for an untracked final
+candidate. What the receiver gets through such a component is governed by whether the path is
+shipped at all, which is the dangling class (P3-132), not this census. Refusing it would refuse a
+link through any gitignored build directory — the first thing a fork-receiver has.
+
+**Controls and measurements, all re-run.**
+- The verifier's exact pair, **both implementations**: `-> DIRLINK` **exit 15** before and after;
+  `-> DIRLINK/` **exit 0 → exit 15**. The no-slash intermediate `-> DIRLINK/real.txt`:
+  **exit 0 → exit 15**. Normalization (record `mid/é-link` NFC, target NFD) and ignorable Cf
+  (`safe-link<U+200C>/real.txt`) do the same, which is what shows the intermediate verdict rides
+  the **shared** fold rather than a case-only check one component to the left.
+- **The round-14 C2 non-block still holds**: `ln -s outdirlink/../SECRET.txt` with
+  `outdirlink -> ../outside` and a tracked `secret.txt` is still **exit 0** — `outdirlink` is the
+  **recorded** spelling, so the new intermediate verdict passes it at step 5 and the walk still
+  takes "escapes" on the first `..`. The over-inclusion round 14 removed was **not** reintroduced.
+- Live tree, measured on a CLEAN clone of HEAD so the recipe is reproducible: 2 tracked
+  symlinks pass, digest **unchanged** — clean `0a815065eb…`, dirty `8a91e4934b…` after
+  `printf 'X\n' > .ax-fp-probe.txt`, byte-identical between the HEAD copy and this one.
+  5-run means, two rounds each: 0.2817 / 0.2795 s/run (HEAD) vs 0.2800 / 0.2798 s/run
+  (14b) — the difference is smaller than the run-to-run spread, which is what the added
+  work predicts: no new syscall, only a dict lookup per resolved component.
+- Prover: (AP)/(AP2) the final-component control, still blocking **through** the 14b neuter —
+  which is what makes the twins attributable to the new *subject* rather than to any change in the
+  old one; (AQ)-(AQ4) the trailing slash with its twin and per-implementation splits;
+  (AR)/(AR2) the no-slash shape; (AS)/(AS2) normalization; (AT)/(AT2) ignorable Cf on the folding
+  volume; (AM) the thirteen legitimate shapes. The 14b neuter is the round-9/10/13 shape (kill the
+  `if`), leaving the resolution algorithm, the round-13 report, the fold, the discriminator and
+  both budgets live.
+
+**Cosmetic, same lane:** the 12c comment named the budget code `R25_SYMLINK_RESOLUTION_UNBOUNDED`
+while the emitted code is `GIT_SYMLINK_RESOLUTION_UNBOUNDED`; corrected. And guard [104]'s
+descriptive echo in `run-all-guards.sh` quoted its own reproduction verbatim, so
+`--advisory-scripts` reported one hit on a pristine tree. **Decision: rephrased**, not left — an
+advisory that always fires is one nobody reads, which is the same habituation failure this family
+keeps closing; the narrative spells the alias out instead of quoting it and the scan now reports
+**0** on a pristine tree while still reporting a planted one.
 
 ### P1-B — R25 executes its own inputs verbatim, and nobody checked their spelling
 
