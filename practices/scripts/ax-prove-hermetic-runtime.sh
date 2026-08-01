@@ -1234,7 +1234,18 @@ fi
 # from disk, which on a case-insensitive filesystem HEALS a casefold premise (the two entries
 # collapse onto the one file's bytes) and makes the twin pass for a reason that is not the neuter.
 round9_neuter() {   # round9_neuter <sb> <what>
-                    # what ∈ all|guard|fp|r1Nall|r1Nguard|r1Nfp for N ∈ 10..14, 14b
+                    # what ∈ all|guard|fp|r1Nall|r1Nguard|r1Nfp for N ∈ 10..15, 14b
+                    # ROUND 15: <what> may be a COMMA-SEPARATED LIST. A twin exists to make one
+                    # round's refusal ATTRIBUTABLE, and that argument only holds while no LATER
+                    # round independently catches the same tree. Round 15 (receiver-resolution
+                    # parity) does catch several of them once rounds 14/14b are computation-
+                    # neutered, because a target the alias census can no longer recognise is,
+                    # from the parity census's point of view, simply a link that resolves here
+                    # and not at the receiver — which is TRUE, and is defence in depth rather
+                    # than a defect. Measured: (AN2)/(AQ2)/(AR2)/(AS2)/(AT2) flipped 0 -> 1 and
+                    # (AN3)/(AQ3) started reporting the parity code instead of the one they
+                    # assert. Those twins now neuter BOTH rounds, so what lands again is again
+                    # attributable to exactly one of them.
     "${AX_PY_BIN:-python3}" - "$1/repo" "$2" <<'PY'
 import sys, pathlib
 repo, what = pathlib.Path(sys.argv[1]), sys.argv[2]
@@ -1336,6 +1347,16 @@ pairs = {
     "r15guard": R15_GUARD,
     "r15fp": R15_FP,
 }
+if "," in what:
+    merged = []
+    for part in what.split(","):
+        part = part.strip()
+        if part not in pairs:
+            print("round9_neuter: unknown component %r in composite %r" % (part, what),
+                  file=sys.stderr)
+            sys.exit(2)
+        merged.extend(pairs[part])
+    pairs[what] = merged
 if what not in pairs:
     print(f"unknown round9/10/11/12/13/14/14b neuter: {what}", file=sys.stderr)
     sys.exit(3)
@@ -2601,7 +2622,7 @@ if [ -n "$IGN_ROOT" ]; then
     # fold rather than adding a case-only check one component to the left.
     r9_case AT  symmidign empty "INTERMEDIATE alias by IGNORABLE ZWNJ      " \
         "GIT_SYMLINK_TARGET_ALIAS" "" "$CLEAN_FP"
-    r9_case AT2 symmidign empty "same, round-14b census removed (both)     " "" r14ball "$CLEAN_FP"
+    r9_case AT2 symmidign empty "same, 14b+15 censuses removed (both)      " "" r14ball,r15all "$CLEAN_FP"
     R9_ROOT=""
 else
     note "(AF/AG) filesystem arm: NO IGNORABLE-FOLDING VOLUME — could not attach a case-insensitive" \
@@ -2691,9 +2712,9 @@ r9_case AM  symlegit  empty "13 legitimate SHAPES must NOT block       " ""
 #        to recognise it. Both verdicts are exit 0; the reason changed, the answer did not.
 r9_case AN  symjump   empty "POSIX dotdot behind a symlink (jump/../)  " \
     "GIT_SYMLINK_TARGET_ALIAS" "" "$CLEAN_FP_R13"
-r9_case AN2 symjump   empty "same, LEXICAL resolution restored (both)  " "" r14all "$CLEAN_FP_R13"
+r9_case AN2 symjump   empty "same, LEXICAL restored + r15 removed      " "" r14all,r15all "$CLEAN_FP_R13"
 r9_case AN3 symjump   empty "jump topology, only the SWEEP neutered    " \
-    "AUDIT_FINGERPRINT_UNVERIFIABLE" r14guard "$CLEAN_FP_R13"
+    "AUDIT_FINGERPRINT_UNVERIFIABLE" r14guard,r15guard "$CLEAN_FP_R13"
 r9_case AN4 symjump   empty "jump topology, only the HELPER neutered   " \
     "GIT_SYMLINK_TARGET_ALIAS" r14fp "$CLEAN_FP_R13"
 r9_case AO  symloop   empty "committed symlink CYCLE blocks, not silent" \
@@ -2731,17 +2752,17 @@ r9_case AP2 symmidfinal empty "same, 14b census removed: STILL blocks    " \
     "GIT_SYMLINK_TARGET_ALIAS" r14ball "$CLEAN_FP_R13"
 r9_case AQ  symmidslash empty "INTERMEDIATE alias via trailing slash     " \
     "GIT_SYMLINK_TARGET_ALIAS" "" "$CLEAN_FP_R13"
-r9_case AQ2 symmidslash empty "same, round-14b census removed (both)     " "" r14ball "$CLEAN_FP_R13"
+r9_case AQ2 symmidslash empty "same, 14b+15 censuses removed (both)      " "" r14ball,r15all "$CLEAN_FP_R13"
 r9_case AQ3 symmidslash empty "trailing slash, only the SWEEP neutered   " \
-    "AUDIT_FINGERPRINT_UNVERIFIABLE" r14bguard "$CLEAN_FP_R13"
+    "AUDIT_FINGERPRINT_UNVERIFIABLE" r14bguard,r15guard "$CLEAN_FP_R13"
 r9_case AQ4 symmidslash empty "trailing slash, only the HELPER neutered  " \
     "GIT_SYMLINK_TARGET_ALIAS" r14bfp "$CLEAN_FP_R13"
 r9_case AR  symmidsub   empty "INTERMEDIATE alias, no trailing slash     " \
     "GIT_SYMLINK_TARGET_ALIAS" "" "$CLEAN_FP_R13"
-r9_case AR2 symmidsub   empty "same, round-14b census removed (both)     " "" r14ball "$CLEAN_FP_R13"
+r9_case AR2 symmidsub   empty "same, 14b+15 censuses removed (both)      " "" r14ball,r15all "$CLEAN_FP_R13"
 r9_case AS  symmidnfd   empty "INTERMEDIATE alias by NORMALIZATION       " \
     "GIT_SYMLINK_TARGET_ALIAS" "" "$CLEAN_FP_R13"
-r9_case AS2 symmidnfd   empty "same, round-14b census removed (both)     " "" r14ball "$CLEAN_FP_R13"
+r9_case AS2 symmidnfd   empty "same, 14b+15 censuses removed (both)      " "" r14ball,r15all "$CLEAN_FP_R13"
 
 # ══ ROUND 15 (BACKLOG P3-131 + P3-132) — RECEIVER-RESOLUTION PARITY ═══════════════════
 # Rounds 13/14/14b asked ONE question about a symlink target: is it SPELLED as an alias of a
