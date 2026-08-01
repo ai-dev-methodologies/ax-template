@@ -1098,16 +1098,64 @@ title: "SP31: CI/DI replaces RRN — @LegalBasis annotation required for statuto
 provenance_class: external_constraint
 evidence:
   source_type: external
-  upstream_id: pipa-article-24-2026-05
-  section: "§24-1 주민등록번호 처리의 제한"
   citation: |
     "개인정보처리자는 다음 각 호의 어느 하나에 해당하는 경우를 제외하고는 주민등록번호를 처리할 수 없다."
-    — 개인정보보호법 제24조의2제1항 (시행 2024.03.15.)
+    — 개인정보보호법 제24조의2제1항 (시행 2024.03.15.), §24-1 주민등록번호 처리의 제한
+  url: "https://www.law.go.kr/법령/개인정보보호법"
 spec_ref: "practices/rules/no-rrn-collection-without-legal-basis.md"
 status: ACCEPTED
 date: 2026-05-18
 ---
 ```
+
+> **CORRECTION 2026-08-01 (BACKLOG P2-75) — this entry's `evidence` block was edited after
+> acceptance, which this ledger otherwise forbids. What changed, why, and what was measured:**
+>
+> **WHAT.** The block used to carry `upstream_id: pipa-article-24-2026-05` alongside
+> `source_type: external`. The `upstream_id` and its `section:` are REMOVED; the statute
+> citation is unchanged and now carries the `url:` that `source_type: external` requires. The
+> decision, the rules it legislates and the statute it rests on are all untouched — only the
+> PROVENANCE POINTER changed, from a snapshot id to the primary source itself.
+>
+> **WHY.** The `upstream_id` pointed at a body that never existed.
+> `practices/upstream/pipa-article-24-2026-05.snapshot.md` is ABSENT from disk (measured), and
+> its `_MANIFEST.yaml` record carried `sha: c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0…` — a rolling-nibble
+> PLACEHOLDER, i.e. a fabricated digest for a file that was never fetched. It is the same
+> fabrication class as `kisa-identity-verification-2026-05`, which was deleted on 2026-08-01
+> after a citation census found none. This one survived only because THIS entry cited it, and
+> `evidence_guard`'s `entry_kind()` resolves `upstream_id` whenever the key is present — so a
+> body-less registration was kept alive by a citation to it, and the citation was kept honest-
+> looking by the registration. Two guards holding each other up over nothing.
+>
+> **ABOUT THE `url:`.** It names the STATUTE, not the deep per-article route. Measured
+> 2026-08-01: `https://www.law.go.kr/법령/개인정보보호법` answers HTTP 200 with the statute's own
+> frameset (1279 bytes, `<title>개인정보보호법</title>`, zero occurrences of the overload string),
+> while the per-article route below is the one that fails. A citation to a STATUTE is not the same
+> obligation as a quote from library docs: the authority is the enacted law and its article
+> number, which do not depend on any one portal rendering them. The article and effective date are
+> carried in the `citation:` itself so the claim stays checkable if the portal changes again.
+>
+> **THE MEASUREMENT THAT DECIDED IT.** Option (a) of P2-75 — "send the headers a browser sends,
+> that is not doctoring" — was TRIED AND FAILED, and the negative result is recorded here so the
+> next person does not retry it. `https://www.law.go.kr/법령/개인정보보호법/…/제24조` answers
+> HTTP 200 with 5278 bytes of law.go.kr's OWN overload page (title 국가법령정보센터 | 오류페이지,
+> body 현재 사용자가 많아 요청하신 페이지를 정상적으로 제공할 수 없습니다). Adding a current
+> desktop Chrome `User-Agent` returns a BYTE-IDENTICAL document; adding `Accept`,
+> `Accept-Language: ko-KR`, `--compressed` and a `Referer` changes only the cosmetic
+> `Content-Language` response header. `m.law.go.kr` 404s at the Apache level. The site ROOT is up
+> and redirects normally, so the failure is a backend condition on that one deep route, not a
+> User-Agent wall — no static header makes it fetchable. (Receipt `r068` records the same-day
+> 200/391-byte error-page extraction; `practices/DECISIONS.md:3103-3113` records the LSW / lsSc /
+> DRF / elaw / Wayback dead ends.)
+>
+> **WHY EDIT AN ACCEPTED ENTRY RATHER THAN ACCEPT THE RED.** The alternative was to let
+> `time_decay_guard` go RED on 2026-08-17 for a single fabricated record that no fetch can ever
+> refresh — i.e. to let a deadlock between two guards decide our evidence policy, and to keep a
+> digest we know to be invented in order to avoid our own gate. The statute is a public legal
+> text with a stable citation; `source_type: external` is exactly the shape for that, and it is
+> the STRONGER claim here, because it rests on the law rather than on a snapshot nobody ever had.
+> The edit is authorized, visible and dated rather than silent, precisely because the ledger's
+> append-only rule exists to stop quiet rewrites — not to make an honest correction impossible.
 
 ### Decision
 
@@ -1117,9 +1165,12 @@ Two rules added to catalog:
 2. `practices-react/rules/no-rrn-display-without-legal-basis-gate.md` (React) — guard matches
    `rrn|주민번호|residentRegistration` field names in TS/TSX files; excludes `ci|di|verifiedIdentityNumber`
 
-`@LegalBasis` annotation pattern from pipa-article-24-2026-05.snapshot.md documents
-required fields: `statute`, `purpose`, `approvedBy`. Absent this annotation, any RRN-like
-field name is a PIPA §24-1 CRITICAL violation.
+The `@LegalBasis` annotation pattern is THIS CATALOG'S OWN design — it requires the fields
+`statute`, `purpose`, `approvedBy`. (CORRECTED 2026-08-01, P2-75: this paragraph used to
+attribute the pattern to `pipa-article-24-2026-05.snapshot.md`, a file that never existed. The
+statute imposes the PROHIBITION; the annotation is our mechanism for recording the statutory
+exception, and claiming a source documented it was a false provenance claim.) Absent this
+annotation, any RRN-like field name is a PIPA §24-1 CRITICAL violation.
 
 ### Rationale
 
