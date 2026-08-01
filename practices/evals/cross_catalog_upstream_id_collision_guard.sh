@@ -96,11 +96,21 @@ if [ -n "$ROOT_OVERRIDE" ]; then
 fi
 
 PY_BIN="${AX_PY_BIN:-python3}"
-command -v "$PY_BIN" >/dev/null 2>&1 || {
-    echo "cross_catalog_upstream_id_collision_guard: python3 not found" >&2; exit 2; }
+
+# ── Fail closed: this guard verifies through PyYAML ──────────────────────────
+# It compares a PROVENANCE field across two manifests. A hand-rolled line reader was written
+# first and [95] pyyaml_preflight_coverage_guard immediately caught it degrading in silence:
+# under simulated PyYAML absence the fallback read 46 practices-react ids where PyYAML reads 42,
+# and the guard still printed PASS — a green verdict about a census that was not the tree's.
+# Pointing a regex at yaml to answer a truth question is the exact defect this catalog keeps
+# catching, so there is no fallback: no PyYAML, no verdict.
+if ! command -v "$PY_BIN" >/dev/null 2>&1 || ! "$PY_BIN" -c 'import yaml' >/dev/null 2>&1; then
+    echo "cross_catalog_upstream_id_collision_guard: BLOCK — cannot verify: python3 + PyYAML required (python3 -m pip install pyyaml)" >&2
+    exit 2
+fi
 
 AX_ROOT="$REPO_ROOT" AX_IS_LIVE="$IS_LIVE" AX_SHOW="$SHOW" "$PY_BIN" - <<'PY'
-import os, sys, pathlib, re
+import os, sys, pathlib
 
 ROOT = pathlib.Path(os.environ["AX_ROOT"])
 IS_LIVE = os.environ["AX_IS_LIVE"] == "1"
@@ -125,43 +135,25 @@ def die(code, msg):
     print(f"cross_catalog_upstream_id_collision_guard: {msg}", file=sys.stderr)
     sys.exit(code)
 
-# ── parse both manifests ──────────────────────────────────────────────────────
-# PyYAML when available; otherwise a deliberately narrow line reader for the two fields this
-# guard compares. The fallback is not a general yaml parser and says so — it reads `- id: "x"`
-# and the `source:` that follows it inside the same list item, which is the shape
-# practices/scripts/snapshot-extract.sh writes.
+# ── parse both manifests (PyYAML only — the shell preflight guarantees it) ────
+import yaml  # noqa: E402  — absence is already a BLOCK above; there is no fallback by design
+
 def load_manifest(path):
-    text = path.read_text(encoding="utf-8", errors="replace")
-    try:
-        import yaml  # type: ignore
-        doc = yaml.safe_load(text) or {}
-        snaps = doc.get("snapshots")
-        if not isinstance(snaps, list):
-            die(2, f"MANIFEST_SHAPE — {path} has no `snapshots:` list")
-        out = {}
-        for s in snaps:
-            if not isinstance(s, dict):
-                die(2, f"MANIFEST_SHAPE — {path} contains a non-mapping snapshot entry")
-            sid = s.get("id")
-            if not isinstance(sid, str) or not sid.strip():
-                die(2, f"MANIFEST_SHAPE — {path} contains an entry with no usable `id`")
-            src = s.get("source")
-            out[sid.strip()] = src.strip() if isinstance(src, str) else None
-        return out
-    except ImportError:
-        pass
-    out, cur = {}, None
-    for raw in text.splitlines():
-        m = re.match(r'^\s*-\s+id:\s*"?([^"\r\n]+?)"?\s*$', raw)
-        if m:
-            cur = m.group(1).strip()
-            out.setdefault(cur, None)
-            continue
-        m = re.match(r'^\s+source:\s*"?([^"\r\n]+?)"?\s*$', raw)
-        if m and cur is not None and out.get(cur) is None:
-            out[cur] = m.group(1).strip()
+    doc = yaml.safe_load(path.read_text(encoding="utf-8", errors="replace")) or {}
+    snaps = doc.get("snapshots")
+    if not isinstance(snaps, list):
+        die(2, f"MANIFEST_SHAPE — {path} has no `snapshots:` list")
+    out = {}
+    for s in snaps:
+        if not isinstance(s, dict):
+            die(2, f"MANIFEST_SHAPE — {path} contains a non-mapping snapshot entry")
+        sid = s.get("id")
+        if not isinstance(sid, str) or not sid.strip():
+            die(2, f"MANIFEST_SHAPE — {path} contains an entry with no usable `id`")
+        src = s.get("source")
+        out[sid.strip()] = src.strip() if isinstance(src, str) else None
     if not out:
-        die(2, f"MANIFEST_SHAPE — {path} yielded no ids (PyYAML absent, fallback read nothing)")
+        die(2, f"MANIFEST_SHAPE — {path} declares zero snapshots")
     return out
 
 manifests = {}
