@@ -19,7 +19,7 @@
 
 schema_version: 1
 scope: "<YOUR_PROJECT>-api-gateway-relay"
-stack: "Spring Boot 3.2.x + React + Caffeine cache (rate-limit) + HMAC-SHA256 (Mac SPI) + ShedLock (or DB row + SELECT FOR UPDATE SKIP LOCKED for circuit-reconcile)"
+stack: "Spring Boot 3.2.x + React + Caffeine cache (rate-limit) + HMAC-SHA256 (Mac SPI) + ShedLock (or DB row + SELECT ... FOR UPDATE, never SKIP LOCKED — P2-48, for circuit-reconcile)"
 standard: "OWASP ASVS V4 + RFC 7807 + RFC 2104 (HMAC) + OWASP ASVS V13.2.6 (webhook payload authenticity) + RFC 6585 §4 (HTTP 429 / Retry-After)"
 applied_recipes:
   - api-gateway-relay

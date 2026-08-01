@@ -47,7 +47,11 @@ notification
 ### `scheduled-task` (scheduled-publish)
 - Register `ScheduledPublishTask` with cron (e.g. `0 * * * * *` minute-granular)
 - `LockingPolicy.tryAcquire("scheduled-publish", node-id)` before each tick
-- `SELECT FOR UPDATE SKIP LOCKED` on `scheduled_task_lock` row (or ShedLock)
+- `SELECT ... FOR UPDATE` on the `scheduled_task_lock` row (row-PRESENT branch:
+  pessimistic lock spanning the staleness test AND the takeover write; row-ABSENT
+  branch: arbitrated by the lock table's PRIMARY KEY) — NOT `SKIP LOCKED`, which H2
+  does not support and which makes a held row look ABSENT to the loser instead of
+  making it wait (BACKLOG P2-48/P2-61). Or ShedLock.
 - JobHistory row appended per run (SCHED-EXECUTE-001)
 - Idempotency: each Content row carries `publish_idempotency_key`; if the
   task re-runs on the same row within the lock window, the second run is a

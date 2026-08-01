@@ -1,6 +1,6 @@
 ---
 sentinel:
-  source_concat_sha256: "c9d21a10cf6f83b2a85186094f16c21add6934df45790f6b9ae880d26adb0ca6"
+  source_concat_sha256: "2e0e3861ba614a6eac104019ee694501f48b20194e604a93e3c69072e44ec0ea"
   rule_count: 233
   generated_by: "practices/generate_agents.sh"
 ---
@@ -9915,7 +9915,7 @@ upstream:
 evidence:
   - upstream_id: spring-boot-sql-migration
     section: "Spring Boot — Flyway versioned migration naming"
-    quote: "Typically, migrations are scripts in the form V __ .sql (with an underscore-separated version, such as '1' or '2_1')."
+    quote: "Typically, migrations are scripts in the form V<VERSION>__<NAME>.sql (with <VERSION> an underscore-separated version, such as '1' or '2_1')."
   - source_type: external
     citation: "Flyway documentation — Migration naming convention"
     url: "https://documentation.red-gate.com/fd/migrations-271583622.html"
@@ -22040,6 +22040,7 @@ Reference: [RFC 2104 — HMAC: Keyed-Hashing for Message Authentication](https:/
 - marketplace-verdict
 - saas-subscription-verdict
 - scheduler-l4-verdict-v2
+- scheduler-l4-verdict-v3
 - scheduler-l4-verdict
 - webhook-l4-verdict
 

@@ -14,7 +14,7 @@ upstream:
 evidence:
   - upstream_id: spring-boot-sql-migration
     section: "Spring Boot — Flyway versioned migration naming"
-    quote: "Typically, migrations are scripts in the form V __ .sql (with an underscore-separated version, such as '1' or '2_1')."
+    quote: "Typically, migrations are scripts in the form V<VERSION>__<NAME>.sql (with <VERSION> an underscore-separated version, such as '1' or '2_1')."
   - source_type: external
     citation: "Flyway documentation — Migration naming convention"
     url: "https://documentation.red-gate.com/fd/migrations-271583622.html"

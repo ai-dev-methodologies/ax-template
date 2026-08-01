@@ -17,7 +17,7 @@
 
 schema_version: 1
 scope: "<YOUR_PROJECT>-cms"
-stack: "Spring Boot 3.2.x + React + ShedLock (or DB row + SELECT FOR UPDATE SKIP LOCKED)"
+stack: "Spring Boot 3.2.x + React + ShedLock (or DB row + SELECT ... FOR UPDATE, never SKIP LOCKED — P2-48)"
 standard: "OWASP Top 10 + ASVS V5 + RFC 7807"
 applied_recipes:
   - cms

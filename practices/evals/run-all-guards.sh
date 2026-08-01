@@ -1550,6 +1550,20 @@ run_guard "evidence_quote_spotcheck/fixture_fail" 1 \
     bash "$SCRIPT_DIR/evidence_quote_spotcheck_guard.sh" --strict --root "$SCRIPT_DIR/fixtures/evidence-quote-spotcheck/fail_quote_absent"
 run_guard "evidence_quote_spotcheck/fixture_pass" 0 \
     bash "$SCRIPT_DIR/evidence_quote_spotcheck_guard.sh" --strict --root "$SCRIPT_DIR/fixtures/evidence-quote-spotcheck/pass_quote_present"
+# BACKLOG P2-74 (2026-08-01) — THE ANGLE-BRACKET HOLE. `strip_html` was applied to the
+# SNAPSHOT side only, so a source page whose prose carries literal unescaped angle brackets
+# made its own citations UNVERIFIABLE BY CONSTRUCTION (the snapshot's `V<VERSION>__<NAME>.sql`
+# stripped to `V __ .sql` while a verbatim quote kept the brackets). The live instance,
+# `practices/rules/migration-versioned-naming.md::spring-boot-sql-migration`, had had its
+# quote rewritten INTO the guard's mangled spelling to make it resolve — the hole was
+# actively pushing citations away from the page text. `strip_html` now runs inside the single
+# `normalize`, so both sides are folded identically, and the live quote was restored verbatim.
+# pass_ = the true bracketed citation resolves; fail_ = the same shape with `.sql`->`.zzz`
+# still BLOCKS, so the symmetric strip is not a blanket amnesty for bracketed quotes.
+run_guard "evidence_quote_spotcheck/fixture_pass_angle_bracket" 0 \
+    bash "$SCRIPT_DIR/evidence_quote_spotcheck_guard.sh" --strict --root "$SCRIPT_DIR/fixtures/evidence-quote-spotcheck/pass_angle_bracket_quote"
+run_guard "evidence_quote_spotcheck/fixture_fail_angle_bracket" 1 \
+    bash "$SCRIPT_DIR/evidence_quote_spotcheck_guard.sh" --strict --root "$SCRIPT_DIR/fixtures/evidence-quote-spotcheck/fail_angle_bracket_fabricated"
 run_guard "evidence_quote_spotcheck/fixture_fail_allow_missing" 1 \
     bash "$SCRIPT_DIR/evidence_quote_spotcheck_guard.sh" --strict --allow-missing-snapshot --root "$SCRIPT_DIR/fixtures/evidence-quote-spotcheck/fail_quote_mismatch_snapshot_missing"
 run_guard "evidence_quote_spotcheck/fixture_pass_allow_missing" 0 \

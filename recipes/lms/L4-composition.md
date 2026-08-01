@@ -54,7 +54,11 @@ notification
 ### `scheduled-task`
 - Register `DueDateReminderTask` with cron expression (e.g. `0 */15 * * * *`)
 - `LockingPolicy.tryAcquire("due-date-reminder", node-id)` before scan/emit
-- `SELECT FOR UPDATE SKIP LOCKED` on `scheduled_task_lock` row (or ShedLock)
+- `SELECT ... FOR UPDATE` on the `scheduled_task_lock` row (row-PRESENT branch:
+  pessimistic lock spanning the staleness test AND the takeover write; row-ABSENT
+  branch: arbitrated by the lock table's PRIMARY KEY) — NOT `SKIP LOCKED`, which H2
+  does not support and which makes a held row look ABSENT to the loser instead of
+  making it wait (BACKLOG P2-48/P2-61). Or ShedLock.
 - JobHistory row appended per run (SCHED-EXECUTE-001)
 - Manual admin trigger routes through `executeWithLock()` (SCHED-IDEMPOTENT-001)
 - Bulk-enrollment idempotency reuses the same `Idempotency-Key` header pattern

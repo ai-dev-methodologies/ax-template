@@ -1315,6 +1315,27 @@ def die_structural(msg):
     sys.exit(2)
 
 def normalize(s):
+    # BACKLOG P2-74 (2026-08-01) — THE ANGLE-BRACKET HOLE. `strip_html` used to be applied
+    # by the CALLERS, and only ever to the SNAPSHOT side (`normalize(strip_html(body))`);
+    # the `quote` side went through `normalize` alone. The two sides were therefore
+    # normalized by DIFFERENT functions, and any source page whose prose contains literal
+    # unescaped angle brackets became UNVERIFIABLE BY CONSTRUCTION: the snapshot's
+    # `V<VERSION>__<NAME>.sql` is stripped to `V __ .sql` while a VERBATIM citation keeps
+    # the brackets, so the true quote can never match. Measured instance:
+    # `practices/rules/migration-versioned-naming.md::spring-boot-sql-migration`, whose
+    # quote had been written in the guard's own MANGLED spelling (`V __ .sql`) to make it
+    # resolve — i.e. the hole did not merely lose coverage, it pressured the citation away
+    # from the page text, which is the exact failure mode this gate exists to catch.
+    # `strip_html` now lives INSIDE the single normalizer, so both sides are folded by the
+    # same function. Snapshot-side behaviour is BYTE-IDENTICAL (the callers ran
+    # `normalize(strip_html(x))`, so the strip already ran first, before `html.unescape`);
+    # only the quote side changes, and only by gaining the identical fold. The change is
+    # SYMMETRIC, not relaxing-in-one-direction: a fabricated quote is still a fabricated
+    # quote after both sides lose their tags, because whatever the strip deletes it deletes
+    # from BOTH texts. A quote consisting ONLY of `<...>` now normalizes to empty and is
+    # caught by the existing vacuity/length floors, which is the correct reading of a
+    # citation with no prose in it.
+    s = strip_html(s)
     s = html.unescape(s)
     s = (s.replace('‘', "'").replace('’', "'")
           .replace('“', '"').replace('”', '"')
@@ -1361,7 +1382,7 @@ def load_snapshot(catalog, uid):
     if not os.path.isfile(snap):
         return None, None
     if snap not in snap_cache:
-        snap_cache[snap] = normalize(strip_html(open(snap, errors="replace").read()))
+        snap_cache[snap] = normalize(open(snap, errors="replace").read())  # P2-74: strip_html is now INSIDE normalize
     return snap, snap_cache[snap]
 
 def resolve_snapshot_any_catalog(uid):
@@ -1412,7 +1433,7 @@ def snapshot_prose_blocks(catalog, uid):
                 current.append(line)
         if current:
             blocks.append("\n".join(current))
-        block_cache[snap] = [normalize(strip_html(b)) for b in blocks]
+        block_cache[snap] = [normalize(b) for b in blocks]  # P2-74: strip_html is now INSIDE normalize
     return block_cache[snap]
 
 quotes = 0
