@@ -60,11 +60,14 @@ jobs:
           probe=".ax-fs-probe"
           rm -rf "$probe"; mkdir -p "$probe"
           rc=0
+          # Count dirents with globs, never `ls | grep` (SC2010): a glob answers the exact
+          # question "how many entries did the filesystem keep" without parsing ls output.
+          shopt -s nullglob
 
           # --- case sensitivity: A vs a must be two distinct files -------------------
           : > "$probe/A"; printf 'upper' > "$probe/A"
           : > "$probe/a"; printf 'lower' > "$probe/a"
-          case_n=$(ls -1 "$probe" | grep -cx '[Aa]')
+          set -- "$probe"/[Aa]; case_n=$#
           ia=$(stat -c '%d %i' "$probe/A" 2>/dev/null || echo "?")
           ib=$(stat -c '%d %i' "$probe/a" 2>/dev/null || echo "?")
           echo "case:  entries=${case_n}  A=(${ia})  a=(${ib})"
@@ -80,7 +83,7 @@ jobs:
           nfd=$(printf 'cafe\314\201')               # c a f e U+0301
           printf 'nfc' > "$probe/$nfc"
           printf 'nfd' > "$probe/$nfd"
-          norm_n=$(ls -1 "$probe" | grep -c 'caf')
+          set -- "$probe"/caf*; norm_n=$#
           ja=$(stat -c '%d %i' "$probe/$nfc" 2>/dev/null || echo "?")
           jb=$(stat -c '%d %i' "$probe/$nfd" 2>/dev/null || echo "?")
           echo "norm:  entries=${norm_n}  NFC=(${ja})  NFD=(${jb})"

@@ -3442,6 +3442,9 @@ step of the job is a capability probe, run **inside the checkout** (the filesyst
 will actually touch, not `$RUNNER_TEMP`):
 
 - creates `A` and `a` and requires **two distinct inodes**, printing `%d %i` for each;
+  (dirents are counted with `shopt -s nullglob` + a glob, never `ls | grep` — shellcheck SC2010,
+  caught by `actionlint` and fixed before commit; `actionlint` over all five workflows then
+  exits **0**)
 - creates NFC `café` (`63 61 66 c3a9`) and NFD `cafe`+U+0301 (`63 61 66 65 cc81`) and requires
   **two distinct inodes**, printing the same;
 - then deletes its own directory and requires `git status --porcelain` to be empty — the suite
