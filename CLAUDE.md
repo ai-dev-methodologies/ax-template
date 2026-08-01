@@ -534,6 +534,7 @@ fork-receiver의 활성화는 opt-in이다.
 | `.githooks/pre-push` (49th guard) | `.githooks/pre-push` | 커밋을 ship하는 모든 push 시 (delete-only push는 제외) — `completion_checklist_recency_guard.sh`가 HEAD에 대한 최신 R25 audit log 항목을 요구 | **push-blocking** (audit log 없으면 push 불가) | **opt-in per clone**: `bash practices/scripts/install-hooks.sh` |
 | `run-all-guards.sh` (95 live guards) | `practices/evals/run-all-guards.sh` | R25 완료 선언 시 수동 호출 (verify-completion.sh 내부에서 실행) | **manual / R25 run** — 자동 트리거 없음 | 항상 사용 가능, 자동 실행 아님 |
 | `per-domain ./gradlew test{Domain}` | `backend/build.gradle.kts` | 수동 또는 fork-receiver CI에서 호출 | **manual / CI** — 자동 트리거 없음 | 항상 사용 가능; CI 통합은 fork-receiver 자율 |
+| `ax-case-sensitive-sweep.sh` (P2-72 standing job) | `practices/scripts/ax-case-sensitive-sweep.sh` | 사람이 주기적으로 호출 (릴리스 전 1회 권장) — 대소문자-**민감** APFS 볼륨을 만들어 HEAD를 클론하고 그 위에서 `run-all-guards.sh --include-fixtures`를 돌린다 | **periodic / manual** — 자동 트리거 없음, merge gate 아님 | 항상 사용 가능(macOS `hdiutil` 필요; 없으면 **소리내어 실패**하고 skip하지 않는다) |
 
 ### 핵심 설명
 
@@ -544,6 +545,18 @@ fork-receiver의 활성화는 opt-in이다.
 - **fork-receiver CI 통합은 완전 자율이다.** ax-template은 catalog quality probe만 제공한다.
   merge gate, branch protection, PR 정책은 fork-receiver가 결정한다.
 - **commit-blocking은 `practices/` 변경에만 적용된다.** 일반 소스 변경에는 pre-commit gate가 실행되지 않는다.
+- **`ax-case-sensitive-sweep.sh`는 "게이트가 자기 파일시스템 위에서 참인가"를 묻는 주기 작업이다** (P2-72).
+  이 맥의 기본 APFS는 대소문자를 **접기** 때문에, 커밋된 경로 문자열이 git이 기록한 스펠링과 달라도 실행이
+  성공해 R25가 **false-green**을 낼 수 있다(2026-08-01 P1-B에서 실측). 임의 파일의 어느 substring이 경로인지는
+  inspection으로 결정불가능하므로 정규식 스캐너로는 계열이 닫히지 않는다 — 유일한 완전 처방이 **비-aliasing
+  파일시스템에서 스위트를 실제로 돌리는 것**이고, 이 스크립트가 그 실행을 재현 가능하게 만든다.
+  ```bash
+  bash practices/scripts/ax-case-sensitive-sweep.sh            # HEAD를 쓸어담는다 (~16분)
+  bash practices/scripts/ax-case-sensitive-sweep.sh --rev <sha>
+  ```
+  **커버 안 하는 것을 스스로 출력한다**: gradle 스텝(JDK 미프로비저닝) · npm 스텝(node_modules 미프로비저닝) ·
+  R25 전체 · 유니코드 정규화(이 볼륨은 NFC/NFD를 접는다 — 측정됨). 볼륨은 EXIT trap에서 detach되고
+  `hdiutil info`로 잔류 없음을 **검증**한다(잔류 시 exit 5). **아무도 스케줄하지 않는다** — 호출은 사람 몫이다.
 
 ### Surface별 binary 테스트 커버리지 (P2-3)
 
