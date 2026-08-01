@@ -7,7 +7,7 @@ evidence:
   - source_type: upstream_id
     upstream_id: recharts-2026-05
     section: "PieChart"
-    quote: "PieChart renders pie slices. Each <Pie> entry needs dataKey and data."
+    quote: "The x-coordinate of center. If set a percentage, the final value is obtained by multiplying the percentage of width."
   - source_type: external
     citation: "WCAG 2.2 — 1.4.1 Use of Color: color must not be the only means of conveying information; use labels or patterns alongside color"
     url: "https://www.w3.org/TR/WCAG22/#use-of-color"

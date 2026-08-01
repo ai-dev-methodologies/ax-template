@@ -6,8 +6,8 @@ provenance_class: external_canonical
 evidence:
   - source_type: upstream_id
     upstream_id: recharts-2026-05
-    section: "Sparkline (compact LineChart)"
-    quote: "A Sparkline is a miniature LineChart with no axes, no legend, and no tooltip by default — used inline in tables or KPI cards."
+    section: "ResponsiveContainer"
+    quote: "The ResponsiveContainer component is a container that adjusts its width and height based on the size of its parent element. It is used to create responsive charts that adapt to different screen sizes."
   - source_type: external
     citation: "Edward Tufte — Sparklines: intense, simple, word-sized graphics embedded in text or table cells to convey trend at a glance without requiring a dedicated chart area"
     url: "https://www.edwardtufte.com/bboard/q-and-a-fetch-msg?msg_id=0001OR"

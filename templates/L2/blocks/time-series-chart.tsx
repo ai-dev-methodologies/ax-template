@@ -6,12 +6,12 @@ provenance_class: external_canonical
 evidence:
   - source_type: upstream_id
     upstream_id: recharts-2026-05
-    section: "LineChart / TimeSeriesChart"
-    quote: "LineChart composes Line, XAxis, YAxis, CartesianGrid, Tooltip, and Legend."
+    section: "Recharts project overview (README)"
+    quote: "The LineChart is composed of x axis, tooltip, grid, and line items, and each of them is an independent React Component."
   - source_type: upstream_id
     upstream_id: recharts-2026-05
     section: "ResponsiveContainer"
-    quote: "ResponsiveContainer provides width and height as a percentage of the parent element."
+    quote: "The ResponsiveContainer component is a container that adjusts its width and height based on the size of its parent element. It is used to create responsive charts that adapt to different screen sizes."
   - source_type: external
     citation: "WCAG 2.2 — 1.4.1 Use of Color: color must not be the only means of conveying information in a chart"
     url: "https://www.w3.org/TR/WCAG22/#use-of-color"

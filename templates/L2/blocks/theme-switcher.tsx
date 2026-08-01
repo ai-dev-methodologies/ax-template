@@ -8,11 +8,11 @@ evidence:
     section: "No-flash theme abstraction"
     quote: "An abstraction for themes in your React app."
   - source_type: external
-    citation: "next-themes — Cookie strategy for SSR: set the theme in a cookie on change, read it server-side to avoid hydration mismatch and theme flicker on first paint."
-    url: "https://github.com/pacocoursey/next-themes#with-app"
-    quoted_at: "2026-05-18"
+    citation: "next-themes persists the selected theme in localStorage and prevents the first-paint flash with a blocking inline script — NOT with a server-read cookie. Corrected 2026-08-01 (BACKLOG P2-63): the entry that stood here attributed a 'Cookie strategy for SSR' to next-themes, which the library's README does not describe. The cookie storage below is an ax-template design choice (next evidence entry), not upstream guidance."
+    url: "https://raw.githubusercontent.com/pacocoursey/next-themes/main/next-themes/README.md"
+    quoted_at: "2026-08-01"
   - source_type: external
-    citation: "PRD §9 R1 default: ThemeSwitcher must use Cookie-based storage so the server can pre-render the correct theme, eliminating SSR hydration mismatches and first-paint flicker."
+    citation: "PRD §9 R1 default: ThemeSwitcher must use Cookie-based storage so the server can pre-render the correct theme, eliminating SSR hydration mismatches and first-paint flicker. This is an ax-template decision that DIVERGES from next-themes (localStorage + blocking inline script); it is recorded here as internal provenance, not as an upstream claim."
     url: "internal:docs/superpowers/specs/2026-05-18-p1-absorption-prd.md#R1"
     quoted_at: "2026-05-18"
 dependencies: []
@@ -117,6 +117,11 @@ export interface ThemeProviderProps {
  * This pattern eliminates the flash of incorrect theme (FOIT) by pre-rendering
  * the correct theme class server-side, avoiding the `useEffect` mount-gate
  * workaround that causes a visible flicker on first paint.
+ *
+ * next-themes solves the same problem differently (localStorage + a blocking
+ * inline script). This template does not wrap or depend on next-themes —
+ * `dependencies: []` — so the cookie above is ours to define; do not read the
+ * code below as documentation of how next-themes behaves.
  */
 export function ThemeProvider({ initialTheme, children }: ThemeProviderProps) {
   const [theme, setThemeState] = React.useState<Theme>(
@@ -184,9 +189,16 @@ export interface ThemeSwitcherProps {
  *
  * ## SSR hydration safety
  *
- * Theme is stored in a Cookie (not localStorage) so the server can pre-render
- * the correct theme without a first-paint flicker. No `suppressHydrationWarning`
- * hack needed.
+ * Theme is stored in a Cookie so the server can read it in a Server Component and
+ * pre-render the correct theme without a first-paint flicker. No
+ * `suppressHydrationWarning` hack needed.
+ *
+ * This is an ax-template design choice, NOT what next-themes does: next-themes
+ * persists the theme in `localStorage` and suppresses the flash with a blocking
+ * inline script (see `practices-react/upstream/next-themes-2026-05.snapshot.md`,
+ * "No-flash theme abstraction"). A cookie is used here because it is the only
+ * store the Next.js server can read during rendering; the trade-off is that the
+ * value is sent on every request and is not shared with a next-themes install.
  */
 export default function ThemeSwitcher({ className, showLabels = true }: ThemeSwitcherProps) {
   const { theme, setTheme } = useTheme()

@@ -313,16 +313,16 @@ snapshots:
     tier: 3
     source: "https://opentelemetry.io/docs/languages/java/"
     via: "WebFetch"
-    fetched_at: "2026-05-18T00:00:00Z"
-    bytes: 3313
-    sha: "5982908aff90c889bd72ad6fe8c204f10ae5df902338851d6c434dae2a83e3c7"
+    fetched_at: "2026-08-01T01:46:34Z"
+    bytes: 11950
+    sha: "eacc79e25aee385203000578edbcdecfcccade5ba3c0cbe5a66aa6a509a3cfde"
   - id: "micrometer-2026-05"
     tier: 3
     source: "https://docs.micrometer.io/micrometer/reference/"
     via: "WebFetch"
-    fetched_at: "2026-05-18T00:00:00Z"
-    bytes: 3823
-    sha: "67152da089d5b664a46c197b33855ca5b6ea9d292f3cd23d232b57cb18b0549c"
+    fetched_at: "2026-08-01T01:46:34Z"
+    bytes: 3056
+    sha: "0143a0b09d01c5c4a36aff0013d44abf70216cdcddd620a1d220f21050ee857f"
   - id: "caffeine-2026-05"
     tier: 3
     source: "https://github.com/ben-manes/caffeine/wiki/Eviction"
@@ -341,38 +341,38 @@ snapshots:
     tier: 3
     source: "https://resilience4j.readme.io/docs/"
     via: "WebFetch"
-    fetched_at: "2026-05-18T00:00:00Z"
-    bytes: 4201
-    sha: "c7f8e3a2b1d4f9e6a8c3d5b2f7e1a4c9d6b3f8e2a5c8d1b4f7e3a6c9d2b5f8"
+    fetched_at: "2026-08-01T01:46:35Z"
+    bytes: 5010
+    sha: "596a63f0ece60a2e2cb40669a08e49dc207bc0761fda7a1caa5cc81eaab5da30"
   - id: "recharts-2026-05"
     tier: 3
-    source: "https://recharts.org/en-US/api"
+    source: "https://recharts.github.io/en-US/api/ResponsiveContainer"
     via: "WebFetch"
-    fetched_at: "2026-05-18T00:00:00Z"
-    bytes: 3841
-    sha: "a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2"
+    fetched_at: "2026-08-01T01:56:10Z"
+    bytes: 37927
+    sha: "bcb370fb282bf90976bf8fc69831881ac37add52053bd3e2829e57c844f444a5"
   - id: "postgresql-fts-2026-05"
     tier: 3
     source: "https://www.postgresql.org/docs/16/textsearch.html"
     via: "WebFetch"
-    fetched_at: "2026-05-18T00:00:00Z"
-    bytes: 4127
-    sha: "b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3"
+    fetched_at: "2026-08-01T01:46:38Z"
+    bytes: 1831
+    sha: "27e5907a2b1148be0bb3e111702537651e46f2bef1b40e782fca022aa1ea3869"
   - id: "meilisearch-2026-05"
     tier: 3
     source: "https://www.meilisearch.com/docs/reference/api/search"
     via: "WebFetch"
-    fetched_at: "2026-05-18T00:00:00Z"
-    bytes: 3512
-    sha: "c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4"
+    fetched_at: "2026-08-01T01:46:40Z"
+    bytes: 32732
+    sha: "b994fe42ab7c79ba2e50c6b0ec131eb9a217eba380e8d7a68d30bc7981ce854a"
 
   - id: "spring-mvc-sse-2026-05"
     tier: 2
     source: "https://docs.spring.io/spring-framework/reference/web/webmvc/mvc-ann-async.html#mvc-ann-async-sse"
     via: "WebFetch"
-    fetched_at: "2026-05-18T00:00:00Z"
-    bytes: 4812
-    sha: "d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5"
+    fetched_at: "2026-08-01T01:46:40Z"
+    bytes: 30171
+    sha: "412dbef768eb3273501ffa5be0861128f029fa02df2ad057888855325f7a3acb"
     version_observed: "spring-framework@6.x"
     purpose: "realtime SSE emitter pattern, serverless-safe ConditionalOnProperty opt-in, WebSocket STOMP alternative"
 
@@ -380,9 +380,9 @@ snapshots:
     tier: 3
     source: "https://github.com/pacocoursey/next-themes"
     via: "WebFetch"
-    fetched_at: "2026-05-18T00:00:00Z"
-    bytes: 3240
-    sha: "e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6"
+    fetched_at: "2026-08-01T01:46:41Z"
+    bytes: 20833
+    sha: "49059930118edda8504b54a306601a6e6e5c1ff3d635ab36b19bd26111ae5c69"
     version_observed: "next-themes@0.3.x"
     purpose: "Cookie-based SSR theme storage for ThemeSwitcher — eliminates first-paint flicker; SP34 R1 default"
 
@@ -397,11 +397,11 @@ snapshots:
 
   - id: "nts-business-reg-2026-05"
     tier: 2
-    source: "https://www.nts.go.kr/nts/na/ntt/selectNttInfo.do?mi=2340&nttSn=7943"
+    source: "https://www.data.go.kr/data/15081808/openapi.do"
     via: "WebFetch"
-    fetched_at: "2026-05-18T00:00:00Z"
-    bytes: 4821
-    sha: "a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c9d0e1f2a3b4"
+    fetched_at: "2026-08-01T01:57:49Z"
+    bytes: 7867
+    sha: "ad395e987713b3dcd1b331fe0dc52cad1cdd34872071ee782a1fb57663d64464"
     purpose: "NTS 사업자등록번호 checksum algorithm (weights [1,3,7,1,3,7,1,3,5], 9th-digit two-part contribution); public BRN data sources (DART, data.go.kr)"
 
   - id: "kisa-identity-verification-2026-05"
@@ -461,9 +461,9 @@ snapshots:
     tier: 2
     source: "https://manual.inicis.com/"
     via: "fork-receiver-provided"
-    fetched_at: "2026-05-18T00:00:00Z"
-    bytes: 4501
-    sha: "6a060948bb271d9facae4630c26097fe6ce3afbe9faeb6c4967e283aac765e88"
+    fetched_at: "2026-08-01T01:46:42Z"
+    bytes: 1675
+    sha: "14954c788a442ac15f54be0bad97ae5ccfa20e2244e16de9d8a59324c9e5a2ff"
     version_observed: "INIstdpay-manual@v3.2.7-2026-04-10"
     purpose: "KG이니시스 redirect-style callback signature: SHA-256 hex over (authToken+timestamp), 'signature' query-param, INICIS_SIGN_KEY env, 5min replay window"
 
@@ -471,9 +471,9 @@ snapshots:
     tier: 2
     source: "https://developers.nicepay.co.kr/"
     via: "fork-receiver-provided"
-    fetched_at: "2026-05-18T00:00:00Z"
-    bytes: 4161
-    sha: "e53ff2607e326ef3c2c5878cad3521bdf488dfd910bfccc2c73b1d596d526958"
+    fetched_at: "2026-08-01T01:46:46Z"
+    bytes: 2889
+    sha: "837f9779979aa630b3f94b094ce1e795993ee71f0844df8d58169a87e06022ad"
     version_observed: "nicepay-v2-php-sample-2026-03-30"
     purpose: "NICE페이먼츠 v2 callback signature: SHA-256 hex over (authToken+mid+amount+ediDate+merchantKey), form-POST 'signature', NICEPAY_MERCHANT_KEY env, 10min replay window"
 
@@ -481,8 +481,8 @@ snapshots:
     tier: 2
     source: "https://developer.kcp.co.kr/"
     via: "fork-receiver-provided"
-    fetched_at: "2026-05-18T00:00:00Z"
-    bytes: 4260
-    sha: "2ce20f7165ae7d4227ee2d960f89aa4ea7bbe7dc889300546a65e0bfb1fdd47e"
+    fetched_at: "2026-08-01T01:46:46Z"
+    bytes: 2561
+    sha: "d42573c56b6b0e1bba3eaf23021c176fa8e45297cc2653423630ae461ecf04ba"
     version_observed: "kcp-pp-cli-java-v1.4.0"
     purpose: "KCP redirect-style callback signature: Base64(SHA-256(site_cd+tno+amount+tran_cd+cust_ip+ediDate+secret_key)), form-POST envelope, KCP_SECRET_KEY + KCP_PRIVATE_KEY env, 3min replay window"

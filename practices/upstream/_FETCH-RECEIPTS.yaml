@@ -678,3 +678,853 @@ receipts:
   - r047
   - r048
   fetched_at: '2026-07-30T00:51:30Z'
+- id: r056
+  kind: fetch
+  url: https://www.nts.go.kr/nts/na/ntt/selectNttInfo.do?mi=2340&nttSn=7943
+  curl_exit: 0
+  http_status: '200'
+  bytes: 15
+  sha256: 7eff0c5e033d2e517ff9d481aa5cf4b8af1d0805b3d9669c681603fb7611e463
+  fetched_at: '2026-08-01T01:46:41Z'
+  error: ''
+  note: DEAD PROBE (P2-58) — previous nts-business-reg-2026-05 source; 200 but a 15-byte SPA shell, no fetchable body
+- id: r057
+  kind: fetch
+  url: https://recharts.org/en-US/api
+  curl_exit: 0
+  http_status: '404'
+  bytes: 33
+  sha256: 6c06d060d78489c91293b67ad5af0400d2cf7f672f81fad3679fadb3a2fa79d4
+  fetched_at: '2026-08-01T01:58:05Z'
+  error: ''
+  note: DEAD PROBE (P3-103) — recharts.org/en-US/api re-probed 2026-08-01, still HTTP 404 GitHub-Pages SPA shell
+- id: r058
+  kind: fetch
+  url: https://recharts.org/en-US/api/ResponsiveContainer
+  curl_exit: 0
+  http_status: '404'
+  bytes: 33
+  sha256: 6c06d060d78489c91293b67ad5af0400d2cf7f672f81fad3679fadb3a2fa79d4
+  fetched_at: '2026-08-01T01:58:05Z'
+  error: ''
+  note: DEAD PROBE (P3-103) — recharts.org/en-US/api/ResponsiveContainer re-probed 2026-08-01, still HTTP 404 SPA shell
+- id: r059
+  kind: fetch
+  url: https://opentelemetry.io/docs/languages/java/
+  curl_exit: 0
+  http_status: '200'
+  bytes: 11950
+  sha256: eacc79e25aee385203000578edbcdecfcccade5ba3c0cbe5a66aa6a509a3cfde
+  fetched_at: '2026-08-01T01:46:34Z'
+  error: ''
+  note: practices::opentelemetry-java-2026-05 refresh
+- id: r060
+  kind: fetch
+  url: https://docs.micrometer.io/micrometer/reference/
+  curl_exit: 0
+  http_status: '200'
+  bytes: 3056
+  sha256: 0143a0b09d01c5c4a36aff0013d44abf70216cdcddd620a1d220f21050ee857f
+  fetched_at: '2026-08-01T01:46:34Z'
+  error: ''
+  note: practices::micrometer-2026-05 refresh
+- id: r061
+  kind: fetch
+  url: https://resilience4j.readme.io/docs/
+  curl_exit: 0
+  http_status: '200'
+  bytes: 5010
+  sha256: 596a63f0ece60a2e2cb40669a08e49dc207bc0761fda7a1caa5cc81eaab5da30
+  fetched_at: '2026-08-01T01:46:35Z'
+  error: ''
+  note: practices::resilience4j-2026-05 refresh
+- id: r062
+  kind: fetch
+  url: https://www.postgresql.org/docs/16/textsearch.html
+  curl_exit: 0
+  http_status: '200'
+  bytes: 1831
+  sha256: 27e5907a2b1148be0bb3e111702537651e46f2bef1b40e782fca022aa1ea3869
+  fetched_at: '2026-08-01T01:46:38Z'
+  error: ''
+  note: practices::postgresql-fts-2026-05 refresh
+- id: r063
+  kind: fetch
+  url: https://www.meilisearch.com/docs/reference/api/search
+  curl_exit: 0
+  http_status: '200'
+  bytes: 32732
+  sha256: b994fe42ab7c79ba2e50c6b0ec131eb9a217eba380e8d7a68d30bc7981ce854a
+  fetched_at: '2026-08-01T01:46:40Z'
+  error: ''
+  note: practices::meilisearch-2026-05 refresh
+- id: r064
+  kind: fetch
+  url: https://docs.spring.io/spring-framework/reference/web/webmvc/mvc-ann-async.html#mvc-ann-async-sse
+  curl_exit: 0
+  http_status: '200'
+  bytes: 30171
+  sha256: 412dbef768eb3273501ffa5be0861128f029fa02df2ad057888855325f7a3acb
+  fetched_at: '2026-08-01T01:46:40Z'
+  error: ''
+  note: practices::spring-mvc-sse-2026-05 refresh
+- id: r065
+  kind: fetch
+  url: https://github.com/pacocoursey/next-themes
+  curl_exit: 0
+  http_status: '200'
+  bytes: 20833
+  sha256: 49059930118edda8504b54a306601a6e6e5c1ff3d635ab36b19bd26111ae5c69
+  fetched_at: '2026-08-01T01:46:41Z'
+  error: ''
+  note: practices::next-themes-2026-05 refresh
+- id: r066
+  kind: fetch
+  url: https://www.data.go.kr/data/15081808/openapi.do
+  curl_exit: 0
+  http_status: '200'
+  bytes: 7867
+  sha256: ad395e987713b3dcd1b331fe0dc52cad1cdd34872071ee782a1fb57663d64464
+  fetched_at: '2026-08-01T01:57:49Z'
+  error: ''
+  note: RE-ANCHOR — the previous source www.nts.go.kr/nts/na/ntt/selectNttInfo.do?mi=2340&nttSn=7943 now returns a 15-byte SPA shell under plain curl (probe receipt above); re-anchored to the same issuer's own open-data listing (국세청_사업자등록정보 진위확인 및 상태조회 서비스)
+- id: r067
+  kind: fetch
+  url: https://www.kisa.or.kr/2060301/form?postSeq=15&lang_type=KO
+  curl_exit: 0
+  http_status: '400'
+  bytes: 31
+  sha256: 2be20a1f871f4bbd989a4fb1a42fc04d06ecc898d9346a69ef1ea4888c7204c0
+  fetched_at: '2026-08-01T01:46:41Z'
+  error: ''
+  note: DEAD PROBE — www.kisa.or.kr WAF-blocks plain curl on every path (HTTP 400 'Request Blocked', incl. /robots.txt); manifest fetched_at deliberately NOT bumped. Honest residual.
+- id: r068
+  kind: fetch
+  url: https://www.law.go.kr/법령/개인정보보호법/(20240315,20040,20230928)/제24조
+  curl_exit: 0
+  http_status: '200'
+  bytes: 391
+  sha256: fca2a71187ab3250a8f0fcd133ba396c5a7a020ce9d719b2e30e5390b3c0b3f6
+  fetched_at: '2026-08-01T01:46:42Z'
+  error: ''
+  note: DEAD PROBE — law.go.kr serves an overload/iframe chrome page under plain curl (391 bytes, no article text); manifest fetched_at deliberately NOT bumped (a timestamp refresh without a successful fetch is the doctoring P2-58 forbids). Honest residual.
+- id: r069
+  kind: fetch
+  url: https://manual.inicis.com/
+  curl_exit: 0
+  http_status: '200'
+  bytes: 1675
+  sha256: 14954c788a442ac15f54be0bad97ae5ccfa20e2244e16de9d8a59324c9e5a2ff
+  fetched_at: '2026-08-01T01:46:42Z'
+  error: ''
+  note: practices::kg-inicis-signature-2026-05 refresh
+- id: r070
+  kind: fetch
+  url: https://developers.nicepay.co.kr/
+  curl_exit: 0
+  http_status: '200'
+  bytes: 2889
+  sha256: 837f9779979aa630b3f94b094ce1e795993ee71f0844df8d58169a87e06022ad
+  fetched_at: '2026-08-01T01:46:46Z'
+  error: ''
+  note: practices::nice-payments-signature-2026-05 refresh
+- id: r071
+  kind: fetch
+  url: https://developer.kcp.co.kr/
+  curl_exit: 0
+  http_status: '200'
+  bytes: 2561
+  sha256: d42573c56b6b0e1bba3eaf23021c176fa8e45297cc2653423630ae461ecf04ba
+  fetched_at: '2026-08-01T01:46:46Z'
+  error: ''
+  note: practices::kcp-payments-signature-2026-05 refresh
+- id: r072
+  kind: fetch
+  url: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Promise/all
+  curl_exit: 0
+  http_status: '200'
+  bytes: 13371
+  sha256: 0e8b6afd171169536a6ab3a721d021e205168322a4a530e32ebbfd19732d5ba9
+  fetched_at: '2026-08-01T01:46:47Z'
+  error: ''
+  note: practices-react::mdn-promise-all refresh
+- id: r073
+  kind: fetch
+  url: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Promise/allSettled
+  curl_exit: 0
+  http_status: '200'
+  bytes: 6607
+  sha256: 410c0ea45c40d3885fe615eb36c31e405d8af38409d263e24048cc847747346e
+  fetched_at: '2026-08-01T01:46:47Z'
+  error: ''
+  note: practices-react::mdn-promise-allsettled refresh
+- id: r074
+  kind: fetch
+  url: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Set
+  curl_exit: 0
+  http_status: '200'
+  bytes: 16272
+  sha256: 2ed6fc21a87aa7c837d48ae884739a7b51a91f29cbf4516b17269137643bb69a
+  fetched_at: '2026-08-01T01:46:47Z'
+  error: ''
+  note: practices-react::mdn-set refresh
+- id: r075
+  kind: fetch
+  url: https://react.dev/reference/react/useEffectEvent
+  curl_exit: 0
+  http_status: '200'
+  bytes: 17294
+  sha256: e28285243e1c652a7e71c6667e8c5d7d5b0fca8f217cf972112477f7a84d2135
+  fetched_at: '2026-08-01T01:46:47Z'
+  error: ''
+  note: practices-react::react-19-useeffectevent refresh
+- id: r076
+  kind: fetch
+  url: https://react.dev/learn/you-might-not-need-an-effect
+  curl_exit: 0
+  http_status: '200'
+  bytes: 39860
+  sha256: ed827793c33289fddff5dc7470a6701814b4ae2b961481c5fbd9dcafb475e969
+  fetched_at: '2026-08-01T01:46:48Z'
+  error: ''
+  note: practices-react::react-you-might-not-need-effect refresh
+- id: r077
+  kind: fetch
+  url: https://react.dev/reference/react/lazy
+  curl_exit: 0
+  http_status: '200'
+  bytes: 7362
+  sha256: 58d98075bd5a96cddc3f56d942004e1f52631dcaef44b0865719335b82f98414
+  fetched_at: '2026-08-01T01:46:48Z'
+  error: ''
+  note: practices-react::react-19-lazy refresh
+- id: r078
+  kind: fetch
+  url: https://nextjs.org/docs/app/guides/lazy-loading
+  curl_exit: 0
+  http_status: '200'
+  bytes: 11109
+  sha256: 328d6e7537cb10bf917c6b08ee987a0c184f07007f938098b0578c149f5a488d
+  fetched_at: '2026-08-01T01:46:48Z'
+  error: ''
+  note: practices-react::nextjs-lazy-loading refresh
+- id: r079
+  kind: fetch
+  url: https://developer.mozilla.org/en-US/docs/Web/API/EventTarget/addEventListener
+  curl_exit: 0
+  http_status: '200'
+  bytes: 27674
+  sha256: 2a994f6f1d0c298073bb859166f18a2c97f9f00b52818c73da8d04cfbcd376d3
+  fetched_at: '2026-08-01T01:46:48Z'
+  error: ''
+  note: practices-react::mdn-addeventlistener-passive refresh
+- id: r080
+  kind: fetch
+  url: https://developer.mozilla.org/en-US/docs/Web/API/Window/localStorage
+  curl_exit: 0
+  http_status: '200'
+  bytes: 8452
+  sha256: c91d6c61b7a5b446a304f749d3bbeab29b5d65bef0ff485dd9e36099e591d468
+  fetched_at: '2026-08-01T01:46:49Z'
+  error: ''
+  note: practices-react::mdn-localstorage refresh
+- id: r081
+  kind: fetch
+  url: https://react.dev/reference/react/Activity
+  curl_exit: 0
+  http_status: '200'
+  bytes: 22719
+  sha256: d69ae837c6b4317254956ddbbc290673b3fe1f2dcc854b0d8c0543bec8d66d34
+  fetched_at: '2026-08-01T01:46:49Z'
+  error: ''
+  note: practices-react::react-19-activity refresh
+- id: r082
+  kind: fetch
+  url: https://react.dev/reference/react-dom
+  curl_exit: 0
+  http_status: '200'
+  bytes: 4616
+  sha256: ecee6168f9cfe227272e03212fec5f5c29c7dbffe637bc247914762437bf9d0f
+  fetched_at: '2026-08-01T01:46:50Z'
+  error: ''
+  note: practices-react::react-dom-resource-hints refresh
+- id: r083
+  kind: fetch
+  url: https://developer.mozilla.org/en-US/docs/Web/HTML/Element/script
+  curl_exit: 0
+  http_status: '200'
+  bytes: 24359
+  sha256: ae485130ac6c920508ca7f6d41f211e82b5ac84e72ca76ed72c743c38713dd21
+  fetched_at: '2026-08-01T01:46:50Z'
+  error: ''
+  note: practices-react::mdn-script-element refresh
+- id: r084
+  kind: fetch
+  url: https://react.dev/reference/react/use
+  curl_exit: 0
+  http_status: '200'
+  bytes: 27287
+  sha256: 6fd9f27cd40b69b567e4cadc1170602160c4e8e0460a44045d4da022a9c70290
+  fetched_at: '2026-08-01T01:46:50Z'
+  error: ''
+  note: practices-react::react-19-use refresh
+- id: r085
+  kind: fetch
+  url: https://react.dev/reference/react/cache
+  curl_exit: 0
+  http_status: '200'
+  bytes: 18320
+  sha256: aa96e68eba0f6880f9c4c65468ec06ede3e19d3e2ffbbbd8a78a4f6b209cfe8a
+  fetched_at: '2026-08-01T01:46:50Z'
+  error: ''
+  note: practices-react::react-19-cache refresh
+- id: r086
+  kind: fetch
+  url: https://nextjs.org/docs/app/api-reference/directives/use-cache
+  curl_exit: 0
+  http_status: '200'
+  bytes: 23114
+  sha256: 1991cee33b7139c74b5053b88be92640c9afdc2f841e6e397fd824143e48fa52
+  fetched_at: '2026-08-01T01:46:51Z'
+  error: ''
+  note: practices-react::nextjs-use-cache-directive refresh
+- id: r087
+  kind: fetch
+  url: https://nextjs.org/docs/app/api-reference/directives/use-cache-private
+  curl_exit: 0
+  http_status: '200'
+  bytes: 8956
+  sha256: f7701769588ab00da69083beb12a989ae8321be68696997244f6694652e9860b
+  fetched_at: '2026-08-01T01:46:52Z'
+  error: ''
+  note: practices-react::nextjs-use-cache-private refresh
+- id: r088
+  kind: fetch
+  url: https://nextjs.org/docs/app/api-reference/directives/use-cache-remote
+  curl_exit: 0
+  http_status: '200'
+  bytes: 23681
+  sha256: 30b80ef2178b695225ae31d88b4c40078cdc24acf4ff5f83ea647d4ecc0b677a
+  fetched_at: '2026-08-01T01:46:53Z'
+  error: ''
+  note: practices-react::nextjs-use-cache-remote refresh
+- id: r089
+  kind: fetch
+  url: https://nextjs.org/docs/app/getting-started/fetching-data
+  curl_exit: 0
+  http_status: '200'
+  bytes: 19199
+  sha256: 4260475ef2475b280328a1dbbcd4ac1296c1688c65571ca82e1e5f996ecfcb53
+  fetched_at: '2026-08-01T01:46:53Z'
+  error: ''
+  note: practices-react::nextjs-fetching-data refresh
+- id: r090
+  kind: fetch
+  url: https://nextjs.org/docs/app/api-reference/config/next-config-js/optimizePackageImports
+  curl_exit: 0
+  http_status: '200'
+  bytes: 5773
+  sha256: a6c27842c1a07ef4617b017f9814207484527d70f52869c0873c39b53958da37
+  fetched_at: '2026-08-01T01:46:54Z'
+  error: ''
+  note: practices-react::nextjs-optimize-package-imports refresh
+- id: r091
+  kind: fetch
+  url: https://nextjs.org/docs/app/getting-started/installation
+  curl_exit: 0
+  http_status: '200'
+  bytes: 14611
+  sha256: 0b7877a0fd8c861a7c27a113802a598ec50b569630f051e2daac5bb7dd873422
+  fetched_at: '2026-08-01T01:46:55Z'
+  error: ''
+  note: practices-react::nextjs-app-router-16 refresh
+- id: r092
+  kind: fetch
+  url: https://nextjs.org/docs/app/getting-started/mutating-data
+  curl_exit: 0
+  http_status: '200'
+  bytes: 15671
+  sha256: 8489263b572891c90bdbe00b2ba24b8d0785048239d1aeb34a3ba3b5502f8093
+  fetched_at: '2026-08-01T01:46:56Z'
+  error: ''
+  note: practices-react::nextjs-server-actions-16 refresh
+- id: r093
+  kind: fetch
+  url: https://nextjs.org/docs/app/api-reference/directives/use-cache
+  curl_exit: 0
+  http_status: '200'
+  bytes: 23114
+  sha256: 1991cee33b7139c74b5053b88be92640c9afdc2f841e6e397fd824143e48fa52
+  fetched_at: '2026-08-01T01:46:56Z'
+  error: ''
+  note: practices-react::nextjs-use-cache-16 refresh
+- id: r094
+  kind: fetch
+  url: https://tanstack.com/query/latest/docs/framework/react/overview
+  curl_exit: 0
+  http_status: '200'
+  bytes: 7388
+  sha256: ae2ef23f85b2f407c77ccebce1401d7b60d963195ce49967a66025bb22b39398
+  fetched_at: '2026-08-01T01:46:57Z'
+  error: ''
+  note: practices-react::tanstack-query-v5 refresh
+- id: r095
+  kind: fetch
+  url: https://www.w3.org/TR/WCAG22/
+  curl_exit: 0
+  http_status: '200'
+  bytes: 155726
+  sha256: 64fd73cdb7725d9511488f5de6386081329d365872547b2d5000ef771ac37bd0
+  fetched_at: '2026-08-01T01:46:57Z'
+  error: ''
+  note: practices-react::wcag-2-2 refresh
+- id: r096
+  kind: fetch
+  url: https://web.dev/articles/vitals
+  curl_exit: 0
+  http_status: '200'
+  bytes: 17004
+  sha256: 083962ddbce1f1332459ff01b6b6ea0600d6ea92f2b0a357bb345384f34c01ba
+  fetched_at: '2026-08-01T01:46:58Z'
+  error: ''
+  note: practices-react::cwv-2026 refresh
+- id: r097
+  kind: fetch
+  url: https://tanstack.com/virtual/v3/docs/introduction
+  curl_exit: 0
+  http_status: '200'
+  bytes: 4850
+  sha256: 1bef62607d4571cffd8987645662c6e0712ccc88bb77c4e1f627a93dfa1a8d0c
+  fetched_at: '2026-08-01T01:47:00Z'
+  error: ''
+  note: practices-react::tanstack-virtual-2026-05 refresh
+- id: r098
+  kind: fetch
+  url: https://react.dev/reference/react/Component#catching-rendering-errors-with-an-error-boundary
+  curl_exit: 0
+  http_status: '200'
+  bytes: 58871
+  sha256: 4069852f84e0665f6febc9f33fad89acdd19af44f012df4d0e24261b1644c3e4
+  fetched_at: '2026-08-01T01:47:00Z'
+  error: ''
+  note: practices-react::react-19-error-boundary refresh
+- id: r099
+  kind: fetch
+  url: https://developer.mozilla.org/en-US/docs/Web/API/Navigator/onLine
+  curl_exit: 0
+  http_status: '200'
+  bytes: 7679
+  sha256: 03ff900fe5e4fb9f79688b127b3f4c2e1ae6069d67402cc7d4023a80ede8d2a0
+  fetched_at: '2026-08-01T01:47:00Z'
+  error: ''
+  note: practices-react::mdn-navigator-online-2026-05 refresh
+- id: r100
+  kind: fetch
+  url: https://next-intl.dev/docs/getting-started/app-router
+  curl_exit: 0
+  http_status: '200'
+  bytes: 6086
+  sha256: 335cd6a510ee2f7d1fa1cf480f370cdda762b4505cc1ab3a0b77759e1d89f1fe
+  fetched_at: '2026-08-01T01:47:00Z'
+  error: ''
+  note: practices-react::next-intl-2026-05 refresh
+- id: r101
+  kind: fetch
+  url: https://react-hook-form.com/docs/useform
+  curl_exit: 0
+  http_status: '200'
+  bytes: 22171
+  sha256: 4896102340023536c2773717b0c0604028867426cdd37e5f81f424dac4a686fb
+  fetched_at: '2026-08-01T01:47:00Z'
+  error: ''
+  note: practices-react::react-hook-form-2026-05 refresh
+- id: r102
+  kind: fetch
+  url: https://www.w3.org/WAI/WCAG22/Techniques/
+  curl_exit: 0
+  http_status: '200'
+  bytes: 39241
+  sha256: 4c7fcded0a26e14b0b61af42a1f748ba7014f34f0b153274ace9d1dedc099b9f
+  fetched_at: '2026-08-01T01:47:01Z'
+  error: ''
+  note: practices-react::wcag-22-techniques-2026-05 refresh
+- id: r103
+  kind: fetch
+  url: https://tiptap.dev/docs/editor/getting-started/install/react
+  curl_exit: 0
+  http_status: '200'
+  bytes: 9593
+  sha256: baaeb25a1bc90373737d78fcad1d7bd51c8c968354ae58f3c2fce209234b363c
+  fetched_at: '2026-08-01T01:47:03Z'
+  error: ''
+  note: practices-react::tiptap-2026-05 refresh
+- id: r104
+  kind: fetch
+  url: https://github.com/remarkjs/react-markdown
+  curl_exit: 0
+  http_status: '200'
+  bytes: 21960
+  sha256: f96f2bb378f98fe34167774e0117df2817dd6428e694c0c491900704e3d27d01
+  fetched_at: '2026-08-01T01:47:04Z'
+  error: ''
+  note: practices-react::remark-2026-05 refresh
+- id: asm-mdn-promise-all-practices-react-20260801
+  kind: assembly
+  catalog: practices-react
+  snapshot_id: mdn-promise-all
+  body_bytes: 15894
+  body_sha256: 11b8271d52093c3c938eef54a6f82486dd73bd5e58a1e7d3c8ba721b1b11a74d
+  from_receipts:
+  - r072
+  fetched_at: '2026-08-01T01:46:47Z'
+- id: asm-mdn-promise-allsettled-practices-react-20260801
+  kind: assembly
+  catalog: practices-react
+  snapshot_id: mdn-promise-allsettled
+  body_bytes: 9099
+  body_sha256: 098b4cb18da6698e6859a35aab57719352b1573143c6769087ee732eb35bd906
+  from_receipts:
+  - r073
+  fetched_at: '2026-08-01T01:46:47Z'
+- id: asm-mdn-set-practices-react-20260801
+  kind: assembly
+  catalog: practices-react
+  snapshot_id: mdn-set
+  body_bytes: 18508
+  body_sha256: b29ce3cb4d69a862bc6a4f2c28aad2f170f145177d5304a43a2f15dbd3446213
+  from_receipts:
+  - r074
+  fetched_at: '2026-08-01T01:46:47Z'
+- id: asm-react-19-useeffectevent-practices-react-20260801
+  kind: assembly
+  catalog: practices-react
+  snapshot_id: react-19-useeffectevent
+  body_bytes: 19637
+  body_sha256: 78985ca932dead6d3f9484d2c0b3f0ceb3717ec8adf621ecbcdf5aa7d0f65ea4
+  from_receipts:
+  - r075
+  fetched_at: '2026-08-01T01:46:47Z'
+- id: asm-react-you-might-not-need-effect-practices-react-20260801
+  kind: assembly
+  catalog: practices-react
+  snapshot_id: react-you-might-not-need-effect
+  body_bytes: 42304
+  body_sha256: 39b86f26434879ea380607714bf416496e21829b83dba645ef8f0e4a952d04a2
+  from_receipts:
+  - r076
+  fetched_at: '2026-08-01T01:46:48Z'
+- id: asm-react-19-lazy-practices-react-20260801
+  kind: assembly
+  catalog: practices-react
+  snapshot_id: react-19-lazy
+  body_bytes: 9419
+  body_sha256: 930337355759959926296a1703e58dbdde467d0cc39419c8785ed22a0707cb2f
+  from_receipts:
+  - r077
+  fetched_at: '2026-08-01T01:46:48Z'
+- id: asm-nextjs-lazy-loading-practices-react-20260801
+  kind: assembly
+  catalog: practices-react
+  snapshot_id: nextjs-lazy-loading
+  body_bytes: 14031
+  body_sha256: 4838883d4dcf5d03e4f56d11f4ef5bdaae84957c2cc6d64e8a41dd52cedaf35b
+  from_receipts:
+  - r078
+  fetched_at: '2026-08-01T01:46:48Z'
+- id: asm-mdn-addeventlistener-passive-practices-react-20260801
+  kind: assembly
+  catalog: practices-react
+  snapshot_id: mdn-addeventlistener-passive
+  body_bytes: 29734
+  body_sha256: 5dce42cb098db0133f28369b7e39db0b96dbeb1ec857dd867d3d57794b57d881
+  from_receipts:
+  - r079
+  fetched_at: '2026-08-01T01:46:48Z'
+- id: asm-mdn-localstorage-practices-react-20260801
+  kind: assembly
+  catalog: practices-react
+  snapshot_id: mdn-localstorage
+  body_bytes: 10494
+  body_sha256: 6cf37181ee9f1270d54ae184d2806f9560d83d0b6842a17a616fa83a1d388a96
+  from_receipts:
+  - r080
+  fetched_at: '2026-08-01T01:46:49Z'
+- id: asm-react-19-activity-practices-react-20260801
+  kind: assembly
+  catalog: practices-react
+  snapshot_id: react-19-activity
+  body_bytes: 24749
+  body_sha256: 1806e52c748e71c59022a1190f502a84efe369a02248af55885a3575d0cf7610
+  from_receipts:
+  - r081
+  fetched_at: '2026-08-01T01:46:49Z'
+- id: asm-react-dom-resource-hints-practices-react-20260801
+  kind: assembly
+  catalog: practices-react
+  snapshot_id: react-dom-resource-hints
+  body_bytes: 6899
+  body_sha256: f0022e67df7532755eb61185fe227f82fd209ebec9af96c3f58ff7f75c04c47f
+  from_receipts:
+  - r082
+  fetched_at: '2026-08-01T01:46:50Z'
+- id: asm-mdn-script-element-practices-react-20260801
+  kind: assembly
+  catalog: practices-react
+  snapshot_id: mdn-script-element
+  body_bytes: 26279
+  body_sha256: e7586ecd03101a018c5384ed8401c91d4219cc028fec1a1b63809f6e8b6ec00b
+  from_receipts:
+  - r083
+  fetched_at: '2026-08-01T01:46:50Z'
+- id: asm-react-19-use-practices-react-20260801
+  kind: assembly
+  catalog: practices-react
+  snapshot_id: react-19-use
+  body_bytes: 29881
+  body_sha256: aef4cf2a4886736408d01e96efe23ae9ae7878ca654b24eb7d4e93663f361a34
+  from_receipts:
+  - r084
+  fetched_at: '2026-08-01T01:46:50Z'
+- id: asm-react-19-cache-practices-react-20260801
+  kind: assembly
+  catalog: practices-react
+  snapshot_id: react-19-cache
+  body_bytes: 21985
+  body_sha256: 8acdb9e5cdb0e40a331b4d960e9d1abe98c5669f5c9cf9d78c77e818871ec872
+  from_receipts:
+  - r085
+  fetched_at: '2026-08-01T01:46:50Z'
+- id: asm-nextjs-use-cache-directive-practices-react-20260801
+  kind: assembly
+  catalog: practices-react
+  snapshot_id: nextjs-use-cache-directive
+  body_bytes: 28363
+  body_sha256: 717950a1b6a8e1ee8acbe9c615c9dbae15e6c0eb78cfc09586ab033547593b98
+  from_receipts:
+  - r086
+  fetched_at: '2026-08-01T01:46:51Z'
+- id: asm-nextjs-use-cache-private-practices-react-20260801
+  kind: assembly
+  catalog: practices-react
+  snapshot_id: nextjs-use-cache-private
+  body_bytes: 12142
+  body_sha256: 1e286cbc50c92e1c893716baccdf3e2bc787d4a81f54e5787476511b8cd0f4f5
+  from_receipts:
+  - r087
+  fetched_at: '2026-08-01T01:46:52Z'
+- id: asm-nextjs-use-cache-remote-practices-react-20260801
+  kind: assembly
+  catalog: practices-react
+  snapshot_id: nextjs-use-cache-remote
+  body_bytes: 28463
+  body_sha256: fd5c119603220a97dea6afa7be23dd1af05215e4a3c7e995362940aafc52bff7
+  from_receipts:
+  - r088
+  fetched_at: '2026-08-01T01:46:53Z'
+- id: asm-nextjs-fetching-data-practices-react-20260801
+  kind: assembly
+  catalog: practices-react
+  snapshot_id: nextjs-fetching-data
+  body_bytes: 23672
+  body_sha256: 12029e190b44c829a6279a7f63257f7a7c3b14f4b86634e91abfbe07b7037065
+  from_receipts:
+  - r089
+  fetched_at: '2026-08-01T01:46:53Z'
+- id: asm-nextjs-optimize-package-imports-practices-react-20260801
+  kind: assembly
+  catalog: practices-react
+  snapshot_id: nextjs-optimize-package-imports
+  body_bytes: 8665
+  body_sha256: 9bf775312d005e7d1edbfd14970d925b3d54998799bedcf07a2f19ec82c10aec
+  from_receipts:
+  - r090
+  fetched_at: '2026-08-01T01:46:54Z'
+- id: asm-nextjs-app-router-16-practices-react-20260801
+  kind: assembly
+  catalog: practices-react
+  snapshot_id: nextjs-app-router-16
+  body_bytes: 17392
+  body_sha256: 7d63149c1805b05d5c314995542872079798fb6036aee2efafb92753e75a8e23
+  from_receipts:
+  - r091
+  fetched_at: '2026-08-01T01:46:55Z'
+- id: asm-nextjs-server-actions-16-practices-react-20260801
+  kind: assembly
+  catalog: practices-react
+  snapshot_id: nextjs-server-actions-16
+  body_bytes: 19300
+  body_sha256: d8394c16a93d41fb0e71a0173ff29c3eabe4d90b54b101ab12203aaba45f0310
+  from_receipts:
+  - r092
+  fetched_at: '2026-08-01T01:46:56Z'
+- id: asm-nextjs-use-cache-16-practices-react-20260801
+  kind: assembly
+  catalog: practices-react
+  snapshot_id: nextjs-use-cache-16
+  body_bytes: 26429
+  body_sha256: cb316d5c70974a89e31dd845f0527456bbd4a2ad9ce214a97a1c19b7c3d5c277
+  from_receipts:
+  - r093
+  fetched_at: '2026-08-01T01:46:56Z'
+- id: asm-tanstack-query-v5-practices-react-20260801
+  kind: assembly
+  catalog: practices-react
+  snapshot_id: tanstack-query-v5
+  body_bytes: 10709
+  body_sha256: 76ca48c23bd01fc666a212e8971e96069b704a81269c9a1c589f315cf1deca73
+  from_receipts:
+  - r094
+  fetched_at: '2026-08-01T01:46:57Z'
+- id: asm-wcag-2-2-practices-react-20260801
+  kind: assembly
+  catalog: practices-react
+  snapshot_id: wcag-2-2
+  body_bytes: 159002
+  body_sha256: 7a7a5284dc62aeb87d6dca388a6a5b71c6b66e124908b7f326c2dc482508e49b
+  from_receipts:
+  - r095
+  fetched_at: '2026-08-01T01:46:57Z'
+- id: asm-cwv-2026-practices-react-20260801
+  kind: assembly
+  catalog: practices-react
+  snapshot_id: cwv-2026
+  body_bytes: 19901
+  body_sha256: 15a23460e0cf1c7a375659967fb10fc360f24fc797edfcac72c1b2b9eace1e4f
+  from_receipts:
+  - r096
+  fetched_at: '2026-08-01T01:46:58Z'
+- id: asm-tanstack-virtual-2026-05-practices-react-20260801
+  kind: assembly
+  catalog: practices-react
+  snapshot_id: tanstack-virtual-2026-05
+  body_bytes: 8009
+  body_sha256: c80347230e780da399d6c605ab50dfb766b14d7d882a8541dd2b1f61cdd1d214
+  from_receipts:
+  - r097
+  fetched_at: '2026-08-01T01:47:00Z'
+- id: asm-react-19-error-boundary-practices-react-20260801
+  kind: assembly
+  catalog: practices-react
+  snapshot_id: react-19-error-boundary
+  body_bytes: 62181
+  body_sha256: 2a1237a97f4c84b75f3cbb99a0943f0e0b1337d6ace5e90314cb629c6cbe6dce
+  from_receipts:
+  - r098
+  fetched_at: '2026-08-01T01:47:00Z'
+- id: asm-mdn-navigator-online-2026-05-practices-react-20260801
+  kind: assembly
+  catalog: practices-react
+  snapshot_id: mdn-navigator-online-2026-05
+  body_bytes: 10955
+  body_sha256: 0a8b3a1682b80d8207d56394e287c134e73311d9a9a928f6cc247641d4d0801c
+  from_receipts:
+  - r099
+  fetched_at: '2026-08-01T01:47:00Z'
+- id: asm-next-intl-2026-05-practices-react-20260801
+  kind: assembly
+  catalog: practices-react
+  snapshot_id: next-intl-2026-05
+  body_bytes: 9783
+  body_sha256: df8a728b09c679c375e8cb4e29e6a0c67fecc0fa5b124b603a62293da0b02490
+  from_receipts:
+  - r100
+  fetched_at: '2026-08-01T01:47:00Z'
+- id: asm-react-hook-form-2026-05-practices-react-20260801
+  kind: assembly
+  catalog: practices-react
+  snapshot_id: react-hook-form-2026-05
+  body_bytes: 27525
+  body_sha256: 5f57aa34f50bd477becd60214a7c97a30f450f9475517d18d225ef94f0498181
+  from_receipts:
+  - r101
+  fetched_at: '2026-08-01T01:47:00Z'
+- id: asm-wcag-22-techniques-2026-05-practices-react-20260801
+  kind: assembly
+  catalog: practices-react
+  snapshot_id: wcag-22-techniques-2026-05
+  body_bytes: 44092
+  body_sha256: f7f0ea31e33dfcb91faebeb897ce0717b8b16e661bb9e213edade983e7eba838
+  from_receipts:
+  - r102
+  fetched_at: '2026-08-01T01:47:01Z'
+- id: asm-tiptap-2026-05-practices-react-20260801
+  kind: assembly
+  catalog: practices-react
+  snapshot_id: tiptap-2026-05
+  body_bytes: 12566
+  body_sha256: 0c91aa7031835e0950f2487e962f02c28ce316bc18b6374b69e8860d83e92cbf
+  from_receipts:
+  - r103
+  fetched_at: '2026-08-01T01:47:03Z'
+- id: asm-remark-2026-05-practices-react-20260801
+  kind: assembly
+  catalog: practices-react
+  snapshot_id: remark-2026-05
+  body_bytes: 24743
+  body_sha256: 0c1377f48aa0920708085a399c5d26bde2594f9d7705ca9e2754bd5a75977954
+  from_receipts:
+  - r104
+  fetched_at: '2026-08-01T01:47:04Z'
+- id: r105
+  kind: fetch
+  url: https://recharts.github.io/en-US/api/ResponsiveContainer
+  curl_exit: 0
+  http_status: '200'
+  bytes: 4079
+  sha256: 3a223efcf93bb6e7ba56a8fcb1c20a4a73f1061950c6e80b459974ef1a232bc6
+  fetched_at: '2026-08-01T01:56:10Z'
+  error: ''
+  note: recharts-2026-05 re-anchor (P3-103) section:ResponsiveContainer
+- id: r106
+  kind: fetch
+  url: https://recharts.github.io/en-US/api/LineChart
+  curl_exit: 0
+  http_status: '200'
+  bytes: 10073
+  sha256: ee4d3fe37beac3a4c841b12ebcc69a3c08c55369d0d8711fcf7a55d83a1a6c77
+  fetched_at: '2026-08-01T01:56:11Z'
+  error: ''
+  note: recharts-2026-05 re-anchor (P3-103) section:LineChart
+- id: r107
+  kind: fetch
+  url: https://recharts.github.io/en-US/api/BarChart
+  curl_exit: 0
+  http_status: '200'
+  bytes: 9635
+  sha256: 2a479dc81ff66cc6b0dcbe25226e8583145ee15c18346f4d70fac545d20faf88
+  fetched_at: '2026-08-01T01:56:11Z'
+  error: ''
+  note: recharts-2026-05 re-anchor (P3-103) section:BarChart
+- id: r108
+  kind: fetch
+  url: https://recharts.github.io/en-US/api/PieChart
+  curl_exit: 0
+  http_status: '200'
+  bytes: 8207
+  sha256: 19eb2e90c30da002f60bcb6a8513137d49da89c679b4d05c154423f1c2fc1bde
+  fetched_at: '2026-08-01T01:56:12Z'
+  error: ''
+  note: recharts-2026-05 re-anchor (P3-103) section:PieChart
+- id: r109
+  kind: fetch
+  url: https://raw.githubusercontent.com/recharts/recharts/main/README.md
+  curl_exit: 0
+  http_status: '200'
+  bytes: 3249
+  sha256: 66231774b8b49934c2c477b97cec7e65357b6af309ba73e2c513a97729d88646
+  fetched_at: '2026-08-01T01:56:12Z'
+  error: ''
+  note: recharts-2026-05 re-anchor (P3-103) section:Recharts project overview (README)
+- id: asm-recharts-2026-05-practices-20260801
+  kind: assembly
+  catalog: practices
+  snapshot_id: recharts-2026-05
+  body_bytes: 37078
+  body_sha256: 3a67aa39828ca641130f296655ab6d618cb2030f42562b5de4255994f05f9adb
+  from_receipts:
+  - r105
+  - r106
+  - r107
+  - r108
+  - r109
+  fetched_at: '2026-08-01T01:56:10Z'

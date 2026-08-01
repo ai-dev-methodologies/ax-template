@@ -113,68 +113,18 @@ baseline_universe:
   - practices::toss-billing-2026-05
   - practices::wcag-22-techniques-2026-05
 
-# 63 entries — the post-W1 residual. Uniform reason: the class is uniform (lost original body),
+# 49 entries — the post-W1 residual, minus the 14 practices-react ids burned down by the
+# 2026-08-01 re-fetch wave (BACKLOG P2-57/P2-58): each was re-fetched through
+# practices/scripts/snapshot-extract.sh, its body appended append-only, its manifest sha/bytes
+# re-synced to the TRUE whole-file digest, and a fetch+assembly receipt pair appended to
+# practices/upstream/_FETCH-RECEIPTS.yaml. Removal is the only legal edit and this is what it
+# looks like.
+# Original note (unchanged in substance): Uniform reason: the class is uniform (lost original body),
 # and a per-id restatement of the same fact would be noise pretending to be diligence. Any id
 # whose reason later turns out to be DIFFERENT gets its own wording at that point.
 entries:
   - catalog: practices-react
-    id: cwv-2026
-    reason: >-
-      originally-fetched body lost — the recorded sha/bytes are unverifiable-or-fabricated history that cannot be corrected without a re-fetch of this id
-  - catalog: practices-react
-    id: mdn-navigator-online-2026-05
-    reason: >-
-      originally-fetched body lost — the recorded sha/bytes are unverifiable-or-fabricated history that cannot be corrected without a re-fetch of this id
-  - catalog: practices-react
-    id: next-intl-2026-05
-    reason: >-
-      originally-fetched body lost — the recorded sha/bytes are unverifiable-or-fabricated history that cannot be corrected without a re-fetch of this id
-  - catalog: practices-react
-    id: nextjs-app-router-16
-    reason: >-
-      originally-fetched body lost — the recorded sha/bytes are unverifiable-or-fabricated history that cannot be corrected without a re-fetch of this id
-  - catalog: practices-react
-    id: nextjs-server-actions-16
-    reason: >-
-      originally-fetched body lost — the recorded sha/bytes are unverifiable-or-fabricated history that cannot be corrected without a re-fetch of this id
-  - catalog: practices-react
-    id: nextjs-use-cache-16
-    reason: >-
-      originally-fetched body lost — the recorded sha/bytes are unverifiable-or-fabricated history that cannot be corrected without a re-fetch of this id
-  - catalog: practices-react
-    id: react-19-error-boundary
-    reason: >-
-      originally-fetched body lost — the recorded sha/bytes are unverifiable-or-fabricated history that cannot be corrected without a re-fetch of this id
-  - catalog: practices-react
-    id: react-hook-form-2026-05
-    reason: >-
-      originally-fetched body lost — the recorded sha/bytes are unverifiable-or-fabricated history that cannot be corrected without a re-fetch of this id
-  - catalog: practices-react
-    id: remark-2026-05
-    reason: >-
-      originally-fetched body lost — the recorded sha/bytes are unverifiable-or-fabricated history that cannot be corrected without a re-fetch of this id
-  - catalog: practices-react
-    id: tanstack-query-v5
-    reason: >-
-      originally-fetched body lost — the recorded sha/bytes are unverifiable-or-fabricated history that cannot be corrected without a re-fetch of this id
-  - catalog: practices-react
-    id: tanstack-virtual-2026-05
-    reason: >-
-      originally-fetched body lost — the recorded sha/bytes are unverifiable-or-fabricated history that cannot be corrected without a re-fetch of this id
-  - catalog: practices-react
-    id: tiptap-2026-05
-    reason: >-
-      originally-fetched body lost — the recorded sha/bytes are unverifiable-or-fabricated history that cannot be corrected without a re-fetch of this id
-  - catalog: practices-react
     id: toss-billing-2026-05
-    reason: >-
-      originally-fetched body lost — the recorded sha/bytes are unverifiable-or-fabricated history that cannot be corrected without a re-fetch of this id
-  - catalog: practices-react
-    id: wcag-2-2
-    reason: >-
-      originally-fetched body lost — the recorded sha/bytes are unverifiable-or-fabricated history that cannot be corrected without a re-fetch of this id
-  - catalog: practices-react
-    id: wcag-22-techniques-2026-05
     reason: >-
       originally-fetched body lost — the recorded sha/bytes are unverifiable-or-fabricated history that cannot be corrected without a re-fetch of this id
   - catalog: practices

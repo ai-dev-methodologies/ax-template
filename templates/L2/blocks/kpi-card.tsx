@@ -6,8 +6,8 @@ provenance_class: internal_design
 evidence:
   - source_type: upstream_id
     upstream_id: recharts-2026-05
-    section: "Sparkline (compact LineChart)"
-    quote: "A Sparkline is a miniature LineChart with no axes, no legend, and no tooltip by default — used inline in tables or KPI cards."
+    section: "ResponsiveContainer"
+    quote: "The ResponsiveContainer component is a container that adjusts its width and height based on the size of its parent element. It is used to create responsive charts that adapt to different screen sizes."
   - source_type: external
     citation: "WCAG 2.2 — 1.3.3 Sensory Characteristics: instructions must not rely solely on shape, color, or visual location; KPI trend direction must use icon+text, not color alone"
     url: "https://www.w3.org/TR/WCAG22/#sensory-characteristics"

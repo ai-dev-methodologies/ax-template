@@ -4,10 +4,13 @@ template_id: L2/blocks/heatmap
 layer: L2
 provenance_class: external_canonical
 evidence:
-  - source_type: upstream_id
-    upstream_id: recharts-2026-05
-    section: "Custom Content with ResponsiveContainer"
-    quote: "ResponsiveContainer provides fluid width/height so charts resize with their container. Combine with custom SVG cells for heatmap-style visualizations."
+  # The recharts-2026-05 anchor that used to sit here was REMOVED, not re-anchored (P3-103,
+  # 2026-08-01): this component imports no recharts symbol and declares `dependencies: []` —
+  # it renders plain SVG cells. The quote it carried ("ResponsiveContainer provides fluid
+  # width/height ... Combine with custom SVG cells for heatmap-style visualizations") appears
+  # in no recharts source: the live ResponsiveContainer page documents fluid sizing but says
+  # nothing about heatmaps, and the sentence was authored, not quoted. A citation to a library
+  # the file does not use is a false provenance claim, so it is deleted rather than repointed.
   - source_type: external
     citation: "WCAG 2.2 — 1.4.1 Use of Color: color must not be the only means of conveying information; numeric labels must accompany color intensity in heatmap cells"
     url: "https://www.w3.org/TR/WCAG22/#use-of-color"

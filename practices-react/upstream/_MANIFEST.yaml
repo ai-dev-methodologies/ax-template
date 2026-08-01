@@ -15,165 +15,165 @@ snapshots:
     tier: 1
     source: "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Promise/all"
     via: "WebFetch"
-    fetched_at: "2026-05-16T00:00:00Z"
-    bytes: 1720
-    sha: "ff2089069bf746370f0d4f27bf443093e325c1ceb6dc9c52a7138637e1b8e0e5"
+    fetched_at: "2026-08-01T01:46:47Z"
+    bytes: 16593
+    sha: "64b6485eb9c982a74de68d71c44fbd3fce3f80134e2e64d584c3ac5d902ffee7"
 
   - id: "mdn-promise-allsettled"
     tier: 1
     source: "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Promise/allSettled"
     via: "WebFetch"
-    fetched_at: "2026-05-16T00:00:00Z"
-    bytes: 1683
-    sha: "42d8cdd117afa44a7057496fb52cbe0020d1906740204bd98706c276df418cde"
+    fetched_at: "2026-08-01T01:46:47Z"
+    bytes: 9819
+    sha: "4ba8a9e5558c0ce35a0261c12fb0cba49736615eb6821ae43e72b513177a1ad4"
 
   - id: "mdn-set"
     tier: 1
     source: "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Set"
     via: "WebFetch"
-    fetched_at: "2026-05-16T00:00:00Z"
-    bytes: 1441
-    sha: "39ccb4a8bcac298c41217a8fce4c0fcfa159a17621a0224fe678ca89b313319f"
+    fetched_at: "2026-08-01T01:46:47Z"
+    bytes: 19183
+    sha: "43e20abe75ebcaf8f56128b38318b1153e93c68472445557b2c2d058cc495f9d"
 
   - id: "react-19-useeffectevent"
     tier: 2
     source: "https://react.dev/reference/react/useEffectEvent"
     via: "WebFetch"
-    fetched_at: "2026-05-16T00:00:00Z"
-    bytes: 1584
-    sha: "55e422f96ac79c4d574d62e9d4e510728632e57780cff15b0c664c1bda75a677"
+    fetched_at: "2026-08-01T01:46:47Z"
+    bytes: 20256
+    sha: "51ae79e1a3ec75b5bbcf3067d6b20f84309d73c094f7397c28bde03c0706b5d1"
     version_observed: "react@19.2"
 
   - id: "react-you-might-not-need-effect"
     tier: 2
     source: "https://react.dev/learn/you-might-not-need-an-effect"
     via: "WebFetch"
-    fetched_at: "2026-05-16T00:00:00Z"
-    bytes: 1681
-    sha: "8edb70b1728a600f43c380d295587473b891c6f8f79984848e5c4087b08d59d8"
+    fetched_at: "2026-08-01T01:46:48Z"
+    bytes: 42939
+    sha: "19ddc7a4bdf893371eaec6443e979c3febe86d1b1f89a63cd11a6bcf53d67271"
     version_observed: "react@19.2"
 
   - id: "react-19-lazy"
     tier: 2
     source: "https://react.dev/reference/react/lazy"
     via: "WebFetch"
-    fetched_at: "2026-05-16T00:00:00Z"
-    bytes: 1309
-    sha: "836a75e4736e611fb81cca4879eb707cce715e46e1c1a6f38597abe214b3f6b7"
+    fetched_at: "2026-08-01T01:46:48Z"
+    bytes: 10008
+    sha: "a8bd9c913786ba4d70d0199044c3594672aad2c6db0b2de5fcc6cda881bc55e0"
     version_observed: "react@19.2"
 
   - id: "nextjs-lazy-loading"
     tier: 2
     source: "https://nextjs.org/docs/app/guides/lazy-loading"
     via: "WebFetch"
-    fetched_at: "2026-05-13T00:00:00Z"
-    bytes: 2164
-    sha: "0cf740df7578a55bb937651c1bac0e77148abff8416c27ed5812a9bf03eb0a72"
+    fetched_at: "2026-08-01T01:46:48Z"
+    bytes: 14644
+    sha: "bced304abc5e31933f68c7c090c7d94d6fb69c680647a4e813dc696e6160569d"
     version_observed: "next@16.2.6"
 
   - id: "mdn-addeventlistener-passive"
     tier: 1
     source: "https://developer.mozilla.org/en-US/docs/Web/API/EventTarget/addEventListener"
     via: "WebFetch"
-    fetched_at: "2026-05-16T00:00:00Z"
-    bytes: 1272
-    sha: "f1ad816347da2eba9667083471e3a7601831cb5270f155427657c0d281cb0ef4"
+    fetched_at: "2026-08-01T01:46:48Z"
+    bytes: 30416
+    sha: "615d4e6217ccb1af478ce314f1b991196dddc83ce8b0b9d41890c67ee360c4c6"
 
   - id: "mdn-localstorage"
     tier: 1
     source: "https://developer.mozilla.org/en-US/docs/Web/API/Window/localStorage"
     via: "WebFetch"
-    fetched_at: "2026-05-16T00:00:00Z"
-    bytes: 1264
-    sha: "b603074ea922690d188673887f201f8a6accd3c72559150d447f3488957ad0b3"
+    fetched_at: "2026-08-01T01:46:49Z"
+    bytes: 11146
+    sha: "35cdec6bd644ad5a5bdfcad58ed0853c3585447afdf6c1e53fd77f5148554829"
 
   - id: "react-19-activity"
     tier: 2
     source: "https://react.dev/reference/react/Activity"
     via: "WebSearch+synthesis"
-    fetched_at: "2026-05-16T00:00:00Z"
-    bytes: 1277
-    sha: "a19b6e69afc2859f490dffe86f17bc458cb1374066158e19e53c831183b8aa18"
+    fetched_at: "2026-08-01T01:46:49Z"
+    bytes: 25350
+    sha: "163de4456c3c35ad33a071e6bf4918da47534b66df24fe6f1b7333fe0c014a44"
     version_observed: "react@19.2"
 
   - id: "react-dom-resource-hints"
     tier: 2
     source: "https://react.dev/reference/react-dom"
     via: "WebFetch+synthesis"
-    fetched_at: "2026-05-16T00:00:00Z"
-    bytes: 1536
-    sha: "9a0ba2b18acc1becbd7d833a4740bce0274c557f3abb426a7899ed1302f244a8"
+    fetched_at: "2026-08-01T01:46:50Z"
+    bytes: 7497
+    sha: "1f785fc3610ebef1a3ec7ac711717b221e325b9bf70524ff4387b67dde05523d"
     version_observed: "react@19"
 
   - id: "mdn-script-element"
     tier: 1
     source: "https://developer.mozilla.org/en-US/docs/Web/HTML/Element/script"
     via: "WebFetch+synthesis"
-    fetched_at: "2026-05-16T00:00:00Z"
-    bytes: 1145
-    sha: "238245ac7cc6e356bbdc812c75129a776273ffc558b97ff61b0a0a1b83fe985a"
+    fetched_at: "2026-08-01T01:46:50Z"
+    bytes: 26925
+    sha: "a42dd2b90b450f541afbc5ee7977f1a81f5c5537edf9b4e5714ade8f8efda10b"
 
   - id: "react-19-use"
     tier: 2
     source: "https://react.dev/reference/react/use"
     via: "WebFetch"
-    fetched_at: "2026-05-16T00:00:00Z"
-    bytes: 1846
-    sha: "f1b930810380f3a4c71b2a17800a634196b22cc58d08176ac49f127c9443a059"
+    fetched_at: "2026-08-01T01:46:50Z"
+    bytes: 30467
+    sha: "4759e9b21492a1f54af7170d2fbb07cd30251be6eca9b6d92a25d5e412715f61"
     version_observed: "react@19"
 
   - id: "react-19-cache"
     tier: 2
     source: "https://react.dev/reference/react/cache"
     via: "WebFetch"
-    fetched_at: "2026-05-16T00:00:00Z"
-    bytes: 2915
-    sha: "76237c1b8d01614dd80f57d95475f1a6711eb765b3cee35cd72541b61b41096b"
+    fetched_at: "2026-08-01T01:46:50Z"
+    bytes: 22577
+    sha: "c0879218ecf14ecff41c6164e6d28800eef3c51e8701b2096d70afea9843fec9"
     version_observed: "react@19"
 
   - id: "nextjs-use-cache-directive"
     tier: 2
     source: "https://nextjs.org/docs/app/api-reference/directives/use-cache"
     via: "WebFetch"
-    fetched_at: "2026-05-13T00:00:00Z"
-    bytes: 4476
-    sha: "8925884b2beaf11c2097be532bdcac95d9ef0e129b4bcbb3aa65ac341cc88a11"
+    fetched_at: "2026-08-01T01:46:51Z"
+    bytes: 29013
+    sha: "cdd2b9bf7da654b6ecf3d38c8b44e54a0a928521bd5b6d2eeb0f01e70e8f8da2"
     version_observed: "next@16.2.6"
 
   - id: "nextjs-use-cache-private"
     tier: 2
     source: "https://nextjs.org/docs/app/api-reference/directives/use-cache-private"
     via: "WebFetch"
-    fetched_at: "2026-05-13T00:00:00Z"
-    bytes: 2406
-    sha: "6824982bcc529d107cfbc4b99053e85ab570c6824553202c5deb219ea80ff9d0"
+    fetched_at: "2026-08-01T01:46:52Z"
+    bytes: 12806
+    sha: "422e045cb116c8bb30e5b3e78b4f67b48836540bbcf3f8c63259e07862734894"
     version_observed: "next@16.2.6"
 
   - id: "nextjs-use-cache-remote"
     tier: 2
     source: "https://nextjs.org/docs/app/api-reference/directives/use-cache-remote"
     via: "WebFetch"
-    fetched_at: "2026-05-13T00:00:00Z"
-    bytes: 4002
-    sha: "286648e52e62ec8b9168280353c48697579a8390736e958a673b1c0060162b38"
+    fetched_at: "2026-08-01T01:46:53Z"
+    bytes: 29124
+    sha: "21826d446f7acd68d4dd298c08d2f4f3a05f7d18ca66b4679d231b6330b51145"
     version_observed: "next@16.2.6"
 
   - id: "nextjs-fetching-data"
     tier: 2
     source: "https://nextjs.org/docs/app/getting-started/fetching-data"
     via: "WebFetch"
-    fetched_at: "2026-05-13T00:00:00Z"
-    bytes: 3705
-    sha: "e6ec1a6c9477cd3b5d42784b9db81472a11222c85c633e736a34484b0c2b3f9f"
+    fetched_at: "2026-08-01T01:46:53Z"
+    bytes: 24306
+    sha: "ae28c3cdf404806631c639891e5351457f78eac08d4cbae5e2b173ac2f4bc211"
     version_observed: "next@16.2.6"
 
   - id: "nextjs-optimize-package-imports"
     tier: 2
     source: "https://nextjs.org/docs/app/api-reference/config/next-config-js/optimizePackageImports"
     via: "WebFetch"
-    fetched_at: "2026-05-13T00:00:00Z"
-    bytes: 2096
-    sha: "7282ac740aeca7791908816acdc47b0461b831a7ccca0a5d6ef7d99b49c4acd8"
+    fetched_at: "2026-08-01T01:46:54Z"
+    bytes: 9368
+    sha: "d7486e5bb6ed48816e677de33c91678356d0701758675ad42abc9ca3ac4f25b1"
     version_observed: "next@16.2.6"
 
   - id: "vercel-react-best-practices"
@@ -190,27 +190,27 @@ snapshots:
     tier: 2
     source: "https://nextjs.org/docs/app/getting-started/installation"
     via: "WebFetch"
-    fetched_at: "2026-05-17T13:00:00Z"
-    bytes: 4200
-    sha: "a3f1b2c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2"
+    fetched_at: "2026-08-01T01:46:55Z"
+    bytes: 18024
+    sha: "bda72de328190d7bd7672c603df445750deb188bdaf514c0cd30d7b468414b3c"
     version_observed: "next@16.2.6"
 
   - id: "nextjs-server-actions-16"
     tier: 2
     source: "https://nextjs.org/docs/app/getting-started/mutating-data"
     via: "WebFetch"
-    fetched_at: "2026-05-17T13:00:00Z"
-    bytes: 5100
-    sha: "b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5"
+    fetched_at: "2026-08-01T01:46:56Z"
+    bytes: 19938
+    sha: "37cad2d4e38f735fa5db7390ffd04f554c908d9a37ea87729f7521cc8b6ec3b7"
     version_observed: "next@16.2.6"
 
   - id: "nextjs-use-cache-16"
     tier: 2
     source: "https://nextjs.org/docs/app/api-reference/directives/use-cache"
     via: "WebFetch"
-    fetched_at: "2026-05-17T13:00:00Z"
-    bytes: 3800
-    sha: "c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6"
+    fetched_at: "2026-08-01T01:46:56Z"
+    bytes: 27072
+    sha: "15fe8d05b2f58b6ce0a29b5e01e395a77a43b6700fd4d9de7c6616f781f5d01e"
     version_observed: "next@16.2.6"
 
   - id: "shadcn-ui-2026-05"
@@ -236,27 +236,27 @@ snapshots:
     tier: 2
     source: "https://tanstack.com/query/latest/docs/framework/react/overview"
     via: "WebFetch"
-    fetched_at: "2026-05-17T13:00:00Z"
-    bytes: 3500
-    sha: "f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9"
+    fetched_at: "2026-08-01T01:46:57Z"
+    bytes: 11352
+    sha: "b19ac8d1240548248dd8551513b30f1be50f7e8a8a617d307361311354d88511"
     version_observed: "tanstack-query@5.x"
 
   - id: "wcag-2-2"
     tier: 1
     source: "https://www.w3.org/TR/WCAG22/"
     via: "WebFetch"
-    fetched_at: "2026-05-17T13:00:00Z"
-    bytes: 2900
-    sha: "a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0"
+    fetched_at: "2026-08-01T01:46:57Z"
+    bytes: 159568
+    sha: "8d180145c93573fc3158fce537b11b696f832780f707cbe3bb70bddad7fa705a"
     version_observed: "WCAG 2.2 W3C Recommendation 2023-10-05"
 
   - id: "cwv-2026"
     tier: 1
     source: "https://web.dev/articles/vitals"
     via: "WebFetch"
-    fetched_at: "2026-05-17T13:00:00Z"
-    bytes: 2600
-    sha: "b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1"
+    fetched_at: "2026-08-01T01:46:58Z"
+    bytes: 20471
+    sha: "408324450e88bcf736f825068f458e034ef96fe0b191cc37afd7d7f47cfaf51f"
     version_observed: "CWV 2026 stable"
 
   - id: "kakao-postcode-2026-05"
@@ -290,9 +290,9 @@ snapshots:
     tier: 2
     source: "https://tanstack.com/virtual/v3/docs/introduction"
     via: "WebFetch"
-    fetched_at: "2026-05-18T00:00:00Z"
-    bytes: 1920
-    sha: "d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5"
+    fetched_at: "2026-08-01T01:47:00Z"
+    bytes: 8631
+    sha: "d077eb210c49526dc8fa24489f013fc0676377d4ed499ea6fcfa4ef41b610cac"
     version_observed: "@tanstack/react-virtual@3.x"
     purpose: virtualized-table-evidence
 
@@ -300,9 +300,9 @@ snapshots:
     tier: 2
     source: "https://react.dev/reference/react/Component#catching-rendering-errors-with-an-error-boundary"
     via: "WebFetch"
-    fetched_at: "2026-05-18T00:00:00Z"
-    bytes: 1760
-    sha: "e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6"
+    fetched_at: "2026-08-01T01:47:00Z"
+    bytes: 62888
+    sha: "97061a0529c84ca50e0edc033d29cd198264be3e5b5e0c556e9f517dbe604bfd"
     version_observed: "react@19.2"
     purpose: error-boundary-evidence
 
@@ -310,18 +310,18 @@ snapshots:
     tier: 1
     source: "https://developer.mozilla.org/en-US/docs/Web/API/Navigator/onLine"
     via: "WebFetch"
-    fetched_at: "2026-05-18T00:00:00Z"
-    bytes: 1540
-    sha: "f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7"
+    fetched_at: "2026-08-01T01:47:00Z"
+    bytes: 11613
+    sha: "2b7e702f24ae63e3b382ebc6ec686fc04de420cfa8966f7ac33c1348f1811c4c"
     purpose: offline-banner-evidence
 
   - id: "next-intl-2026-05"
     tier: 2
     source: "https://next-intl.dev/docs/getting-started/app-router"
     via: "WebFetch"
-    fetched_at: "2026-05-18T00:00:00Z"
-    bytes: 3200
-    sha: "a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2"
+    fetched_at: "2026-08-01T01:47:00Z"
+    bytes: 10406
+    sha: "54c9904bc8bfb16a98faa8242def2290c03be9ed071c87bdd5290f221a8f0f7c"
     version_observed: "next-intl@3.x (App Router)"
     purpose: "i18n LocaleProvider, useTranslations, KRW format, fallback chain evidence"
 
@@ -329,9 +329,9 @@ snapshots:
     tier: 2
     source: "https://react-hook-form.com/docs/useform"
     via: "WebFetch"
-    fetched_at: "2026-05-18T00:00:00Z"
-    bytes: 5230
-    sha: "e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6"
+    fetched_at: "2026-08-01T01:47:00Z"
+    bytes: 28128
+    sha: "57a9d633e1376cdd7feee72543732654afdb9b1066925157dd24eb1aaf149e91"
     version_observed: "react-hook-form@7.x"
     purpose: "useFieldArray, useWatch, useController, FormProvider, Zod resolver, isDirty, auto-save, error summary pattern"
 
@@ -349,9 +349,9 @@ snapshots:
     tier: 1
     source: "https://www.w3.org/WAI/WCAG22/Techniques/"
     via: "WebFetch"
-    fetched_at: "2026-05-18T00:00:00Z"
-    bytes: 5120
-    sha: "f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7"
+    fetched_at: "2026-08-01T01:47:01Z"
+    bytes: 44700
+    sha: "102d92bed0f9cd17210566994f4fa825f257bc433ccb226c00d84f5c0ae7a6ed"
     purpose: "WCAG 2.2 techniques: SC 2.4.1 bypass-blocks (skip-link), SC 4.1.3 status-messages (announce-live, impersonation-banner)"
 
   - id: "stripe-billing-2026-05"
@@ -384,9 +384,9 @@ snapshots:
     tier: 2
     source: "https://tiptap.dev/docs/editor/getting-started/install/react"
     via: "WebFetch"
-    fetched_at: "2026-05-18T00:00:00Z"
-    bytes: 4320
-    sha: "c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c9d0"
+    fetched_at: "2026-08-01T01:47:03Z"
+    bytes: 13200
+    sha: "90419c533e76d2ab079ffd607c46083fa489087b40cf2acd5f72722b994ced4d"
     version_observed: "tiptap@2.x"
     purpose: "TipTap WYSIWYG editor: useEditor hook, EditorContent, StarterKit extensions, 'use client' RSC directive requirement, next/dynamic ssr:false consumption pattern"
 
@@ -394,9 +394,9 @@ snapshots:
     tier: 2
     source: "https://github.com/remarkjs/react-markdown"
     via: "WebFetch"
-    fetched_at: "2026-05-18T00:00:00Z"
-    bytes: 3140
-    sha: "d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c9d0e1"
+    fetched_at: "2026-08-01T01:47:04Z"
+    bytes: 25341
+    sha: "ef353dfb6cd0bac64bde48d49b32c9301e4ecaf18296cfb7fa48d78e0eb9e73a"
     version_observed: "react-markdown@9.x + remark-gfm@4.x"
     purpose: "react-markdown: no dangerouslySetInnerHTML, safe by default, GFM (remark-gfm) for tables/strikethrough/task-lists, custom components prop for design-system integration"
 

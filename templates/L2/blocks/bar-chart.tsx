@@ -6,8 +6,8 @@ provenance_class: external_canonical
 evidence:
   - source_type: upstream_id
     upstream_id: recharts-2026-05
-    section: "BarChart"
-    quote: "BarChart is used to display and compare multiple sets of data or to track changes over time."
+    section: "Recharts project overview (README)"
+    quote: "All the components of Recharts are clearly separated."
   - source_type: external
     citation: "WCAG 2.2 — 1.4.1 Use of Color: color must not be the only means of conveying information"
     url: "https://www.w3.org/TR/WCAG22/#use-of-color"

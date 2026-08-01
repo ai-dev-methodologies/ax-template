@@ -31,9 +31,9 @@ evidence:
     citation: "WCAG 2.2 SC 1.3.1 Info and Relationships (Level A): Information, structure, and relationships conveyed through presentation are also available in text. A banner conveying impersonation context must be programmatically determinable."
     url: "https://www.w3.org/WAI/WCAG22/Understanding/info-and-relationships.html"
     quoted_at: "2026-05-18"
-  - upstream_id: wcag-22-techniques-2026-05
-    section: "SC 4.1.3 Status Messages — aria-live regions"
-    quote: "determined through role or properties so they can be presented by assistive technologies"
+  - upstream_id: wcag-2-2
+    section: "Success Criterion 4.1.3 Status Messages"
+    quote: "status messages can be programmatically determined through role or properties such that they can be presented to the user by assistive technologies without receiving focus"
 decided_at: "2026-05-18"
 ---
 
