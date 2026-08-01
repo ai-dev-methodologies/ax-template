@@ -9,8 +9,8 @@ evidence:
     section: sonner
     quote: "A succinct message that is displayed temporarily."
   - source_type: upstream_id
-    upstream_id: wcag-2-2
-    section: "Success Criterion 4.1.3 Status Messages"
+    upstream_id: wcag-22-techniques-2026-05
+    section: "Success Criterion (SC)"
     quote: "In content implemented using markup languages, status messages can be programmatically determined through role or properties such that they can be presented to the user by assistive technologies without receiving focus."
 a11y_criteria:
   - "WCAG 2.2 SC 4.1.3 — role='status' or role='alert' on toast notifications"
