@@ -3067,3 +3067,74 @@ arbitration) with the reason SKIP LOCKED is wrong here. `applyOptimisticDelete` 
 but not the lie — and now decrements only what the filter actually removed.
 
 - Commits: (this commit — final-4 wave, Lane C)
+
+---
+
+## P2-58 / P2-57 / P3-103 / P2-63 — 2026-08-01 evidence-freshness wave (final-4 Lane A)
+
+- Status: ACCEPT
+- Date: 2026-08-01
+- Maintainer: final-4 Lane A (final4-closeA)
+- Evidence: `practices/upstream/_FETCH-RECEIPTS.yaml` rows r056–r158 (fetch + assembly)
+- Re-evaluation trigger: any of the refreshed hosts changing shape, or the next time_decay
+  cohort (2026-10-12 / 2026-10-13) coming due
+
+### Mechanism, so a later reader can tell a refresh from a timestamp edit
+
+96 manifest ids were re-fetched through the committed pipeline
+`practices/scripts/snapshot-extract.sh` (curl → deterministic HTML→text extractor, no model in
+the loop). No `fetched_at` was bulk-touched: EVERY attempted URL — including every failure — has
+a `kind: fetch` row, and every id whose body changed has a `kind: assembly` row binding the
+body's sha256 to the fetch rows it was built from. Bodies were refreshed APPEND-ONLY: the prior
+body is preserved byte-for-byte and the unmodified extractor output is appended below it, so the
+185 existing rule quotes and 74 template anchors stayed verbatim (0 findings) while the manifest
+digests became true.
+
+### Two deliberate deletions, and one that was refused
+
+`kisa-identity-verification-2026-05` was DELETED from `practices/upstream/_MANIFEST.yaml`. It was
+a body-less plan registration carrying a rolling-nibble placeholder sha
+(`b4c5d6e7f8a9b0c1…`) — a fabricated digest for a file that never existed — and `www.kisa.or.kr`
+WAF-blocks a plain client on every path including `/robots.txt` (HTTP 400, receipt r067). Nothing
+in `practices/rules`, `practices-react/rules` or `templates/**` cited it; the only references are
+prose in three superseded PRD drafts. Keeping a fabricated record solely to avoid a time_decay RED
+would be gaming our own gate.
+
+`pipa-article-24-2026-05` was NOT deleted, and the reason is recorded because it is the more
+interesting half. It is cited: `templates/DECISIONS.md[TD-2026-05-18-031]` carries
+`upstream_id: pipa-article-24-2026-05` inside an ADR evidence block, and `evidence_guard`'s
+`entry_kind()` returns `upstream_id` whenever that key is present — `source_type: external`
+alongside it does not downgrade the resolution. Measured, not assumed: dropping the entry produced
+`VIOLATION templates/DECISIONS.md[TD-2026-05-18-031]: evidence[0] upstream_id=… is not registered
+in any upstream/_MANIFEST.yaml`. Its source is also unreachable to the committed extractor —
+law.go.kr serves an iframe/overload shell to plain curl, and the article text is in none of
+`/법령/…`, `LSW/lsInfoP.do`, `lsSc.do`, `DRF/lawService.do`, elaw.klri.re.kr or Wayback (receipt
+r068). So the entry stays stale by choice, and `practices` goes time_decay RED on 2026-08-17
+because of it. That is a stated cost, not an oversight.
+
+### Residual policy for the allowlist
+
+`practices/evals/manifest_snapshot_integrity_allowlist.yaml` went 71 → 63 → 49 → 1. The single
+survivor, `practices::iso-4217`, keeps its entry because iso.org answers a plain client with an
+HTTP 403 Cloudflare interstitial (58 bytes, receipt r117) — a bot wall, not a document. Its
+`reason:` now records url, status, bytes, date and receipt id, so the residual is evidence of an
+unreachable host rather than an assertion inherited from the wave that created the list.
+
+### What the refresh revealed about the old records
+
+At the pre-wave anchor, 21 manifest records carried rolling-nibble placeholder shas, and five of
+those shas were shared by two or three different entries. A sha256 is a function of the bytes, so
+most of them were never computed from any file. Twenty are now true whole-file digests; the
+twenty-first is the deleted stub.
+
+### Boundary, stated rather than hidden
+
+Append-only refresh keeps the guards green by construction, and that is the mechanism working as
+designed — but "the quote is in our snapshot" is a weaker property than "the quote is on the live
+page". Testing the stronger one, 26 citations anchored to refreshed ids do NOT appear on the
+2026-08-01 page in three classes: authored digest prose that was never page text, a
+wrong-granularity source (an index page that does not contain the cited sentence), and page text
+that genuinely moved. That is registered as its own backlog row rather than silently re-anchored
+here.
+
+- Commits: e25f598, ce85dc5, and this commit (final-4 wave, Lane A)

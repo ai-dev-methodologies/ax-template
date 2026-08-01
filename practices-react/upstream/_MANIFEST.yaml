@@ -371,9 +371,9 @@ snapshots:
     tier: 2
     source: "https://docs.tosspayments.com/guides/billing/overview"
     via: "curl"
-    fetched_at: "2026-07-14T00:00:00Z"
-    bytes: 961
-    sha: "70d66b0c80e9a6707175f0bd1b8c9ac767494e9a5f11499055f0023b6a756200"
+    fetched_at: "2026-08-01T02:23:41Z"
+    bytes: 9635
+    sha: "24b211181a2cb31ad4b28e6d74c76362c4dead94d0c7dcfa3f16da86c6ec8987"
     version_observed: "toss-payments-api@2024"
     curated_sources:
       - "https://docs.tosspayments.com/guides/billing/overview (billingKey flow; merchant builds subscription lifecycle; amount 파라미터)"

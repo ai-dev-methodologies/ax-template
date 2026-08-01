@@ -1528,3 +1528,925 @@ receipts:
   - r108
   - r109
   fetched_at: '2026-08-01T01:56:10Z'
+- id: r110
+  kind: fetch
+  url: https://docs.tosspayments.com/guides/billing/overview
+  curl_exit: 0
+  http_status: '200'
+  bytes: 6860
+  sha256: 764f385148f9f047b818bf035eb736f62cf851fc75a45fd2684796443dcde71d
+  fetched_at: '2026-08-01T02:23:41Z'
+  error: ''
+  note: practices-react::toss-billing-2026-05 P2-57 burn-down refresh
+- id: r111
+  kind: fetch
+  url: https://www.archunit.org/userguide/html/000_Index.html
+  curl_exit: 0
+  http_status: '200'
+  bytes: 76670
+  sha256: fb6223b5662b2705c6efb425bab57662001cf6afb7bc8c3d73059f6f21f665ed
+  fetched_at: '2026-08-01T02:23:42Z'
+  error: ''
+  note: practices::archunit-userguide P2-57 burn-down refresh
+- id: r112
+  kind: fetch
+  url: https://github.com/ben-manes/caffeine/wiki/Eviction
+  curl_exit: 0
+  http_status: '200'
+  bytes: 13082
+  sha256: 19ddba736f96628532a99f5a13c9dd431d56960d01ae4899c664d2a9f8d7774c
+  fetched_at: '2026-08-01T02:23:42Z'
+  error: ''
+  note: practices::caffeine-2026-05 P2-57 burn-down refresh
+- id: r113
+  kind: fetch
+  url: https://cwe.mitre.org/data/definitions/915.html
+  curl_exit: 0
+  http_status: '200'
+  bytes: 18812
+  sha256: 9341bee1dfdd95fb6b46aed6d77fafa785f8557a2c377a83c6ab32408c151a42
+  fetched_at: '2026-08-01T02:23:44Z'
+  error: ''
+  note: practices::cwe-915 P2-57 burn-down refresh
+- id: r114
+  kind: fetch
+  url: https://google.aip.dev/180
+  curl_exit: 0
+  http_status: '200'
+  bytes: 14214
+  sha256: b53dc861c73b63bc20cbd000e95455aacce6e3afbe0d5d03c5b53710dded2d4c
+  fetched_at: '2026-08-01T02:23:44Z'
+  error: ''
+  note: practices::google-aip-versioning P2-57 burn-down refresh
+- id: r115
+  kind: fetch
+  url: https://docs.gradle.org/current/userguide/toolchains.html
+  curl_exit: 0
+  http_status: '200'
+  bytes: 39375
+  sha256: 321f0d646fd82182a066025229c9aaa47a9862925a2cdd089c184e3a8b229130
+  fetched_at: '2026-08-01T02:23:44Z'
+  error: ''
+  note: practices::gradle-toolchains P2-57 burn-down refresh
+- id: r116
+  kind: fetch
+  url: https://docs.jboss.org/hibernate/validator/8.0/reference/en-US/html_single/
+  curl_exit: 0
+  http_status: '200'
+  bytes: 315270
+  sha256: 3507a6ebde9cf6f19d6b30b54c02d21a6548b1a95030a6880c8d7cc1599921c5
+  fetched_at: '2026-08-01T02:23:46Z'
+  error: ''
+  note: practices::hibernate-validator P2-57 burn-down refresh
+- id: r117
+  kind: fetch
+  url: https://www.iso.org/iso-4217-currency-codes.html
+  curl_exit: 0
+  http_status: '403'
+  bytes: 58
+  sha256: ae0b26c68939e8214056c2517af3b5091f1c674c8aef5f1e1fbab7804a78829b
+  fetched_at: '2026-08-01T02:23:47Z'
+  error: ''
+  note: P2-57 burn-down probe — UNFETCHABLE, allowlist entry retained with this receipt as its reason
+- id: r118
+  kind: fetch
+  url: https://openjdk.org/jeps/395
+  curl_exit: 0
+  http_status: '200'
+  bytes: 26711
+  sha256: a74484d477079f5d48aaa021fb063c5637a67909ebf919ae5c14adeeefdafa78
+  fetched_at: '2026-08-01T02:23:56Z'
+  error: ''
+  note: practices::jep-395-records P2-57 burn-down refresh
+- id: r119
+  kind: fetch
+  url: https://openjdk.org/jeps/409
+  curl_exit: 0
+  http_status: '200'
+  bytes: 24652
+  sha256: b6900266be32685806f24ca55ba542fb0c6304be0f12d9e2024237498302d0ca
+  fetched_at: '2026-08-01T02:24:05Z'
+  error: ''
+  note: practices::jep-409-sealed-classes P2-57 burn-down refresh
+- id: r120
+  kind: fetch
+  url: https://openjdk.org/jeps/444
+  curl_exit: 0
+  http_status: '200'
+  bytes: 51010
+  sha256: 155ffc0c0c5454ab41d15938a30681853e58a26ef31dadd4f02b7df48eb68461
+  fetched_at: '2026-08-01T02:24:15Z'
+  error: ''
+  note: practices::jep-444-virtual-threads P2-57 burn-down refresh
+- id: r121
+  kind: fetch
+  url: https://logback.qos.ch/manual/layouts.html
+  curl_exit: 0
+  http_status: '200'
+  bytes: 61552
+  sha256: f7416a3cde83ee75588b524bdc319116ab3d2f301e5aea5928fc4f29b4fcf246
+  fetched_at: '2026-08-01T02:24:19Z'
+  error: ''
+  note: practices::logback-layouts P2-57 burn-down refresh
+- id: r122
+  kind: fetch
+  url: https://owasp.org/API-Security/editions/2023/en/0xa8-security-misconfiguration/
+  curl_exit: 0
+  http_status: '200'
+  bytes: 7296
+  sha256: 823ece2102a87a94ee5874f718c5f76fb5dce4997627f384e946fafa568564b9
+  fetched_at: '2026-08-01T02:24:20Z'
+  error: ''
+  note: practices::owasp-api-error-handling P2-57 burn-down refresh
+- id: r123
+  kind: fetch
+  url: https://cheatsheetseries.owasp.org/cheatsheets/Logging_Cheat_Sheet.html
+  curl_exit: 0
+  http_status: '200'
+  bytes: 30981
+  sha256: ebfa8e0dcade5647822086ab038af5acec9dd5b2a058ddb0fee69ddb658a701f
+  fetched_at: '2026-08-01T02:24:20Z'
+  error: ''
+  note: practices::owasp-logging-cheatsheet P2-57 burn-down refresh
+- id: r124
+  kind: fetch
+  url: https://cheatsheetseries.owasp.org/cheatsheets/Mass_Assignment_Cheat_Sheet.html
+  curl_exit: 0
+  http_status: '200'
+  bytes: 9693
+  sha256: f5bdefd4e8288e68712648e6de35b69887ab72bcac7c541f268b0de6cb8485c7
+  fetched_at: '2026-08-01T02:24:21Z'
+  error: ''
+  note: practices::owasp-mass-assignment P2-57 burn-down refresh
+- id: r125
+  kind: fetch
+  url: https://www.pcisecuritystandards.org/document_library/?category=saqs
+  curl_exit: 0
+  http_status: '200'
+  bytes: 5682
+  sha256: 78fea21b6e9e52b1c8e4949e9da4061f5e641452f23cab6cd0e4100af3792ed1
+  fetched_at: '2026-08-01T02:24:22Z'
+  error: ''
+  note: practices::pci-dss-saq-a P2-57 burn-down refresh
+- id: r126
+  kind: fetch
+  url: https://github.com/rest-assured/rest-assured/wiki/Usage
+  curl_exit: 0
+  http_status: '200'
+  bytes: 102047
+  sha256: ac091528da35791c188311bb7bdcfb3c2022997b103e1c439db590251154d89e
+  fetched_at: '2026-08-01T02:24:22Z'
+  error: ''
+  note: practices::rest-assured-usage P2-57 burn-down refresh
+- id: r127
+  kind: fetch
+  url: https://datatracker.ietf.org/doc/html/rfc7807
+  curl_exit: 0
+  http_status: '200'
+  bytes: 28943
+  sha256: d95dcf3bb33f63a7e4185ca4f33f05da9bb5c44b73db85a420023fe35471aa0a
+  fetched_at: '2026-08-01T02:24:23Z'
+  error: ''
+  note: practices::rfc-7807 P2-57 burn-down refresh
+- id: r128
+  kind: fetch
+  url: https://www.slf4j.org/manual.html
+  curl_exit: 0
+  http_status: '200'
+  bytes: 22382
+  sha256: 0f598d0fd529ac13a3009deec68880fed861f417203a7c68258e92f1edf81327
+  fetched_at: '2026-08-01T02:24:25Z'
+  error: ''
+  note: practices::slf4j-mdc P2-57 burn-down refresh
+- id: r129
+  kind: fetch
+  url: https://docs.spring.io/spring-framework/reference/core/aop/proxying.html
+  curl_exit: 0
+  http_status: '200'
+  bytes: 21996
+  sha256: cd580057ed4d7f27260d85cb56dfe85fe56e7a09a2cdc923356434c7c333cff0
+  fetched_at: '2026-08-01T02:24:26Z'
+  error: ''
+  note: practices::spring-aop-proxying P2-57 burn-down refresh
+- id: r130
+  kind: fetch
+  url: https://docs.spring.io/spring-framework/reference/core/beans/context-introduction.html
+  curl_exit: 0
+  http_status: '200'
+  bytes: 48038
+  sha256: 166ad86467520b875422724645f4b007a78cbe48842f0c3f239ada8d679ef834
+  fetched_at: '2026-08-01T02:24:26Z'
+  error: ''
+  note: practices::spring-application-events P2-57 burn-down refresh
+- id: r131
+  kind: fetch
+  url: https://docs.spring.io/spring-framework/reference/core/beans/dependencies/factory-collaborators.html
+  curl_exit: 0
+  http_status: '200'
+  bytes: 31843
+  sha256: 278a29d06c98cd9692cdb50c514133c2725f6cd3504853fddc0d80ddd526f77b
+  fetched_at: '2026-08-01T02:24:26Z'
+  error: ''
+  note: practices::spring-beans-constructor-injection P2-57 burn-down refresh
+- id: r132
+  kind: fetch
+  url: https://docs.spring.io/spring-framework/reference/core/beans/factory-scopes.html
+  curl_exit: 0
+  http_status: '200'
+  bytes: 38402
+  sha256: 418376ce0b8578fda9a590c9d54cbb0469953bbdc97e3e52a2493f7c09e1efce
+  fetched_at: '2026-08-01T02:24:26Z'
+  error: ''
+  note: practices::spring-beans-scopes P2-57 burn-down refresh
+- id: r133
+  kind: fetch
+  url: https://docs.spring.io/spring-boot/reference/actuator/endpoints.html
+  curl_exit: 0
+  http_status: '200'
+  bytes: 63541
+  sha256: 3b0a791845f2240466bbdb0cf7df5ecacbe8ea410bda5f4cd6f0a01de8783543
+  fetched_at: '2026-08-01T02:24:27Z'
+  error: ''
+  note: practices::spring-boot-actuator-endpoints P2-57 burn-down refresh
+- id: r134
+  kind: fetch
+  url: https://docs.spring.io/spring-boot/reference/io/caching.html
+  curl_exit: 0
+  http_status: '200'
+  bytes: 28067
+  sha256: 4f8e99ed7c2f49a40fd19ac56d36360d87897117247605c4562d2582f46ff340
+  fetched_at: '2026-08-01T02:24:27Z'
+  error: ''
+  note: practices::spring-boot-cache P2-57 burn-down refresh
+- id: r135
+  kind: fetch
+  url: https://docs.spring.io/spring-boot/reference/features/external-config.html
+  curl_exit: 0
+  http_status: '200'
+  bytes: 84295
+  sha256: 39133974fd00dce73dccd11551f36e5b7a79b4b6cf70da8465bc99abddaf9ca5
+  fetched_at: '2026-08-01T02:24:27Z'
+  error: ''
+  note: practices::spring-boot-external-config P2-57 burn-down refresh
+- id: r136
+  kind: fetch
+  url: https://docs.spring.io/spring-boot/reference/features/profiles.html
+  curl_exit: 0
+  http_status: '200'
+  bytes: 15799
+  sha256: 3e9cf0f50fa094aef0d4d2b3c761233d202a71d90714f81d30bbb8bf4374ba23
+  fetched_at: '2026-08-01T02:24:27Z'
+  error: ''
+  note: practices::spring-boot-profiles P2-57 burn-down refresh
+- id: r137
+  kind: fetch
+  url: https://docs.spring.io/spring-boot/how-to/data-initialization.html
+  curl_exit: 0
+  http_status: '200'
+  bytes: 23881
+  sha256: f25f4a058c17996baf2943fd510b4e0de04aedd9f6edfe04aa76565e310094b3
+  fetched_at: '2026-08-01T02:24:28Z'
+  error: ''
+  note: practices::spring-boot-sql-migration P2-57 burn-down refresh
+- id: r138
+  kind: fetch
+  url: https://docs.spring.io/spring-boot/reference/testing/spring-boot-applications.html
+  curl_exit: 0
+  http_status: '200'
+  bytes: 111390
+  sha256: 10eb14f448c56865fe479cceb9f1fce2b194639a4f27e97991554b75d95904da
+  fetched_at: '2026-08-01T02:24:28Z'
+  error: ''
+  note: practices::spring-boot-testing P2-57 burn-down refresh
+- id: r139
+  kind: fetch
+  url: https://docs.spring.io/spring-framework/reference/integration/cache/specific-config.html
+  curl_exit: 0
+  http_status: '200'
+  bytes: 13853
+  sha256: 93e01cf86c3b1ba6a520cefba40ac736f6f21ffac12477a427a73bd947252a5f
+  fetched_at: '2026-08-01T02:24:28Z'
+  error: ''
+  note: practices::spring-cache-2026-05 P2-57 burn-down refresh
+- id: r140
+  kind: fetch
+  url: https://docs.spring.io/spring-framework/reference/integration/cache/annotations.html
+  curl_exit: 0
+  http_status: '200'
+  bytes: 41533
+  sha256: 48f9e999100d19a6a409889f79b35854bedf9daedc993016d2262c596f637a2c
+  fetched_at: '2026-08-01T02:24:29Z'
+  error: ''
+  note: practices::spring-cache-abstraction P2-57 burn-down refresh
+- id: r141
+  kind: fetch
+  url: https://docs.spring.io/spring-data/commons/reference/repositories/core-concepts.html
+  curl_exit: 0
+  http_status: '200'
+  bytes: 7374
+  sha256: 9d80a4dfd6b2de1f9f59913dea22b143efec0d10b43d2c62bba6d3589d404711
+  fetched_at: '2026-08-01T02:24:29Z'
+  error: ''
+  note: practices::spring-data-paging P2-57 burn-down refresh
+- id: r142
+  kind: fetch
+  url: https://docs.spring.io/dependency-management-plugin/docs/current/reference/html/
+  curl_exit: 0
+  http_status: '200'
+  bytes: 25331
+  sha256: dc1f46ae20946974309fddb243572fc813374fba0bd9f892cab44382f4041bbf
+  fetched_at: '2026-08-01T02:24:29Z'
+  error: ''
+  note: practices::spring-dependency-management P2-57 burn-down refresh
+- id: r143
+  kind: fetch
+  url: https://docs.spring.io/spring-data/jpa/reference/jpa/query-methods.html
+  curl_exit: 0
+  http_status: '200'
+  bytes: 46163
+  sha256: 210c466da86be435ea43d1e17e506444cfcdaca5df0c907336349a028b99c447
+  fetched_at: '2026-08-01T02:24:29Z'
+  error: ''
+  note: practices::spring-jpa-fetching P2-57 burn-down refresh
+- id: r144
+  kind: fetch
+  url: https://docs.spring.io/spring-data/jpa/reference/jpa/locking.html
+  curl_exit: 0
+  http_status: '200'
+  bytes: 3797
+  sha256: c36e009605e7476af35e738bc4f96e5a18749df2d472f51763096390c275a2c5
+  fetched_at: '2026-08-01T02:24:30Z'
+  error: ''
+  note: practices::spring-jpa-locking P2-57 burn-down refresh
+- id: r145
+  kind: fetch
+  url: https://docs.spring.io/spring-framework/reference/web/webmvc/mvc-controller/ann-advice.html
+  curl_exit: 0
+  http_status: '200'
+  bytes: 15674
+  sha256: 3bddd78ea5996b0a567aad527f29a53cde8601d7cdd71eeebf1e64e0415c2c5d
+  fetched_at: '2026-08-01T02:24:30Z'
+  error: ''
+  note: practices::spring-mvc-controlleradvice P2-57 burn-down refresh
+- id: r146
+  kind: fetch
+  url: https://docs.spring.io/spring-framework/reference/web/webmvc/mvc-controller/ann-exceptionhandler.html
+  curl_exit: 0
+  http_status: '200'
+  bytes: 24471
+  sha256: 879be1a527c41a6308348663c46f24d90b7783483f8212f8217cc3f5a439d86d
+  fetched_at: '2026-08-01T02:24:30Z'
+  error: ''
+  note: practices::spring-mvc-exception-handler P2-57 burn-down refresh
+- id: r147
+  kind: fetch
+  url: https://docs.spring.io/spring-framework/reference/web/webmvc/mvc-controller/ann-methods/modelattrib-method-args.html
+  curl_exit: 0
+  http_status: '200'
+  bytes: 19991
+  sha256: 5335ee7a0e1cabd219ceae176da01bcb364cef729df4bcdab0e382a9bcf1ccdb
+  fetched_at: '2026-08-01T02:24:31Z'
+  error: ''
+  note: practices::spring-mvc-modelattribute P2-57 burn-down refresh
+- id: r148
+  kind: fetch
+  url: https://docs.spring.io/spring-framework/reference/web/webmvc/mvc-controller/ann-requestmapping.html
+  curl_exit: 0
+  http_status: '200'
+  bytes: 34267
+  sha256: b52299e5011c817bea260fb899bd4b91edd05507a75763f16231440d9d322b40
+  fetched_at: '2026-08-01T02:24:31Z'
+  error: ''
+  note: practices::spring-mvc-requestmapping P2-57 burn-down refresh
+- id: r149
+  kind: fetch
+  url: https://docs.spring.io/spring-framework/reference/web/webmvc/mvc-controller/ann-validation.html
+  curl_exit: 0
+  http_status: '200'
+  bytes: 17743
+  sha256: 5755b2f9c002a1edbee19df95691867a25c7d2d7bee7197e85a8e05ed7f06dba
+  fetched_at: '2026-08-01T02:24:31Z'
+  error: ''
+  note: practices::spring-mvc-validation P2-57 burn-down refresh
+- id: r150
+  kind: fetch
+  url: https://docs.spring.io/spring-framework/reference/integration/rest-clients.html
+  curl_exit: 0
+  http_status: '200'
+  bytes: 53397
+  sha256: 7a55ab496a5762d2c8e1889b0bdb07fc8e96888b280bd902229b4b2d1b091cb8
+  fetched_at: '2026-08-01T02:24:31Z'
+  error: ''
+  note: practices::spring-rest-clients P2-57 burn-down refresh
+- id: r151
+  kind: fetch
+  url: https://docs.spring.io/spring-framework/reference/integration/scheduling.html
+  curl_exit: 0
+  http_status: '200'
+  bytes: 56305
+  sha256: dc923a23e58043a4cef31a65e701f6d61af6904fbf00bf1926f69be163bba588
+  fetched_at: '2026-08-01T02:24:31Z'
+  error: ''
+  note: practices::spring-scheduling P2-57 burn-down refresh
+- id: r152
+  kind: fetch
+  url: https://docs.spring.io/spring-security/reference/servlet/exploits/csrf.html
+  curl_exit: 0
+  http_status: '200'
+  bytes: 44702
+  sha256: 11e45157cd541f7c319785ed3219266af22e10e09554157b1029ea739a3ee4b0
+  fetched_at: '2026-08-01T02:24:32Z'
+  error: ''
+  note: practices::spring-security-csrf P2-57 burn-down refresh
+- id: r153
+  kind: fetch
+  url: https://docs.spring.io/spring-security/reference/servlet/exploits/headers.html
+  curl_exit: 0
+  http_status: '200'
+  bytes: 25689
+  sha256: f1b0d6aa1f4466623ab55d22fc58f6d8183f86712d6ea03c2b35f2344863076e
+  fetched_at: '2026-08-01T02:24:32Z'
+  error: ''
+  note: practices::spring-security-headers P2-57 burn-down refresh
+- id: r154
+  kind: fetch
+  url: https://docs.spring.io/spring-security/reference/servlet/authentication/session-management.html
+  curl_exit: 0
+  http_status: '200'
+  bytes: 33311
+  sha256: 2b5ef29272c897c394fb7ce90bba183a07cf7523030358a7fb895e2597fbee68
+  fetched_at: '2026-08-01T02:24:32Z'
+  error: ''
+  note: practices::spring-security-stateless P2-57 burn-down refresh
+- id: r155
+  kind: fetch
+  url: https://docs.spring.io/spring-boot/reference/features/task-execution-and-scheduling.html
+  curl_exit: 0
+  http_status: '200'
+  bytes: 22509
+  sha256: 79556bb0c167bb1e9184f4d9dee26fe399bfd1402e7f6f4c7ae569bbecb150b7
+  fetched_at: '2026-08-01T02:24:32Z'
+  error: ''
+  note: practices::spring-task-execution P2-57 burn-down refresh
+- id: r156
+  kind: fetch
+  url: https://docs.spring.io/spring-framework/reference/data-access/transaction/declarative/annotations.html
+  curl_exit: 0
+  http_status: '200'
+  bytes: 34837
+  sha256: 4e62112f5c9cd2e999cf44f334c93f47df49a489ff09ac191d5fe610d573287b
+  fetched_at: '2026-08-01T02:24:33Z'
+  error: ''
+  note: practices::spring-tx-declarative P2-57 burn-down refresh
+- id: r157
+  kind: fetch
+  url: https://docs.tosspayments.com/guides/billing/overview
+  curl_exit: 0
+  http_status: '200'
+  bytes: 6860
+  sha256: 764f385148f9f047b818bf035eb736f62cf851fc75a45fd2684796443dcde71d
+  fetched_at: '2026-08-01T02:24:33Z'
+  error: ''
+  note: practices::toss-billing-2026-05 P2-57 burn-down refresh
+- id: r158
+  kind: fetch
+  url: https://www.w3.org/WAI/WCAG22/Understanding/status-messages.html
+  curl_exit: 0
+  http_status: '200'
+  bytes: 24507
+  sha256: 8050d5f51e46484b3040131daed6c7e29fb1761a0d98e1e3c4b591a407135bf8
+  fetched_at: '2026-08-01T02:24:33Z'
+  error: ''
+  note: practices::wcag-22-techniques-2026-05 P2-57 burn-down refresh
+- id: asm-toss-billing-2026-05-practices-react-20260801
+  kind: assembly
+  catalog: practices-react
+  snapshot_id: toss-billing-2026-05
+  body_bytes: 9009
+  body_sha256: bdedbcdd9929cbb2b89c6e91ab43734dd6c8717e089dc1c34bae58e9063df208
+  from_receipts:
+  - r110
+  fetched_at: '2026-08-01T02:23:41Z'
+- id: asm-archunit-userguide-practices-20260801
+  kind: assembly
+  catalog: practices
+  snapshot_id: archunit-userguide
+  body_bytes: 154247
+  body_sha256: 539c957afbba9387b0ebe938c30c2c28e926991f08c817c3e94023202151d3a6
+  from_receipts:
+  - r111
+  fetched_at: '2026-08-01T02:23:42Z'
+- id: asm-caffeine-2026-05-practices-20260801
+  kind: assembly
+  catalog: practices
+  snapshot_id: caffeine-2026-05
+  body_bytes: 20507
+  body_sha256: c93c5685f848fb90b2f4a7064c19dcb34b79fdad182552e40d56ff46b4168989
+  from_receipts:
+  - r112
+  fetched_at: '2026-08-01T02:23:42Z'
+- id: asm-cwe-915-practices-20260801
+  kind: assembly
+  catalog: practices
+  snapshot_id: cwe-915
+  body_bytes: 38893
+  body_sha256: 61981403a74f54eaa467c530da9e326a63abbd35b082a3af3f9ad4bac1b2f423
+  from_receipts:
+  - r113
+  fetched_at: '2026-08-01T02:23:44Z'
+- id: asm-google-aip-versioning-practices-20260801
+  kind: assembly
+  catalog: practices
+  snapshot_id: google-aip-versioning
+  body_bytes: 27612
+  body_sha256: 19e06a95c5f441dc83d713ca91c02c0fbce712effb202c2c11a1cba7705786fe
+  from_receipts:
+  - r114
+  fetched_at: '2026-08-01T02:23:44Z'
+- id: asm-gradle-toolchains-practices-20260801
+  kind: assembly
+  catalog: practices
+  snapshot_id: gradle-toolchains
+  body_bytes: 72599
+  body_sha256: 5624b74675cb72e706c6e3a3c2f1eb1f135a1e81c3ba12cbd861b1d86b976e94
+  from_receipts:
+  - r115
+  fetched_at: '2026-08-01T02:23:44Z'
+- id: asm-hibernate-validator-practices-20260801
+  kind: assembly
+  catalog: practices
+  snapshot_id: hibernate-validator
+  body_bytes: 622648
+  body_sha256: 419378e38277fadf7a2ef505e266ddfe3394eee2b29e6dfc68ba0aff1c555526
+  from_receipts:
+  - r116
+  fetched_at: '2026-08-01T02:23:46Z'
+- id: asm-jep-395-records-practices-20260801
+  kind: assembly
+  catalog: practices
+  snapshot_id: jep-395-records
+  body_bytes: 54680
+  body_sha256: 1a731da1d05af1d402b3deafaabd7df80e6161cfe8578f4b41822338fc5d4d4e
+  from_receipts:
+  - r118
+  fetched_at: '2026-08-01T02:23:56Z'
+- id: asm-jep-409-sealed-classes-practices-20260801
+  kind: assembly
+  catalog: practices
+  snapshot_id: jep-409-sealed-classes
+  body_bytes: 50551
+  body_sha256: 8010ca824d182183526b41601130a195b76bfccc427407ebd90596d06f0681e1
+  from_receipts:
+  - r119
+  fetched_at: '2026-08-01T02:24:05Z'
+- id: asm-jep-444-virtual-threads-practices-20260801
+  kind: assembly
+  catalog: practices
+  snapshot_id: jep-444-virtual-threads
+  body_bytes: 103224
+  body_sha256: a5e1761931107c1a0f5b84b1d1717f57cf833d1df0962cdee91ebc5c66496c35
+  from_receipts:
+  - r120
+  fetched_at: '2026-08-01T02:24:15Z'
+- id: asm-logback-layouts-practices-20260801
+  kind: assembly
+  catalog: practices
+  snapshot_id: logback-layouts
+  body_bytes: 122070
+  body_sha256: 1d135c25be81c122bfdb972a4589f1d1dadfd6bb1dd1e1aaf82a1bca50448844
+  from_receipts:
+  - r121
+  fetched_at: '2026-08-01T02:24:19Z'
+- id: asm-owasp-api-error-handling-practices-20260801
+  kind: assembly
+  catalog: practices
+  snapshot_id: owasp-api-error-handling
+  body_bytes: 13886
+  body_sha256: 686f0418d66a495ec8d6079228e7ab00d021f8c522bb89ce0d87d1f83aeefdb1
+  from_receipts:
+  - r122
+  fetched_at: '2026-08-01T02:24:20Z'
+- id: asm-owasp-logging-cheatsheet-practices-20260801
+  kind: assembly
+  catalog: practices
+  snapshot_id: owasp-logging-cheatsheet
+  body_bytes: 59359
+  body_sha256: 108236d9023c51aa2e9fe6beb60de099771d31cc4b2abe56a50ce51249120e57
+  from_receipts:
+  - r123
+  fetched_at: '2026-08-01T02:24:20Z'
+- id: asm-owasp-mass-assignment-practices-20260801
+  kind: assembly
+  catalog: practices
+  snapshot_id: owasp-mass-assignment
+  body_bytes: 16890
+  body_sha256: f0273df12eda011d667a9028a2bdfd820a49f8fb4e24b44291411857ff0dc020
+  from_receipts:
+  - r124
+  fetched_at: '2026-08-01T02:24:21Z'
+- id: asm-pci-dss-saq-a-practices-20260801
+  kind: assembly
+  catalog: practices
+  snapshot_id: pci-dss-saq-a
+  body_bytes: 12057
+  body_sha256: 4fb86510d4b7306f233c1c80803d5a1fce438af229fcabf6e7e29bd258075400
+  from_receipts:
+  - r125
+  fetched_at: '2026-08-01T02:24:22Z'
+- id: asm-rest-assured-usage-practices-20260801
+  kind: assembly
+  catalog: practices
+  snapshot_id: rest-assured-usage
+  body_bytes: 194888
+  body_sha256: d216fcaccdf7650e7911f2cb54547680ac8b47fa4f2fae1d7b9759c489aa4c89
+  from_receipts:
+  - r126
+  fetched_at: '2026-08-01T02:24:22Z'
+- id: asm-rfc-7807-practices-20260801
+  kind: assembly
+  catalog: practices
+  snapshot_id: rfc-7807
+  body_bytes: 58032
+  body_sha256: 1edbd377cbacaabe1101d40c7491e417515a3532090498c40dc6a2f718fb456e
+  from_receipts:
+  - r127
+  fetched_at: '2026-08-01T02:24:23Z'
+- id: asm-slf4j-mdc-practices-20260801
+  kind: assembly
+  catalog: practices
+  snapshot_id: slf4j-mdc
+  body_bytes: 45356
+  body_sha256: a4cb03c75006710566f967a8a488c82913a02d90c13ffded550746838d7b9e22
+  from_receipts:
+  - r128
+  fetched_at: '2026-08-01T02:24:25Z'
+- id: asm-spring-aop-proxying-practices-20260801
+  kind: assembly
+  catalog: practices
+  snapshot_id: spring-aop-proxying
+  body_bytes: 32880
+  body_sha256: 870141d2d98cec3d6aac46f2e9029ac6656222fecbf544afe0868b555cc85d45
+  from_receipts:
+  - r129
+  fetched_at: '2026-08-01T02:24:26Z'
+- id: asm-spring-application-events-practices-20260801
+  kind: assembly
+  catalog: practices
+  snapshot_id: spring-application-events
+  body_bytes: 84018
+  body_sha256: 438296871c5d0e0c005defe72e84bbdf110f678c4a19333237fb0119d5d6d811
+  from_receipts:
+  - r130
+  fetched_at: '2026-08-01T02:24:26Z'
+- id: asm-spring-beans-constructor-injection-practices-20260801
+  kind: assembly
+  catalog: practices
+  snapshot_id: spring-beans-constructor-injection
+  body_bytes: 51114
+  body_sha256: 3dc28709f8ec84009f7997b27175c1d191ec7fa5301cd56e7b6a4920b373735b
+  from_receipts:
+  - r131
+  fetched_at: '2026-08-01T02:24:26Z'
+- id: asm-spring-beans-scopes-practices-20260801
+  kind: assembly
+  catalog: practices
+  snapshot_id: spring-beans-scopes
+  body_bytes: 62387
+  body_sha256: 9a08eebd0ee5fad166eb34e375113bafac54488b159860a30f8cd84dd8a408b1
+  from_receipts:
+  - r132
+  fetched_at: '2026-08-01T02:24:26Z'
+- id: asm-spring-boot-actuator-endpoints-practices-20260801
+  kind: assembly
+  catalog: practices
+  snapshot_id: spring-boot-actuator-endpoints
+  body_bytes: 120066
+  body_sha256: eb3b9900670c7d4117afa51ffda34bbd35911610c31cbd3fe0840c2ec7516382
+  from_receipts:
+  - r133
+  fetched_at: '2026-08-01T02:24:27Z'
+- id: asm-spring-boot-cache-practices-20260801
+  kind: assembly
+  catalog: practices
+  snapshot_id: spring-boot-cache
+  body_bytes: 49001
+  body_sha256: 56710b5655127780d64b40deac067df8135321dba2ec5be85fa5fa3f9cde8864
+  from_receipts:
+  - r134
+  fetched_at: '2026-08-01T02:24:27Z'
+- id: asm-spring-boot-external-config-practices-20260801
+  kind: assembly
+  catalog: practices
+  snapshot_id: spring-boot-external-config
+  body_bytes: 161747
+  body_sha256: ba04fa16cb565b20e38fd2a1f06d100bff69eac48cb46f410d3ba1eebd156abf
+  from_receipts:
+  - r135
+  fetched_at: '2026-08-01T02:24:27Z'
+- id: asm-spring-boot-profiles-practices-20260801
+  kind: assembly
+  catalog: practices
+  snapshot_id: spring-boot-profiles
+  body_bytes: 24383
+  body_sha256: b47bf38e7499cc7a16d9b857e045219153b4830f82aa14a1eb6e0c2c729bef59
+  from_receipts:
+  - r136
+  fetched_at: '2026-08-01T02:24:27Z'
+- id: asm-spring-boot-sql-migration-practices-20260801
+  kind: assembly
+  catalog: practices
+  snapshot_id: spring-boot-sql-migration
+  body_bytes: 49358
+  body_sha256: f57a547f975631bbcc3a7ca76ea29ad2925956fd15be9895c9e2bbd3b04df80f
+  from_receipts:
+  - r137
+  fetched_at: '2026-08-01T02:24:28Z'
+- id: asm-spring-boot-testing-practices-20260801
+  kind: assembly
+  catalog: practices
+  snapshot_id: spring-boot-testing
+  body_bytes: 215914
+  body_sha256: efc628f22f49ce05a4178cc8f31ffa441c28f4eb723ccb12d72ffde31f405c12
+  from_receipts:
+  - r138
+  fetched_at: '2026-08-01T02:24:28Z'
+- id: asm-spring-cache-2026-05-practices-20260801
+  kind: assembly
+  catalog: practices
+  snapshot_id: spring-cache-2026-05
+  body_bytes: 29531
+  body_sha256: 70fe3a0210d61c0fbae32946741e17d9535f0a447b546ff028045ecec5854e8b
+  from_receipts:
+  - r139
+  fetched_at: '2026-08-01T02:24:28Z'
+- id: asm-spring-cache-abstraction-practices-20260801
+  kind: assembly
+  catalog: practices
+  snapshot_id: spring-cache-abstraction
+  body_bytes: 85060
+  body_sha256: 836db4ebe893182feb6fb32711a29134ea09e4189ca9a12807176e2f676b3c10
+  from_receipts:
+  - r140
+  fetched_at: '2026-08-01T02:24:29Z'
+- id: asm-spring-data-paging-practices-20260801
+  kind: assembly
+  catalog: practices
+  snapshot_id: spring-data-paging
+  body_bytes: 13428
+  body_sha256: 0a119494bc08cc16e1f619f60813e1d9b4465f1089b9eda55f5d06d45804deb6
+  from_receipts:
+  - r141
+  fetched_at: '2026-08-01T02:24:29Z'
+- id: asm-spring-dependency-management-practices-20260801
+  kind: assembly
+  catalog: practices
+  snapshot_id: spring-dependency-management
+  body_bytes: 51428
+  body_sha256: ce0d6e73e378c0260e5cc2adafe2b335a6b19d6d8be19066c816589fe941bc4b
+  from_receipts:
+  - r142
+  fetched_at: '2026-08-01T02:24:29Z'
+- id: asm-spring-jpa-fetching-practices-20260801
+  kind: assembly
+  catalog: practices
+  snapshot_id: spring-jpa-fetching
+  body_bytes: 90338
+  body_sha256: ddb0ce678687b53b04b63c023d3316883e2f57ac6cff3ffa68f84b8493826c29
+  from_receipts:
+  - r143
+  fetched_at: '2026-08-01T02:24:29Z'
+- id: asm-spring-jpa-locking-practices-20260801
+  kind: assembly
+  catalog: practices
+  snapshot_id: spring-jpa-locking
+  body_bytes: 8890
+  body_sha256: d555db976b7372d487ca6eb671abb061c05559076c9912fbd1c47e074e4333f9
+  from_receipts:
+  - r144
+  fetched_at: '2026-08-01T02:24:30Z'
+- id: asm-spring-mvc-controlleradvice-practices-20260801
+  kind: assembly
+  catalog: practices
+  snapshot_id: spring-mvc-controlleradvice
+  body_bytes: 20574
+  body_sha256: 617b77d5a9f8ee9dfebb0f348bf7340a72a2352770ad9f4b78c96fc5c4cb627f
+  from_receipts:
+  - r145
+  fetched_at: '2026-08-01T02:24:30Z'
+- id: asm-spring-mvc-exception-handler-practices-20260801
+  kind: assembly
+  catalog: practices
+  snapshot_id: spring-mvc-exception-handler
+  body_bytes: 38203
+  body_sha256: e117e971b8e94eb3e377ef18e83dc98761318b7c159df562141b7c341148021e
+  from_receipts:
+  - r146
+  fetched_at: '2026-08-01T02:24:30Z'
+- id: asm-spring-mvc-modelattribute-practices-20260801
+  kind: assembly
+  catalog: practices
+  snapshot_id: spring-mvc-modelattribute
+  body_bytes: 29249
+  body_sha256: abf75fd40c0c0d584d2f4b6b8492931ab205ad69b2410bfcc82f3ef5f918ba97
+  from_receipts:
+  - r147
+  fetched_at: '2026-08-01T02:24:31Z'
+- id: asm-spring-mvc-requestmapping-practices-20260801
+  kind: assembly
+  catalog: practices
+  snapshot_id: spring-mvc-requestmapping
+  body_bytes: 70601
+  body_sha256: 669c190a900f00ad4ba725162068009b475518c4a70805bca3054d34b26195be
+  from_receipts:
+  - r148
+  fetched_at: '2026-08-01T02:24:31Z'
+- id: asm-spring-mvc-validation-practices-20260801
+  kind: assembly
+  catalog: practices
+  snapshot_id: spring-mvc-validation
+  body_bytes: 24759
+  body_sha256: 3f8a0ceb3ae0a41dcd399c9029972df318fb723ddf2ea3275671ee9829f73b50
+  from_receipts:
+  - r149
+  fetched_at: '2026-08-01T02:24:31Z'
+- id: asm-spring-rest-clients-practices-20260801
+  kind: assembly
+  catalog: practices
+  snapshot_id: spring-rest-clients
+  body_bytes: 95810
+  body_sha256: 383291fc9473b93bd571eb6ae1ca57dc2bc89ce67c0119d5582acace7ec5936e
+  from_receipts:
+  - r150
+  fetched_at: '2026-08-01T02:24:31Z'
+- id: asm-spring-scheduling-practices-20260801
+  kind: assembly
+  catalog: practices
+  snapshot_id: spring-scheduling
+  body_bytes: 98326
+  body_sha256: cd52deacec5c152d3570d64903e12af1ced2828caf1d132e20e8d23d4038e784
+  from_receipts:
+  - r151
+  fetched_at: '2026-08-01T02:24:31Z'
+- id: asm-spring-security-csrf-practices-20260801
+  kind: assembly
+  catalog: practices
+  snapshot_id: spring-security-csrf
+  body_bytes: 91278
+  body_sha256: 43fc6a5a5d615f106756af2c451bde88d5a22df929ce4a6d70809d58c5c6c852
+  from_receipts:
+  - r152
+  fetched_at: '2026-08-01T02:24:32Z'
+- id: asm-spring-security-headers-practices-20260801
+  kind: assembly
+  catalog: practices
+  snapshot_id: spring-security-headers
+  body_bytes: 45105
+  body_sha256: 8b7f63385cccc8126fd93f6f2f9a3b329c867117873cfed2a9b8fcce7482dfc1
+  from_receipts:
+  - r153
+  fetched_at: '2026-08-01T02:24:32Z'
+- id: asm-spring-security-stateless-practices-20260801
+  kind: assembly
+  catalog: practices
+  snapshot_id: spring-security-stateless
+  body_bytes: 61397
+  body_sha256: 605edd5fc0db5623cd0a29b4152f40232a450ba652fa6be1952c7b6a13217caf
+  from_receipts:
+  - r154
+  fetched_at: '2026-08-01T02:24:32Z'
+- id: asm-spring-task-execution-practices-20260801
+  kind: assembly
+  catalog: practices
+  snapshot_id: spring-task-execution
+  body_bytes: 37922
+  body_sha256: 5580c33a6ccaf2d7b6b53db5b5cc49598634057ebac5d47ba4cc5a4f58c099e9
+  from_receipts:
+  - r155
+  fetched_at: '2026-08-01T02:24:32Z'
+- id: asm-spring-tx-declarative-practices-20260801
+  kind: assembly
+  catalog: practices
+  snapshot_id: spring-tx-declarative
+  body_bytes: 57381
+  body_sha256: faacc73bfdbec6b60c6ab512b8658072688d992f67a7b327ff62458cb9af4f0f
+  from_receipts:
+  - r156
+  fetched_at: '2026-08-01T02:24:33Z'
+- id: asm-toss-billing-2026-05-practices-20260801
+  kind: assembly
+  catalog: practices
+  snapshot_id: toss-billing-2026-05
+  body_bytes: 9009
+  body_sha256: 7f86fa55b64c58d841e38269b3c814577f1c2465bfdd3cd6224ed00c44cf268c
+  from_receipts:
+  - r157
+  fetched_at: '2026-08-01T02:24:33Z'
+- id: asm-wcag-22-techniques-2026-05-practices-20260801
+  kind: assembly
+  catalog: practices
+  snapshot_id: wcag-22-techniques-2026-05
+  body_bytes: 50393
+  body_sha256: e44f80a443119c4587681bdd1156581856303625cc7096b26f5a6ab3135209d1
+  from_receipts:
+  - r158
+  fetched_at: '2026-08-01T02:24:33Z'
