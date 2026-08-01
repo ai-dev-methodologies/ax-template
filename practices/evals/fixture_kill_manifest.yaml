@@ -37,7 +37,7 @@
 # distinct ids and distinct (guard, fixture) pairs are all equal to the value below.
 # fixture_kill_proof_guard.sh pins the same number as LIVE_MIN_ITEMS, so lowering the gate takes
 # two coordinated edits rather than one silent deletion.
-min_items: 71
+min_items: 72
 
 items:
 
@@ -1128,4 +1128,19 @@ items:
     fixture: practices/evals/fixtures/completion_checklist_recency/fail_git_context_redirected
     fixture_arg: '--root'
     anchor: 'inside_git and not live_git_root and not expected_head_file.is_file() and not expect_sha_arg'
+    neuter: 'False'
+
+  # [107] P3-137 — the cross-catalog upstream_id collision detector.
+  # subject: fail_same_id_two_sources is the wcag-22-techniques class in miniature — ONE id
+  #          registered in both catalogs against two different `source` URLs. The fixture must
+  #          exit 1 BECAUSE the guard compares the two sources, not because a small hand-written
+  #          manifest happens to upset some other check.
+  # anchor:  the source-comparison itself.
+  # neuter:  condition-constant False → every shared id is classed as agreeing, no collision is
+  #          ever reported → exit 0.
+  - id: cross_catalog_upstream_id_collision/fail_same_id_two_sources
+    guard: practices/evals/cross_catalog_upstream_id_collision_guard.sh
+    fixture: practices/evals/fixtures/cross-catalog-upstream-id/fail_same_id_two_sources
+    fixture_arg: '--root'
+    anchor: 'a != b'
     neuter: 'False'

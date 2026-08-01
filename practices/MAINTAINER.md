@@ -331,6 +331,41 @@ contract as any other rule.
 
 ---
 
+## 5d. Periodic jobs — nobody schedules these, you do (added 2026-08-01)
+
+Two checks in this repo are **invocable but unscheduled**. No hook, no CI workflow and no R25
+step calls them, so they run exactly as often as a maintainer runs them. The natural moment is
+**once before a release**, and that is the only cadence this section prescribes.
+
+| Job | Command | Cost | What it answers |
+|---|---|---|---|
+| upstream URL spot audit | `bash practices/scripts/external_url_spot_audit.sh` | network, minutes | do `source_type: external` citation URLs still resolve, and does the page still carry the id the citation claims? Three buckets: OK / SUSPICIOUS / UNREACHABLE. |
+| non-aliasing filesystem sweep | `bash practices/scripts/ax-case-sensitive-sweep.sh` | macOS only (`hdiutil`), ~16 min | does the guard suite still pass when the filesystem **does not fold case**? A committed path string can name a file by a spelling git never recorded, and the default case-insensitive APFS every macOS checkout lives on serves it anyway — the command runs, the tree is clean, R25 reports GREEN on evidence it never produced. |
+
+**What the sweep does NOT cover, and it prints this itself at the end of every run:** R25's
+gradle steps (no JDK is provisioned on the volume), R25's npm step (no `node_modules`), R25 as a
+whole, and **unicode normalization** — the volume `hdiutil` creates folds NFC/NFD, measured, so
+only the case half of the aliasing family is swept. Uncommitted work is also out of scope: the
+sweep clones a **committed revision**.
+
+Both jobs fail loudly rather than skipping: a missing `hdiutil`, a volume that turns out to
+alias, or a leaked attachment is a distinct non-zero exit with its reason printed.
+
+**Why this is a section and not a cron.** It is tempting to read ax-template's autonomy
+boundary — *"Fork받은 팀의 정책을 skill이 강제 ❌ … catalog 품질을 넘는 CI gate"* — as saying
+this project does not schedule things. It does not say that, and the repo does not behave that
+way: `.github/workflows/` carries three scheduled jobs today (`practices-drift` weekly,
+`practices-portability` weekly and advisory, `practices-chub-feedback` monthly) plus a
+push/PR-triggered `practices-sentinel`. The boundary is about **not imposing gates on
+fork-receivers**, not about refusing to schedule our own probes. So "nothing schedules the
+sweep" is a genuine remainder (BACKLOG P2-72), not a design decision — and the cheapest closure
+is not a macOS cron but a **Linux runner**, whose filesystem is case-sensitive *and*
+byte-preserving by default, i.e. gets both halves for free where `hdiutil` gets only one. That
+job has not been written, and the claim that the guard suite is clean on Linux has **not been
+measured** — every guard in this tree has only ever run on macOS.
+
+---
+
 ## 6. Anti-Pattern: Governance Loop
 
 > **Citation from `CLAUDE.md` — Anti-Patterns (거버넌스 무한루프 금지):**

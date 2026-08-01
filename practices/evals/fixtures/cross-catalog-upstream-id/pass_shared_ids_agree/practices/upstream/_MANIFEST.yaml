@@ -1,0 +1,7 @@
+# Fixture: the honest shape — one id shared by both catalogs against ONE source,
+# plus one id unique to each side. Nothing to report.
+snapshots:
+  - id: "shared-vendor-doc-2026-05"
+    source: "https://example.invalid/vendor/doc"
+  - id: "java-only-doc-2026-05"
+    source: "https://example.invalid/java/doc"

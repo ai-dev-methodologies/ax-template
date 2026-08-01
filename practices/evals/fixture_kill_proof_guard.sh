@@ -166,7 +166,7 @@ items = doc.get('items') or []
 # manifest_snapshot_integrity_guard (fail_diverged + fail_stale_allowlist), so the floor moves
 # to the new disk truth in the same commit — otherwise the two new proofs would be removable
 # without breaching the registry floor, which is exactly the shrink [87] exists to reject.
-LIVE_MIN_ITEMS = 71
+LIVE_MIN_ITEMS = 72
 
 structural = []
 

@@ -1,0 +1,8 @@
+# Fixture: byte-shape of pass_shared_ids_agree, except the shared id names a DIFFERENT page on
+# each side. This is the wcag-22-techniques class: templates resolve practices-FIRST, so the
+# truth of a citation against this id is decided by the resolution loop, not by the citation.
+snapshots:
+  - id: "shared-vendor-doc-2026-05"
+    source: "https://example.invalid/vendor/doc"
+  - id: "java-only-doc-2026-05"
+    source: "https://example.invalid/java/doc"

@@ -168,7 +168,7 @@ template**. 모든 layer에서 **규칙을 기계적으로 강제하는 선 순�
 
 ```
 fork ax-template
-    ↓ (25 L4 domains + 11 active recipes + 233 Java rules + 102 React rules + 15 ESLint rules + 106 hard guards + AGENTS.md sentinel)
+    ↓ (25 L4 domains + 11 active recipes + 233 Java rules + 102 React rules + 15 ESLint rules + 107 hard guards + AGENTS.md sentinel)
 새 도메인 추가 — METHODOLOGY.md의 5-step 따라
     ↓
 AI agent가 Spring + React 코드 작성
@@ -464,7 +464,7 @@ ax-template/
 ├── practices/                 # AI-targeted catalog (skill 핵심 자산)
 │   ├── rules/                 # 233룰, 22+ categories (R50/R58/R61 추가분 포함)
 │   ├── upstream/              # 외부 사실 snapshot
-│   ├── evals/                 # 4 hard gates + 106 hard guards
+│   ├── evals/                 # 4 hard gates + 107 hard guards
 │   ├── AGENTS.md              # AI agent 진입점 (sha sentinel)
 │   ├── SKILL.md               # practices 서브시스템 skill
 │   ├── MAINTAINER.md
@@ -532,13 +532,13 @@ fork-receiver의 활성화는 opt-in이다.
 | PreToolUse hook (Claude Code) | `.claude/settings.local.json` | Write/Edit이 `practices/rules/` 파일에 닿을 때 | session-bound advisory (commit 시 재검증 필요) | claude 세션 자동 |
 | `.githooks/pre-commit` | `.githooks/pre-commit` | `practices/` 또는 `practices-react/` 변경 포함 커밋 — **spec_ref · substance · evidence · time_decay** 4개 binary gate 실행 | **commit-blocking** (exit 1이면 커밋 불가) | **opt-in per clone**: `bash practices/scripts/install-hooks.sh` |
 | `.githooks/pre-push` (49th guard) | `.githooks/pre-push` | 커밋을 ship하는 모든 push 시 (delete-only push는 제외) — `completion_checklist_recency_guard.sh`가 HEAD에 대한 최신 R25 audit log 항목을 요구 | **push-blocking** (audit log 없으면 push 불가) | **opt-in per clone**: `bash practices/scripts/install-hooks.sh` |
-| `run-all-guards.sh` (95 live guards) | `practices/evals/run-all-guards.sh` | R25 완료 선언 시 수동 호출 (verify-completion.sh 내부에서 실행) | **manual / R25 run** — 자동 트리거 없음 | 항상 사용 가능, 자동 실행 아님 |
+| `run-all-guards.sh` (102 live guards) | `practices/evals/run-all-guards.sh` | R25 완료 선언 시 수동 호출 (verify-completion.sh 내부에서 실행) | **manual / R25 run** — 자동 트리거 없음 | 항상 사용 가능, 자동 실행 아님 |
 | `per-domain ./gradlew test{Domain}` | `backend/build.gradle.kts` | 수동 또는 fork-receiver CI에서 호출 | **manual / CI** — 자동 트리거 없음 | 항상 사용 가능; CI 통합은 fork-receiver 자율 |
 | `ax-case-sensitive-sweep.sh` (P2-72 standing job) | `practices/scripts/ax-case-sensitive-sweep.sh` | 사람이 주기적으로 호출 (릴리스 전 1회 권장) — 대소문자-**민감** APFS 볼륨을 만들어 HEAD를 클론하고 그 위에서 `run-all-guards.sh --include-fixtures`를 돌린다 | **periodic / manual** — 자동 트리거 없음, merge gate 아님 | 항상 사용 가능(macOS `hdiutil` 필요; 없으면 **소리내어 실패**하고 skip하지 않는다) |
 
 ### 핵심 설명
 
-- **가드 파일(`*_guard.sh`)은 105개다** (practices/evals 103 + practices-react/evals 2 — `doc_headline_count_guard`가 이 수를 헤드라인과 대조해 강제; 정확한 수는 항상 `ls practices/evals/*_guard.sh practices-react/evals/*_guard.sh | wc -l`의 disk truth를 따른다). `run-all-guards.sh`는 R25 완료 선언 시 수동 호출된다(커밋마다 자동 실행되지 않는다). 일부 가드는 추가 진입점을 갖는다 — pre-commit 4 hard gates(`spec_ref`·`substance`·`evidence`·`time_decay`)는 practices/ 변경 커밋에서, `completion_checklist_recency`는 pre-push에서 돈다.
+- **가드 파일(`*_guard.sh`)은 107개다** (practices/evals 105 + practices-react/evals 2 — `doc_headline_count_guard`가 이 수를 헤드라인과 대조해 강제; 정확한 수는 항상 `ls practices/evals/*_guard.sh practices-react/evals/*_guard.sh | wc -l`의 disk truth를 따른다). `run-all-guards.sh`는 R25 완료 선언 시 수동 호출된다(커밋마다 자동 실행되지 않는다). 일부 가드는 추가 진입점을 갖는다 — pre-commit 4 hard gates(`spec_ref`·`substance`·`evidence`·`time_decay`)는 practices/ 변경 커밋에서, `completion_checklist_recency`는 pre-push에서 돈다.
   R25 완료 선언 전에 `verify-completion.sh`를 실행하면 이 guard들이 모두 돌아간다.
 - **pre-commit / pre-push hook은 opt-in이다.** `install-hooks.sh`를 실행한 클론에서만 활성화된다.
   ax-template 자체 HEAD에서는 활성화되어 있다; fork-receiver가 활성화 여부를 결정한다.
@@ -557,6 +557,13 @@ fork-receiver의 활성화는 opt-in이다.
   **커버 안 하는 것을 스스로 출력한다**: gradle 스텝(JDK 미프로비저닝) · npm 스텝(node_modules 미프로비저닝) ·
   R25 전체 · 유니코드 정규화(이 볼륨은 NFC/NFD를 접는다 — 측정됨). 볼륨은 EXIT trap에서 detach되고
   `hdiutil info`로 잔류 없음을 **검증**한다(잔류 시 exit 5). **아무도 스케줄하지 않는다** — 호출은 사람 몫이다.
+  호출 시점(릴리스 전 1회)과 함께 도는 다른 주기 작업은 **`practices/MAINTAINER.md` §5d**에 정리돼 있다.
+  그 절은 "우리는 스케줄을 안 한다"가 **repo의 사실이 아님**도 기록한다 — `.github/workflows/`에 크론 3개
+  (`practices-drift` 주간 · `practices-portability` 주간 advisory · `practices-chub-feedback` 월간)가 이미 돈다.
+  자율성 경계는 **fork-receiver에게 게이트를 강제하지 않는다**는 뜻이지 우리 프로브를 스케줄하지 않는다는
+  뜻이 아니므로, P2-72는 설계 경계가 아니라 **열린 잔여**다. 가장 싼 처방은 macOS 크론이 아니라 **Linux
+  러너**다(대소문자-민감 + 바이트 보존 = 두 반쪽을 동시에 얻는다). 단 이 트리의 가드는 **macOS에서만
+  실행된 적이 있고**, Linux 청결성은 **측정된 바 없다**.
 
 ### Surface별 binary 테스트 커버리지 (P2-3)
 

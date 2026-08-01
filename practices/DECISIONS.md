@@ -3226,3 +3226,100 @@ enforcement-surface table as periodic/manual, and proven to run — but no hook,
 R25 step calls it, and its coverage statement excludes the gradle and npm steps (no JDK or
 node_modules is provisioned on the volume) and unicode normalization (the volume folds
 NFC/NFD — measured, printed, not papered over).
+
+## TD-2026-08-01-Lane-H — P3-137 cross-catalog id collision (guard shipped, rename refused) + P2-72 boundary argument tested and REJECTED
+
+- Status: ACCEPT (P3-137 closed) / P2-72 stays OPEN
+- Date: 2026-08-01
+- Maintainer: Lane H (backlog-closure wave, branch ax-template-final)
+- Evidence: the throwaway-clone measurements and guard exits recorded below; the new guard
+  [107] and its four fixtures; `.github/workflows/` as committed
+- Re-evaluation trigger: any change to `resolve_snapshot_any_catalog`'s catalog order; any
+  sanctioned retirement path for an id whose receipt would otherwise orphan; a Linux CI job
+  that actually runs the guard suite
+
+### P2-72 — the boundary argument was tested and it does not hold
+
+The judgement offered for closing P2-72 as a design boundary was: ax-template ships probes,
+not schedules; scheduling is fork-receiver autonomy; therefore "nothing schedules it" is the
+correct end state. What the repo actually says is narrower. CLAUDE.md: *"Fork받은 팀의 정책을
+skill이 강제 ❌ … Git branch / PR / merge 정책 … catalog 품질을 넘는 CI gate"*, and
+*"sentinel CI는 catalog quality probe로만 제공. merge gate 여부는 fork받는 팀이 결정"*. That is
+a rule about **not imposing gates on fork-receivers**. It says nothing about ax-template
+scheduling its own probes — and the repo demonstrably does, four times:
+
+| workflow | trigger | posture |
+|---|---|---|
+| `practices-drift.yml` | `cron: "0 6 * * 1"` weekly | opens a PR when a snapshot is > 30 days old |
+| `practices-portability.yml` | `cron: "0 7 * * 1"` weekly | `continue-on-error: true` — advisory, never blocks |
+| `practices-chub-feedback.yml` | `cron: "0 7 1 * *"` monthly | ecosystem probe |
+| `practices-sentinel.yml` | push/PR | *"Any guard failing → CI red, blocking merge"* |
+
+`practices-portability.yml` is precisely the shape P2-72 needs — a weekly advisory cron on
+`ubuntu-latest` — so the objection "we do not schedule things" is not available. **P2-72 stays
+OPEN**, and the honest closure is cheaper than the row assumed: a Linux runner's filesystem is
+case-sensitive AND byte-preserving, i.e. it covers BOTH the case half and the normalization
+half that `hdiutil`'s volume cannot (that volume folds NFC/NFD — measured by Lane G, printed by
+the script on every run). What is **not** measured: whether the 107-guard suite is clean on
+Linux. Every guard in this tree has only ever executed on macOS, and at least four scripts
+carry `stat -f` (BSD spelling). An attempt to measure it here failed for environmental reasons
+— Docker on this machine did not return output from a trivial `ubuntu:24.04` probe within
+repeated 2-minute windows — so shipping a workflow on the strength of an unmeasured premise was
+refused rather than guessed at. The invocation point is now documented where a maintainer will
+find it: `practices/MAINTAINER.md` §5d ("Periodic jobs — nobody schedules these, you do"),
+which lists both unscheduled jobs, their cost, what the sweep does NOT cover, and the fact
+above that this repo does schedule its own probes.
+
+### P3-137 — the rename is refused on BOTH sides, measured first-hand
+
+Prescription (1) was to rename the misnamed id. It cannot be done, and the refusal is a
+property of the provenance system rather than an accident. In throwaway clones of cf42258, with
+nothing edited but the snapshot filename and the manifest `id`:
+
+| edit | result |
+|---|---|
+| react side: `git mv …/wcag-22-techniques-2026-05.snapshot.md → …-index-…` + manifest id | `manifest_snapshot_integrity_guard` **exit 2 `RECEIPT_ORPHANED`** — "has an assembly receipt but no `wcag-22-techniques-2026-05.snapshot.md` on disk" |
+| practices side: same edit to `wcag-22-understanding-status-messages-2026-05` | **exit 2 `RECEIPT_ORPHANED`** *and* `evidence_quote_spotcheck --templates-only-protected` **exit 1**, `66 file(s), 70 anchor(s), 4 finding(s)` — the two pinned template anchors stop resolving |
+| (Lane G, prior) count-preserving RESPELL of a pinned identity | exit 5 `PROTECTED_IDENTITY_REMOVED` — "the pin set may only GROW" |
+
+`_FETCH-RECEIPTS.yaml` is append-only and binds an id to the bytes a fetch produced, so an id is
+**part of a provenance record, not a label**. Re-spelling it is the "manufacture a provenance
+claim" move the receipts chain exists to prevent; deleting the react-side registration orphans
+its receipt for the same reason; and the guard offers no sanctioned retirement path (searched:
+no tombstone/supersede branch exists). The practices-side id is additionally pinned by the
+protected-anchor ledger, so it is refused twice over. **Nothing was renamed. The naming
+mismatch — an id called "techniques" whose practices-side body is the SC 4.1.3 Understanding
+page — is permanent under current mechanics, and saying so is more useful than a rename that
+would have to fabricate a fetch.**
+
+### P3-137 — what did ship: guard [107], and why "same source" rather than "no sharing"
+
+`cross_catalog_upstream_id_collision_guard.sh` forbids one `upstream_id` registered in both
+catalogs against two different `source` URLs. Live census, measured at introduction: 61
+practices ids × 42 practices-react ids share exactly **4** — `next-themes-2026-05`,
+`stripe-billing-2026-05`, `toss-billing-2026-05` carry an **identical** source on both sides
+(one upstream fact legitimately cited by both catalogs), and only `wcag-22-techniques-2026-05`
+names two pages. Forbidding shared ids outright would therefore block three honest ids to catch
+one dishonest one; the defect is not name reuse but a name **meaning two things**.
+
+The one live collision is GRANDFATHERED in a frozen frozenset literal in the guard — because it
+provably cannot be dissolved (above), and a guard that ships red is a guard that gets ignored.
+Two properties stop the exception becoming padding: NON-REDUNDANCY fails a grandfathered id
+that is registered on both sides and now AGREES (any root), and additionally one that is not
+shared at all any more (live root only — a fixture root has no reason to carry this repo's ids,
+and requiring it would make the exception's own test untestable; this branch split was forced by
+the fixtures, which caught the first formulation firing on every unrelated root). The guard also
+blocks `SHARED_SNAPSHOT_UNREGISTERED` — a body present in both `upstream/` dirs while one
+manifest never registered it — because resolution is by FILE and "the sources cannot be compared
+at all" is worse than "they disagree". Non-vacuity: `LIVE_MIN_SHARED = 4` on a live root (exit 2),
+so a collapsed census cannot report a green "no collisions" about an empty set.
+
+Fixtures: `pass_shared_ids_agree` 0 · `fail_same_id_two_sources` 1 · `fail_stale_grandfather` 1 ·
+`fail_shared_body_unregistered` 1. The collision fixture is registered with [87]
+`fixture_kill_proof` (`anchor: 'a != b'` → `neuter: 'False'`), floors ratcheted **71 → 72** in
+both halves (`fixture_kill_manifest.yaml: min_items` and the guard-pinned `LIVE_MIN_ITEMS`).
+Headline reconciliation: guard files 106 → 107 on disk, bumped in README ×3, CLAUDE.md ×2,
+`skills/ax-transform/SKILL.md` ×2 (`doc_headline_count_guard` PASS: 233 Java · 102 React · 15
+ESLint · 25 L4 · 107 guards). Two unguarded CLAUDE.md prose counts that had already rotted were
+corrected in the same pass: `*_guard.sh` 105 → 107 (practices/evals 103 → 105) and the
+enforcement table's "95 live guards" → 102 (`run_guard "*/live"` census).

@@ -1,0 +1,8 @@
+# Fixture: a body exists under one id in BOTH catalogs, but the react manifest never registered
+# it. Resolution is by FILE, so this id resolves — while the sources cannot be compared at all.
+# Unverifiable is worse than disagreeing, not better.
+snapshots:
+  - id: "orphan-body-2026-05"
+    source: "https://example.invalid/vendor/doc"
+  - id: "java-only-doc-2026-05"
+    source: "https://example.invalid/java/doc"

@@ -1,0 +1,5 @@
+snapshots:
+  - id: "wcag-22-techniques-2026-05"
+    source: "https://example.invalid/wcag/one-page"
+  - id: "react-only-doc-2026-05"
+    source: "https://example.invalid/react/doc"

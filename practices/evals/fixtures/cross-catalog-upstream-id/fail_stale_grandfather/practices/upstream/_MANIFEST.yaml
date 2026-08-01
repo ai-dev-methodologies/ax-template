@@ -1,0 +1,8 @@
+# Fixture: the grandfathered id is present in BOTH catalogs against the SAME source — i.e. the
+# collision the exception exists for is GONE. The exception must then be removed, or it becomes
+# padding that would silently absorb a future collision under the same id.
+snapshots:
+  - id: "wcag-22-techniques-2026-05"
+    source: "https://example.invalid/wcag/one-page"
+  - id: "java-only-doc-2026-05"
+    source: "https://example.invalid/java/doc"
