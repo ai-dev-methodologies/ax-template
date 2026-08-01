@@ -644,6 +644,29 @@ r97–r115 e-commerce/generic 시리즈 ×7씩(일부 6) = 124 · email-outbox 6
 approval-workflow 5 · activity-feed 4 · favorites-bookmarks 4 · meta-catalog 1 외 —
 상세 전문은 `docs/dogfood-ledger/*.yaml` (HIGH 45 / MEDIUM 다수 / LOW 일부).
 
+## D — Claude Code plugin 소비 채널 (수렴 분모 제외; D-track)
+
+fork하지 않는 기존 프로젝트가 ax-template 카탈로그를 Claude Code plugin으로 소비할 수 있게 하는
+별도 트랙. composition-kit 정체성(fork-base)을 바꾸지 않는 **소비 경로 추가**이며, P0–P3 수렴률
+(북극성 2)의 분모에서 제외한다. 상세 근거는 `practices/DECISIONS.md` R109.
+
+- [ ] D-1 — ESLint 레이아웃 변수화 + ax.config. done-when: 기존 테스트 무수정 전건 green ·
+  커스텀 레이아웃 신규 테스트 3종(invalid 검출 / valid 무위반 / malformed 폴백) green ·
+  `cd frontend && npm run lint` exit 0 · `npm pack --dry-run` tarball 목록에
+  `lib/feature-layout.js` + `schemas/ax.config.schema.json` 둘 다 포함.
+- [ ] D-2 — 룰 인덱스 생성기 + 진입 스킬 2종. done-when: 생성기 2회 연속 실행 diff 0 ·
+  `evidence_guard`/`substance_guard`/`spec_ref_guard`/`doc_headline_count_guard` 전부 exit 0 ·
+  `skills/ax-practices/SKILL.md` + `skills/ax-init-config/SKILL.md` 존재 ·
+  양쪽 `generate_agents.sh` diff 0(배선 없음) + 수동 재생성 스텝이 `practices/MAINTAINER.md`에
+  문서화됨.
+- [ ] D-3 — 설치 가이드 서브스킬 3종. done-when: 3개 SKILL.md 존재 · 각각 비공허 검증 절차
+  (probe→검출→삭제) 내장 · react 스킬이 `files` 글롭 파라미터화 스니펫 제공 · hooks 스킬이
+  `.githooks/` 복사 금지 경고 포함.
+- [ ] D-4 — marketplace.json + 파생블록 provenance 대장·guard. done-when:
+  `.claude-plugin/marketplace.json` 존재 · `templates/DERIVED-SOURCES.yaml`이
+  `grep -rln "@ax-codified-from" templates/` 전건 등재 · `derived_block_license_guard.sh` +
+  fail/pass fixture 쌍 · `run-all-guards.sh` 등록 · `doc_headline_count_guard` exit 0.
+
 ## 운영 규약
 
 1. **등재**: 새 발견은 분류(P0–P4) + 출처(ledger 경로 또는 세션) + 한 줄 정의로 등재.

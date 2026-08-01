@@ -3548,3 +3548,57 @@ audited — other GNU/BSD divergences (`sed -i`, `date -r`, `readlink -f`, `base
 instrument that finds them empirically and a hand-audit would only anticipate a subset;
 (iv) the probe measures case and NFC/NFD only — other aliasing families (e.g. filesystems that
 strip trailing dots or fold width) are not probed and would not be detected.
+
+## R109 — Claude Code plugin 소비 채널 (D-track): 스킬은 안내, 강제는 설치
+- Status: PROPOSED
+- Date: 2026-08-01
+- Drivers: ax-template은 fork-as-base 모델이라 신규 프로젝트가 참조 워크로드와 `com.ax.template`
+  패키지를 통째로 상속해야 하고, 다른 레이아웃의 기존 프로젝트에는 적용 경로가 0이다. Java 룰의
+  다수가 `verification.type: review`라 "지식"으로 이식 가능함이 확인되어, 카탈로그를 임의
+  프로젝트에 적용하는 소비 채널이 성립한다 (vercel:react-best-practices 형태).
+- Alternatives considered:
+  - 스킬이 강제까지 나른다 — rejected. `practices/evals/*_guard.sh`는 REPO_ROOT를 스크립트
+    자기 위치(`SCRIPT_DIR/../..`) 기준으로 해석하므로 스킬 위치에서 실행하면 ax-template 자신을
+    검사하거나 vacuous pass한다. git hook·gradle test·CI는 대상 프로젝트에 설치돼야만 작동한다.
+    따라서 아키텍처를 "스킬=안내·라우팅 / 강제=온디맨드 설치 가이드"로 분리한다.
+  - 별도 dist 레포 신설 — rejected (maintainer 결정). 본 레포에 `.claude-plugin/marketplace.json`을
+    병설해 레포 자체가 marketplace가 된다. 카탈로그와 배포물의 드리프트 표면을 만들지 않는다.
+  - ESLint 플러그인 npm publish — 보류 (maintainer 결정). `file:` 설치가 공식 경로다. 다만
+    패키지 온전성을 위해 `package.json`의 `files`에 `lib/`·`schemas/`를 추가했다 —
+    `lib/feature-layout.js`는 5개 룰이 import하는데 tarball에서 누락돼 있었다.
+  - 21st.dev 파생 블록을 배포 패키지에서 제외 — rejected (maintainer 결정). 내부 사용 전제로
+    포함하되 `templates/DERIVED-SOURCES.yaml` provenance 대장 + `derived_block_license_guard`로
+    등재 누락을 기계 차단한다.
+  - 레이어 개수/이름 자체를 커스터마이즈 — rejected (비범위). `LAYER_RANK`는 3계층 단방향
+    순서 자체가 불변식이다. 변수화하는 것은 각 레이어의 **디렉터리명**뿐이다.
+- Why chosen: R53의 "Lift to a published npm package — rejected, fork-receivers fork source,
+  not consume packages"는 *fork가 직접 편집하는 L0 소스 헬퍼*의 스코프 결정이다. 스킬과
+  lint-plugin은 *as-is로 소비되는 도구*라 범주가 다르며, R53과 충돌하지 않는다. D-track은
+  composition-kit 정체성을 바꾸지 않는 **소비 경로 추가**다 — fork 경로는 그대로 1급이고,
+  D-track은 fork하지 않는 프로젝트를 위한 두 번째 문이다.
+- Consequences: `feature-layout.js`가 `DEFAULT_LAYOUT` + `layoutFrom(settings)`로 레이아웃을
+  변수화하고, 5개 룰이 flat-config 공유 `settings.ax` 채널로 이를 받는다(룰 `schema` 불변).
+  카탈로그 루트에 결정론적 `INDEX.md`가 생성된다(rules/ 안이 아니라 — 4개 hard gate가
+  `{catalog}/rules/*.md`를 스캔하므로). 스킬 5종이 추가된다(ax-practices / ax-init-config /
+  ax-install-{react,java}-enforcement / ax-install-hooks). hard guard가 107→108이 되어
+  `[0-9]+ hard guards` 문자열 7곳이 동기화된다(그중 4곳만 doc_headline_count_guard가 BLOCK하고
+  나머지 3곳은 같은 사실의 P3 doc-drift). D-track 백로그는 `## D` 섹션에 두어 P0–P3 수렴
+  분모(북극성 2)를 오염시키지 않는다.
+  **INDEX.md 재생성은 자동 배선하지 않고 문서화된 수동 스텝으로 남긴다** —
+  `agents_md_toc_disk_truth_guard.sh`와 `practices_react_sentinel_disk_truth_guard.sh`가
+  guard 실행 중 `generate_agents.sh`를 재실행하므로, 거기에 인덱스 생성을 배선하면 (a) 모든
+  R25/guard-suite 실행이 워킹 트리를 변형하고(두 guard는 AGENTS.md만 복원한다) (b) 인덱스
+  생성기의 parse-fail이 무관한 guard 2개를 경유해 R25 전체를 깨는 전이 결합이 생긴다.
+  **대가는 INDEX staleness이며 이를 P3 doc-drift 계열로 명시적으로 수용한다** — 게이트가 자기
+  실행으로 트리를 오염시키는 것보다 엄격히 싸다. staleness 감시용 새 guard는 만들지 않는다
+  (그 guard 역시 재생성·diff가 필요해 같은 커플링을 다른 이름으로 재도입한다).
+  ESLint 플러그인 `package.json`의 `files`에 `lib/`·`schemas/`가 추가된다 — `file:` 설치는
+  심링크라 이 결함을 감지하지 못하므로 `npm pack` 파일 목록 단언이 검증 절차에 포함된다.
+- Follow-ups: npm publish는 보류 상태로 남는다 — 재검토 트리거는 `file:` 설치가 실제
+  fork-receiver에게 마찰을 일으켰다는 관측이다. 레이어 개수/이름 커스터마이즈는 비범위로
+  남는다. 설치 스킬의 java 측은 review-type 룰을 기계 게이트로 옮기지 않는다(구조적 한계).
+  **V1(외부 비공허성 증명) 재검증 트리거**: ESLint **메이저 버전 범프**(플랫 config·`context.settings`
+  전달 의미가 바뀔 수 있음) 또는 **Claude Code plugin/marketplace 스키마 변경**(`${CLAUDE_PLUGIN_ROOT}`
+  해석·스킬 탐지 방식이 바뀔 수 있음) 시 §6 V1 절차를 **대조군 포함 전체** 재실행한다 — 두 경우
+  모두 설치 경로가 조용히 0위반으로 퇴화할 수 있는 표면이고, 그 퇴화는 정의상 침묵한다.
+- Commits: <pending — D-5 finalization에서 실제 sha로 채움>
