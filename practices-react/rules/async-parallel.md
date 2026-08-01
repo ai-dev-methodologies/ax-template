@@ -75,9 +75,12 @@ evidence:
   - upstream_id: nextjs-fetching-data
     section: "Parallel data fetching — Good to know"
     quote: "If one request fails when using `Promise.all`, the entire operation will fail. To handle this, you can use the `Promise.allSettled` method instead."
+  # Re-anchored 2026-08-01 (BACKLOG P2-73): react.dev/reference/react/use was rewritten and
+  # no longer contains the previous sentence. Quote below is copied verbatim from the
+  # 2026-08-01 extractor output appended to the snapshot.
   - upstream_id: react-19-use
     section: "Server Component data fetching"
-    quote: "Prefer creating Promises in Server Components and passing them to Client Components over creating Promises in Client Components."
+    quote: "Ideally, Promises are created before rendering, such as in an event handler, a route loader, or a Server Component, and passed to the component that calls use"
   - upstream_id: mdn-promise-all
     section: "Description"
     quote: "It rejects when any of the input's promises rejects, with this first rejection reason."

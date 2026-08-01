@@ -44,9 +44,12 @@ upstream:
     url: "https://nextjs.org/docs/app/getting-started/fetching-data"
     role: canonical-nextjs
 evidence:
+  # Re-anchored 2026-08-01 (BACKLOG P2-73): the previous quote was a colon-lead-in digest
+  # sentence, not page prose. Quote below is copied verbatim from the 2026-08-01 extractor
+  # output appended to the snapshot.
   - upstream_id: nextjs-fetching-data
     section: "Next.js 16-specific: async params"
-    quote: "this is a separate sequential await that can be parallelized with other independent work."
+    quote: "However, within any component, multiple async / await requests can still be sequential if placed after the other."
   - upstream_id: nextjs-fetching-data
     section: "Parallel data fetching"
     quote: "Start multiple requests by calling `fetch`, then await them with `Promise.all`. Requests begin as soon as `fetch` is called."

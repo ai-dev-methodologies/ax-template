@@ -46,9 +46,12 @@ evidence:
   - upstream_id: vercel-react-best-practices
     section: "server-cache-lru"
     quote: "`React.cache()` only works within one request."
+  # Re-anchored 2026-08-01 (BACKLOG P2-73): the previous quote was a colon-terminated
+  # lead-in someone wrote to introduce a code block, not page prose. Quote below is copied
+  # verbatim from the 2026-08-01 extractor output appended to the snapshot.
   - upstream_id: nextjs-use-cache-directive
     section: "Runtime caching considerations"
-    quote: "For durable shared caching across instances/requests:"
+    quote: "If the default in-memory cache isn't enough, consider use cache: remote which allows platforms to provide a dedicated cache handler (like Redis or KV database)."
 codex_consensus:
   reviewer: "codex-cli 0.130.0, model_reasoning_effort=medium"
   reviewed_at: "2026-05-16"

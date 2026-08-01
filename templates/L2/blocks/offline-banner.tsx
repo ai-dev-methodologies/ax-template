@@ -4,18 +4,26 @@ template_id: L2/blocks/offline-banner
 layer: L2
 provenance_class: external_canonical
 evidence:
+  # All three anchors re-anchored 2026-08-01 (BACKLOG P2-73). The first sentence was
+  # rewritten upstream; the second was a colon-terminated lead-in someone wrote to introduce
+  # a code block; the third was authored advice that MDN does not give (the page says
+  # nothing about visibilitychange). PROTECTED LEDGER IDENTITY — re-anchored, not deleted.
+  # Quotes below are copied verbatim from the 2026-08-01 extractor output appended to the
+  # snapshot. The visibilitychange recheck this component performs is therefore an
+  # ax-template design decision; what MDN does support is that the property is unreliable
+  # and should only produce hints — which is what the third quote now says.
   - source_type: upstream_id
     upstream_id: mdn-navigator-online-2026-05
     section: "navigator.onLine"
-    quote: "Navigator.onLine returns the online status of the browser. The property returns a boolean value, with true meaning online and false meaning offline."
+    quote: "The onLine property of the Navigator interface returns whether the device is connected to the network, with true meaning online and false meaning offline."
   - source_type: upstream_id
     upstream_id: mdn-navigator-online-2026-05
     section: "online / offline events"
-    quote: "Listen for network state changes via `window` events:"
+    quote: "To see changes in the network state, use addEventListener to listen for the events on window.online and window.offline , as in the following example:"
   - source_type: upstream_id
     upstream_id: mdn-navigator-online-2026-05
     section: "visibilitychange pattern"
-    quote: "Recheck `navigator.onLine` when the document becomes visible again to catch transitions that occurred while the tab was in the background"
+    quote: "Therefore, this property is inherently unreliable, and you should not disable features based on the online status, only provide hints when the user may seem offline."
 dependencies: []
 imports_from: [L1]
 imports_forbidden: [L4, app/, lib/auth/, lib/payment/]

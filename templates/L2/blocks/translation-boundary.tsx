@@ -4,14 +4,19 @@ template_id: L2/blocks/translation-boundary
 layer: L2
 provenance_class: internal_design
 evidence:
+  # Both anchors re-anchored 2026-08-01 (BACKLOG P2-73). The next-intl quote was an authored
+  # positioning claim ("the canonical i18n library") that no next-intl page makes about
+  # itself; the react.dev quote no longer exists on the rewritten Component page. Both are
+  # PROTECTED LEDGER IDENTITIES — re-anchored, not deleted. Quotes below are copied verbatim
+  # from the 2026-08-01 extractor output appended to each snapshot.
   - source_type: upstream_id
     upstream_id: next-intl-2026-05
     section: "Overview"
-    quote: "next-intl is the canonical i18n library for Next.js App Router"
+    quote: "next-intl provides the essential foundation for internationalization in Next.js apps."
   - source_type: upstream_id
     upstream_id: react-19-error-boundary
     section: "Required lifecycle methods"
-    quote: "Error boundaries are React class components that let you display some fallback UI instead of the component tree that crashed."
+    quote: "An Error Boundary is a special component that lets you display some fallback UI instead of the part that crashed"
   - source_type: external
     citation: "next-intl docs — error handling when translations are missing"
     url: "https://next-intl.dev/docs/environments/error-files"

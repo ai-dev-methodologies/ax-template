@@ -4,10 +4,14 @@ template_id: L1/components/markdown-renderer
 layer: L1
 provenance_class: external_canonical
 evidence:
+  # Re-anchored 2026-08-01 (BACKLOG P2-73): the react-markdown readme was rewritten and no
+  # longer contains the previous sentence. The claim survives on the live page in different
+  # words ("we use unified , specifically remark for markdown and rehype for HTML"). Quote
+  # below is copied verbatim from the 2026-08-01 extractor output appended to the snapshot.
   - source_type: upstream_id
     upstream_id: remark-2026-05
     section: react-markdown
-    quote: "react-markdown renders markdown as React elements using remark as the markdown parser and rehype as the HTML processor."
+    quote: "This package is a React component that can be given a string of markdown that it'll safely render to React elements."
   - source_type: external
     citation: "remark / react-markdown — safe by default: no dangerouslySetInnerHTML; all HTML is sanitized via rehype."
     url: "https://github.com/remarkjs/react-markdown"

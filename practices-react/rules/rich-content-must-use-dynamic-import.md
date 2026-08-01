@@ -39,10 +39,15 @@ evidence:
     citation: "TipTap v2 — Getting started with React: Add 'use client' to the component; the Editor is a browser-only construct."
     url: "https://tiptap.dev/docs/editor/getting-started/install/react"
     quoted_at: "2026-05-18"
+  # Re-anchored 2026-08-01 (BACKLOG P2-73): the previous quote was authored guidance, not
+  # Tiptap page text — the install/react page states the client-only constraint in terms of
+  # the `immediatelyRender` option. The authored phrasing survives above as an explicitly
+  # `source_type: external` citation, where it is a claim rather than a quotation. Quote
+  # below is copied verbatim from the 2026-08-01 extractor output appended to the snapshot.
   - source_type: upstream_id
     upstream_id: tiptap-2026-05
     section: "RSC Compatibility"
-    quote: "Add `'use client'` to the component; the Editor is a browser-only construct."
+    quote: "However, to ensure that the editor is only initialized on the client side, you need to use the immediatelyRender option when creating the editor instance to prevent it from rendering on the server."
   - source_type: external
     anchors: generic_principle_only
     citation: "Next.js 15 Docs — Lazy Loading: ssr:false is not allowed with next/dynamic in Server Components. Move it into a Client Component."

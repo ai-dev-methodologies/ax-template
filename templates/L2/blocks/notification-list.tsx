@@ -4,10 +4,14 @@ template_id: L2/blocks/notification-list
 layer: L2
 provenance_class: internal_design
 evidence:
+  # Re-anchored 2026-08-01 (BACKLOG P2-73): "Virtualize only what you see..." is a digest
+  # sentence someone wrote; it appears nowhere in the TanStack Virtual introduction page,
+  # historically or currently. PROTECTED LEDGER IDENTITY — re-anchored, not deleted. Quote
+  # below is copied verbatim from the 2026-08-01 extractor output appended to the snapshot.
   - source_type: upstream_id
     upstream_id: tanstack-virtual-2026-05
     section: "Core API: useVirtualizer"
-    quote: "Virtualize only what you see. @tanstack/react-virtual gives you the primitives to render only the visible rows of a large dataset, keeping DOM node count proportional to the viewport rather than the data size."
+    quote: "TanStack Virtual is a headless UI utility for virtualizing long lists of elements in JS/TS, React, Vue, Svelte, Solid, Lit, and Angular."
   - source_type: external
     citation: "WCAG 2.2 — 1.3.1 Info and Relationships: lists must use appropriate list markup for assistive technology"
     url: "https://www.w3.org/TR/WCAG22/#info-and-relationships"

@@ -54,9 +54,12 @@ evidence:
   - upstream_id: vercel-react-best-practices
     section: "async-suspense-boundaries"
     quote: "Instead of awaiting data in async components before returning JSX, use Suspense boundaries to show the wrapper UI faster while data loads."
+  # Re-anchored 2026-08-01 (BACKLOG P2-73): react.dev/reference/react/use was rewritten and
+  # no longer contains the previous sentence. Quote below is copied verbatim from the
+  # 2026-08-01 extractor output appended to the snapshot.
   - upstream_id: react-19-use
     section: "Promise creation site"
-    quote: "Prefer creating Promises in Server Components and passing them to Client Components over creating Promises in Client Components. Promises created in Client Components are recreated on every render."
+    quote: "Promises created during render are recreated on every render, which causes React to show the Suspense fallback repeatedly and prevents content from appearing."
   - upstream_id: nextjs-fetching-data
     section: "Client Components — use() API"
     quote: "Start by fetching data in your Server component, and pass the promise to your Client Component as prop."

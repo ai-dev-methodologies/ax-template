@@ -4,14 +4,19 @@ template_id: L2/blocks/virtualized-table
 layer: L2
 provenance_class: external_canonical
 evidence:
+  # Both anchors re-anchored 2026-08-01 (BACKLOG P2-73): both previous quotes were digest
+  # sentences someone wrote — neither appears in the TanStack Virtual introduction page,
+  # historically or currently. The DOM-node-count claim in particular was a derived
+  # performance assertion, not a quotation. Quotes below are copied verbatim from the
+  # 2026-08-01 extractor output appended to the snapshot.
   - source_type: upstream_id
     upstream_id: tanstack-virtual-2026-05
     section: "Core API: useVirtualizer"
-    quote: "Virtualize only what you see. @tanstack/react-virtual gives you the primitives to render only the visible rows of a large dataset, keeping DOM node count proportional to the viewport rather than the data size."
+    quote: "At the heart of TanStack Virtual is the Virtualizer . Virtualizers can be oriented on either the vertical (default) or horizontal axes which makes it possible to achieve vertical, horizontal and even grid-like virtualization by combining the two axis configurations together."
   - source_type: upstream_id
     upstream_id: tanstack-virtual-2026-05
     section: "Rendering virtual items"
-    quote: "Only getVirtualItems().length DOM nodes are rendered at any time (proportional to viewport height / item height), regardless of total count."
+    quote: "It is not a component therefore does not ship with or render any markup or styles for you."
 dependencies: ["@tanstack/react-virtual"]
 imports_from: [L1, L2]
 imports_forbidden: [L4, app/, lib/auth/, lib/payment/]

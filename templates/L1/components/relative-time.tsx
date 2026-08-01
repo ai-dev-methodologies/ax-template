@@ -4,10 +4,17 @@ template_id: L1/components/relative-time
 layer: L1
 provenance_class: internal_design
 evidence:
+  # Re-anchored 2026-08-01 (BACKLOG P2-73): the previous quote was a colon-terminated
+  # lead-in someone wrote to introduce a code block, not page text; the cited page does not
+  # name `useFormatter()` at all. PROTECTED LEDGER IDENTITY — re-anchored, not deleted. The
+  # `useFormatter` API itself is documented on next-intl's usage pages, which this snapshot
+  # does not cover; the MDN Intl.RelativeTimeFormat entry below carries the formatting
+  # semantics. Quote copied verbatim from the 2026-08-01 extractor output appended to the
+  # snapshot.
   - source_type: upstream_id
     upstream_id: next-intl-2026-05
     section: "Relative Time"
-    quote: "`next-intl` provides `useFormatter()` for relative time:"
+    quote: "next-intl provides the essential foundation for internationalization in Next.js apps. It handles aspects like translations, date and number formatting, as well as internationalized routing."
   - source_type: external
     citation: "MDN Intl.RelativeTimeFormat — relative time formatting API"
     url: "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Intl/RelativeTimeFormat"

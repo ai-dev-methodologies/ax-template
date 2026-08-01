@@ -4,14 +4,21 @@ template_id: L2/blocks/error-boundary
 layer: L2
 provenance_class: external_canonical
 evidence:
+  # Both anchors re-anchored 2026-08-01 (BACKLOG P2-73): react.dev/reference/react/Component
+  # was rewritten and contains neither previous sentence. Quotes below are copied verbatim
+  # from the 2026-08-01 extractor output appended to the snapshot.
   - source_type: upstream_id
     upstream_id: react-19-error-boundary
     section: "Required lifecycle methods"
-    quote: "Error boundaries are React class components that let you display some fallback UI instead of the component tree that crashed. They catch errors during rendering, in lifecycle methods, and in constructors of any components below them in the tree."
+    quote: "Typically, it is used together with static getDerivedStateFromError which lets you update state in response to an error and display an error message to the user. A component with these methods is called an Error Boundary"
+  # NARROWER THAN THE CLAIM IT REPLACES, deliberately: the live page states the
+  # change-the-key reset pattern as a general state-reset mechanism, and no longer states it
+  # for error boundaries specifically. The quote is what the page says; the error-boundary
+  # application of it is this template's own design decision, not an upstream claim.
   - source_type: upstream_id
     upstream_id: react-19-error-boundary
     section: "Reset key pattern"
-    quote: "A common pattern to reset an error boundary is to change a `key` prop. When `key` changes, React remounts the subtree from scratch, clearing the error state"
+    quote: "If you want to \"reset\" some state when a prop changes, consider either making a component fully controlled or fully uncontrolled with a key instead."
 dependencies: []
 imports_from: [L1]
 imports_forbidden: [L4, app/, lib/auth/, lib/payment/]

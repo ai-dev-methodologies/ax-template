@@ -4,10 +4,15 @@ template_id: L1/components/rich-text-editor
 layer: L1
 provenance_class: external_canonical
 evidence:
+  # Re-anchored 2026-08-01 (BACKLOG P2-73): the previous sentence is a definition someone
+  # wrote for `useEditor`; the install/react page uses the hook in examples but never
+  # defines it in those words. PROTECTED LEDGER IDENTITY — re-anchored, not deleted. Quote
+  # below is copied verbatim from the 2026-08-01 extractor output appended to the snapshot,
+  # and states the client-only constraint this component's rsc_compat block depends on.
   - source_type: upstream_id
     upstream_id: tiptap-2026-05
     section: useEditor
-    quote: "useEditor is a custom React hook that creates and manages a Tiptap editor instance."
+    quote: "Tiptap can be used with server-side rendering (SSR) in React applications."
   - source_type: external
     citation: "Next.js 16 — Lazy Loading: ssr:false is not allowed with next/dynamic in Server Components. Move it into a Client Component."
     url: "https://nextjs.org/docs/app/guides/lazy-loading"

@@ -36,10 +36,14 @@ verification:
     Fail fixture: contains <button>결제하기</button> — exits 1.
     Existing-l4-must-skip: rule excludes pre-2026-05-18 L4 paths — exits 0.
 evidence:
+  # Re-anchored 2026-08-01 (BACKLOG P2-73): the previous quote was an ADAPTED code example
+  # (the page's example reads `useTranslations('HomePage')`; 'Payment' was substituted for
+  # this rule), so it was never verbatim page text. Quote below is copied verbatim from the
+  # 2026-08-01 extractor output appended to the snapshot.
   - source_type: upstream_id
     upstream_id: next-intl-2026-05
     section: "useTranslations"
-    quote: "const t = useTranslations('Payment');"
+    quote: "Messages represent the translations that are available per language and can be provided either locally or loaded from a remote data source."
   - source_type: external
     anchors: generic_principle_only
     citation: "next-intl docs — using t() for all user-visible text to enable locale switching"

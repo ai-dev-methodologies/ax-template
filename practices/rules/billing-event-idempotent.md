@@ -24,10 +24,15 @@ evidence:
     upstream_id: stripe-billing-2026-05
     section: "Idempotency"
     quote: "Stripe's idempotency works by saving the resulting status code and body of the first request made for any given idempotency key, regardless of whether it succeeds or fails."
-  - source_type: upstream_id
-    upstream_id: toss-billing-2026-05
-    section: "멱등키 헤더"
-    quote: "요청 헤더에 Idempotency-Key를 추가하면 멱등한 요청을 보낼 수 있습니다."
+  # The toss-billing-2026-05 anchor that used to sit here was REMOVED, not re-anchored
+  # (BACKLOG P2-73, 2026-08-01). Its `upstream_id` resolves to the 자동결제(빌링) OVERVIEW
+  # page (https://docs.tosspayments.com/guides/billing/overview), and the 2026-08-01
+  # extractor output for that URL contains the tokens "멱등" and "Idempotency" ZERO times —
+  # the page describes 빌링키 발급 and 자동결제 승인 and never mentions an idempotency header.
+  # The sentence is real Toss documentation, but it lives on a different page than the one
+  # cited, so the citation as written is a wrong-granularity provenance claim. Re-anchoring
+  # inside the overview page is impossible: nothing on it supports this rule. The Stripe
+  # anchor above and the IETF draft below already carry the rule's external grounding.
   - source_type: external
     anchors: generic_principle_only
     citation: "IETF draft — The Idempotency-Key HTTP Header Field (exactly-once semantics)"

@@ -1,6 +1,6 @@
 ---
 sentinel:
-  source_concat_sha256: "8455820f835140eb53327598e99ce6250f4b11900cef2caf1abb5a6ce61635f0"
+  source_concat_sha256: "a9158d5c618c2b16109e684537f1cde6370061dedfe0523c8914e6fb78dd840c"
   rule_count: 102
   generated_by: "practices-react/generate_agents.sh"
 ---
@@ -916,9 +916,12 @@ evidence:
   - upstream_id: nextjs-fetching-data
     section: "Parallel data fetching — Good to know"
     quote: "If one request fails when using `Promise.all`, the entire operation will fail. To handle this, you can use the `Promise.allSettled` method instead."
+  # Re-anchored 2026-08-01 (BACKLOG P2-73): react.dev/reference/react/use was rewritten and
+  # no longer contains the previous sentence. Quote below is copied verbatim from the
+  # 2026-08-01 extractor output appended to the snapshot.
   - upstream_id: react-19-use
     section: "Server Component data fetching"
-    quote: "Prefer creating Promises in Server Components and passing them to Client Components over creating Promises in Client Components."
+    quote: "Ideally, Promises are created before rendering, such as in an event handler, a route loader, or a Server Component, and passed to the component that calls use"
   - upstream_id: mdn-promise-all
     section: "Description"
     quote: "It rejects when any of the input's promises rejects, with this first rejection reason."
@@ -1098,9 +1101,12 @@ evidence:
   - upstream_id: vercel-react-best-practices
     section: "async-suspense-boundaries"
     quote: "Instead of awaiting data in async components before returning JSX, use Suspense boundaries to show the wrapper UI faster while data loads."
+  # Re-anchored 2026-08-01 (BACKLOG P2-73): react.dev/reference/react/use was rewritten and
+  # no longer contains the previous sentence. Quote below is copied verbatim from the
+  # 2026-08-01 extractor output appended to the snapshot.
   - upstream_id: react-19-use
     section: "Promise creation site"
-    quote: "Prefer creating Promises in Server Components and passing them to Client Components over creating Promises in Client Components. Promises created in Client Components are recreated on every render."
+    quote: "Promises created during render are recreated on every render, which causes React to show the Suspense fallback repeatedly and prevents content from appearing."
   - upstream_id: nextjs-fetching-data
     section: "Client Components — use() API"
     quote: "Start by fetching data in your Server component, and pass the promise to your Client Component as prop."
@@ -5588,9 +5594,12 @@ upstream:
     url: "https://nextjs.org/docs/app/getting-started/fetching-data"
     role: canonical-nextjs
 evidence:
+  # Re-anchored 2026-08-01 (BACKLOG P2-73): the previous quote was a colon-lead-in digest
+  # sentence, not page prose. Quote below is copied verbatim from the 2026-08-01 extractor
+  # output appended to the snapshot.
   - upstream_id: nextjs-fetching-data
     section: "Next.js 16-specific: async params"
-    quote: "this is a separate sequential await that can be parallelized with other independent work."
+    quote: "However, within any component, multiple async / await requests can still be sequential if placed after the other."
   - upstream_id: nextjs-fetching-data
     section: "Parallel data fetching"
     quote: "Start multiple requests by calling `fetch`, then await them with `Promise.all`. Requests begin as soon as `fetch` is called."
@@ -6901,10 +6910,14 @@ verification:
     Fail fixture: contains <button>결제하기</button> — exits 1.
     Existing-l4-must-skip: rule excludes pre-2026-05-18 L4 paths — exits 0.
 evidence:
+  # Re-anchored 2026-08-01 (BACKLOG P2-73): the previous quote was an ADAPTED code example
+  # (the page's example reads `useTranslations('HomePage')`; 'Payment' was substituted for
+  # this rule), so it was never verbatim page text. Quote below is copied verbatim from the
+  # 2026-08-01 extractor output appended to the snapshot.
   - source_type: upstream_id
     upstream_id: next-intl-2026-05
     section: "useTranslations"
-    quote: "const t = useTranslations('Payment');"
+    quote: "Messages represent the translations that are available per language and can be provided either locally or loaded from a remote data source."
   - source_type: external
     anchors: generic_principle_only
     citation: "next-intl docs — using t() for all user-visible text to enable locale switching"
@@ -10910,10 +10923,15 @@ evidence:
     citation: "TipTap v2 — Getting started with React: Add 'use client' to the component; the Editor is a browser-only construct."
     url: "https://tiptap.dev/docs/editor/getting-started/install/react"
     quoted_at: "2026-05-18"
+  # Re-anchored 2026-08-01 (BACKLOG P2-73): the previous quote was authored guidance, not
+  # Tiptap page text — the install/react page states the client-only constraint in terms of
+  # the `immediatelyRender` option. The authored phrasing survives above as an explicitly
+  # `source_type: external` citation, where it is a claim rather than a quotation. Quote
+  # below is copied verbatim from the 2026-08-01 extractor output appended to the snapshot.
   - source_type: upstream_id
     upstream_id: tiptap-2026-05
     section: "RSC Compatibility"
-    quote: "Add `'use client'` to the component; the Editor is a browser-only construct."
+    quote: "However, to ensure that the editor is only initialized on the client side, you need to use the immediatelyRender option when creating the editor instance to prevent it from rendering on the server."
   - source_type: external
     anchors: generic_principle_only
     citation: "Next.js 15 Docs — Lazy Loading: ssr:false is not allowed with next/dynamic in Server Components. Move it into a Client Component."
@@ -11577,9 +11595,12 @@ evidence:
   - upstream_id: vercel-react-best-practices
     section: "server-cache-lru"
     quote: "`React.cache()` only works within one request."
+  # Re-anchored 2026-08-01 (BACKLOG P2-73): the previous quote was a colon-terminated
+  # lead-in someone wrote to introduce a code block, not page prose. Quote below is copied
+  # verbatim from the 2026-08-01 extractor output appended to the snapshot.
   - upstream_id: nextjs-use-cache-directive
     section: "Runtime caching considerations"
-    quote: "For durable shared caching across instances/requests:"
+    quote: "If the default in-memory cache isn't enough, consider use cache: remote which allows platforms to provide a dedicated cache handler (like Redis or KV database)."
 codex_consensus:
   reviewer: "codex-cli 0.130.0, model_reasoning_effort=medium"
   reviewed_at: "2026-05-16"

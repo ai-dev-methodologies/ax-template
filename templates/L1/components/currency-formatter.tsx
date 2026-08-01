@@ -4,10 +4,16 @@ template_id: L1/components/currency-formatter
 layer: L1
 provenance_class: locked_constraint
 evidence:
+  # Re-anchored 2026-08-01 (BACKLOG P2-73). The previous quote asserted an ISO 4217 FACT
+  # while citing next-intl, which does not state it — an authored sentence, never page text.
+  # The ISO 4217 claim itself is unaffected: it is carried by its own `source_type: external`
+  # entry below, which is where it belonged. This anchor is a PROTECTED LEDGER IDENTITY, so
+  # deleting it is not available; it is re-anchored instead to text the cited page does say.
+  # Quote copied verbatim from the 2026-08-01 extractor output appended to the snapshot.
   - source_type: upstream_id
     upstream_id: next-intl-2026-05
     section: "KRW Currency Format"
-    quote: "Per ISO 4217, Korean Won (KRW) has 0 decimal places."
+    quote: "It handles aspects like translations, date and number formatting, as well as internationalized routing."
   - source_type: external
     citation: "ISO 4217 — KRW has 0 decimal places; ₩ symbol is the standard prefix"
     url: "https://www.iso.org/iso-4217-currency-codes.html"

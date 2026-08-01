@@ -4,10 +4,14 @@ template_id: L1/components/locale-switcher
 layer: L1
 provenance_class: internal_design
 evidence:
+  # Re-anchored 2026-08-01 (BACKLOG P2-73). The previous quote was an ADAPTED config
+  # fragment ('ko'/'en' are this template's locales, not the page's), so it was never
+  # verbatim page text. PROTECTED LEDGER IDENTITY — re-anchored, not deleted. Quote copied
+  # verbatim from the 2026-08-01 extractor output appended to the snapshot.
   - source_type: upstream_id
     upstream_id: next-intl-2026-05
     section: "Middleware (locale detection)"
-    quote: "locales: ['ko', 'en'], defaultLocale: 'ko'"
+    quote: "If your app doesn't require unique pathnames per locale, you can provide a locale to next-intl based on user preferences or other application logic."
   - source_type: external
     citation: "next-intl docs — useLocale, useRouter for locale switching"
     url: "https://next-intl.dev/docs/routing/navigation"

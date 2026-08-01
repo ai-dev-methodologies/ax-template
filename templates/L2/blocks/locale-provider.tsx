@@ -4,10 +4,14 @@ template_id: L2/blocks/locale-provider
 layer: L2
 provenance_class: internal_design
 evidence:
+  # Re-anchored 2026-08-01 (BACKLOG P2-73): the previous quote was an authored restatement
+  # ("or a custom LocaleProvider wrapper" is this template's own affordance, not upstream
+  # guidance). PROTECTED LEDGER IDENTITY — re-anchored, not deleted. Quote below is copied
+  # verbatim from the 2026-08-01 extractor output appended to the snapshot.
   - source_type: upstream_id
     upstream_id: next-intl-2026-05
     section: "LocaleProvider / NextIntlClientProvider"
-    quote: "Messages must be provided to the client via NextIntlClientProvider or a custom LocaleProvider wrapper"
+    quote: "To make your request configuration available to Client Components, you can wrap the children in your root layout with NextIntlClientProvider"
   - source_type: external
     citation: "next-intl docs — NextIntlClientProvider wraps client subtree with locale and messages"
     url: "https://next-intl.dev/docs/getting-started/app-router"
