@@ -677,6 +677,12 @@ fork하지 않는 기존 프로젝트가 ax-template 카탈로그를 Claude Code
   훅 템플릿으로 승격 + probe 검증 절차 추가 (react/java 설치 스킬과 동등한 비공허성 확인;
   USAGE-GUIDE §5의 hooks 예외 문구 해소). done-when: 완성형 스니펫 + probe 커밋 차단 절차
   내장. 출처: D-track 독립 리뷰 비차단 관찰 + USAGE-GUIDE 적대 리뷰 HIGH-1 (2026-08-02).
+- [ ] D-7 — plugin.json 버전 릴리스 규율: 버전이 0.1.0 고정이라 `claude plugin update`가
+  내용 변경에도 no-op ("already at latest version" — 2026-08-02 live 실측, gitCommitSha
+  불변). 소비자는 재설치(uninstall→install)로만 갱신 가능(USAGE-GUIDE §6). done-when:
+  (a) skills/·practices/·templates/ 변경 커밋 시 plugin.json version bump를 요구하는
+  가드 또는 (b) "재설치가 공식 경로" maintainer DECISION 중 하나로 닫기. 출처:
+  USAGE-GUIDE 적대 리뷰 CRITICAL-1의 live 검증 후속 (2026-08-02).
 
 ## 운영 규약
 

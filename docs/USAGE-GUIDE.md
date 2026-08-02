@@ -107,25 +107,31 @@ hooks 스킬은 probe 없이 self-check 체크리스트로 마무리하므로, �
 
 ## 6. 업데이트 / 제거
 
-업데이트는 **두 단계**다 — marketplace 갱신만으로는 설치본에 반영되지 않는다
-(설치본은 `~/.claude/plugins/cache/`의 버전 고정 스냅숏이고, 세션은 그 사본을 로드한다):
+세션이 로드하는 것은 `~/.claude/plugins/cache/`의 **설치 시점 스냅숏**이다 — marketplace
+갱신만으로는 반영되지 않는다. 그리고 현 배포 모델에서는 `claude plugin update`도
+**동작하지 않는다**: plugin.json 버전이 0.1.0에 고정돼 있어(레포 main = 배포 채널,
+별도 릴리스 없음) 내용이 바뀌어도 updater가 "already at the latest version"으로
+no-op한다 (2026-08-02 live 실측 — gitCommitSha 불변 확인).
+
+**확실한 갱신 절차 (live 실증됨 — 스냅숏 sha가 최신 main으로 이동):**
 
 ```bash
-claude plugin marketplace update ax-transform          # ① 카탈로그 clone 갱신 (레포 main 추종)
-claude plugin update ax-transform@ax-transform          # ② 설치 스냅숏 갱신
+claude plugin marketplace update ax-transform           # ① 카탈로그 clone 갱신
+claude plugin uninstall ax-transform@ax-transform       # ② 스냅숏 제거
+claude plugin install ax-transform@ax-transform         # ③ 최신 main으로 재설치
 claude plugin list                                      # 확인 — 적용은 새 세션부터
 ```
 
-제거:
+> plugin.json 버전을 릴리스마다 올리는 규율이 도입되면(BACKLOG D-7) ②③은
+> `claude plugin update ax-transform@ax-transform` 한 줄로 줄어든다. 그 전까지는
+> 위 재설치 경로가 유일하게 검증된 방법이다.
+
+제거만 할 때:
 
 ```bash
 claude plugin uninstall ax-transform@ax-transform
 claude plugin marketplace remove ax-transform
 ```
-
-카탈로그는 레포 main이 곧 배포 채널이다 — 별도 릴리스 절차 없음. ①만 실행하면
-**조용히 옛 스냅숏을 계속 쓰게 되므로** 반드시 ②까지. ② 후에도 진행 중 세션에는
-반영되지 않는다 — 새 세션부터.
 
 ---
 
