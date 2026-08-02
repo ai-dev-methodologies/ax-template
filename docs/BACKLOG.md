@@ -670,6 +670,13 @@ fork하지 않는 기존 프로젝트가 ax-template 카탈로그를 Claude Code
   `grep -rln "@ax-codified-from" templates/` 전건 등재 · `derived_block_license_guard.sh` +
   fail/pass fixture 쌍 · `run-all-guards.sh` 등록 · `doc_headline_count_guard` exit 0.
   → **closed 2026-08-02** (f8be8fd + 3f66e08; main 착지 096614b5, R25 PASS)
+- [ ] D-5 — `practices/generate_index.sh`의 `<out>.tmp` 고정 임시파일명 고유화 (동시 실행 시
+  상호 truncate 가능). done-when: `mktemp` 류 고유 이름 + 실패 시 잔여물 정리 trap. 출처:
+  D-track 독립 리뷰 비차단 관찰 (2026-08-01).
+- [ ] D-6 — `skills/ax-install-hooks/SKILL.md`의 Java 분기를 주석이 아닌 stack별 완성형
+  훅 템플릿으로 승격 + probe 검증 절차 추가 (react/java 설치 스킬과 동등한 비공허성 확인;
+  USAGE-GUIDE §5의 hooks 예외 문구 해소). done-when: 완성형 스니펫 + probe 커밋 차단 절차
+  내장. 출처: D-track 독립 리뷰 비차단 관찰 + USAGE-GUIDE 적대 리뷰 HIGH-1 (2026-08-02).
 
 ## 운영 규약
 
