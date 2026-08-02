@@ -5,6 +5,8 @@
 
 **처음 오셨나요? → [docs/GETTING-STARTED.md](./docs/GETTING-STARTED.md)** — 이걸로 뭘 할 수 있고, 어떻게 만들고, 결과가 어떻게 나오는지 한 문서로.
 
+**fork 없이 기존 프로젝트에 카탈로그만 얹고 싶다면 → [docs/PLUGIN-CHANNEL.md](./docs/PLUGIN-CHANNEL.md)** — `/plugin marketplace add`로 설치하는 plugin 소비 채널(D-track): `ax.config.json` 레이아웃 선언 → `/ax-practices` 지식 라우팅 → 강제는 opt-in 설치 (R109).
+
 ax = **AI transformation**. This repo is the source of the Claude Code skill
 **`/ax-transform`** and a composition kit you fork to start a new
 project. Every layer of the stack ships with rule-enforcement wired in:
