@@ -106,6 +106,13 @@ claude plugin list          # ax-transform@ax-transform · Status: ✔ enabled �
 hooks 스킬은 probe 없이 self-check 체크리스트로 마무리하므로, 훅 배선 후 위반 커밋을
 한 번 시도해 차단을 직접 확인하는 것을 권장한다.
 
+> **헤드리스 실행 주의**: 이 절의 설치 스킬(특히 `/ax-install-react-enforcement`)은 `npm install`과
+> probe 실행에 Bash가 필요하다. `claude -p` 등 헤드리스 실행에서 `--permission-mode acceptEdits`는
+> 파일 편집만 자동 승인하고 Bash 호출은 여전히 승인 대기시키므로 npm 설치·probe가 막힌다. 헤드리스
+> 운영자는 `--permission-mode bypassPermissions`(신뢰된 샌드박스 한정) 또는 `.claude/settings.json`의
+> `permissions.allow`에 필요한 Bash 패턴(`npm i *`, `npx eslint *`)을 사전 등록해야 한다. 대화형
+> 세션은 승인 프롬프트가 그때그때 뜨므로 영향 없다.
+
 ## 6. 업데이트 / 제거
 
 세션이 로드하는 것은 `~/.claude/plugins/cache/`의 **설치 시점 스냅숏**이다 — marketplace

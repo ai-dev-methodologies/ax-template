@@ -69,9 +69,13 @@ in the repo root for one filled-in example of the shape.
      not silently invent one).
    - `alias`: read `tsconfig.json`'s (or `jsconfig.json`'s) `compilerOptions.paths`
      and reverse-map each entry into `{ prefix: replacement }` form (e.g.
-     `"@/*": ["./src/*"]` → `{ "@/": "src/" }`). If no `paths` config exists,
-     leave `alias` as the schema default (`{"@/": "src/"}`) and say so — do not
-     fabricate an alias that isn't configured anywhere.
+     `"@/*": ["./src/*"]` → `{ "@/": "src/" }`). If no `paths` config exists, do
+     **not** fall back to the schema default's literal `src/` — that default
+     assumes the conventional layout and silently mismatches any project whose
+     detected `srcDir` (step above) is something else. Derive the alias target
+     from the `srcDir` already detected instead: `{ "@/": "<srcDir>/" }`. Only
+     if `srcDir` itself could not be detected either, fall back to the schema
+     default and flag it as needing manual confirmation.
    - `layers`: look for `app`, `features`, `components`, `lib` (or clear analogs)
      as top-level directories under `srcDir`. Map found directories into
      `layers.app` / `layers.features` / `layers.shared` by name; directories that

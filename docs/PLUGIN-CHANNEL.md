@@ -88,7 +88,9 @@ ax-template의 카탈로그(Java 233룰 · React 102룰 · ESLint 15룰 · 검�
 
 - **`/ax-install-react-enforcement`** — 플러그인 `file:` 설치 + `eslint.config.mjs`에
   `settings: { ax: axConfig.react }` 주입. `files` 글롭은 `srcDir` 파라미터화(하드코딩
-  금지 — 커스텀 srcDir에서 조용히 0위반이 되는 결함을 막는다). 설치 직후 **probe 절차**
+  금지 — 커스텀 srcDir에서 조용히 0위반이 되는 결함을 막는다). TypeScript 프로젝트는
+  `typescript-eslint` 설치 + parser 배선도 같은 블록에 필수 — 없으면 `.ts`/`.tsx` 전체가
+  parsing error로 스킵돼 모든 ax 룰이 조용히 미실행된다. 설치 직후 **probe 절차**
   (위반 파일 심기 → 룰 id 검출 확인 → 삭제)로 배선이 공허하지 않음을 그 자리에서 증명.
 - **`/ax-install-java-enforcement`** — archunit-junit5 + `rootPackage` systemProperty
   변수화 `testPractices` task + 시작 체크 3종(layer-boundary / no-cyclic / DTO-record).
