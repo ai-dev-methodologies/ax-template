@@ -220,7 +220,7 @@ catalog 시스템.**
 
 핵심 가치는 "코드"가 아니라 **AI agent가 빠르게 이해하고 안전하게 작업할 수 있는 인프라**. 인증/CRUD 구현은 skill이 자신을 자신에게 적용한 reference workload — skill의 동작 시연.
 
-**Skill 진입점**: `skills/ax-transform/SKILL.md` (frontmatter `name: ax-transform`). Plugin manifest는 `.claude-plugin/plugin.json`. Claude Code plugin marketplace에 등록 시 `/plugin install ax-transform@<marketplace>` 로 설치 가능.
+**Skill 진입점**: `skills/ax-transform/SKILL.md` (frontmatter `name: ax-transform`). Plugin manifest는 `.claude-plugin/plugin.json` + `.claude-plugin/marketplace.json`(R109, D-4) — 두 파일이 존재하므로 plugin 채널 설치가 실제로 가능하다: `claude plugin marketplace add ai-dev-methodologies/ax-template` → `claude plugin install ax-transform@ax-transform` (세션 내 `/plugin marketplace add …` → `/plugin install …` 동일). 설치 전제·확인·트러블슈팅의 정본은 `docs/USAGE-GUIDE.md` §2, 채널 개념 비교는 `docs/PLUGIN-CHANNEL.md`.
 
 ### 이 skill이 제공하는 것
 
