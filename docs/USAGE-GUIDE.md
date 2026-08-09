@@ -9,6 +9,7 @@
 | 알고 싶은 것 | 문서 |
 |---|---|
 | 두 소비 경로(A fork / B plugin) 비교·선택 | [PLUGIN-CHANNEL.md](PLUGIN-CHANNEL.md) |
+| 경로별 복붙용 시작 프롬프트 | [START-PROMPTS.md](START-PROMPTS.md) |
 | plugin 채널 설치·프로젝트 온보딩·트러블슈팅 (이 문서) | USAGE-GUIDE.md |
 | fork-as-base로 새 도메인 추가 | [NEW-DOMAIN-CHECKLIST.md](NEW-DOMAIN-CHECKLIST.md) + METHODOLOGY.md |
 | 결정 이력 (왜 이렇게 설계됐나) | practices/DECISIONS.md (plugin 채널은 R109) |

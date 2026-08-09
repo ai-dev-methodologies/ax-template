@@ -7,6 +7,8 @@
 
 **fork 없이 기존 프로젝트에 카탈로그만 얹고 싶다면 → [docs/PLUGIN-CHANNEL.md](./docs/PLUGIN-CHANNEL.md)** — `/plugin marketplace add`로 설치하는 plugin 소비 채널(D-track): `ax.config.json` 레이아웃 선언 → `/ax-practices` 지식 라우팅 → 강제는 opt-in 설치 (R109).
 
+**바로 시작할 프롬프트가 필요하다면 → [docs/START-PROMPTS.md](./docs/START-PROMPTS.md)** — 두 경로별 복붙용 시작 프롬프트. 각 단계에 관측 가능한 성공 기준 + "강제가 정말 막는지" 위반을 심어 증명하는 단계 포함.
+
 ax = **AI transformation**. This repo is the source of the Claude Code skill
 **`/ax-transform`** and a composition kit you fork to start a new
 project. Every layer of the stack ships with rule-enforcement wired in:
