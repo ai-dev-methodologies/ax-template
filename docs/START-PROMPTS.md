@@ -31,16 +31,28 @@ ax-template을 fork-base로 삼아 새 프로젝트 "<PROJECT_NAME>"을 시작�
 [1] 클론 + 번들
     git clone https://github.com/ai-dev-methodologies/ax-template <PROJECT_NAME>
     cd <PROJECT_NAME> && git submodule update --init
-    성공 기준: submodule 3개(petclinic/realworld/modulith) 체크아웃됨.
+    성공 기준: 클론 완료. submodule 3개(petclinic/realworld/modulith)는 **선택** —
+    이식성 축 검증에만 쓰이고, 가드·게이트·빌드는 서브모듈 없이도 통과한다(실측).
+    외부 repo 접근이 막혀 있으면 서브모듈 실패는 무시하고 [2]로 진행한다.
 
 [2] 사전 요구사항 확인 — 없으면 이후 검증이 exit 2로 막힌다
     java -version(21) · python3 -V · python3 -c 'import yaml' · node -v · git --version
-    성공 기준: 전부 출력. JDK가 21이 아니면 JAVA_HOME부터 잡고 재확인.
+    성공 기준: 전부 출력.
+    JDK가 21이 아니면 JAVA_HOME부터 잡는다 — macOS의 /usr/bin/java는 껍데기다:
+      system/Oracle JDK : export JAVA_HOME=$(/usr/libexec/java_home -v 21)
+      Homebrew JDK      : export JAVA_HOME=/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home
+                          (Intel Mac은 /usr/local/opt/...)
+    ★ brew로 깐 JDK는 java_home에 등록되지 않으므로 위 첫 명령이 "Unable to locate a
+      Java Runtime"으로 실패한다(실측). 그 경우 두 번째 형태를 쓴다.
+    python3에 PyYAML이 없고 yq만 있으면 백엔드 전용 실행은 되지만 [9] 전체 실행은
+    막힌다 — 전체를 돌릴 거면 PyYAML을 깐다.
 
 [3] 현재 상태 파악 — 이 단계를 건너뛰면 범위를 오판한다
-    docs/IMPLEMENTATION-STATUS.md 를 읽고, 25개 L4 도메인 중
-    (a) 백엔드 구현까지 된 것 (b) spec만 있는 것 을 구분해 요약 보고.
-    성공 기준: 내 목표 도메인에 필요한 것이 (a)인지 (b)인지 명시됨.
+    docs/IMPLEMENTATION-STATUS.md 를 읽고, 25개 L4 도메인을
+    full-trio(백엔드+프론트 트리오) / backend-only(서버간 도메인, 프론트 의도적 부재) /
+    rules-as-code(INFRA)로 분류해 요약 보고.
+    ※ "spec만 있는 도메인"은 더 이상 없다 — 25개 전부 백엔드 구현을 갖는다.
+    성공 기준: 내 목표 도메인이 위 셋 중 무엇이며, 프론트가 있는지 없는지 명시됨.
 
 [4] 레시피 선택 (선택이지만 권장)
     recipes/_MANIFEST.yaml 에서 11개 레시피 중 목표에 가장 가까운 것을 고르고
@@ -54,7 +66,9 @@ ax-template을 fork-base로 삼아 새 프로젝트 "<PROJECT_NAME>"을 시작�
 [6] 빌드
     cd backend && ./gradlew build && cd ..
     cd frontend && npm ci && cd ..
-    성공 기준: 둘 다 BUILD SUCCESSFUL / 설치 완료.
+    성공 기준: gradle이 `BUILD SUCCESSFUL`, npm이 `added N packages ... in Xs`.
+    ※ 이 단계가 가장 오래 걸린다 — 백엔드 빌드는 테스트까지 포함해 10분 안팎이다
+      (머신·동시 부하에 따라 더 걸릴 수 있다). 멈춘 게 아니다.
 
 [7] 카탈로그 무결성 확인
     bash practices/evals/run-all-guards.sh
@@ -138,9 +152,12 @@ ax-template을 fork-base로 삼아 새 프로젝트 "<PROJECT_NAME>"을 시작�
     React:  /ax-install-react-enforcement     (node/npm + ESLint 9 필요)
     Java:   /ax-install-java-enforcement      (JDK + gradle 필요)
     훅:     /ax-install-hooks                 (git)
-    성공 기준: react/java 설치 스킬은 배선 직후 probe(위반 파일 심기 →
-    룰 id 검출 확인 → 삭제)까지 스스로 수행한다. probe에서 위반이 검출되지
-    않으면 배선이 공허한 것이다 — 그 자리에서 멈추고 원인을 보고한다.
+    성공 기준: react/java 설치 스킬은 배선 직후 probe(위반 심기 → 검출 확인 → 삭제)까지
+    스스로 수행한다. 단 **관측물이 스택마다 다르다**:
+      react — lint 출력에 룰 id(예: `ax/no-upward-layer-import`)가 뜬다
+      java  — 레이어 경계 테스트가 **RED로 실패**하고 실패 출력에 probe 클래스명이 뜬다
+              (룰 id가 아니다 — 여기서 룰 id를 찾으면 못 찾는다)
+    probe에서 위반이 검출되지 않으면 배선이 공허한 것이다 — 그 자리에서 멈추고 보고한다.
     ⚠️ ax-template 레포의 .githooks/ 를 복사하지 마라 — pre-push recency guard는
        그 레포 전용이라 이 프로젝트의 모든 push를 영구 차단한다.
 
