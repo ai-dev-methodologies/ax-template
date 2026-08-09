@@ -1,0 +1,14 @@
+{
+  "name": "fixture-plugin",
+  "metadata": {
+    "description": "doc_headline_count_guard fixture — pass_version_sync",
+    "version": "0.2.0"
+  },
+  "plugins": [
+    {
+      "name": "fixture-plugin",
+      "source": "./",
+      "version": "0.2.0"
+    }
+  ]
+}

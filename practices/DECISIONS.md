@@ -3653,3 +3653,80 @@ eslint exit 1 + `ax/no-upward-layer-import` 1건, 주입 제거 시 동일 파�
 
 **동반 문서 정정**: `ax.config.schema.json` 설명문 · `docs/PLUGIN-CHANNEL.md` 경로B 2단계 ·
 `docs/USAGE-GUIDE.md` §3 필드 레퍼런스 및 §7 T-2. 백로그: P1-74(closed) · P2-76(open).
+
+## R111 — plugin.json 버전 릴리스 규율 도입 + `doc_headline_count_guard`가 3-필드 일치를 강제 (D-7 종결)
+
+**날짜**: 2026-08-10 · **닫는 백로그 항목**: BACKLOG D-7
+
+**측정한 것.** `claude plugin update <name>@<marketplace>`는 CLI 2.1.220에서
+**`.claude-plugin/plugin.json`의 top-level `version` 필드만**을 비교 기준으로 삼는다.
+`marketplace.json`의 plugin-entry `version`이나 top-level `metadata.version`은 이 비교에
+전혀 관여하지 않는다 — plugin.json이 0.1.0으로 고정된 채 두 값만 올려도 updater는
+`✔ ax-transform is already at the latest version (0.1.0).`을 출력하는 진짜 no-op이었고,
+스냅숏 디렉터리와 gitCommitSha는 이동하지 않았다. 반대로 plugin.json을 0.1.0 → 0.1.1로
+올리자 updater는 `✔ Plugin "ax-transform" updated from 0.1.0 to 0.1.1 for scope user.
+Restart to apply changes.`를 출력했고, `cache/ax-transform/ax-transform/0.1.1/` 스냅숏이
+새로 생성되며 기록된 gitCommitSha가 새 HEAD로 이동했다.
+
+**왜 entry version이 비교 기준이 아닌가.** 확인된 사실일 뿐이고 이유는 CLI 내부 구현이다 —
+marketplace 엔트리는 marketplace의 자기서술(카탈로그가 스스로를 광고하는 값)이고, 실제
+설치본과 비교하는 진실은 설치되는 패키지 자신의 manifest(`plugin.json`)다. fork-base
+repo가 곧 배포 채널이라 별도 릴리스 아티팩트가 없는 이 프로젝트에서는 그 두 값이 서로
+다른 파일에 두 번 적혀 있다는 사실 자체가 드리프트 표면이다.
+
+**무엇을 도입했나.**
+1. **릴리스 규율**: `skills/`·`practices/`·`templates/` 등 소비자에게 보이는 내용이 바뀌는
+   릴리스는 `.claude-plugin/plugin.json`의 `version`을 올린다. 이번 릴리스에서 0.1.0 → 0.1.1로
+   실제로 올렸다(D-7 종결 커밋 자체가 첫 적용 사례).
+2. `.claude-plugin/marketplace.json`의 plugin-entry `version`과 top-level `metadata.version`도
+   함께 0.1.1로 올렸다 — **updater 비교에는 관여하지 않지만**, 세 필드가 서로 다른 이야기를
+   하면 안 된다는 원칙(레포가 자기 자신에 대해 하나의 진실만 말해야 한다)에 따른 것이다.
+3. **기계 강제**: `doc_headline_count_guard.sh`(guard [60], 새 guard 파일을 추가하지 않고
+   기존 guard를 확장 — 아래 "왜 새 guard가 아닌가" 참조)가 `check_plugin_marketplace_version_sync()`
+   함수로 plugin.json의 `version`과 marketplace.json의 entry `version` + `metadata.version`이
+   전부 일치하는지 매 실행마다 검증한다. 불일치 시 `ENTRY_VERSION_MISMATCH` /
+   `METADATA_VERSION_MISMATCH`로 exit 1 — 한쪽만 올리고 잊는 릴리스를 커밋 시점에 차단한다.
+   격리 fixture 검증용으로 `--version-fixture-root DIR` 플래그를 신설(README/CLAUDE.md/
+   SKILL.md 헤드라인 체크는 전체 문서 replica가 필요해 최소 두-JSON fixture로는 통과시킬 수
+   없으므로, 이 하나의 불변식만 독립적으로 시험하는 별도 진입점). `pass_version_sync` /
+   `fail_version_mismatch` fixture 쌍을 `practices/evals/fixtures/doc-headline-count/`에
+   신설, `run-all-guards.sh` [60] 섹션에 `--include-fixtures` 조건부로 등록.
+   `fixture_kill_manifest.yaml`에 `doc_headline_count/fail_version_mismatch` 항목을 등재하고
+   (anchor `entry_version != plugin_version`, neuter `False`) `LIVE_MIN_ITEMS`를 73 → 74로
+   래칫(`fixture_kill_proof_guard.sh`) — 원본 guard가 fixture에서 exit 1, anchor를 neuter로
+   치환한 임시 guard가 exit 0로 뒤집힘을 직접 확인(오케스트레이터 자체의 아래 기지 결함으로
+   `--manifest`를 통한 자동 실행은 막혔으나, 동일한 두 단계를 손으로 재현해 non-vacuity를
+   확인했다 — 결과는 동일: exit 1 → exit 0 flip).
+
+**왜 새 guard 파일이 아니라 기존 guard 확장인가.** `doc_headline_count_guard.sh`는
+`practices/evals/*_guard.sh` 개수를 세어 README.md·CLAUDE.md·SKILL.md의 "<N> hard guards"
+헤드라인 주장과 대조한다. 새 guard **파일**을 추가하면 그 개수가 108 → 109로 올라가고,
+README.md와 CLAUDE.md의 헤드라인 숫자도 함께 갱신해야만 guard가 계속 exit 0을 낸다 — 그런데
+이 릴리스의 작업 지시는 README.md와 CLAUDE.md를 건드리지 말라는 명시적 제약을 안고 있었다
+(다른 레인이 소유). 기존 guard를 확장하면 guard 파일 개수가 그대로이므로 이 충돌이 원천
+발생하지 않는다 — "확장이 자연스러운 자리인가"를 먼저 판단하라는 지시에 대한 답이기도
+하다: 이 guard는 이미 plugin.json의 다른 헤드라인 주장("<N> rules")을 disk-truth와 대조하는
+자리이므로, plugin.json의 또 다른 필드(version)를 다른 파일(marketplace.json)과 대조하는
+로직을 같은 guard에 얹는 것은 파일 개수를 건드리지 않는 자연스러운 확장이었다.
+
+**기지 결함 (수정 범위 밖, 기록만 함).** `fixture_kill_proof_guard.sh`를 `--manifest`로
+직접 실행하면(신규 항목 유무와 무관하게 기존 등재 항목 단독으로도 재현됨) `line 386:
+parse_rc: unbound variable`로 죽는다 — 이 릴리스의 diff가 만든 결함이 아니라 HEAD에 이미
+있던 결함이며(`git diff`로 확인: 이번 변경은 주석 한 단락과 `LIVE_MIN_ITEMS` 상수 한 줄뿐),
+수정은 이 릴리스의 범위 밖으로 남긴다. 그래서 신규 kill-proof 항목의 non-vacuity는
+오케스트레이터를 우회해 ALGORITHM의 2·3·4단계(원본 guard exit 1 → anchor를 neuter로
+치환 → 임시 guard exit 0)를 수동으로 재현해 확인했다.
+
+**증거.** `.claude-plugin/plugin.json` version 0.1.0 → 0.1.1. `.claude-plugin/marketplace.json`
+entry version + `metadata.version` 0.1.0 → 0.1.1. live 실행:
+`doc_headline_count_guard.sh` exit 0("headline counts match disk ... and plugin/marketplace
+versions agree"). `--version-fixture-root` pass/fail fixture 각각 exit 0/exit 1(정확히
+`ENTRY_VERSION_MISMATCH` 1건). `backlog_convergence_integrity_guard.sh`는 D-7 체크박스
+전환 전후 동일하게 exit 0(`## D` 섹션은 수렴 분모에서 명시 제외 — 가드 소스가 `## P0-3`만
+순회함을 직접 확인).
+
+**동반 문서 정정**: `docs/USAGE-GUIDE.md` §6(정상 경로 = marketplace update + plugin update
+한 쌍, no-op 재발 조건과 재설치 우회 경로는 유지·amend). 백로그: D-7(closed). `docs/
+START-PROMPTS.md`의 "plugin.json 버전이 0.1.0에 고정돼 있어 updater가 no-op한다"는 서술은
+이제 정확하지 않으나 해당 파일은 이 릴리스의 소유 범위 밖이라 갱신하지 않았다 — 소유
+레인에 인계.

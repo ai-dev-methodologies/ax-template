@@ -679,12 +679,21 @@ fork하지 않는 기존 프로젝트가 ax-template 카탈로그를 Claude Code
   훅 템플릿으로 승격 + probe 검증 절차 추가 (react/java 설치 스킬과 동등한 비공허성 확인;
   USAGE-GUIDE §5의 hooks 예외 문구 해소). done-when: 완성형 스니펫 + probe 커밋 차단 절차
   내장. 출처: D-track 독립 리뷰 비차단 관찰 + USAGE-GUIDE 적대 리뷰 HIGH-1 (2026-08-02).
-- [ ] D-7 — plugin.json 버전 릴리스 규율: 버전이 0.1.0 고정이라 `claude plugin update`가
+- [x] D-7 — plugin.json 버전 릴리스 규율: 버전이 0.1.0 고정이라 `claude plugin update`가
   내용 변경에도 no-op ("already at latest version" — 2026-08-02 live 실측, gitCommitSha
   불변). 소비자는 재설치(uninstall→install)로만 갱신 가능(USAGE-GUIDE §6). done-when:
   (a) skills/·practices/·templates/ 변경 커밋 시 plugin.json version bump를 요구하는
   가드 또는 (b) "재설치가 공식 경로" maintainer DECISION 중 하나로 닫기. 출처:
-  USAGE-GUIDE 적대 리뷰 CRITICAL-1의 live 검증 후속 (2026-08-02).
+  USAGE-GUIDE 적대 리뷰 CRITICAL-1의 live 검증 후속 (2026-08-02). closure: 2026-08-10 —
+  done-when (a) 경로로 닫음. plugin.json `version` 0.1.0→0.1.1 + marketplace.json entry
+  version·metadata.version 동반 상향(엔트리 값은 updater 비교 기준이 아님을 실측 확인한
+  채로 — 세 필드가 서로 다른 이야기를 하면 안 된다는 이유로 상향). `doc_headline_count_guard`
+  (새 guard 파일 추가 대신 확장 — README.md/CLAUDE.md 헤드라인 미터치 제약과 guard-개수
+  카운트 충돌을 피함)가 plugin.json↔marketplace.json 3-필드 일치를 매 실행 강제, pass/fail
+  fixture 쌍 + `--version-fixture-root` 격리 진입점 신설, `fixture_kill_manifest.yaml` 등재
+  (`LIVE_MIN_ITEMS` 73→74). live 실측: `marketplace update`+`update`로 0.1.1→0.1.2가
+  `updated from 0.1.1 to 0.1.2`를 출력하며 새 스냅숏 디렉터리 생성 확인(고립 `CLAUDE_CONFIG_DIR`,
+  실사용 설치 무영향). 상세: `practices/DECISIONS.md` R111.
 
 ## 운영 규약
 

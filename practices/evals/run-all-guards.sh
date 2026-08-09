@@ -1568,9 +1568,15 @@ run_guard "practices_react_sentinel_disk_truth/live" 0 \
     bash "$SCRIPT_DIR/practices_react_sentinel_disk_truth_guard.sh"
 
 echo ""
-echo "[60] doc_headline_count_guard.sh (2026-05-30 audit C1/C2/C3 — README hero + CLAUDE.md vision + plugin.json headline counts must match disk: Java/React/ESLint rules · L4 dirs · hard guards)"
+echo "[60] doc_headline_count_guard.sh (2026-05-30 audit C1/C2/C3 — README hero + CLAUDE.md vision + plugin.json headline counts must match disk: Java/React/ESLint rules · L4 dirs · hard guards. D-7 2026-08-10 addition — also asserts .claude-plugin/plugin.json's version agrees with marketplace.json's plugins[].version and metadata.version, so a release that bumps one manifest's number and forgets the other is blocked; --version-fixture-root exercises this sub-check in isolation since a minimal two-JSON fixture cannot satisfy the README/CLAUDE/SKILL.md checks above.)"
 run_guard "doc_headline_count/live" 0 \
     bash "$SCRIPT_DIR/doc_headline_count_guard.sh"
+if [ "$INCLUDE_FIXTURES" -eq 1 ]; then
+    run_guard "doc_headline_count/fixture_pass_version_sync" 0 \
+        bash "$SCRIPT_DIR/doc_headline_count_guard.sh" --version-fixture-root "$SCRIPT_DIR/fixtures/doc-headline-count/pass_version_sync"
+    run_guard "doc_headline_count/fixture_fail_version_mismatch" 1 \
+        bash "$SCRIPT_DIR/doc_headline_count_guard.sh" --version-fixture-root "$SCRIPT_DIR/fixtures/doc-headline-count/fail_version_mismatch"
+fi
 
 echo ""
 echo "[61] money_boundary_seam_guard.sh (#39 money-l0 reconcile — block raw BigDecimal.valueOf(<minor getter>) at the long-minor → BigDecimal-major payment boundary; use common/Money.toMajorUnits)"

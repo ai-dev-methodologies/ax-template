@@ -33,11 +33,11 @@
 
 # min_items — the unique item count MAY NOT BE REDUCED below this number, and it is the ONLY
 # place in this file that states it (BACKLOG P3-104 — a prose restatement rotted to 57 while the
-# directive read 62). Re-measured from disk 2026-08-02 after the D-4 append (derived_block_license
-# [108] kill-proof): items, distinct ids and distinct (guard, fixture) pairs are all equal to the
-# value below. fixture_kill_proof_guard.sh pins the same number as LIVE_MIN_ITEMS, so lowering the
-# gate takes two coordinated edits rather than one silent deletion.
-min_items: 73
+# directive read 62). Re-measured from disk 2026-08-10 after the D-7 append (doc_headline_count's
+# plugin/marketplace version-sync kill-proof): items, distinct ids and distinct (guard, fixture)
+# pairs are all equal to the value below. fixture_kill_proof_guard.sh pins the same number as
+# LIVE_MIN_ITEMS, so lowering the gate takes two coordinated edits rather than one silent deletion.
+min_items: 74
 
 items:
 
@@ -1159,4 +1159,23 @@ items:
     fixture: practices/evals/fixtures/derived-block-license/fail_unregistered
     fixture_arg: '--root'
     anchor: 'path not in registered_paths'
+    neuter: 'False'
+
+  # [D-7] the plugin.json / marketplace.json version-agreement check that closes
+  # BACKLOG D-7 (a release that bumps one manifest's version and forgets the other
+  # must be blocked, not just "compared once and hoped for the best").
+  # subject: fail_version_mismatch has plugin.json version 0.2.0 and marketplace.json's
+  #          plugins[].version 0.1.0 (metadata.version agrees at 0.2.0, isolating the
+  #          entry-version invariant specifically). The fixture must exit 1 BECAUSE the
+  #          guard compares plugins[].version against plugin.json's version, not because
+  #          some other invariant (metadata mismatch / missing field / no matching entry)
+  #          happens to also fire on this fixture pair.
+  # anchor:  the entry-version comparison itself.
+  # neuter:  condition-constant False → the comparison branch never executes → any
+  #          plugins[].version value is treated as agreeing regardless of plugin.json → exit 0.
+  - id: doc_headline_count/fail_version_mismatch
+    guard: practices/evals/doc_headline_count_guard.sh
+    fixture: practices/evals/fixtures/doc-headline-count/fail_version_mismatch
+    fixture_arg: '--version-fixture-root'
+    anchor: 'entry_version != plugin_version'
     neuter: 'False'

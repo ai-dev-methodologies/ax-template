@@ -109,23 +109,36 @@ hooks 스킬은 probe 없이 self-check 체크리스트로 마무리하므로, �
 ## 6. 업데이트 / 제거
 
 세션이 로드하는 것은 `~/.claude/plugins/cache/`의 **설치 시점 스냅숏**이다 — marketplace
-갱신만으로는 반영되지 않는다. 그리고 현 배포 모델에서는 `claude plugin update`도
-**동작하지 않는다**: plugin.json 버전이 0.1.0에 고정돼 있어(레포 main = 배포 채널,
-별도 릴리스 없음) 내용이 바뀌어도 updater가 "already at the latest version"으로
-no-op한다 (2026-08-02 live 실측 — gitCommitSha 불변 확인).
+갱신만으로는 반영되지 않는다.
 
-**확실한 갱신 절차 (live 실증됨 — 스냅숏 sha가 최신 main으로 이동):**
+**정상 경로 (BACKLOG D-7 종결 — 2026-08-10부터, live 실증됨):**
 
 ```bash
 claude plugin marketplace update ax-transform           # ① 카탈로그 clone 갱신
-claude plugin uninstall ax-transform@ax-transform       # ② 스냅숏 제거
-claude plugin install ax-transform@ax-transform         # ③ 최신 main으로 재설치
+claude plugin update ax-transform@ax-transform          # ② plugin.json 버전이 올랐으면 새 스냅숏 설치
 claude plugin list                                      # 확인 — 적용은 새 세션부터
 ```
 
-> plugin.json 버전을 릴리스마다 올리는 규율이 도입되면(BACKLOG D-7) ②③은
-> `claude plugin update ax-transform@ax-transform` 한 줄로 줄어든다. 그 전까지는
-> 위 재설치 경로가 유일하게 검증된 방법이다.
+`claude plugin update`는 `.claude-plugin/plugin.json`의 **top-level `version` 필드만** 보고
+갱신 여부를 판단한다(2026-08-02 live 실측, CLI 2.1.220) — `marketplace.json`의 plugin-entry
+`version`이나 `metadata.version`은 이 비교에 쓰이지 않는다. ax-template은 이제 **내용이 바뀌는
+릴리스마다 `plugin.json`의 version을 올리는 규율**을 채택했고(`practices/DECISIONS.md` R111),
+`doc_headline_count_guard.sh`가 `plugin.json`과 `marketplace.json`의 세 버전 필드(엔트리
+version · `metadata.version` · `plugin.json` version)가 서로 어긋나지 않는지를 기계적으로
+검증한다 — 한쪽만 올리고 잊는 릴리스를 차단한다.
+
+**이 경로가 no-op으로 보일 수 있는 경우 (여전히 유효한 사실 — amended, not retracted):**
+plugin.json의 버전 필드가 실제로 올라가지 **않은** 채 내용만 바뀐 릴리스를 소비 중이라면(예:
+D-7 이전에 설치했거나, 릴리스 규율을 어긴 커밋을 소비 중인 경우) `claude plugin update`는
+"already at the latest version"을 출력하는 **진짜 no-op**이다 — 스냅숏의 version 문자열이
+plugin.json과 이미 같기 때문이며, 업데이터에 결함이 있는 게 아니다(2026-08-02 최초 실측:
+plugin.json이 0.1.0에 고정돼 있던 시절 gitCommitSha 불변 확인). 이 경우의 **확실한 우회 경로**:
+
+```bash
+claude plugin uninstall ax-transform@ax-transform       # ① 스냅숏 제거
+claude plugin install ax-transform@ax-transform         # ② 최신 main으로 재설치
+claude plugin list                                      # 확인 — 적용은 새 세션부터
+```
 
 제거만 할 때:
 

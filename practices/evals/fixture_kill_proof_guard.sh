@@ -168,7 +168,9 @@ items = doc.get('items') or []
 # without breaching the registry floor, which is exactly the shrink [87] exists to reject.
 # 2026-08-02 (D-4): 72 → 73. One kill-proof was appended for the new
 # derived_block_license_guard (fail_unregistered), same reasoning.
-LIVE_MIN_ITEMS = 73
+# 2026-08-10 (D-7): 73 → 74. One kill-proof was appended for doc_headline_count_guard's
+# new plugin.json/marketplace.json version-sync check (fail_version_mismatch).
+LIVE_MIN_ITEMS = 74
 
 structural = []
 
