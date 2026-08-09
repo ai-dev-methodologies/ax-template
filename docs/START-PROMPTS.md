@@ -18,8 +18,13 @@ AI 에이전트(Claude Code 세션)에 그대로 붙여넣어 쓴다.
 **언제**: 새 제품을 처음부터 만든다 · 템플릿 구조(`backend/` + `frontend/`)를 물려받아도 된다 ·
 가드/R25/훅 전부 켜고 싶다.
 
-**전제**: JDK 21 · python3 · PyYAML(또는 yq) · node+npm · git ≥ 2.28.
-(`/usr/bin/java`는 macOS 껍데기라 실패한다 — `export JAVA_HOME=$(/usr/libexec/java_home -v 21)`)
+**전제**: JDK 21 · python3 · **PyYAML** · node+npm · git ≥ 2.28.
+`/usr/bin/java`는 macOS 껍데기다 — Homebrew로 깐 JDK는 `java_home`에 등록되지 않으므로
+`export JAVA_HOME=/opt/homebrew/opt/openjdk@21/...`(Intel은 `/usr/local/opt/...`), system/Oracle
+JDK만 `export JAVA_HOME=$(/usr/libexec/java_home -v 21)`가 통한다. 상세는 아래 [2].
+yq는 체크리스트 파싱만 대체한다 — [9] 전체 실행에는 PyYAML이 필요하다.
+
+**소요(실측)**: 빌드까지 ~15분, [9] 최종 판정까지 완주하면 1시간 안팎.
 
 ```
 ax-template을 fork-base로 삼아 새 프로젝트 "<PROJECT_NAME>"을 시작한다.
@@ -168,12 +173,17 @@ ax-template을 fork-base로 삼아 새 프로젝트 "<PROJECT_NAME>"을 시작�
     /ax-install-hooks 는 probe가 없으므로, 위반 커밋을 한 번 시도해
     차단되는 것을 눈으로 확인하고 되돌린다.
 
-[6] 갱신이 필요할 때 (중요 — update 명령은 동작하지 않는다)
-    claude plugin marketplace update ax-transform
-    claude plugin uninstall ax-transform@ax-transform
-    claude plugin install ax-transform@ax-transform
-    이유: plugin.json 버전이 0.1.0에 고정돼 있어 updater가 no-op한다(실측).
-    재설치가 현재 유일하게 검증된 갱신 경로다.
+[6] 갱신이 필요할 때
+    claude plugin marketplace update ax-transform     # ① 카탈로그 clone 갱신
+    claude plugin update ax-transform@ax-transform    # ② 새 버전이면 새 스냅숏 설치
+    claude plugin list                                # 확인 — 적용은 새 세션부터
+    성공 기준: ②가 `updated from <이전> to <이후>`를 출력.
+    ※ ②가 "already at the latest version"을 내면 진짜 no-op다 — 소비 중인 스냅숏의
+      버전 문자열이 이미 같다는 뜻이다(2026-08-10 이전에 설치했다면 해당). 그 경우:
+        claude plugin uninstall ax-transform@ax-transform
+        claude plugin install ax-transform@ax-transform
+      ax-template은 내용이 바뀌는 릴리스마다 plugin.json version을 올리는 규율을
+      채택했고(DECISIONS R111), 세 버전 필드가 어긋나면 가드가 차단한다.
 
 먼저 [1]~[2]를 실행하고, 생성된 ax.config.json 을 보여준 뒤 진행 승인을 받아라.
 ```
