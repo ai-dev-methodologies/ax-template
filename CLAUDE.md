@@ -37,7 +37,11 @@ preflight (exit 2, BLOCK — not a silent skip) before executing the plan, gated
   `/usr/bin/java` stub (no runtime) fails the check. On this maintainer machine:
   `JAVA_HOME=/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home`.
 - **python3** — required unconditionally (checklist parsing, guard helpers, collapse planner).
-- **PyYAML or yq** — the checklist is yaml; one parser is additionally required (always).
+- **PyYAML or yq** — either parses the checklist yaml (always required; the parser falls back
+  to `yq -o=json` when PyYAML is absent). **PyYAML specifically** is additionally required
+  whenever any catalog-guard step is scheduled (any command under an `evals/` directory) — yq
+  is NOT a substitute there: the guards themselves embed `import yaml` with no yq path, and
+  several SILENTLY SKIP without it, which would report a PASS for guards that never ran.
 - **node + npm** — required ONLY when the `frontend-lint` step is scheduled. A
   backend-only run (`--step backend-build`, etc.) is NOT blocked by missing node.
 - **bash + git** — baseline.

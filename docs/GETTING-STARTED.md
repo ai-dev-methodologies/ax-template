@@ -53,7 +53,7 @@ fork하는 순간 이미 들어있는 것:
 |---|---|---|
 | **JDK 21** | 백엔드/gradle 단계 | `java -version` → 21. macOS의 `/usr/bin/java`는 껍데기라 실패한다. system/Oracle JDK: `export JAVA_HOME=$(/usr/libexec/java_home -v 21)` — Homebrew JDK(`brew install openjdk@21`)는 java_home에 자동 등록되지 않으므로 `export JAVA_HOME=/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home`(Intel Mac은 `/usr/local/opt/...`) |
 | **python3** | 항상 (체크리스트 파싱·가드 헬퍼) | `python3 -V` |
-| **PyYAML 또는 yq** | 항상 | `python3 -c 'import yaml'` 또는 `yq --version` |
+| **PyYAML 또는 yq** | 체크리스트 파싱(항상) | `python3 -c 'import yaml'` 또는 `yq --version` — 단 catalog-guard 단계(전체 실행 포함)는 **PyYAML이 필수**, yq는 대체 불가(가드가 `import yaml`을 직접 embed하고 없으면 조용히 SKIP한다) |
 | **node + npm** | 프론트 lint 단계에서만 | `node -v` (백엔드만 돌릴 땐 없어도 안 막힌다) |
 
 > 이 preflight는 **조용히 건너뛰지 않는다.** 도구가 없으면 `verify-completion.sh`가 exit 2로 멈추고 무엇이 없는지 말한다. (과거에 PyYAML이 없어서 테스트 fixture가 "의도한 이유가 아닌 이유로" 통과하던 사고가 있었고, 그래서 막게 만들었다.)
@@ -212,7 +212,7 @@ bash practices/scripts/ax-prove-evidence-gate-blocks-agent.sh
 | 증상 | 원인 | 해결 |
 |---|---|---|
 | `Unable to locate a Java Runtime` | macOS `/usr/bin/java` 껍데기, 또는 `java_home`이 Homebrew JDK를 못 찾음 | system/Oracle JDK: `export JAVA_HOME=$(/usr/libexec/java_home -v 21)` — Homebrew JDK: `export JAVA_HOME=/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home`(Intel Mac: `/usr/local/opt/...`) |
-| R25가 `ModuleNotFoundError: yaml`로 실패 | PyYAML 없음 | `pip3 install pyyaml` 또는 `brew install yq` |
+| R25가 `ModuleNotFoundError: yaml`로 실패 | PyYAML 없음 | 체크리스트 파싱만이면 `brew install yq`로도 통과하지만, catalog-guard 단계가 포함된 전체 실행은 yq로 대체 불가 — `pip3 install pyyaml` |
 | `npm ci` 실패 | lockfile과 package.json 불일치 | `npm install --package-lock-only` 후 재시도 |
 | 푸시가 "R25 audit log 없음"으로 거부 | 커밋 후 R25를 안 돌림 | HEAD에서 `verify-completion.sh` 재실행 후 푸시 |
 | 커밋이 evidence 게이트에서 거부 | 새 규칙에 근거(인용/URL)가 없음 | 실제 외부 출처를 anchor. **placeholder는 통과 못 한다** |
