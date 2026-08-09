@@ -10,7 +10,9 @@ import {
 } from '../lib/feature-layout.js'
 
 // ── layoutFrom fallback contract — every malformed shape must NOT throw and
-// must field-by-field fall back to DEFAULT_LAYOUT (D-1 P3: crash-free defaults). ──
+// must field-by-field fall back to DEFAULT_LAYOUT (D-1 P3: crash-free defaults).
+// EXCEPTION: a multi-segment `ax.srcDir` (containing '/') THROWS instead of
+// falling back — see the "srcDir must be a single path segment" tests below. ──
 
 test('layoutFrom — undefined settings falls back to DEFAULT_LAYOUT', () => {
   assert.doesNotThrow(() => layoutFrom(undefined))
@@ -40,6 +42,30 @@ test('layoutFrom — non-string srcDir falls back to default srcDir', () => {
 test('layoutFrom — empty-string srcDir falls back to default srcDir', () => {
   const layout = layoutFrom({ ax: { srcDir: '' } })
   assert.equal(layout.srcDir, 'src')
+})
+
+// ── srcDir must be a single path segment — a multi-segment value is not a
+// "malformed field" that degrades gracefully; it silently classifies every
+// import in every file as layer:null (see doc comment above layoutFrom), so
+// it THROWS instead of falling back to DEFAULT_LAYOUT (P1 fix). ──
+
+test('layoutFrom — multi-segment srcDir throws instead of silently no-oping', () => {
+  assert.throws(() => layoutFrom({ ax: { srcDir: 'packages/web/src' } }), /single path segment/)
+})
+
+test('layoutFrom — multi-segment srcDir throw message names the offending value', () => {
+  assert.throws(() => layoutFrom({ ax: { srcDir: 'packages/web/src' } }), /packages\/web\/src/)
+})
+
+test('layoutFrom — leading-slash srcDir also throws (still contains "/")', () => {
+  assert.throws(() => layoutFrom({ ax: { srcDir: '/src' } }), /single path segment/)
+})
+
+test('layoutFrom — single-segment srcDir does NOT throw and classifies correctly', () => {
+  assert.doesNotThrow(() => layoutFrom({ ax: { srcDir: 'source' } }))
+  const layout = layoutFrom({ ax: { srcDir: 'source' } })
+  assert.equal(layout.srcDir, 'source')
+  assert.equal(classifySrcPath('source/features/f1/index.ts', layout).layer, 'features')
 })
 
 test('layoutFrom — non-object alias falls back to default alias', () => {

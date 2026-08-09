@@ -47,13 +47,26 @@ function escapeRe(s) {
 }
 
 /**
- * Derive a layout from ESLint flat-config `context.settings`. Never throws —
- * any missing/malformed field falls back to its DEFAULT_LAYOUT counterpart,
- * field by field, so a partially-broken config still enforces on the fields
- * that ARE well-formed instead of degrading enforcement entirely.
+ * Derive a layout from ESLint flat-config `context.settings`. Crash-free for
+ * every malformed field EXCEPT `ax.srcDir` containing `/` (see below) — that
+ * one shape throws instead of falling back, because it is a project-wide
+ * false-green producer, not a narrow misconfiguration. Every other
+ * missing/malformed field falls back to its DEFAULT_LAYOUT counterpart, field
+ * by field, so a partially-broken config still enforces on the fields that
+ * ARE well-formed instead of degrading enforcement entirely.
  *
  * - `settings` not an object, or `settings.ax` not an object -> DEFAULT_LAYOUT.
  * - `ax.srcDir` not a non-empty string -> default `'src'`.
+ * - `ax.srcDir` a non-empty string that contains `/` -> THROWS (fail loud, not a
+ *   silent fallback). `classifySrcPath` requires `srcDir` to be exactly the
+ *   FIRST path segment (`parts[0] !== layout.srcDir`) for every file in every
+ *   layout-aware rule; a multi-segment value (e.g. a fork-receiver pasting
+ *   `react.root`+`react.srcDir` together as `"packages/web/src"`) can never
+ *   match that check, so every import in every file silently classifies as
+ *   `layer: null` and all four layer-boundary rules go permanently quiet —
+ *   a project-wide false green, not a narrow misconfiguration. That failure
+ *   mode is worse than crashing, so this ONE field is exempted from the
+ *   crash-free contract below.
  * - `ax.alias` not a plain object -> default `{'@/':'src/'}`; if it IS an
  *   object, each entry is validated independently — a non-string/empty key or
  *   non-string/empty value discards only that entry (not the whole map).
@@ -72,7 +85,19 @@ export function layoutFrom(settings) {
   const ax = isPlainObject(settings) ? settings.ax : undefined
   if (!isPlainObject(ax)) return cloneLayout(DEFAULT_LAYOUT)
 
-  const srcDir = typeof ax.srcDir === 'string' && ax.srcDir.length > 0 ? ax.srcDir : DEFAULT_LAYOUT.srcDir
+  let srcDir = DEFAULT_LAYOUT.srcDir
+  if (typeof ax.srcDir === 'string' && ax.srcDir.length > 0) {
+    if (ax.srcDir.includes('/')) {
+      throw new Error(
+        `ax.config.json react.srcDir must be a single path segment (no '/'), got ${JSON.stringify(ax.srcDir)}. ` +
+          `srcDir is relative to react.root — a multi-segment path silently disables every ax/* layer-boundary ` +
+          `rule for the whole project instead of erroring (classifySrcPath can never match a multi-segment srcDir ` +
+          `against a single path segment). Fix: set react.srcDir to the single top-level directory name under ` +
+          `react.root (e.g. "src"), and move any deeper prefix into react.root instead.`
+      )
+    }
+    srcDir = ax.srcDir
+  }
 
   let alias = DEFAULT_LAYOUT.alias
   if (isPlainObject(ax.alias)) {

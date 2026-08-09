@@ -26,7 +26,7 @@
         "srcDir": {
           "type": "string",
           "pattern": "^[^/]+$",
-          "description": "Top-level source directory name, relative to react.root (e.g. src). Must be a single path segment — a multi-segment path (e.g. 'a/b') silently no-ops the layer glob instead of erroring."
+          "description": "Top-level source directory name, relative to react.root (e.g. src). Must be a single path segment — a multi-segment path (e.g. 'a/b') is rejected. This pattern is the schema-time check; layoutFrom() in feature-layout.js additionally throws at lint runtime if a multi-segment value reaches it (e.g. a hand-edited config that bypassed this schema), since it would otherwise silently no-op every layer-boundary rule instead of erroring."
         },
         "alias": {
           "type": "object",

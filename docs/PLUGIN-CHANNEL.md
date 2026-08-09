@@ -55,8 +55,12 @@ ax-template의 카탈로그(Java 233룰 · React 102룰 · ESLint 15룰 · 검�
 ```
 
 - `srcDir`/`alias`/`layers`가 전부 커스터마이즈 가능 — `src/`·`@/`가 아니어도 된다.
-- `srcDir`는 **단일 세그먼트**만 허용된다(스키마 `pattern: ^[^/]+$` — 다중 세그먼트는
-  ESLint 룰이 조용히 no-op하는 silent-miss를 만들기 때문에 스키마 차원에서 막는다).
+- `srcDir`는 **단일 세그먼트**만 허용된다 — 스키마(`pattern: ^[^/]+$`)로 제약하고,
+  **런타임(`layoutFrom()`)도** `/`가 포함된 값을 즉시 `Error` throw로 거부한다(ESLint
+  프로세스가 fatal error로 죽는다, exit code 2). 스키마는 손편집·생성기 결함으로 우회될
+  수 있으므로 — 다중 세그먼트가 스키마를 우회해 그대로 통과하면 `classifySrcPath`가
+  모든 파일을 `layer: null`로 분류해 4개 레이어 룰 전부가 조용히 0위반이 되는 silent-miss가
+  발생한다 — 스키마만으로는 이 결함을 막지 못한다. 그래서 두 층 모두 강제한다.
 - 레이어 **개수/이름**(app > features > shared 3계층 단방향)은 불변식이라 바꿀 수 없다 —
   변수화 대상은 각 레이어의 **디렉터리명 배열**뿐이다.
 - 스키마 정본: `practices-react/eslint-plugin-ax/schemas/ax.config.schema.json` ·

@@ -66,7 +66,7 @@ claude plugin list          # ax-transform@ax-transform · Status: ✔ enabled �
   "stacks": ["react", "java"],        // 배열 — 쓰는 스택만. ["react"]만도 됨
   "react": {
     "root": "frontend",               // 프로젝트 루트 기준 react 코드 위치. 루트면 "."
-    "srcDir": "src",                  // 단일 세그먼트만 (스키마 강제 ^[^/]+$)
+    "srcDir": "src",                  // 단일 세그먼트만 — 스키마(^[^/]+$) + 런타임 throw 이중 강제
     "alias": { "@/": "src/" },        // import alias → 실경로 매핑
     "layers": {                       // 레이어 3계층(app>features>shared)은 불변 —
       "app": ["app"],                 // 각 레이어의 "디렉토리명 배열"만 커스텀
@@ -149,8 +149,10 @@ plugin 채널의 대표 함정. 다음 순서로 진단:
    상태에서 srcDir이 `source`면 lint 대상 자체가 0이다. `${axConfig.react.srcDir}/**` 형태여야 함.
 2. `settings: { ax: axConfig.react }` 주입이 있는가 — 없으면 기본 레이아웃(`src/…`)으로
    폴백해 커스텀 트리 전체가 레이어 판정 밖.
-3. `ax.config.json`의 `srcDir`가 다중 세그먼트(`packages/web/src` 류)가 아닌가 — 스키마가
-   막지만 손으로 편집했으면 통과됐을 수 있음. 단일 세그먼트로.
+3. `ax.config.json`의 `srcDir`가 다중 세그먼트(`packages/web/src` 류)면 — 이제 스키마뿐
+   아니라 `layoutFrom()` 런타임도 이를 즉시 `Error` throw로 거부해 ESLint가 fatal error로
+   죽는다(exit code 2). 즉 이 경우는 더 이상 "조용한 0위반"이 아니라 눈에 보이는 크래시로
+   나타난다 — 크래시 메시지를 그대로 따라 단일 세그먼트로 고친다.
 4. `/ax-install-react-enforcement`의 probe 절차를 다시 실행해 배선을 재검증.
 
 ### T-3. `marketplace add`가 실패한다
