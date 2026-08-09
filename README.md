@@ -87,7 +87,11 @@ loop.
 
 ## Use as a project starter
 
-### 30-minute quickstart (fork-receiver path)
+### Quickstart (fork-receiver path) — ~15 min to a green build, ~1 h to a green R25
+
+> Measured 2026-08-10 on a loaded Mac: clone+submodules ~10 s · `./gradlew build` 9 m 57 s ·
+> `npm ci` 7 s · `run-all-guards.sh` 10 min+ · `verify-completion.sh` (R25) 20 min+ (it re-runs
+> every per-domain test task). Build first; run R25 when you make your first change.
 
 > **Step 0 — Read [`docs/IMPLEMENTATION-STATUS.md`](./docs/IMPLEMENTATION-STATUS.md) first.** It documents the current state across the 25 L4 domains: backend implementation level, frontend trio status (full / backend-only / promoted from R39 stub), and which Spec Trio fields are wired. Sealed verdict PASS validates **catalog self-discoverability by AI agents**, NOT that all backend code is production-ready. Skipping this step is the #1 cause of fork-receiver scope misjudgment.
 

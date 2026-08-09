@@ -32,8 +32,9 @@ ax-template을 fork-base로 삼아 새 프로젝트 "<PROJECT_NAME>"을 시작�
     git clone https://github.com/ai-dev-methodologies/ax-template <PROJECT_NAME>
     cd <PROJECT_NAME> && git submodule update --init
     성공 기준: 클론 완료. submodule 3개(petclinic/realworld/modulith)는 **선택** —
-    이식성 축 검증에만 쓰이고, 가드·게이트·빌드는 서브모듈 없이도 통과한다(실측).
-    외부 repo 접근이 막혀 있으면 서브모듈 실패는 무시하고 [2]로 진행한다.
+    이식성 축 검증에만 쓰이고, 가드·게이트·빌드는 서브모듈 없이도 통과한다
+    (GETTING-STARTED §3-2 주석 기준). 외부 repo(서드파티 3곳) 접근이 막혀 있으면
+    서브모듈 실패는 무시하고 [2]로 진행한다.
 
 [2] 사전 요구사항 확인 — 없으면 이후 검증이 exit 2로 막힌다
     java -version(21) · python3 -V · python3 -c 'import yaml' · node -v · git --version
@@ -72,7 +73,9 @@ ax-template을 fork-base로 삼아 새 프로젝트 "<PROJECT_NAME>"을 시작�
 
 [7] 카탈로그 무결성 확인
     bash practices/evals/run-all-guards.sh
-    성공 기준: 전 가드 PASS. FAIL이 있으면 그 이름과 출력을 그대로 보고하고 멈춘다.
+    성공 기준: 마지막 두 줄이 `Total: N passed, 0 failed` + `run-all-guards: all guards PASS`.
+    FAIL이 있으면 그 이름과 출력을 그대로 보고하고 멈춘다.
+    ※ 10분 이상 걸린다(실측). 멈춘 게 아니다.
 
 [8] ★강제가 정말 막는지 증명 (자기보고 금지 — 실제 차단을 본다)
     bash practices/scripts/ax-prove-gate-blocks-agent.sh
