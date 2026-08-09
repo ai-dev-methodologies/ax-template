@@ -20,7 +20,7 @@
 | 요구사항 | 확인 명령 | 비고 |
 |---|---|---|
 | Claude Code CLI | `claude --version` | plugin 명령은 CLI 또는 세션 내 `/plugin` 둘 다 가능 |
-| GitHub 접근 권한 | `git ls-remote git@github.com:ai-dev-methodologies/ax-template.git HEAD` | private repo — 계정별 SSH 키(또는 HTTPS 토큰) 필요. 이 명령이 sha를 출력해야 설치 가능 |
+| 네트워크 접근 | `git ls-remote https://github.com/ai-dev-methodologies/ax-template HEAD` | public repo — 인증 없이 HTTPS로 동작한다(실측: `gh repo view … --json visibility` → `PUBLIC`). 이 명령이 sha를 출력해야 설치 가능. 예외: git이 `url.*.insteadOf`로 https→ssh 재작성되도록 설정돼 있으면 그 계정의 SSH 키가 대신 필요 — T-3 참조 |
 | git ≥ 2.28 | `git --version` | ⚠️ 아래 트러블슈팅 T-4 — PATH 앞에 낡은 git이 숨어 있는 머신 실존 |
 
 plugin 채널 소비만 할 거면 JDK/node는 **필요 없다** (기계 강제를 opt-in 설치할 때 해당 스택 도구만 필요).
@@ -153,8 +153,21 @@ plugin 채널의 대표 함정. 다음 순서로 진단:
 4. `/ax-install-react-enforcement`의 probe 절차를 다시 실행해 배선을 재검증.
 
 ### T-3. `marketplace add`가 실패한다
-- private repo 접근 권한: `git ls-remote git@github.com:ai-dev-methodologies/ax-template.git HEAD`
-  가 그 계정에서 되는지부터. SSH 키 미등록이 대부분의 원인.
+ax-template은 **public repo**다 — SSH 키/토큰은 정상 경로에 필요 없다. 실패 원인은 아래 순서로 좁힌다:
+
+1. `owner/repo` 오타: `claude plugin marketplace add ai-dev-methodologies/ax-template` 인지 확인
+   (하이픈·오탈자 한 글자 차이로도 조용히 실패).
+2. 낡은 git이 PATH 앞에 있음: T-4의 `git init -b` 미지원 케이스와 같은 원인 —
+   `which -a git`으로 실제 실행되는 git이 ≥ 2.28인지 확인.
+3. `git config --get-all url.*.insteadOf` / `~/.gitconfig`에 https→ssh 재작성 규칙이
+   있는지 확인 (`url."git@github.com:".insteadOf = "https://github.com/"` 류). 있으면
+   `claude`가 내부적으로 https URL을 만들어도 실행 시 ssh로 바뀌어 그 계정의 SSH 키가
+   없으면 실패한다 — 규칙을 제거하거나 키를 등록.
+4. 네트워크/프록시: `git ls-remote https://github.com/ai-dev-methodologies/ax-template HEAD`가
+   sha 없이 실패하면(타임아웃, 407, TLS 오류) 사내 프록시/방화벽이 github.com 자체를 막고 있는 것.
+5. marketplace 이름 충돌: 이미 다른 소스로 `ax-transform`이라는 이름의 marketplace가 등록돼
+   있으면 `add`가 거부될 수 있다 — `claude plugin marketplace list`로 기존 등록을 확인 후
+   `claude plugin marketplace remove ax-transform`로 정리하고 재시도.
 
 ### T-4. (maintainer, 경로 A) R25 `verify-completion.sh`가 환경 문제로 BLOCK
 전부 실측된 사례들이다. R25는 fail-closed라 **원인을 없애야** 하며 우회 옵션은 없다:
@@ -177,7 +190,8 @@ plugin 채널의 대표 함정. 다음 순서로 진단:
 ## 8. FAQ
 
 **Q. 팀원/다른 계정에게 배포하려면?**
-그 계정에 repo 접근 권한을 주고 §2의 두 명령을 실행하게 하면 끝. 머신 이동도 동일.
+public repo이므로 접근 권한 부여가 필요 없다 — 그 계정에서 §2의 두 명령만 실행하면 끝.
+머신 이동도 동일.
 
 **Q. plugin 채널로 쓰면 ax-template의 guard·R25도 우리 프로젝트에 걸리나?**
 아니다. 그것은 카탈로그 자신의 자기검증 체계다. 대상 프로젝트가 받는 것은
