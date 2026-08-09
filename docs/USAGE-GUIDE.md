@@ -147,6 +147,14 @@ claude plugin install ax-transform@ax-transform         # ② 최신 main으로 
 claude plugin list                                      # 확인 — 적용은 새 세션부터
 ```
 
+**갱신 후 — react 기계 강제를 배선한 프로젝트는 심링크 재결박 (경로에 버전이 박혀 있다):**
+플러그인 스냅숏 경로는 `…/cache/ax-transform/ax-transform/<plugin버전>/` 형태라, **버전이
+올라간 갱신 뒤에는** 소비 프로젝트의 `node_modules/@ax/eslint-plugin-ax` 심링크가 **옛 버전
+디렉토리를 계속 가리킨다**(2026-08-10 git-소스 실측: same-버전 재설치는 같은 경로를 재생성해
+심링크가 생존하지만, 버전이 바뀌면 경로 자체가 바뀐다). 갱신 후 각 소비 프로젝트에서
+`npm i -D file:<새 스냅숏 경로>/practices-react/eslint-plugin-ax`를 재실행해 재결박하고,
+`/ax-install-react-enforcement`의 probe 절차로 배선이 살아 있는지 재확인한다.
+
 제거만 할 때:
 
 ```bash
