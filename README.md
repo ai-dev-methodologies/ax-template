@@ -1,6 +1,6 @@
 # ax-template
 
-> **Full-stack React 19 / Next.js 15 + Spring Boot 3 fork-base template. The catalog mechanically enforces development rules on its own HEAD (and in any fork that opts into the hooks) so AI agents can't drift off the rails.**
+> **Full-stack React 19 / Next.js 15 + Spring Boot 4 fork-base template. The catalog mechanically enforces development rules on its own HEAD (and in any fork that opts into the hooks) so AI agents can't drift off the rails.**
 > This claim is falsifiable — run `bash practices/scripts/ax-prove-gate-blocks-agent.sh` to confirm the block→correct→log triple on the current HEAD (maintainer-run, opt-in; see [`skills/ax-ledger/SKILL.md`](./skills/ax-ledger/SKILL.md)).
 
 **처음 오셨나요? → [docs/GETTING-STARTED.md](./docs/GETTING-STARTED.md)** — 이걸로 뭘 할 수 있고, 어떻게 만들고, 결과가 어떻게 나오는지 한 문서로.
@@ -13,7 +13,7 @@ ax = **AI transformation**. This repo is the source of the Claude Code skill
 **`/ax-transform`** and a composition kit you fork to start a new
 project. Every layer of the stack ships with rule-enforcement wired in:
 
-- **React / Next.js side** — `@ax/eslint-plugin-ax` mechanical lint (15 ESLint rules) + 101-rule
+- **React / Next.js side** — `@ax/eslint-plugin-ax` mechanical lint (15 ESLint rules) + 102-rule
   evidence-anchored catalog (`practices-react/rules/`).
 - **Spring Boot side** — `@Tag`-based JUnit + RestAssured tests
   (`./gradlew test{Domain}`) + 233-rule Java/Spring catalog
@@ -75,11 +75,11 @@ loop.
 
 | Layer | Asset | Mechanism |
 |-------|-------|-----------|
-| Backend reference workload | `backend/` — Spring Boot 3 + Java 21, 14 auth endpoints (signup/login/OAuth Google·Naver·Kakao/password reset/RBAC ADMIN·MANAGER·MEMBER), 5 CRUD endpoints, 1 rate-limit endpoint | TDD-built; per-domain `./gradlew test{Domain}` is binary pass/fail (status matrix in CLAUDE.md Build & Test) |
+| Backend reference workload | `backend/` — Spring Boot 4 + Java 21, 14 auth endpoints (signup/login/OAuth Google·Naver·Kakao/password reset/RBAC ADMIN·MANAGER·MEMBER), 5 CRUD endpoints, 1 rate-limit endpoint | TDD-built; per-domain `./gradlew test{Domain}` is binary pass/fail (status matrix in CLAUDE.md Build & Test) |
 | Frontend reference workload | `frontend/` — React 19 + Next.js 15, OAuth UI, login pages, e2e Playwright tests | self-tests the ESLint plugin |
 | Java/Spring rule catalog | `practices/` — 233 rules / 22+ categories with evidence-anchored frontmatter | runs against backend via `testPractices`; advisory probes via `practices/evals/run.sh` |
-| React/Next.js rule catalog | `practices-react/` — 100 rules / 9 families, citing canonical React 19 / Next.js 16 docs | runs via 3 hard gates (`practices-react/evals/run.sh`) |
-| ESLint plugin (React enforcement) | `practices-react/eslint-plugin-ax/` — 14 custom rules (incl. 3 frontend-decomposition: cross-feature / layer-direction / published-API-barrel) | RuleTester suites; install in any downstream project |
+| React/Next.js rule catalog | `practices-react/` — 102 rules / 9 families, citing canonical React 19 / Next.js 16 docs | runs via 3 hard gates (`practices-react/evals/run.sh`) |
+| ESLint plugin (React enforcement) | `practices-react/eslint-plugin-ax/` — 15 custom rules (incl. 3 frontend-decomposition: cross-feature / layer-direction / published-API-barrel) | RuleTester suites; install in any downstream project |
 | Spec Trio (per domain) | `specs/<domain>.yaml` + `contracts/<domain>-openapi.yaml` + `blueprints/<domain>-manifest.yaml` | enforced by `spec_ref_guard.sh` — every rule must point to a spec item |
 | 4 hard gates | `practices/evals/{spec_ref,substance,time_decay,evidence}_guard.sh` (Java) + `practices-react/evals/run.sh` (React) | block commits / pushes via `.githooks/{pre-commit,pre-push}` when catalog quality degrades |
 | AGENTS.md sentinel | `practices/AGENTS.md` + `practices-react/AGENTS.md` (sha256-anchored, auto-regenerated) | AI agents read this first; never read stale catalog |
@@ -97,7 +97,8 @@ The fastest way to evaluate: pick **one of 11 active recipes** that matches your
 # 1. Fork + bundle (first 5 minutes)
 git clone https://github.com/ai-dev-methodologies/ax-template my-project
 cd my-project
-git submodule update --init   # fixtures: petclinic / realworld / modulith
+git submodule update --init   # fixtures: petclinic / realworld / modulith — needed for
+                               # portability fixtures only; guards/gates PASS without them
 
 # 2. Pick a recipe (open recipes/_MANIFEST.yaml or recipes/README.md)
 #    11 active recipes: saas-subscription · e-commerce · crm · booking · marketplace
@@ -122,11 +123,13 @@ cd backend
 ./gradlew testNotification      # GREEN
 ./gradlew testIdentityVerification  # GREEN — 19/19 (HMAC envelope + PASS/KCB canonical extraction + VerifiedIdentity persistence + AuditLog publish + Admin GET. R54 backend residual closure. spec `domain_mode: backend_only` — no frontend trio.)
 ./gradlew testBilling           # GREEN — 17/17 (R21 backend impl: subscription/plan/webhook endpoints shipped)
-./gradlew testPortability       # advisory — external fixture (spring-realworld-example-app) cycle, not your code
+./gradlew testPortability       # advisory — external fixture (spring-realworld-example-app) cycle, not your code.
+                                 # On a fresh clone the fixtures aren't built yet, so these tests
+                                 # SKIP via JUnit Assumptions; run practices/evals/portability/run.sh --full first to build them.
 ./gradlew test                  # aggregate of the above; GREEN except the advisory PortabilityCyclic external-fixture cycle
 cd ..
 
-cd frontend && npm install && npm run build && cd ..
+cd frontend && npm ci && npm run build && cd ..
 
 # 5. Optional: install pre-commit + pre-push hooks (opt-in)
 bash practices/scripts/install-hooks.sh
@@ -195,7 +198,7 @@ reference workload ships `mock` provider only; the redirect-style hook
 source (Spring Docs, OWASP ASVS, RFC, JEP). Full catalog:
 [`practices/AGENTS.md`](./practices/AGENTS.md).
 
-### React/Next.js (`@ax/eslint-plugin-ax` + 101-rule catalog)
+### React/Next.js (`@ax/eslint-plugin-ax` + 102-rule catalog)
 
 | Rule | Default | Catches |
 |------|---------|---------|
@@ -248,7 +251,7 @@ ax-template/
 │   └── DECISIONS.md                # rule provenance trail
 │
 ├── practices-react/                # React/Next.js catalog
-│   ├── rules/                      # 99 rule.md files
+│   ├── rules/                      # 102 rule.md files
 │   ├── upstream/                   # External doc snapshots
 │   ├── eslint-plugin-ax/           # @ax/eslint-plugin-ax — 15 ESLint rules
 │   ├── evals/                      # 3 hard gates

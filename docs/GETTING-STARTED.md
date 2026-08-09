@@ -28,9 +28,9 @@
 
 fork하는 순간 이미 들어있는 것:
 
-- **동작하는 참조 구현 25개 도메인** — 인증(OAuth 포함) · CRUD · 결제 · 알림 · 감사로그 · 파일저장 · 검색 · 권한 · 세션 · 승인결재 · 리포트 내보내기 · API 키 … (`specs/` 142개 spec 파일)
-- **규칙 카탈로그** — Java/Spring 229룰(`practices/rules/`) + React 99룰(`practices-react/rules/`) + ESLint 14룰(기계 검사)
-- **강제 장치 90개** — 하드 가드 스크립트. 커밋·푸시·완료선언 시점에 돌아간다
+- **동작하는 참조 구현 25개 도메인** — 인증(OAuth 포함) · CRUD · 결제 · 알림 · 감사로그 · 파일저장 · 검색 · 권한 · 세션 · 승인결재 · 리포트 내보내기 · API 키 … (`specs/` 168개 spec 파일)
+- **규칙 카탈로그** — Java/Spring 233룰(`practices/rules/`) + React 102룰(`practices-react/rules/`) + ESLint 15룰(기계 검사)
+- **강제 장치 108개** — 하드 가드 스크립트. 커밋·푸시·완료선언 시점에 돌아간다
 - **AI 진입점** — `AGENTS.md`(에이전트가 처음 읽는 파일, 룰 소스에서 자동 생성 + sha256으로 stale 감지)
 
 즉 "결제 붙여줘"라고 하면 AI가 **백지에서 발명하지 않고** 기존 payment 도메인의 spec·테스트·규칙을 따라간다.
@@ -51,7 +51,7 @@ fork하는 순간 이미 들어있는 것:
 
 | 도구 | 언제 필요 | 확인 |
 |---|---|---|
-| **JDK 21** | 백엔드/gradle 단계 | `java -version` → 21. macOS의 `/usr/bin/java`는 껍데기라 실패한다. `export JAVA_HOME=$(/usr/libexec/java_home -v 21)` |
+| **JDK 21** | 백엔드/gradle 단계 | `java -version` → 21. macOS의 `/usr/bin/java`는 껍데기라 실패한다. system/Oracle JDK: `export JAVA_HOME=$(/usr/libexec/java_home -v 21)` — Homebrew JDK(`brew install openjdk@21`)는 java_home에 자동 등록되지 않으므로 `export JAVA_HOME=/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home`(Intel Mac은 `/usr/local/opt/...`) |
 | **python3** | 항상 (체크리스트 파싱·가드 헬퍼) | `python3 -V` |
 | **PyYAML 또는 yq** | 항상 | `python3 -c 'import yaml'` 또는 `yq --version` |
 | **node + npm** | 프론트 lint 단계에서만 | `node -v` (백엔드만 돌릴 땐 없어도 안 막힌다) |
@@ -63,6 +63,8 @@ fork하는 순간 이미 들어있는 것:
 ```bash
 git clone https://github.com/<your-org>/ax-template.git my-project
 cd my-project
+git submodule update --init   # portability fixtures(petclinic/realworld/modulith)용 — 가드·게이트는
+                               # 서브모듈 없이도 통과한다(필수 아님, 이식성 축 검증에만 필요)
 
 # ① 강제 훅 활성화 (opt-in — 이걸 해야 커밋/푸시 게이트가 켜진다)
 bash practices/scripts/install-hooks.sh
@@ -162,7 +164,7 @@ $ bash practices/scripts/verify-completion.sh
 verify-completion: PASS — all steps green. Task may declare done.
 ```
 
-돌아가는 단계(7 step): `backend-build` → `structural-pregate` → `per-domain-tests`(도메인별 gradle 태스크 전수) → `hard-guards`(90개) → `catalog-meta-guards` → `frontend-lint` → `aggregate-regression`
+돌아가는 단계(8 step): `backend-build` → `structural-pregate` → `per-domain-tests`(도메인별 gradle 태스크 전수) → `hard-guards`(108개) → `catalog-meta-guards` → `frontend-lint` → `frontend-test` → `aggregate-regression`
 
 **exit 0이어야 "완료"라고 말할 수 있다.** 실패하면 `fix_playbook`(고치는 법)이 출력된다. AI 에이전트도 사람도 이 규칙을 우회할 수 없다 — `--skip` 플래그가 없고, 푸시할 때 훅이 "최근 R25 통과 기록이 HEAD에 있는지" 다시 확인한다.
 
@@ -171,8 +173,8 @@ verify-completion: PASS — all steps green. Task may declare done.
 | 시점 | 무엇이 검사되나 | 활성화 |
 |---|---|---|
 | **커밋** | `practices/` 변경 시 4개 하드 게이트(spec_ref·substance·evidence·time_decay) + 커밋 메시지 스캔 | `install-hooks.sh` 실행한 클론 |
-| **푸시** | HEAD에 대한 최근 R25 통과 기록 + 전체 회귀(testPractices/testAsvs/testCrud) | 동일 |
-| **완료 선언 전** | R25 전체 (위 7 step) | 항상 수동 실행 가능 |
+| **푸시** | HEAD에 대한 최근 R25 통과 기록(모든 푸시) + 전체 회귀(testPractices/testAsvs/testCrud, `backend/`·`practices/`·seed spec을 건드리는 diff일 때만) | 동일 |
+| **완료 선언 전** | R25 전체 (위 8 step) | 항상 수동 실행 가능 |
 | **CI** | 카탈로그 품질 프로브 | fork 팀 자율 |
 
 > 이 훅들은 **opt-in**이다 — fork받은 팀이 켤지 말지 정한다. 템플릿은 카탈로그 품질만 보장하고, git·배포·리뷰 정책은 강제하지 않는다.
@@ -209,7 +211,7 @@ bash practices/scripts/ax-prove-evidence-gate-blocks-agent.sh
 
 | 증상 | 원인 | 해결 |
 |---|---|---|
-| `Unable to locate a Java Runtime` | macOS `/usr/bin/java` 껍데기 | `export JAVA_HOME=$(/usr/libexec/java_home -v 21)` |
+| `Unable to locate a Java Runtime` | macOS `/usr/bin/java` 껍데기, 또는 `java_home`이 Homebrew JDK를 못 찾음 | system/Oracle JDK: `export JAVA_HOME=$(/usr/libexec/java_home -v 21)` — Homebrew JDK: `export JAVA_HOME=/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home`(Intel Mac: `/usr/local/opt/...`) |
 | R25가 `ModuleNotFoundError: yaml`로 실패 | PyYAML 없음 | `pip3 install pyyaml` 또는 `brew install yq` |
 | `npm ci` 실패 | lockfile과 package.json 불일치 | `npm install --package-lock-only` 후 재시도 |
 | 푸시가 "R25 audit log 없음"으로 거부 | 커밋 후 R25를 안 돌림 | HEAD에서 `verify-completion.sh` 재실행 후 푸시 |
