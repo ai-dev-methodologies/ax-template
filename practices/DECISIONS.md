@@ -3610,3 +3610,46 @@ strip trailing dots or fold width) are not probed and would not be detected.
 - Commits: 5412fb2 (D-0 거버넌스) · f4c4b59 (D-1 ESLint 레이아웃 변수화) · 5d85876
   (D-2 INDEX 생성기 + 진입 스킬) · 86186d4 (D-3 설치 가이드 3종) · f8be8fd (D-4
   marketplace + provenance guard [108]) · D-5 finalization은 본 커밋.
+
+## R110 — `layoutFrom()`의 crash-free 계약을 `srcDir` 한 형태에 대해 번복 (fail-open → fail-closed)
+
+**날짜**: 2026-08-09 · **번복 대상**: D-1 P3 "crash-free defaults" 계약
+(`practices-react/eslint-plugin-ax/tests/feature-layout.test.js` 헤더에 명시돼 있던
+"모든 malformed shape는 throw하지 않는다")
+
+**무엇을 바꿨나.** `layoutFrom()`은 `ax.srcDir`가 `/`를 포함하면 이제 즉시 `Error`를
+throw한다. 그 외 malformed shape(alias 엔트리, layers 배열)는 **종전대로 무예외 폴백**을
+유지한다 — 계약을 통째로 폐기한 것이 아니라 정확히 한 필드-형태만 예외로 도려냈다.
+
+**왜 번복이 정당한가.** crash-free 계약의 목적은 "config 오타 하나가 lint 전체를 죽이지
+않게" 하는 것이다. 그 목적은 blast radius가 좁을 때만 성립한다:
+
+- 잘못된 `alias` 엔트리 → 그 alias를 쓰는 import만 out-of-scope로 떨어진다 (좁음)
+- 잘못된 `layers` 항목 → 그 디렉터리명만 매칭 실패 (좁음)
+- 잘못된 `srcDir` → `classifySrcPath`의 **첫 비교**(`parts[0] !== layout.srcDir`)가
+  전 파일에서 실패 → 모든 파일이 `layer:null` → **4개 레이어 경계 룰이 프로젝트 전역에서
+  한 건도 발화하지 않는다.** 그런데 lint는 0위반 green을 낸다.
+
+즉 이 필드에서 fail-open의 결과는 "관대함"이 아니라 **강제의 전역 침묵 + 거짓 green**이다.
+강제가 존재 이유인 산출물에서 거짓 green은 crash보다 엄격히 나쁘다 — crash는 보이고,
+침묵은 안 보인다. 그래서 이 한 자리에서는 fail-closed가 이긴다.
+
+**왜 스키마로 충분하지 않았나.** `schemas/ax.config.schema.json`은 `pattern: ^[^/]+$`로
+이를 제약하고 있었고 문서는 "스키마 차원에서 막는다"고 주장했다. 그러나 **lint 시점에
+그 스키마를 실행하는 코드가 없다**(레포 전체에 ajv 부재; 스키마를 참조하는 것은 SKILL.md
+산문 3곳뿐). 즉 강제 경로가 `/ax-init-config`라는 **에이전트 매개**에만 존재했고,
+손편집·오생성 config는 아무 저항 없이 통과했다. 선언된 스키마에 실행 소비자가 없는
+계열 문제로 P2-76에 등재.
+
+**번복 조건 (이 결정을 되돌려야 하는 신호).** ESLint가 `create()` throw를 삼키도록
+동작을 바꾸면(현재는 exit 2로 전파됨을 CLI 실측) 이 처방은 무력해지므로, 그때는
+throw가 아니라 도달 가능한 다른 fail-closed 기제로 재설계한다.
+
+**증거.** 재현: `layoutFrom({ax:{srcDir:'packages/web/src'}})` → 수정 전 수용 +
+`classifySrcPath` `{"layer":null}` / 수정 후 throw. 회귀 테스트 4건(stash bisection으로
+3건이 수정 없이는 FAIL함을 확인 = 비공허), 플러그인 스위트 56/56. 배선 실재성은 별도
+양방향 대조군으로 확인: 커스텀 레이아웃 소비자 프로젝트에서 `settings.ax` 주입 시
+eslint exit 1 + `ax/no-upward-layer-import` 1건, 주입 제거 시 동일 파일에서 exit 0 + 0건.
+
+**동반 문서 정정**: `ax.config.schema.json` 설명문 · `docs/PLUGIN-CHANNEL.md` 경로B 2단계 ·
+`docs/USAGE-GUIDE.md` §3 필드 레퍼런스 및 §7 T-2. 백로그: P1-74(closed) · P2-76(open).
