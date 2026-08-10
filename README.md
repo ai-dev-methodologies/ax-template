@@ -9,6 +9,20 @@
 
 **바로 시작할 프롬프트가 필요하다면 → [docs/START-PROMPTS.md](./docs/START-PROMPTS.md)** — 두 경로별 복붙용 시작 프롬프트. 각 단계에 관측 가능한 성공 기준 + "강제가 정말 막는지" 위반을 심어 증명하는 단계 포함.
 
+## 설치 — 한눈에
+
+| 방법 | 명령 | 언제 / 상세 |
+|---|---|---|
+| **경로 A — fork-base** | `git clone https://github.com/ai-dev-methodologies/ax-template my-project` | 신규 제품, 가드·R25 풀 강제 → [GETTING-STARTED](./docs/GETTING-STARTED.md) |
+| **경로 B — plugin 설치** | `claude plugin marketplace add ai-dev-methodologies/ax-template`<br>`claude plugin install ax-transform@ax-transform` | 기존/자유 레이아웃 프로젝트에 카탈로그+스킬 26종, 강제는 opt-in → [USAGE-GUIDE](./docs/USAGE-GUIDE.md) |
+| 세션 한정 로드 | `claude --plugin-dir <clone경로>` | 설치 흔적 없이 시험 (CLI 옵션 실재 확인) |
+
+> 별도 marketplace **등록 절차는 없다** — 이 repo 자체가 marketplace다
+> (`.claude-plugin/marketplace.json`). 위 `add` 명령이 곧 GitHub에서 직접 설치이며,
+> 격리 환경 실측으로 동작 확인됨(2026-08-10, gitCommitSha=HEAD·스킬 26종 스냅숏).
+> 경로 선택 기준·비교표는 [PLUGIN-CHANNEL](./docs/PLUGIN-CHANNEL.md),
+> 복붙 시작 프롬프트(신규 PC 포함)는 [START-PROMPTS](./docs/START-PROMPTS.md).
+
 ax = **AI transformation**. This repo is the source of the Claude Code skill
 **`/ax-transform`** and a composition kit you fork to start a new
 project. Every layer of the stack ships with rule-enforcement wired in:
