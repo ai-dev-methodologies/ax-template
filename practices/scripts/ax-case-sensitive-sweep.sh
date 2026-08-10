@@ -27,11 +27,15 @@
 #   1. creates a case-sensitive APFS sparse image and attaches it (`hdiutil`);
 #   2. PROBES the mount — refuses to continue unless it is REALLY case-sensitive, and reports
 #      (does not require) whether it is normalization-sensitive;
-#   3. clones this repo onto the volume and checks out the exact revision under test;
-#   4. runs `practices/evals/run-all-guards.sh --include-fixtures` INSIDE that clone;
-#   5. detaches the volume, deletes the image, and VERIFIES with `hdiutil info` that nothing
+#   3. FORCES TMPDIR onto the volume and PROBES that directory too (BACKLOG P3-142) — otherwise
+#      the guard suite's own TMPDIR-based probes (`ax-prove-hermetic-runtime.sh`'s $WORK) would
+#      silently fall back to the boot volume and measure the wrong filesystem;
+#   4. clones this repo onto the volume and checks out the exact revision under test;
+#   5. runs `practices/evals/run-all-guards.sh --include-fixtures` INSIDE that clone, with the
+#      volume-forced TMPDIR exported;
+#   6. detaches the volume, deletes the image, and VERIFIES with `hdiutil info` that nothing
 #      is left attached;
-#   6. prints what it covered and, explicitly, WHAT IT DID NOT.
+#   7. prints what it covered and, explicitly, WHAT IT DID NOT.
 #
 # IT FAILS LOUDLY, NEVER SILENTLY. No hdiutil, a volume that turns out to alias, a clone that
 # will not check out, a leaked attachment — each is a distinct NON-ZERO exit with its reason
@@ -69,6 +73,8 @@
 #   3  hdiutil unavailable (or image creation/attach failed) — NOT a skip
 #   4  the attached volume is not case-sensitive — NOT a skip
 #   5  the volume could not be detached, or is still attached afterwards (leak)
+#   6  TMPDIR could not be forced onto the volume, or the forced directory itself failed the
+#      case-sensitivity probe (BACKLOG P3-142) — NOT a skip
 set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -243,12 +249,38 @@ else
     NORM_NOTE="NOT covered (this volume folds NFC/NFD)"
 fi
 
+# ── force TMPDIR onto the volume ────────────────────────────────────────────────────
+# BACKLOG P3-142 — `run-all-guards.sh --include-fixtures` shells out to
+# `ax-prove-hermetic-runtime.sh`, which builds its ENTIRE attack topology under
+# `${TMPDIR:-/tmp}` ($WORK in that script), not under $MNT. Without forcing TMPDIR onto THIS
+# volume, the invocation below silently tests the BOOT volume's (folding) semantics instead of
+# the case-sensitive one just attached and probed above — every case-folding-dependent premise
+# would construct on the boot volume's own case-INSENSITIVE filesystem and "pass" there, having
+# never touched the volume this script exists to test. MEASURED: this was true of every prior
+# green from this sweep (357/0 ×2) — the TMPDIR-based probes inside those runs were partially
+# VACUOUS. Probed here, in the same style as the volume's own case probe above (build, ask,
+# refuse loudly), so a TMPDIR that turns out not to be on the volume cannot pass silently.
+SWEEP_TMPDIR="$MNT/tmp"
+if ! mkdir -p "$SWEEP_TMPDIR"; then
+    echo "ax-case-sensitive-sweep: cannot create $SWEEP_TMPDIR — TMPDIR cannot be forced onto" >&2
+    echo "  the volume, so the guard-suite invocation would fall back to the boot volume." >&2
+    exit 6
+fi
+if ! cs_probe "$SWEEP_TMPDIR"; then
+    echo "ax-case-sensitive-sweep: the forced TMPDIR ($SWEEP_TMPDIR) is NOT case-sensitive, even" >&2
+    echo "  though the volume it sits on IS (probed above). Something is wrong with this" >&2
+    echo "  directory specifically — refusing to run a sweep whose TMPDIR premise is unverified." >&2
+    exit 6
+fi
+echo "  TMPDIR forced onto the volume: $SWEEP_TMPDIR (probed case-sensitive, not assumed)"
+
 if [ "$PROBE_ONLY" = "1" ]; then
     echo ""
     echo "═══ RESULT (--probe-only) ═══"
     echo "  volume lifecycle exercised: create → attach → case probe → normalization probe →"
-    echo "  armed leak check → (teardown below). NO CLONE, NO SWEEP, NOTHING VERIFIED ABOUT"
-    echo "  THE CATALOG. This mode measures the harness, not the tree."
+    echo "  TMPDIR forced onto the volume + probed → armed leak check → (teardown below). NO"
+    echo "  CLONE, NO SWEEP, NOTHING VERIFIED ABOUT THE CATALOG. This mode measures the harness,"
+    echo "  not the tree."
     exit 0
 fi
 
@@ -268,9 +300,10 @@ fi
 echo "  clone HEAD verified: $CLONE_HEAD"
 
 LOG="$WORK/run-all-guards.log"
-echo "  running run-all-guards.sh --include-fixtures on the case-sensitive volume …"
+echo "  running run-all-guards.sh --include-fixtures on the case-sensitive volume (TMPDIR=$SWEEP_TMPDIR) …"
 START=$(date +%s)
-( cd "$CLONE" && bash practices/evals/run-all-guards.sh --include-fixtures ) >"$LOG" 2>&1
+( cd "$CLONE" && TMPDIR="$SWEEP_TMPDIR" bash practices/evals/run-all-guards.sh --include-fixtures ) \
+    >"$LOG" 2>&1
 SWEEP_RC=$?
 ELAPSED=$(( $(date +%s) - START ))
 TALLY="$(grep -E '^Total: [0-9]+ passed, [0-9]+ failed' "$LOG" | tail -1)"

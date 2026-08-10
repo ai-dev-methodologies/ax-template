@@ -286,6 +286,50 @@ violation() { echo "  VIOLATION: $*" >&2; FAIL=1; }
 
 GIT_ID=(-c user.email=ax@example.invalid -c user.name=ax)
 
+# ax_fold_probe <a-hex> <b-hex> — builds the two RAW-BYTE spellings under a throwaway subdirectory
+# of $WORK and prints "FOLD "/"NOFOLD " followed by both spellings' (dev,ino) evidence (or ENOENT).
+# Computed HERE, ONCE, before ANY case runs (BACKLOG P3-142): every premise-dependent case in this
+# harness — round 9's casefold/dircase (index-plumbing aliases whose SECOND spelling is never
+# materialized on disk, so `git status` itself only stays empty because a folding filesystem's own
+# lookup serves it from the FIRST spelling's inode), round 11's nacase (a directory aliased by
+# non-ASCII CASE), round 13/14/14b's symcase/symjump/symmidfinal (a symlink target census that
+# groups by OBSERVED (st_dev, st_ino), so the alias can only be OBSERVED on a filesystem that
+# actually folds the axis under test) — shares the SAME dependency: build the alias, then ask
+# whether $WORK served it from one inode. Reused below and by round 14b's symmidslash/symmidsub/
+# symmidnfd (BACKLOG P3-139), never recomputed twice.
+ax_fold_probe() {
+    local ah="$1" bh="$2"
+    "${AX_PY_BIN:-python3}" - "$WORK" "$ah" "$bh" <<'PY'
+import os, shutil, sys
+d, ah, bh = sys.argv[1], sys.argv[2], sys.argv[3]
+A, B = bytes.fromhex(ah), bytes.fromhex(bh)
+base = os.path.join(os.fsencode(d), b"ax-fold-probe")
+shutil.rmtree(base, ignore_errors=True)
+os.makedirs(base)
+try:
+    with open(os.path.join(base, A), "wb"):
+        pass
+    def ev(name):
+        try:
+            st = os.lstat(os.path.join(base, name))
+            return f"{name.decode('utf-8', 'replace')}=[{st.st_dev},{st.st_ino}]", (st.st_dev, st.st_ino)
+        except OSError:
+            return f"{name.decode('utf-8', 'replace')}=[ENOENT]", None
+    ea, ia = ev(A)
+    eb, ib = ev(B)
+    folds = A != B and ia is not None and ia == ib
+    print(("FOLD " if folds else "NOFOLD ") + ea + " " + eb)
+finally:
+    shutil.rmtree(base, ignore_errors=True)
+PY
+}
+CASE_FOLD_PROBE="$(ax_fold_probe 6469726c696e6b 4449524c494e4b)"          # dirlink / DIRLINK
+NORM_FOLD_PROBE="$(ax_fold_probe c3a92d6c696e6b 65cc812d6c696e6b)"        # é-link (NFC) / e+́-link (NFD)
+NACASE_FOLD_PROBE="$(ax_fold_probe c389 c3a9)"                            # É / é — non-ASCII CASE
+case "$CASE_FOLD_PROBE" in FOLD\ *) WORK_FOLDS_CASE=1 ;; *) WORK_FOLDS_CASE=0 ;; esac
+case "$NORM_FOLD_PROBE" in FOLD\ *) WORK_FOLDS_NORM=1 ;; *) WORK_FOLDS_NORM=0 ;; esac
+case "$NACASE_FOLD_PROBE" in FOLD\ *) WORK_FOLDS_NACASE=1 ;; *) WORK_FOLDS_NACASE=0 ;; esac
+
 # prefix_neuter <sb> — rebuild the sandbox's copies as the PRE-ROUND-5 shape: the hermetic
 # scrubs, the git-context binding and the independent status read are removed. Every anchor is
 # asserted to occur exactly once, so this goes STALE LOUDLY rather than silently proving nothing.
@@ -2407,10 +2451,27 @@ r9_case V2 gldirt   empty "same, round-9 refusals removed              " "" all
 # fact ran). The honest scope of the LEAF class is therefore: the divergent form is caught by the
 # clean-tree precondition anyway, and this refusal names the fault in the form that precondition
 # cannot see. The DIRECTORY form (Z) has no such backstop — that one was silently open.
-r9_case W  casefold empty "two index entries differing only in CASE    " \
-    "GIT_CASEFOLD_ALIAS" "" "0a815065ebf5ad6ce3828aba4cfc387f26a56a306e8616bb22aadce99dd11211"
-r9_case W2 casefold empty "same, round-9 refusals removed              " "" all \
-    "0a815065ebf5ad6ce3828aba4cfc387f26a56a306e8616bb22aadce99dd11211"
+# BACKLOG P3-142 — the SECOND index entry (`alias.txt`) is registered by plumbing alone
+# (`update-index --cacheinfo`) and NEVER materialized as its own file on disk, so `git status`
+# stays empty ONLY because a case-FOLDING $WORK serves the `alias.txt` lookup from `Alias.txt`'s
+# own inode. On a case-sensitive filesystem that lookup is ENOENT, `git status` reports
+# `alias.txt` deleted, and the gate refuses on AUDIT_TREE_DIRTY_NOW before the casefold code ever
+# runs — r9_premise's own "premise broken" check (below) would then fire, which is a genuine
+# harness failure, not a skip. Gate the construction itself instead.
+if [ "$WORK_FOLDS_CASE" -eq 1 ]; then
+    r9_case W  casefold empty "two index entries differing only in CASE    " \
+        "GIT_CASEFOLD_ALIAS" "" "0a815065ebf5ad6ce3828aba4cfc387f26a56a306e8616bb22aadce99dd11211"
+    r9_case W2 casefold empty "same, round-9 refusals removed              " "" all \
+        "0a815065ebf5ad6ce3828aba4cfc387f26a56a306e8616bb22aadce99dd11211"
+else
+    note "(W)/(W2) SKIPPED-2 — casefold needs a CASE-FOLDING filesystem to construct its premise" \
+         "(the second index entry \`alias.txt\` is never written to disk; \`git status\` stays" \
+         "empty only because \$WORK's own lookup serves it from \`Alias.txt\`'s inode); probed" \
+         "\$WORK: $CASE_FOLD_PROBE — this filesystem does NOT fold case, so the alias cannot be" \
+         "built here. PREMISE MISMATCH (BACKLOG P3-142), not a defect: SKIPPED, never counted as" \
+         "a pass, and the casefold code never ran."
+    SKIPPED=$((SKIPPED + 2))
+fi
 # (X) ROUND 9 / (c): the MIRROR of round 8's (P) — index SYMLINK, regular file on disk. Round 8
 # implemented this direction and never exercised it. Run with the index-bit refusal neutered so the
 # code under test is the REPRESENTATION backstop and not the assume-unchanged bit.
@@ -2433,18 +2494,29 @@ r9_case Y  glinit   any   "INITIALIZED gitlink at the wrong commit     " \
 # the gate would then block on the RECORD SHAPE instead of on the alias. The constant is the honest
 # value for this tree (status is empty), and 12c fires before the recompute.
 CLEAN_FP="0a815065ebf5ad6ce3828aba4cfc387f26a56a306e8616bb22aadce99dd11211"
-r9_case Z  dircase  empty "DIRECTORY component aliased (A/ ≡ a/)      " \
-    "GIT_CASEFOLD_DIR_ALIAS" "" "$CLEAN_FP"
-# (Z2) the pre-round-10 twin: with the refusal removed from BOTH implementations the attack lands.
-r9_case Z2 dircase  empty "same, round-10 refusal removed (both)      " "" r10all "$CLEAN_FP"
-# (Z3)/(Z4) ROUND 10 / P2 — EACH IMPLEMENTATION, ON ITS OWN. With only the 12c sweep neutered the
-# FINGERPRINT HELPER must still refuse; it is the prior-release copy the recompute runs, so its
-# refusal surfaces as AUDIT_FINGERPRINT_UNVERIFIABLE. With only the helper neutered the sweep must
-# still refuse, on its own code. Neither implementation may be dead weight behind the other.
-r9_case Z3 dircase  empty "same, only the 12c SWEEP neutered          " \
-    "AUDIT_FINGERPRINT_UNVERIFIABLE" r10guard "$CLEAN_FP"
-r9_case Z4 dircase  empty "same, only the FINGERPRINT HELPER neutered " \
-    "GIT_CASEFOLD_DIR_ALIAS" r10fp "$CLEAN_FP"
+# BACKLOG P3-142 — `a/helper` is likewise registered by plumbing alone, so `a/` never exists as a
+# real directory; `A/` and `a/` lstat to the SAME inode, and `git status` stays empty, only on a
+# case-FOLDING $WORK. Gated for the same reason as (W)/(W2) above.
+if [ "$WORK_FOLDS_CASE" -eq 1 ]; then
+    r9_case Z  dircase  empty "DIRECTORY component aliased (A/ ≡ a/)      " \
+        "GIT_CASEFOLD_DIR_ALIAS" "" "$CLEAN_FP"
+    # (Z2) the pre-round-10 twin: with the refusal removed from BOTH implementations the attack lands.
+    r9_case Z2 dircase  empty "same, round-10 refusal removed (both)      " "" r10all "$CLEAN_FP"
+    # (Z3)/(Z4) ROUND 10 / P2 — EACH IMPLEMENTATION, ON ITS OWN. With only the 12c sweep neutered the
+    # FINGERPRINT HELPER must still refuse; it is the prior-release copy the recompute runs, so its
+    # refusal surfaces as AUDIT_FINGERPRINT_UNVERIFIABLE. With only the helper neutered the sweep must
+    # still refuse, on its own code. Neither implementation may be dead weight behind the other.
+    r9_case Z3 dircase  empty "same, only the 12c SWEEP neutered          " \
+        "AUDIT_FINGERPRINT_UNVERIFIABLE" r10guard "$CLEAN_FP"
+    r9_case Z4 dircase  empty "same, only the FINGERPRINT HELPER neutered " \
+        "GIT_CASEFOLD_DIR_ALIAS" r10fp "$CLEAN_FP"
+else
+    note "(Z)/(Z2)/(Z3)/(Z4) SKIPPED-4 — dircase needs a CASE-FOLDING filesystem to construct its" \
+         "premise (\`a/helper\` is never a real directory; \`A/\` and \`a/\` must lstat to ONE" \
+         "inode for \`git status\` to stay empty); probed \$WORK: $CASE_FOLD_PROBE — this" \
+         "filesystem does NOT fold case. PREMISE MISMATCH (BACKLOG P3-142), not a defect: SKIPPED."
+    SKIPPED=$((SKIPPED + 4))
+fi
 # The same split, applied to the three round-9 refusals whose shipped twins disabled both
 # implementations at once (reviewer P2). Each must be independently load-bearing.
 r9_case T3 execA    empty "exec bit, only the 12c SWEEP neutered      " \
@@ -2455,10 +2527,16 @@ r9_case V3 gldirt   empty "gitlink dirt, only the 12c SWEEP neutered  " \
     "AUDIT_FINGERPRINT_UNVERIFIABLE" guard
 r9_case V4 gldirt   empty "gitlink dirt, only the HELPER neutered     " \
     "GIT_GITLINK_UNINITIALIZED_POPULATED" fp
-r9_case W3 casefold any   "leaf alias, only the 12c SWEEP neutered    " \
-    "AUDIT_FINGERPRINT_UNVERIFIABLE" guard "$CLEAN_FP"
-r9_case W4 casefold any   "leaf alias, only the HELPER neutered       " \
-    "GIT_CASEFOLD_ALIAS" fp "$CLEAN_FP"
+if [ "$WORK_FOLDS_CASE" -eq 1 ]; then
+    r9_case W3 casefold any   "leaf alias, only the 12c SWEEP neutered    " \
+        "AUDIT_FINGERPRINT_UNVERIFIABLE" guard "$CLEAN_FP"
+    r9_case W4 casefold any   "leaf alias, only the HELPER neutered       " \
+        "GIT_CASEFOLD_ALIAS" fp "$CLEAN_FP"
+else
+    note "(W3)/(W4) SKIPPED-2 — same casefold premise as (W)/(W2) above; probed \$WORK:" \
+         "$CASE_FOLD_PROBE. PREMISE MISMATCH (BACKLOG P3-142), not a defect: SKIPPED."
+    SKIPPED=$((SKIPPED + 2))
+fi
 
 # ══ ROUND 11 (TD-2026-08-01-(P1-unicode-prefix-fold)) ════════════════════════════════
 # (AA) THE REVIEWER'S ROUND-11 TOPOLOGY: the two DIRECTORY spellings differ only by UNICODE
@@ -2470,13 +2548,29 @@ r9_case W4 casefold any   "leaf alias, only the HELPER neutered       " \
 # `é` c3a9). The fingerprint override is the clean-tree constant for the same reason as (W)/(Z).
 r9_case AA nfcnfd  empty "DIRECTORY aliased by NORMALIZATION (é ≡ é)" \
     "GIT_CASEFOLD_DIR_ALIAS" "" "$CLEAN_FP"
-r9_case AB nacase  empty "DIRECTORY aliased by NON-ASCII CASE (É ≡ é)" \
-    "GIT_CASEFOLD_DIR_ALIAS" "" "$CLEAN_FP"
+# BACKLOG P3-142 — (AB) is a CASE alias (É/é), not a normalization one (AA is): it needs a
+# filesystem that folds NON-ASCII case specifically. Probed with the exact bytes this case builds
+# (c389/c3a9), not the ASCII dirlink/DIRLINK proxy — the two axes are not guaranteed to coincide.
+if [ "$WORK_FOLDS_NACASE" -eq 1 ]; then
+    r9_case AB nacase  empty "DIRECTORY aliased by NON-ASCII CASE (É ≡ é)" \
+        "GIT_CASEFOLD_DIR_ALIAS" "" "$CLEAN_FP"
+else
+    note "(AB) SKIPPED-1 — nacase needs a filesystem that folds NON-ASCII CASE (É≡é) to construct" \
+         "its premise; probed \$WORK: $NACASE_FOLD_PROBE — this filesystem does NOT fold it." \
+         "PREMISE MISMATCH (BACKLOG P3-142), not a defect: SKIPPED."
+    SKIPPED=$((SKIPPED + 1))
+fi
 # (AA2)/(AB2) the pre-round-11 twins. The neuter puts `bytes.lower()` BACK as the map key in both
 # implementations — it does NOT remove the round-10 report, so what lands again is attributable to
 # the FOLD and to nothing else.
 r9_case AA2 nfcnfd empty "same, round-11 fold reverted (both)       " "" r11all "$CLEAN_FP"
-r9_case AB2 nacase empty "same, round-11 fold reverted (both)       " "" r11all "$CLEAN_FP"
+if [ "$WORK_FOLDS_NACASE" -eq 1 ]; then
+    r9_case AB2 nacase empty "same, round-11 fold reverted (both)       " "" r11all "$CLEAN_FP"
+else
+    note "(AB2) SKIPPED-1 — same nacase premise as (AB) above; probed \$WORK: $NACASE_FOLD_PROBE." \
+         "PREMISE MISMATCH (BACKLOG P3-142), not a defect: SKIPPED."
+    SKIPPED=$((SKIPPED + 1))
+fi
 # (AA3)/(AA4)/(AB3)/(AB4) — EACH IMPLEMENTATION ON ITS OWN, the round-10 split pattern. With only
 # the 12c sweep's fold reverted the FINGERPRINT HELPER must still refuse (it is the prior-release
 # copy the recompute runs, so its refusal surfaces as AUDIT_FINGERPRINT_UNVERIFIABLE); with only
@@ -2485,13 +2579,26 @@ r9_case AA3 nfcnfd empty "normalization, only the SWEEP reverted    " \
     "AUDIT_FINGERPRINT_UNVERIFIABLE" r11guard "$CLEAN_FP"
 r9_case AA4 nfcnfd empty "normalization, only the HELPER reverted   " \
     "GIT_CASEFOLD_DIR_ALIAS" r11fp "$CLEAN_FP"
-r9_case AB3 nacase empty "non-ASCII case, only the SWEEP reverted   " \
-    "AUDIT_FINGERPRINT_UNVERIFIABLE" r11guard "$CLEAN_FP"
-r9_case AB4 nacase empty "non-ASCII case, only the HELPER reverted  " \
-    "GIT_CASEFOLD_DIR_ALIAS" r11fp "$CLEAN_FP"
-# (AC) NO REGRESSION: the round-10 ASCII topology must still be refused by the widened fold.
-r9_case AC dircase empty "round-10 ASCII A/ ≡ a/ still refused       " \
-    "GIT_CASEFOLD_DIR_ALIAS" "" "$CLEAN_FP"
+if [ "$WORK_FOLDS_NACASE" -eq 1 ]; then
+    r9_case AB3 nacase empty "non-ASCII case, only the SWEEP reverted   " \
+        "AUDIT_FINGERPRINT_UNVERIFIABLE" r11guard "$CLEAN_FP"
+    r9_case AB4 nacase empty "non-ASCII case, only the HELPER reverted  " \
+        "GIT_CASEFOLD_DIR_ALIAS" r11fp "$CLEAN_FP"
+else
+    note "(AB3)/(AB4) SKIPPED-2 — same nacase premise as (AB) above; probed \$WORK:" \
+         "$NACASE_FOLD_PROBE. PREMISE MISMATCH (BACKLOG P3-142), not a defect: SKIPPED."
+    SKIPPED=$((SKIPPED + 2))
+fi
+# (AC) NO REGRESSION: the round-10 ASCII topology must still be refused by the widened fold. Same
+# CASE premise as (Z)/(Z2)/(Z3)/(Z4) above (BACKLOG P3-142) — a different KIND, same premise axis.
+if [ "$WORK_FOLDS_CASE" -eq 1 ]; then
+    r9_case AC dircase empty "round-10 ASCII A/ ≡ a/ still refused       " \
+        "GIT_CASEFOLD_DIR_ALIAS" "" "$CLEAN_FP"
+else
+    note "(AC) SKIPPED-1 — same dircase premise as (Z) above; probed \$WORK: $CASE_FOLD_PROBE." \
+         "PREMISE MISMATCH (BACKLOG P3-142), not a defect: SKIPPED."
+    SKIPPED=$((SKIPPED + 1))
+fi
 
 # (Z5) THE FALSE-POSITIVE CONTROL, and it is the one that matters: the refusal is a MEASUREMENT of
 # (st_dev, st_ino), so a tree whose `A/` and `a/` are GENUINELY DISTINCT directories must pass.
@@ -2674,16 +2781,42 @@ fi
 #        symlinked directory. All nine must PASS. A rule of "the target must equal the record"
 #        would refuse six of them; gating the refusal on FOLD-EQUALITY refuses exactly the aliases.
 CLEAN_FP_R13="$CLEAN_FP"
-r9_case AJ  symcase   empty "SYMLINK TARGET aliased by CASE (gradlew)  " \
-    "GIT_SYMLINK_TARGET_ALIAS" "" "$CLEAN_FP_R13"
+# BACKLOG P3-142 — (AJ) is a symlink-target CASE alias (`GRADLEW-REAL` vs tracked
+# `backend/gradlew-real`); the census in tree_fingerprint.py groups by OBSERVED (st_dev, st_ino)
+# (_register_prefixes / _symlink_target_verdicts), so the alias can only be OBSERVED on a
+# filesystem that actually folds CASE — the symlink itself is committed content and creates fine
+# on any filesystem, but the aliased candidate path never lstat's to the tracked file's inode
+# without folding, so no violation would be observed (r9_premise's own check below would then
+# fire "premise broken"). (AK) is the NORMALIZATION sibling and is NOT gated here — untouched.
+if [ "$WORK_FOLDS_CASE" -eq 1 ]; then
+    r9_case AJ  symcase   empty "SYMLINK TARGET aliased by CASE (gradlew)  " \
+        "GIT_SYMLINK_TARGET_ALIAS" "" "$CLEAN_FP_R13"
+else
+    note "(AJ) SKIPPED-1 — symcase needs a CASE-FOLDING filesystem to construct its premise" \
+         "(the aliased candidate must lstat to the tracked file's inode); probed \$WORK:" \
+         "$CASE_FOLD_PROBE. PREMISE MISMATCH (BACKLOG P3-142), not a defect: SKIPPED."
+    SKIPPED=$((SKIPPED + 1))
+fi
 r9_case AK  symnfcnfd empty "SYMLINK TARGET aliased by NORMALIZATION   " \
     "GIT_SYMLINK_TARGET_ALIAS" "" "$CLEAN_FP_R13"
-r9_case AJ2 symcase   empty "same, round-13 census removed (both)      " "" r13all "$CLEAN_FP_R13"
+if [ "$WORK_FOLDS_CASE" -eq 1 ]; then
+    r9_case AJ2 symcase   empty "same, round-13 census removed (both)      " "" r13all "$CLEAN_FP_R13"
+else
+    note "(AJ2) SKIPPED-1 — same symcase premise as (AJ) above; probed \$WORK: $CASE_FOLD_PROBE." \
+         "PREMISE MISMATCH (BACKLOG P3-142), not a defect: SKIPPED."
+    SKIPPED=$((SKIPPED + 1))
+fi
 r9_case AK2 symnfcnfd empty "same, round-13 census removed (both)      " "" r13all "$CLEAN_FP_R13"
-r9_case AJ3 symcase   empty "case target, only the SWEEP neutered      " \
-    "AUDIT_FINGERPRINT_UNVERIFIABLE" r13guard "$CLEAN_FP_R13"
-r9_case AJ4 symcase   empty "case target, only the HELPER neutered     " \
-    "GIT_SYMLINK_TARGET_ALIAS" r13fp "$CLEAN_FP_R13"
+if [ "$WORK_FOLDS_CASE" -eq 1 ]; then
+    r9_case AJ3 symcase   empty "case target, only the SWEEP neutered      " \
+        "AUDIT_FINGERPRINT_UNVERIFIABLE" r13guard "$CLEAN_FP_R13"
+    r9_case AJ4 symcase   empty "case target, only the HELPER neutered     " \
+        "GIT_SYMLINK_TARGET_ALIAS" r13fp "$CLEAN_FP_R13"
+else
+    note "(AJ3)/(AJ4) SKIPPED-2 — same symcase premise as (AJ) above; probed \$WORK:" \
+         "$CASE_FOLD_PROBE. PREMISE MISMATCH (BACKLOG P3-142), not a defect: SKIPPED."
+    SKIPPED=$((SKIPPED + 2))
+fi
 r9_case AK3 symnfcnfd empty "normalization target, SWEEP neutered      " \
     "AUDIT_FINGERPRINT_UNVERIFIABLE" r13guard "$CLEAN_FP_R13"
 r9_case AK4 symnfcnfd empty "normalization target, HELPER neutered     " \
@@ -2712,13 +2845,27 @@ r9_case AM  symlegit  empty "13 legitimate SHAPES must NOT block       " ""
 #        legitimate shapes include a target reached THROUGH an intermediate symlinked directory,
 #        whose verdict the new resolver reaches by AGREEING with the record instead of by failing
 #        to recognise it. Both verdicts are exit 0; the reason changed, the answer did not.
-r9_case AN  symjump   empty "POSIX dotdot behind a symlink (jump/../)  " \
-    "GIT_SYMLINK_TARGET_ALIAS" "" "$CLEAN_FP_R13"
-r9_case AN2 symjump   empty "same, LEXICAL restored + r15 removed      " "" r14all,r15all "$CLEAN_FP_R13"
-r9_case AN3 symjump   empty "jump topology, only the SWEEP neutered    " \
-    "AUDIT_FINGERPRINT_UNVERIFIABLE" r14guard,r15guard "$CLEAN_FP_R13"
-r9_case AN4 symjump   empty "jump topology, only the HELPER neutered   " \
-    "GIT_SYMLINK_TARGET_ALIAS" r14fp "$CLEAN_FP_R13"
+# BACKLOG P3-142 — (AN)'s premise is that the POSIX resolution of `backend/gradlew` (through the
+# tracked intermediate `backend/jump`) reaches `backend/real/gradlew-real`'s inode via the ALIASED
+# final component `GRADLEW-REAL`; that reach only happens on a CASE-FOLDING filesystem — r9_premise
+# checks this explicitly (`os.stat` equality) and calls violation() on a case-sensitive one, which
+# is a genuine harness failure, not a skip. (AO)/(symloop) has NO alias in it at all — a genuine
+# symlink cycle is ELOOP on every filesystem — so it is left UNGATED below, unconditionally.
+if [ "$WORK_FOLDS_CASE" -eq 1 ]; then
+    r9_case AN  symjump   empty "POSIX dotdot behind a symlink (jump/../)  " \
+        "GIT_SYMLINK_TARGET_ALIAS" "" "$CLEAN_FP_R13"
+    r9_case AN2 symjump   empty "same, LEXICAL restored + r15 removed      " "" r14all,r15all "$CLEAN_FP_R13"
+    r9_case AN3 symjump   empty "jump topology, only the SWEEP neutered    " \
+        "AUDIT_FINGERPRINT_UNVERIFIABLE" r14guard,r15guard "$CLEAN_FP_R13"
+    r9_case AN4 symjump   empty "jump topology, only the HELPER neutered   " \
+        "GIT_SYMLINK_TARGET_ALIAS" r14fp "$CLEAN_FP_R13"
+else
+    note "(AN)/(AN2)/(AN3)/(AN4) SKIPPED-4 — symjump needs a CASE-FOLDING filesystem for the POSIX" \
+         "resolution of \`backend/gradlew\` to reach the tracked file's inode via the aliased" \
+         "final component; probed \$WORK: $CASE_FOLD_PROBE. PREMISE MISMATCH (BACKLOG P3-142)," \
+         "not a defect: SKIPPED."
+    SKIPPED=$((SKIPPED + 4))
+fi
 r9_case AO  symloop   empty "committed symlink CYCLE blocks, not silent" \
     "GIT_SYMLINK_RESOLUTION_UNBOUNDED" "" "$CLEAN_FP_R13"
 
@@ -2748,10 +2895,21 @@ r9_case AO  symloop   empty "committed symlink CYCLE blocks, not silent" \
 #         spelled tracked directory, the same through a correctly-spelled tracked symlink, a chain
 #         of SEVERAL correctly-spelled intermediates, and an UNTRACKED intermediate — because
 #         precision, not detection, is the risk in this round.
-r9_case AP  symmidfinal empty "FINAL-component alias still blocks        " \
-    "GIT_SYMLINK_TARGET_ALIAS" "" "$CLEAN_FP_R13"
-r9_case AP2 symmidfinal empty "same, 14b census removed: STILL blocks    " \
-    "GIT_SYMLINK_TARGET_ALIAS" r14ball "$CLEAN_FP_R13"
+# BACKLOG P3-142 — (AP)/(AP2) build the FINAL-component alias with the exact same `dirlink`/
+# `DIRLINK` CASE bytes as the (AQ)/(AR) INTERMEDIATE-position twins below (r14b_plant with no
+# tail); the census still groups by OBSERVED (st_dev, st_ino), so it needs the SAME
+# CASE-FOLDING $WORK to construct the alias at all.
+if [ "$WORK_FOLDS_CASE" -eq 1 ]; then
+    r9_case AP  symmidfinal empty "FINAL-component alias still blocks        " \
+        "GIT_SYMLINK_TARGET_ALIAS" "" "$CLEAN_FP_R13"
+    r9_case AP2 symmidfinal empty "same, 14b census removed: STILL blocks    " \
+        "GIT_SYMLINK_TARGET_ALIAS" r14ball "$CLEAN_FP_R13"
+else
+    note "(AP)/(AP2) SKIPPED-2 — symmidfinal needs a CASE-FOLDING filesystem to construct its" \
+         "premise (same \`dirlink\`/\`DIRLINK\` alias as (AQ)/(AR) below); probed \$WORK:" \
+         "$CASE_FOLD_PROBE. PREMISE MISMATCH (BACKLOG P3-142), not a defect: SKIPPED."
+    SKIPPED=$((SKIPPED + 2))
+fi
 
 # BACKLOG P3-139 — (AQ)/(AR) construct their alias through CASE (`dirlink` vs `DIRLINK`) and (AS)
 # through NORMALIZATION (NFC `é-link` vs NFD `e`+combining-acute+`-link`); on a filesystem that
@@ -2759,41 +2917,11 @@ r9_case AP2 symmidfinal empty "same, 14b census removed: STILL blocks    " \
 # the alias premise cannot be built at all, and running the case anyway would not measure the
 # guard, it would measure this probe's own absence (ext4: neither axis folds, and r9_premise's
 # generic check already says so via the "DISTINCT inodes … this filesystem does not fold the axis"
-# branch — but as a VIOLATION, which is the wrong verdict for a premise mismatch). Probed HERE,
-# once, mirroring cs_probe's own shape (write one spelling, ask for the other) so a non-folding
-# runner reports an explicit, uncountable-as-pass SKIP instead.
-# ax_fold_probe <a-hex> <b-hex> — builds the two RAW-BYTE spellings under a throwaway subdirectory
-# of $WORK and prints "FOLD "/"NOFOLD " followed by both spellings' (dev,ino) evidence (or ENOENT).
-ax_fold_probe() {
-    local ah="$1" bh="$2"
-    "${AX_PY_BIN:-python3}" - "$WORK" "$ah" "$bh" <<'PY'
-import os, shutil, sys
-d, ah, bh = sys.argv[1], sys.argv[2], sys.argv[3]
-A, B = bytes.fromhex(ah), bytes.fromhex(bh)
-base = os.path.join(os.fsencode(d), b"ax-fold-probe")
-shutil.rmtree(base, ignore_errors=True)
-os.makedirs(base)
-try:
-    with open(os.path.join(base, A), "wb"):
-        pass
-    def ev(name):
-        try:
-            st = os.lstat(os.path.join(base, name))
-            return f"{name.decode('utf-8', 'replace')}=[{st.st_dev},{st.st_ino}]", (st.st_dev, st.st_ino)
-        except OSError:
-            return f"{name.decode('utf-8', 'replace')}=[ENOENT]", None
-    ea, ia = ev(A)
-    eb, ib = ev(B)
-    folds = A != B and ia is not None and ia == ib
-    print(("FOLD " if folds else "NOFOLD ") + ea + " " + eb)
-finally:
-    shutil.rmtree(base, ignore_errors=True)
-PY
-}
-CASE_FOLD_PROBE="$(ax_fold_probe 6469726c696e6b 4449524c494e4b)"
-NORM_FOLD_PROBE="$(ax_fold_probe c3a92d6c696e6b 65cc812d6c696e6b)"
-case "$CASE_FOLD_PROBE" in FOLD\ *) WORK_FOLDS_CASE=1 ;; *) WORK_FOLDS_CASE=0 ;; esac
-case "$NORM_FOLD_PROBE" in FOLD\ *) WORK_FOLDS_NORM=1 ;; *) WORK_FOLDS_NORM=0 ;; esac
+# branch — but as a VIOLATION, which is the wrong verdict for a premise mismatch). Probed EARLY,
+# right after $WORK is created (BACKLOG P3-142 — casefold/dircase/nacase/symcase/symjump/
+# symmidfinal above need the SAME CASE_FOLD_PROBE/WORK_FOLDS_CASE this arm uses, and they run
+# BEFORE this point in the file), mirroring cs_probe's own shape (write one spelling, ask for the
+# other) so a non-folding runner reports an explicit, uncountable-as-pass SKIP instead.
 
 if [ "$WORK_FOLDS_CASE" -eq 1 ]; then
     r9_case AQ  symmidslash empty "INTERMEDIATE alias via trailing slash     " \
@@ -3001,7 +3129,8 @@ PY
 echo ""
 if [ "$SKIPPED" -gt 0 ]; then
     echo "ax-prove-hermetic-runtime: SKIPPED-$SKIPPED case(s) — premise not constructible on this" \
-         "filesystem (BACKLOG P3-139); see the SKIPPED notes above. Not counted as pass or fail."
+         "filesystem (BACKLOG P3-139 + P3-142); see the SKIPPED notes above. Not counted as pass" \
+         "or fail."
 fi
 if [ "$FAIL" -ne 0 ]; then
     echo "ax-prove-hermetic-runtime: FAIL — an inherited-runtime path is open" >&2
