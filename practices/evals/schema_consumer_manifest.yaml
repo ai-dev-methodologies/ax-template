@@ -1,0 +1,57 @@
+# practices/evals/schema_consumer_manifest.yaml — BACKLOG P2-76 schema-consumer registry.
+#
+# Every `*.schema.json` file in the tree must appear here exactly once, with one of two
+# statuses, enforced by schema_executable_consumer_guard.sh:
+#   - status: consumed          — `consumer:` names a real code file (.py/.js/.mjs/.sh) that
+#                                  actually references this schema's basename at runtime.
+#   - status: documented-only   — `reason:` explains, non-vacuously, why no runtime consumer
+#                                  loads this schema. A gap must be an audited decision, not a
+#                                  silent assumption (the P1-74 lesson this guard exists for).
+#
+# Re-measured from disk 2026-08-10 (not carried over from the BACKLOG row's 2026-08-09 note,
+# which predates this re-check): grep across every .py/.js/.mjs/.sh/.cjs/.ts file in the tree
+# for each schema's basename, excluding node_modules.
+
+schemas:
+
+  - path: practices-react/eslint-plugin-ax/schemas/ax.config.schema.json
+    status: documented-only
+    reason: >
+      Zero code files reference ax.config.schema.json by name (checked across
+      .py/.js/.mjs/.sh/.cjs/.ts, excluding node_modules and this guard's own header
+      comment, which names it only to document the re-measurement) — only prose in
+      SKILL.md ×3
+      (skills/ax-install-java-enforcement, skills/ax-install-react-enforcement,
+      skills/ax-init-config) and docs (PLUGIN-CHANNEL.md, USAGE-GUIDE.md,
+      practices/DECISIONS.md). Runtime enforcement of the shape this schema documents is
+      NOT schema-driven: practices-react/eslint-plugin-ax/lib/feature-layout.js's
+      layoutFrom() hand-validates each `settings.ax` field independently (fallback to
+      DEFAULT_LAYOUT per-field, or a hard throw for the one shape — a multi-segment
+      `srcDir` — that would silently disable every layer-boundary rule instead of erroring;
+      see R110 / that file's own header). The schema file itself is never read.parse()'d,
+      require()'d, or otherwise loaded by any process. No JSON-Schema validation library
+      (ajv or equivalent) exists anywhere in this repository's package manifests.
+
+  - path: specs/personas/persona-registry.schema.json
+    status: documented-only
+    reason: >
+      Zero code files reference persona-registry.schema.json by name (checked across
+      .py/.js/.mjs/.sh/.cjs/.ts, excluding node_modules and this guard's own header
+      comment, which names it only to document the re-measurement). The one guard that
+      inspects persona-registry-shaped YAML, dogfood_ledger_guard.sh, checks the ledger's
+      SHAPE with a plain regex (`grep -c '^  - persona:'`) — it never loads this schema
+      file, so the schema documents an intent the guard enforces independently and by
+      coincidence of shape, not by consuming this file. No JSON-Schema validation library
+      (ajv or equivalent) exists anywhere in this repository's package manifests.
+
+  - path: verify/manifest.schema.json
+    status: consumed
+    consumer: verify/scripts/run_verify_triplet.py
+    reason: >
+      load_required_manifest_keys() in verify/scripts/run_verify_triplet.py does
+      `SCHEMA_PATH.read_text()` then `json.loads(...)` — a genuine runtime load and parse
+      of this file, not a prose mention. The consumption is PARTIAL, disclosed rather than
+      hidden: only the top-level `required[]` string list is read to validate that
+      blueprints/auth-manifest.yaml's top-level keys are a superset of it; `properties`,
+      `type` and every other JSON-Schema keyword in the file are never consulted, so this
+      is real-but-partial enforcement rather than full schema validation.

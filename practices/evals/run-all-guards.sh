@@ -2676,6 +2676,19 @@ if [ "$INCLUDE_FIXTURES" -eq 1 ]; then
         bash "$SCRIPT_DIR/derived_block_license_guard.sh" --root "$SCRIPT_DIR/fixtures/derived-block-license/fail_malformed_header"
 fi
 
+# ── 109. schema_executable_consumer_guard ────────────────────────────────────
+echo "[109] schema_executable_consumer_guard.sh (P2-76 — every *.schema.json file in the tree (3 today: practices-react/eslint-plugin-ax/schemas/ax.config.schema.json, specs/personas/persona-registry.schema.json, verify/manifest.schema.json) must be registered in practices/evals/schema_consumer_manifest.yaml with either status:consumed or status:documented-only. A schema nobody loads is not enforcement, it is the LOOK of enforcement — P1-74 shipped exactly that shape (a schema existed, docs pointed at it, zero code loaded it), so this guard forces every gap to be an audited decision instead of a silent assumption. Five independently-blocking invariants: (1) COMPLETENESS — every schema on disk is registered (UNREGISTERED); (2) REVERSE EXISTENCE — every registered path still exists on disk (STALE_ENTRY); (3) ONE-TO-ONE — no path registered twice (DUPLICATE_PATH); (4) STATUS SHAPE — status is exactly 'consumed' or 'documented-only' and the field each requires (consumer / reason respectively) is non-blank (INVALID_STATUS / MISSING_FIELD); (5) CONSUMER REAL — for status:consumed, the named consumer must exist on disk, have a code extension (.py/.js/.mjs/.sh — a .md/.txt 'consumer' is prose, not execution), and actually contain the schema's own basename in its text (PHANTOM_CONSUMER) — this is what catches a manifest CLAIMING a consumer that is not really one, the same class of forged-claim check derived_block_license_guard.sh applies to upstream citations. Re-measured 2026-08-10: ax.config.schema.json and persona-registry.schema.json are documented-only (zero code consumers found across .py/.js/.mjs/.sh/.cjs/.ts; ax.config's runtime enforcement is a hand-written validator in feature-layout.js's layoutFrom() that never reads this file) — verify/manifest.schema.json is consumed by verify/scripts/run_verify_triplet.py, which genuinely read_text()+json.loads()s it, disclosed as PARTIAL (only required[] is read). Non-vacuity: zero schema files found is NO_SCHEMAS_FOUND (exit 2) on ANY root, and a LIVE root is additionally floored at LIVE_MIN_SCHEMAS=3. Fixtures: pass_all_declared 0 / fail_unregistered_schema 1 (invariant 1) / fail_phantom_consumer 1 (invariant 5, consumer named in the manifest does not exist on disk).)"
+run_guard "schema_executable_consumer/live" 0 \
+    bash "$SCRIPT_DIR/schema_executable_consumer_guard.sh"
+if [ "$INCLUDE_FIXTURES" -eq 1 ]; then
+    run_guard "schema_executable_consumer/fixture_pass_all_declared" 0 \
+        bash "$SCRIPT_DIR/schema_executable_consumer_guard.sh" --root "$SCRIPT_DIR/fixtures/schema-executable-consumer/pass_all_declared"
+    run_guard "schema_executable_consumer/fixture_fail_unregistered_schema" 1 \
+        bash "$SCRIPT_DIR/schema_executable_consumer_guard.sh" --root "$SCRIPT_DIR/fixtures/schema-executable-consumer/fail_unregistered_schema"
+    run_guard "schema_executable_consumer/fixture_fail_phantom_consumer" 1 \
+        bash "$SCRIPT_DIR/schema_executable_consumer_guard.sh" --root "$SCRIPT_DIR/fixtures/schema-executable-consumer/fail_phantom_consumer"
+fi
+
 # ── Summary ──────────────────────────────────────────────────────────────────
 echo ""
 echo "=== Results ==="

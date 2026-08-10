@@ -172,7 +172,7 @@ template**. 모든 layer에서 **규칙을 기계적으로 강제하는 선 순�
 
 ```
 fork ax-template
-    ↓ (25 L4 domains + 11 active recipes + 233 Java rules + 102 React rules + 15 ESLint rules + 108 hard guards + AGENTS.md sentinel)
+    ↓ (25 L4 domains + 11 active recipes + 233 Java rules + 102 React rules + 15 ESLint rules + 109 hard guards + AGENTS.md sentinel)
 새 도메인 추가 — METHODOLOGY.md의 5-step 따라
     ↓
 AI agent가 Spring + React 코드 작성
@@ -543,7 +543,7 @@ fork-receiver의 활성화는 opt-in이다.
 
 ### 핵심 설명
 
-- **가드 파일(`*_guard.sh`)은 108개다** (practices/evals 106 + practices-react/evals 2 — `doc_headline_count_guard`가 이 수를 헤드라인과 대조해 강제; 정확한 수는 항상 `ls practices/evals/*_guard.sh practices-react/evals/*_guard.sh | wc -l`의 disk truth를 따른다). `run-all-guards.sh`는 R25 완료 선언 시 수동 호출된다(커밋마다 자동 실행되지 않는다). 일부 가드는 추가 진입점을 갖는다 — pre-commit 4 hard gates(`spec_ref`·`substance`·`evidence`·`time_decay`)는 practices/ 변경 커밋에서, `completion_checklist_recency`는 pre-push에서 돈다.
+- **가드 파일(`*_guard.sh`)은 109개다** (practices/evals 107 + practices-react/evals 2 — `doc_headline_count_guard`가 이 수를 헤드라인과 대조해 강제; 정확한 수는 항상 `ls practices/evals/*_guard.sh practices-react/evals/*_guard.sh | wc -l`의 disk truth를 따른다). `run-all-guards.sh`는 R25 완료 선언 시 수동 호출된다(커밋마다 자동 실행되지 않는다). 일부 가드는 추가 진입점을 갖는다 — pre-commit 4 hard gates(`spec_ref`·`substance`·`evidence`·`time_decay`)는 practices/ 변경 커밋에서, `completion_checklist_recency`는 pre-push에서 돈다.
   R25 완료 선언 전에 `verify-completion.sh`를 실행하면 이 guard들이 모두 돌아간다.
 - **pre-commit / pre-push hook은 opt-in이다.** `install-hooks.sh`를 실행한 클론에서만 활성화된다.
   ax-template 자체 HEAD에서는 활성화되어 있다; fork-receiver가 활성화 여부를 결정한다.

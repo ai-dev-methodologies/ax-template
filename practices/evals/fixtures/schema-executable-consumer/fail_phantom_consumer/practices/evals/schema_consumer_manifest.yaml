@@ -1,0 +1,9 @@
+# Fixture manifest — fail_phantom_consumer. status: consumed names scripts/ghost.py, which
+# does not exist anywhere in this fixture root, tripping invariant (5) CONSUMER REAL
+# (PHANTOM_CONSUMER) — a manifest asserting a consumer that is not actually there.
+schemas:
+  - path: schemas/sample-a.schema.json
+    status: consumed
+    consumer: scripts/ghost.py
+    reason: >
+      Deliberately false claim — scripts/ghost.py does not exist in this fixture.

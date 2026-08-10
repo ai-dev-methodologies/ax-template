@@ -1,0 +1,7 @@
+# Fixture manifest — fail_unregistered_schema. schemas/sample-orphan.schema.json exists on
+# disk but is deliberately NOT registered here, tripping invariant (1) COMPLETENESS.
+schemas:
+  - path: schemas/sample-a.schema.json
+    status: documented-only
+    reason: >
+      Fixture schema with no runtime consumer — documented-only for test purposes.

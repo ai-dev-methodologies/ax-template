@@ -1179,3 +1179,42 @@ items:
     fixture_arg: '--version-fixture-root'
     anchor: 'entry_version != plugin_version'
     neuter: 'False'
+
+  # [P2-76] schema_executable_consumer_guard — every *.schema.json file must be registered
+  # in practices/evals/schema_consumer_manifest.yaml as either status:consumed (real,
+  # verified code consumer) or status:documented-only (audited reason). A schema nobody
+  # loads is not enforcement, it is the LOOK of enforcement (the P1-74 lesson).
+  # subject: fail_unregistered_schema has schemas/sample-orphan.schema.json on disk with no
+  #          matching entry in the fixture's manifest. The fixture must exit 1 BECAUSE the
+  #          guard's completeness check (every disk schema must be registered) fires, not
+  #          because some other invariant (duplicate path / phantom consumer / invalid
+  #          status) happens to also trip on this fixture's manifest.
+  # anchor:  the completeness membership test itself.
+  # neuter:  condition-constant False → the completeness branch never executes → every
+  #          schema file on disk is treated as registered regardless of the manifest → exit 0.
+  - id: schema_executable_consumer/fail_unregistered_schema
+    guard: practices/evals/schema_executable_consumer_guard.sh
+    fixture: practices/evals/fixtures/schema-executable-consumer/fail_unregistered_schema
+    fixture_arg: '--root'
+    anchor: 'path not in registered_paths'
+    neuter: 'False'
+
+  # subject: fail_phantom_consumer's manifest claims status:consumed with
+  #          consumer:scripts/ghost.py, a file that does not exist anywhere in the fixture
+  #          root. The fixture must exit 1 BECAUSE the guard's combined existence+content
+  #          validity check fires, not because some other invariant happens to also trip.
+  #          Existence and content-reference are ONE check in the guard, not two
+  #          sequential ones — a missing consumer trivially fails a "references the
+  #          basename" check too, so disabling only an existence pre-check would leave a
+  #          separate content check still firing and the fixture would stay vacuous
+  #          (measured: this was the guard's first draft, and it WAS vacuous here).
+  # anchor:  the combined validity test itself.
+  # neuter:  condition-constant False → a claimed consumer is treated as valid
+  #          regardless of whether the path exists, is readable, or references the
+  #          schema's basename → exit 0.
+  - id: schema_executable_consumer/fail_phantom_consumer
+    guard: practices/evals/schema_executable_consumer_guard.sh
+    fixture: practices/evals/fixtures/schema-executable-consumer/fail_phantom_consumer
+    fixture_arg: '--root'
+    anchor: 'not consumer_valid'
+    neuter: 'False'

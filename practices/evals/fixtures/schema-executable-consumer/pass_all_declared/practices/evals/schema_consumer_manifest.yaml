@@ -1,0 +1,13 @@
+# Fixture manifest — pass_all_declared. Both schema files are correctly registered:
+# one documented-only with a reason, one consumed by a real, referencing code file.
+schemas:
+  - path: schemas/sample-a.schema.json
+    status: documented-only
+    reason: >
+      Fixture schema with no runtime consumer — documented-only for test purposes.
+
+  - path: schemas/sample-b.schema.json
+    status: consumed
+    consumer: scripts/consumer.py
+    reason: >
+      Loaded via json.loads(SCHEMA_PATH.read_text()) in scripts/consumer.py.
