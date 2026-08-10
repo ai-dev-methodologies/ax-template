@@ -169,9 +169,12 @@ ax-template을 fork-base로 삼아 새 프로젝트 "<PROJECT_NAME>"을 시작�
     ⚠️ ax-template 레포의 .githooks/ 를 복사하지 마라 — pre-push recency guard는
        그 레포 전용이라 이 프로젝트의 모든 push를 영구 차단한다.
 
-[5] 훅 배선했다면 직접 확인
-    /ax-install-hooks 는 probe가 없으므로, 위반 커밋을 한 번 시도해
-    차단되는 것을 눈으로 확인하고 되돌린다.
+[5] 훅 배선했다면 self-check 재확인 (선택 — probe는 스킬이 이미 자동 수행함)
+    /ax-install-hooks 도 이제 [4]의 react/java 스킬과 같이 배선 직후 probe(위반 심기 →
+    git commit 시도 → 차단 확인 → 삭제)까지 스스로 수행한다 — react/java 게이트가 이미
+    설치돼 있으면 그 스킬의 probe를 재사용해 전체 체인을 검증하고, 없으면 훅 파일에
+    임시 exit 1을 심어 배선 자체(git이 훅을 실제로 실행해 커밋을 막는가)만 검증한다.
+    별도로 위반 커밋을 다시 시도해 보는 것은 이제 필수가 아니라 선택적 재확인이다.
 
 [6] 갱신이 필요할 때
     claude plugin marketplace update ax-transform     # ① 카탈로그 clone 갱신
