@@ -206,6 +206,53 @@ ax-template을 fork-base로 삼아 새 프로젝트 "<PROJECT_NAME>"을 시작�
 
 ---
 
+## 신규 PC에서 시작 — 0단계 부트스트랩 + 신규-프로젝트 변형
+
+위 두 프롬프트는 도구가 갖춰진 머신을 전제한다. **방금 세팅한 신규 PC**라면:
+
+### 0단계 — 사람이 터미널에서 직접 (Claude Code 설치 전이라 프롬프트 불가)
+
+```bash
+curl -fsSL https://claude.ai/install.sh | bash   # 또는 npm install -g @anthropic-ai/claude-code
+git --version                                    # 없으면 xcode-select --install
+claude                                           # 첫 실행 시 브라우저 인증
+```
+
+### 경로 A 변형 — 프롬프트 맨 앞에 [0] 도구 준비를 추가
+
+경로 A 프롬프트의 [1] 앞에 아래 단계를 붙이고, "이 머신은 신규 PC다 — 도구부터
+검사하고 없으면 설치한다"를 서두에 넣는다:
+
+```
+[0] 신규 PC 도구 준비 (없는 것만 설치)
+    brew --version                          # 없으면 https://brew.sh 원라이너
+    java -version                           # 21 아니면: brew install openjdk@21
+      export JAVA_HOME=/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home
+      (Intel Mac은 /usr/local/opt/... · Homebrew JDK는 java_home에 등록되지
+       않으므로 $(/usr/libexec/java_home -v 21)은 실패한다 — 직접 경로가 정답)
+    python3 -c 'import yaml'                # 실패 시: pip3 install pyyaml
+    node -v && npm -v                       # 없으면: brew install node
+    성공 기준: 네 검사 전부 통과 출력.
+```
+
+### 경로 B 변형 — 신규 프로젝트라면 [2]에 뼈대 생성을 삽입
+
+경로 B 프롬프트는 기존 프로젝트를 전제한다. 빈 디렉토리에서 시작한다면 [1] 설치
+후 **새 세션에서** 아래를 [2]로 삽입하고 기존 [2]~[6]을 한 단계씩 민다:
+
+```
+[2] 프로젝트 뼈대 생성 (스택에 맞게)
+    react: npx create-next-app@latest <PROJECT_NAME>  (또는 팀 표준 스캐폴드)
+    java : Spring Initializr(start.spring.io) 기본 구성으로 backend/ 생성
+    git init + 첫 커밋.
+    성공 기준: 소스 트리와 package.json/build.gradle 존재 —
+    /ax-init-config가 감지할 스택 실체가 있어야 한다.
+```
+
+플러그인 설치 명령은 세션 밖(`claude plugin ...`)·안(`/plugin ...`) 모두 동일하게
+동작하며, 설치는 **진행 중 세션에 반영되지 않는다** — 설치 후 새 세션부터 스킬이
+뜬다(USAGE-GUIDE §2).
+
 ## 두 경로를 섞어도 되나
 
 된다. 흔한 조합은 **경로 A로 새 제품을 만들면서, 같은 계정의 다른 기존 프로젝트에는
