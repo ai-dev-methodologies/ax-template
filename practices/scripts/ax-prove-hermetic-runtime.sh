@@ -279,6 +279,8 @@ ax_teardown() {
 }
 trap ax_teardown EXIT
 FAIL=0
+SKIPPED=0   # BACKLOG P3-139 — cases whose premise could not be constructed on THIS filesystem.
+            # Never a pass, never a fail: a count so it cannot be silently absorbed into either.
 note() { echo "  $*"; }
 violation() { echo "  VIOLATION: $*" >&2; FAIL=1; }
 
@@ -2750,19 +2752,82 @@ r9_case AP  symmidfinal empty "FINAL-component alias still blocks        " \
     "GIT_SYMLINK_TARGET_ALIAS" "" "$CLEAN_FP_R13"
 r9_case AP2 symmidfinal empty "same, 14b census removed: STILL blocks    " \
     "GIT_SYMLINK_TARGET_ALIAS" r14ball "$CLEAN_FP_R13"
-r9_case AQ  symmidslash empty "INTERMEDIATE alias via trailing slash     " \
-    "GIT_SYMLINK_TARGET_ALIAS" "" "$CLEAN_FP_R13"
-r9_case AQ2 symmidslash empty "same, 14b+15 censuses removed (both)      " "" r14ball,r15all "$CLEAN_FP_R13"
-r9_case AQ3 symmidslash empty "trailing slash, only the SWEEP neutered   " \
-    "AUDIT_FINGERPRINT_UNVERIFIABLE" r14bguard,r15guard "$CLEAN_FP_R13"
-r9_case AQ4 symmidslash empty "trailing slash, only the HELPER neutered  " \
-    "GIT_SYMLINK_TARGET_ALIAS" r14bfp "$CLEAN_FP_R13"
-r9_case AR  symmidsub   empty "INTERMEDIATE alias, no trailing slash     " \
-    "GIT_SYMLINK_TARGET_ALIAS" "" "$CLEAN_FP_R13"
-r9_case AR2 symmidsub   empty "same, 14b+15 censuses removed (both)      " "" r14ball,r15all "$CLEAN_FP_R13"
-r9_case AS  symmidnfd   empty "INTERMEDIATE alias by NORMALIZATION       " \
-    "GIT_SYMLINK_TARGET_ALIAS" "" "$CLEAN_FP_R13"
-r9_case AS2 symmidnfd   empty "same, 14b+15 censuses removed (both)      " "" r14ball,r15all "$CLEAN_FP_R13"
+
+# BACKLOG P3-139 — (AQ)/(AR) construct their alias through CASE (`dirlink` vs `DIRLINK`) and (AS)
+# through NORMALIZATION (NFC `é-link` vs NFD `e`+combining-acute+`-link`); on a filesystem that
+# does not FOLD the axis under test the two spellings are simply two different, unrelated paths —
+# the alias premise cannot be built at all, and running the case anyway would not measure the
+# guard, it would measure this probe's own absence (ext4: neither axis folds, and r9_premise's
+# generic check already says so via the "DISTINCT inodes … this filesystem does not fold the axis"
+# branch — but as a VIOLATION, which is the wrong verdict for a premise mismatch). Probed HERE,
+# once, mirroring cs_probe's own shape (write one spelling, ask for the other) so a non-folding
+# runner reports an explicit, uncountable-as-pass SKIP instead.
+# ax_fold_probe <a-hex> <b-hex> — builds the two RAW-BYTE spellings under a throwaway subdirectory
+# of $WORK and prints "FOLD "/"NOFOLD " followed by both spellings' (dev,ino) evidence (or ENOENT).
+ax_fold_probe() {
+    local ah="$1" bh="$2"
+    "${AX_PY_BIN:-python3}" - "$WORK" "$ah" "$bh" <<'PY'
+import os, shutil, sys
+d, ah, bh = sys.argv[1], sys.argv[2], sys.argv[3]
+A, B = bytes.fromhex(ah), bytes.fromhex(bh)
+base = os.path.join(os.fsencode(d), b"ax-fold-probe")
+shutil.rmtree(base, ignore_errors=True)
+os.makedirs(base)
+try:
+    with open(os.path.join(base, A), "wb"):
+        pass
+    def ev(name):
+        try:
+            st = os.lstat(os.path.join(base, name))
+            return f"{name.decode('utf-8', 'replace')}=[{st.st_dev},{st.st_ino}]", (st.st_dev, st.st_ino)
+        except OSError:
+            return f"{name.decode('utf-8', 'replace')}=[ENOENT]", None
+    ea, ia = ev(A)
+    eb, ib = ev(B)
+    folds = A != B and ia is not None and ia == ib
+    print(("FOLD " if folds else "NOFOLD ") + ea + " " + eb)
+finally:
+    shutil.rmtree(base, ignore_errors=True)
+PY
+}
+CASE_FOLD_PROBE="$(ax_fold_probe 6469726c696e6b 4449524c494e4b)"
+NORM_FOLD_PROBE="$(ax_fold_probe c3a92d6c696e6b 65cc812d6c696e6b)"
+case "$CASE_FOLD_PROBE" in FOLD\ *) WORK_FOLDS_CASE=1 ;; *) WORK_FOLDS_CASE=0 ;; esac
+case "$NORM_FOLD_PROBE" in FOLD\ *) WORK_FOLDS_NORM=1 ;; *) WORK_FOLDS_NORM=0 ;; esac
+
+if [ "$WORK_FOLDS_CASE" -eq 1 ]; then
+    r9_case AQ  symmidslash empty "INTERMEDIATE alias via trailing slash     " \
+        "GIT_SYMLINK_TARGET_ALIAS" "" "$CLEAN_FP_R13"
+    r9_case AQ2 symmidslash empty "same, 14b+15 censuses removed (both)      " "" r14ball,r15all "$CLEAN_FP_R13"
+    r9_case AQ3 symmidslash empty "trailing slash, only the SWEEP neutered   " \
+        "AUDIT_FINGERPRINT_UNVERIFIABLE" r14bguard,r15guard "$CLEAN_FP_R13"
+    r9_case AQ4 symmidslash empty "trailing slash, only the HELPER neutered  " \
+        "GIT_SYMLINK_TARGET_ALIAS" r14bfp "$CLEAN_FP_R13"
+    r9_case AR  symmidsub   empty "INTERMEDIATE alias, no trailing slash     " \
+        "GIT_SYMLINK_TARGET_ALIAS" "" "$CLEAN_FP_R13"
+    r9_case AR2 symmidsub   empty "same, 14b+15 censuses removed (both)      " "" r14ball,r15all "$CLEAN_FP_R13"
+else
+    note "(AQ)/(AQ2)/(AQ3)/(AQ4)/(AR)/(AR2) SKIPPED-6 — symmidslash/symmidsub need a CASE-FOLDING" \
+         "filesystem to construct their premise (the recorded \`dirlink\` and the attack's" \
+         "\`DIRLINK\` must lstat to ONE inode); probed \$WORK: $CASE_FOLD_PROBE — this filesystem" \
+         "does NOT fold case, so the alias cannot be built here. This is a PREMISE MISMATCH" \
+         "(BACKLOG P3-139), not a defect: SKIPPED, never counted as a pass, and the gate under" \
+         "test never ran."
+    SKIPPED=$((SKIPPED + 6))
+fi
+if [ "$WORK_FOLDS_NORM" -eq 1 ]; then
+    r9_case AS  symmidnfd   empty "INTERMEDIATE alias by NORMALIZATION       " \
+        "GIT_SYMLINK_TARGET_ALIAS" "" "$CLEAN_FP_R13"
+    r9_case AS2 symmidnfd   empty "same, 14b+15 censuses removed (both)      " "" r14ball,r15all "$CLEAN_FP_R13"
+else
+    note "(AS)/(AS2) SKIPPED-2 — symmidnfd needs a NORMALIZATION-FOLDING filesystem to construct" \
+         "its premise (the recorded NFC \`é-link\` and the attack's NFD \`e\`+combining-acute+" \
+         "\`-link\` must lstat to ONE inode); probed \$WORK: $NORM_FOLD_PROBE — this filesystem" \
+         "does NOT fold normalization, so the alias cannot be built here. This is a PREMISE" \
+         "MISMATCH (BACKLOG P3-139), not a defect: SKIPPED, never counted as a pass, and the gate" \
+         "under test never ran."
+    SKIPPED=$((SKIPPED + 2))
+fi
 
 # ══ ROUND 15 (BACKLOG P3-131 + P3-132) — RECEIVER-RESOLUTION PARITY ═══════════════════
 # Rounds 13/14/14b asked ONE question about a symlink target: is it SPELLED as an alias of a
@@ -2934,6 +2999,10 @@ print(f"  (AI) SIMULATED ignorable control: distinct inodes → 0 reports; one i
 PY
 
 echo ""
+if [ "$SKIPPED" -gt 0 ]; then
+    echo "ax-prove-hermetic-runtime: SKIPPED-$SKIPPED case(s) — premise not constructible on this" \
+         "filesystem (BACKLOG P3-139); see the SKIPPED notes above. Not counted as pass or fail."
+fi
 if [ "$FAIL" -ne 0 ]; then
     echo "ax-prove-hermetic-runtime: FAIL — an inherited-runtime path is open" >&2
     exit 1
