@@ -262,8 +262,35 @@ if not all_deps:
     sys.exit(1)
 
 # ── 3. behavioral assertions against the REAL verify-completion.sh ───────────
+def _resolve_java21_home():
+    # This probe fakes PyYAML absence and reads the resulting message — it is not
+    # testing the JDK preflight at all. But verify-completion.sh checks JDK BEFORE
+    # PyYAML, so on a machine whose ambient JAVA_HOME is not a JDK 21 (any non-JDK21
+    # default, e.g. a JDK 17), the unrelated JDK block fires first and masks the
+    # PyYAML message this probe looks for — a false VIOLATION with no PyYAML defect
+    # behind it. Best-effort, non-fatal: try the ambient JAVA_HOME first, then macOS's
+    # java_home helper; if neither yields a JDK 21, fall through unchanged (the probe
+    # may then legitimately report an unrelated JDK gap, same as before this helper).
+    cur = os.environ.get("JAVA_HOME", "")
+    if cur:
+        java_bin = os.path.join(cur, "bin", "java")
+        if os.path.exists(java_bin):
+            out = subprocess.run([java_bin, "-version"], capture_output=True, text=True)
+            first_line = (out.stderr or out.stdout or "").splitlines()[:1]
+            if first_line and '"21' in first_line[0]:
+                return cur
+    java_home_tool = "/usr/libexec/java_home"
+    if os.path.exists(java_home_tool):
+        r = subprocess.run([java_home_tool, "-v", "21"], capture_output=True, text=True)
+        if r.returncode == 0 and r.stdout.strip():
+            return r.stdout.strip()
+    return cur
+
 def probe(args):
     env = dict(os.environ, AX_PREFLIGHT_FAKE_MISSING="pyyaml")
+    java21_home = _resolve_java21_home()
+    if java21_home:
+        env["JAVA_HOME"] = java21_home
     p = subprocess.run(["bash", vc_path, "--dry-run"] + args,
                        env=env, capture_output=True, text=True)
     err = p.stderr or ""

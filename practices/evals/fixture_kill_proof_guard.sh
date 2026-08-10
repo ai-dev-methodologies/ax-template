@@ -136,7 +136,8 @@ command -v python3 >/dev/null 2>&1 || {
 # reproduce a failure (e.g. private_boundary_guard's --repo-root + --commit-msg-file).
 # Existing single-input items simply leave these two fields unset; behavior for
 # them is unchanged (see invocation sites below, gated on fixture_arg2 non-empty).
-ITEMS="$(python3 - "$MANIFEST" "$DEFAULT_MANIFEST" <<'PY'
+ITEMS_PY="$(mktemp)"
+cat <<'PY' > "$ITEMS_PY"
 import os, sys, yaml
 manifest_path = sys.argv[1]
 default_manifest = sys.argv[2]
@@ -247,9 +248,10 @@ for it in items:
     ]
     print('\t'.join(fields))
 PY
-)"
-
+ITEMS="$(python3 "$ITEMS_PY" "$MANIFEST" "$DEFAULT_MANIFEST")"
 parse_rc=$?
+rm -f "$ITEMS_PY"
+
 if [ "$parse_rc" -eq 3 ]; then
     # registry integrity violation (duplicate id / duplicate proof / min_items floor).
     # Reported above by the parser; a BLOCK, not a tooling error.
@@ -307,7 +309,8 @@ while IFS=$'\t' read -r item_id guard_rel fixture_rel fixture_arg anchor neuter 
     # ── (0) neuter vocabulary validation (P2-14) ──────────────────────────────
     # neuter must match one of 6 allowlisted PIT-style operator shapes, and must
     # not contain a control-flow escape token (exit/return/kill) regardless of shape.
-    neuter_verdict="$(python3 - "$anchor" "$neuter" <<'PY'
+    NEUTER_VERDICT_PY="$(mktemp)"
+    cat <<'PY' > "$NEUTER_VERDICT_PY"
 import re, sys
 anchor = sys.argv[1]
 neuter = sys.argv[2]
@@ -387,7 +390,8 @@ if shapes:
 else:
     print("UNKNOWN: neuter does not match any allowlisted PIT-style operator shape: " + repr(neuter))
 PY
-)"
+    neuter_verdict="$(python3 "$NEUTER_VERDICT_PY" "$anchor" "$neuter")"
+    rm -f "$NEUTER_VERDICT_PY"
     case "$neuter_verdict" in
         PASS:*) : ;;
         REJECT:*|UNKNOWN:*)
@@ -399,12 +403,14 @@ PY
     esac
 
     # ── (1) anchor uniqueness in guard source ─────────────────────────────────
-    anchor_count="$(python3 - "$GUARD_PATH" "$anchor" <<'PY'
+    ANCHOR_COUNT_PY="$(mktemp)"
+    cat <<'PY' > "$ANCHOR_COUNT_PY"
 import sys
 src = open(sys.argv[1], encoding='utf-8').read()
 print(src.count(sys.argv[2]))
 PY
-)"
+    anchor_count="$(python3 "$ANCHOR_COUNT_PY" "$GUARD_PATH" "$anchor")"
+    rm -f "$ANCHOR_COUNT_PY"
     if [ "$anchor_count" -ne 1 ]; then
         echo "fixture_kill_proof_guard: FAIL [$item_id] anchor appears ${anchor_count} time(s) in $guard_rel" >&2
         echo "  (expected exactly 1 — manifest is stale; update anchor to match current guard source)" >&2
@@ -503,11 +509,13 @@ fi
 # Print the floor alongside the proven count. A ratchet that is never displayed is a ratchet
 # nobody notices moving; the census guards in this suite print their floors for the same
 # reason. Display only — the enforcing comparison already happened in the parser above.
-DECLARED_MIN="$(python3 - "$MANIFEST" <<'PY' 2>/dev/null
+DECLARED_MIN_PY="$(mktemp)"
+cat <<'PY' > "$DECLARED_MIN_PY"
 import sys, yaml
 doc = yaml.safe_load(open(sys.argv[1], encoding='utf-8')) or {}
 print(doc.get('min_items', 'none'))
 PY
-)"
+DECLARED_MIN="$(python3 "$DECLARED_MIN_PY" "$MANIFEST" 2>/dev/null)"
+rm -f "$DECLARED_MIN_PY"
 echo "fixture_kill_proof_guard: PASS — $PROVEN item(s) all non-vacuous (every fail fixture is killed by its targeted neuter) [min_items floor: ${DECLARED_MIN:-none}]"
 exit 0

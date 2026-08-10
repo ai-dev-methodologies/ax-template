@@ -100,7 +100,10 @@ checklist:
     # busy machine (exit 143 / SIGTERM, not a test regression). Bumping to
     # 2700s (45 min) restores headroom. The matrix only grows; this is a
     # catalog-mechanics adjustment, not a per-domain regression.
-    timeout_seconds: 2700
+    # 2026-08-10: 2700→5400 — matrix grew again (117 register<Test> tasks) and a
+    # load-avg~6 machine was observed SIGTERM'd at task 90/113 (~80% through, no
+    # test regression). Same class of adjustment as the 1800→2700 bump above.
+    timeout_seconds: 5400
     commands:
       - command: "./gradlew testAsvs"
         working_directory: "backend"
@@ -478,7 +481,10 @@ checklist:
     # (exit 143) while the same sweep run standalone finished 346/0 PASS.
     # Same class as the backend step's 1800→2700 bump above — a catalog-mechanics
     # adjustment, not a guard regression. The registry only grows.
-    timeout_seconds: 2700
+    # 2026-08-10: 2700→5400 — registry at 109 guards + PIT mutation runs; observed
+    # SIGTERM mid-suite on a load-avg~6 machine while the same suite standalone
+    # passes. Ceiling raise only; no check weakened.
+    timeout_seconds: 5400
     commands:
       - command: "bash practices/evals/run-all-guards.sh --include-fixtures"
         expected_exit: 0

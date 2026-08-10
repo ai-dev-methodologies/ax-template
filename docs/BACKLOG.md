@@ -28,9 +28,9 @@ signature를 발견**(17/17)함으로써 경험적으로 반증되었다 — 발
 |---|---|---|---|
 | P0 (expiry-bound / live defects) | 30 | 30 | **100%** |
 | P1 (generic signature backlog) | 74 | 74 | **100%** |
-| P2 (verification escapes) | 79 | 79 | **100%** |
+| P2 (verification escapes) | 80 | 79 | **99%** |
 | P3 (industry-niche deferrals) | 141 | 141 | **100%** |
-| **P0–P3 합계 (수렴 분모)** | **324** | **324** | **100%** |
+| **P0–P3 합계 (수렴 분모)** | **325** | **324** | **100%** |
 
 > 2026-08-01 P1-seal 라운드 14 — reviewer P1 **2건**을 서로 다른 처방으로 봉합. **(P1-A) lexical `..`가 실재 alias를 놓친다**: 라운드 13은 심링크 타깃을 **lexical**로 해석해 `..`를 **follow 이전에** 텍스트로 접었다. 커널은 중간 symlink를 **follow 한 뒤** `..`를 pop한다. reviewer 토폴로지(커밋 내용만, 환경 통제 0): `backend/jump -> real/sub` + `backend/gradlew -> jump/../GRADLEW-REAL` over tracked `backend/real/gradlew-real` → POSIX는 `backend/real/GRADLEW-REAL`에 도달하고 case-insensitive APFS가 그것을 **추적 파일로 서비스**하므로 R25가 래퍼를 실제로 실행하고 green, lexical 후보 `backend/GRADLEW-REAL`은 **부재**라 두 구현 모두 dangling 종료로 **침묵**(측정: HEAD helper exit 0 + 클린트리 상수 `0a815065…`), case-**sensitive** 수신자는 **DANGLING gradlew**. 봉합: `_resolve_link_target`을 **component-by-component** 커널 해석으로 교체(중간 follow / 최종 컴포넌트는 lstat이므로 follow 안 함 / `..`는 follow 이후 pop / 중간 절대 타깃은 수신자 루트로 이탈 / 결측·판독불가 중간은 최종 lstat이 판정) + **예산 2종**(follow 40 = Linux MAXSYMLINKS와 macOS SYMLOOP_MAX 32 중 **큰 쪽**, component 4096) 소진 시 **침묵이 아니라** 신규 코드 `GIT_SYMLINK_RESOLUTION_UNBOUNDED`(fingerprint exit 16)로 BLOCK — 미완주 walk는 alias 질문에 **답하지 못한 것**이고 그 상태를 침묵으로 바꾸는 것이 라운드 8 이후 매 라운드가 닫아온 결함이며, 커밋된 cycle은 수신자에게 ELOOP다(측정: `loopa -> loopb/x`·`loopb -> loopa`, 커널 ELOOP, HEAD exit 0 → round-14 exit 16). 두 구현 대칭 봉합(helper + recency guard 12c). **P3-133은 SUPERSEDE — 그 행의 done-when(“발산 시 침묵”)은 이 P1을 보존한다**(reviewer 논거 인용과 함께 REJECT로 닫음), 그 행의 over-inclusive 반례를 새 resolver로 **재측정**: HEAD exit 15(부당 차단) → round-14 **exit 0 + 클린트리 상수**(첫 `..`에서 escapes). 정당한 **9형태 전부 재빌드해 exit 0**(HEAD·round-14 동일), 비공허성은 최종 컴포넌트 별칭 1건 추가 시 exit 15. 라운드 13 직접형 재확인: (AJ) 대소문자 · (AK) 정규화 **양쪽 모두 exit 15 유지**. 라이브 트리: symlink 2건 통과, digest **불변**(감사 가능 레시피 — clean `0a815065…` / dirty `8a91e493…`, HEAD 사본과 이번 사본 바이트 일치), 5회 평균 0.2738→0.2758 s/run(+0.7%, 노이즈). **(P1-B) 커밋된 런타임 경로 문자열**: R25가 체크리스트의 `command`/`working_directory`를 **verbatim** 실행(verify-completion.sh:1086 → :1561 `cd`+`bash -c`)하는데 그 문자열이 **기록된 스펠링**인지 아무도 묻지 않았다. 재현(커밋 내용만): `practices/evals/spec_policy_ref_guard.sh` → `PRACTICES/evals/…` 한 글자 케이스 변경 → APFS에서 명령 **exit 0**, `git cat-file -e HEAD:PRACTICES/…` **exit 128**, 트리 CLEAN, fingerprint **클린트리 상수**, [58] task-coverage exit 0, R25 위반 버킷 10종 전부 EMPTY = **green 증거 위조**. 처방을 **두 부분으로 분리**: **(1) 강제** — 신규 가드 [104] `checklist_command_path_spelling_guard.sh`가 체크리스트의 모든 경로형 토큰을 working_directory 기준 repo-relative로 풀어 **기록된 스펠링(추적 경로 또는 그 디렉터리 컴포넌트)** 이어야 하고, 아니면서 **공유 fold**(`tree_fingerprint.py`의 `_fold_path_key`를 import — 재구현 0)로 동치면 `CHECKLIST_PATH_ALIAS` BLOCK. **(st_dev, st_ino) 판별자를 쓰지 않는다** — 주제가 커밋된 파일 안의 **문자열**이지 검증 파일시스템 위의 경로가 아니므로 측정할 로컬 동일성이 없고 판정하는 것은 **수신자의** 파일시스템이다(그 덕에 가드와 fixture가 **파일시스템 독립**). candidate 규칙 7종을 헤더에 전수 열거하고 **라이브 체크리스트 오탐 0을 측정**: 367 토큰 → recorded 240 / unrelated 125 / skipped(flag) 2 / **alias 0**(`--show`로 표 출력). fixture 3종(pass_recorded_spellings / fail_command_case_alias = 재현 그대로 / fail_working_directory_alias). **(2) 정직한 한계** — 임의 커밋 내용의 경로 문자열 일반형은 **inspection으로 결정불가능**이므로 휴리스틱 스캐너를 출하하지 않고 **P2-72로 열어둔다**: 유일한 완전 처방은 **aliasing 하지 않는(대소문자·정규화 민감) 체크아웃에서 스위트를 실제로 돌리는 것**(이 프로젝트가 이미 구성 가능함을 증명한 `hdiutil create -fs "Case-sensitive APFS"`), 비용·채택 조건을 행에 명기. 값싼 완화책으로 `--advisory-scripts`(체크리스트가 **직접 호출하는** 셸 스크립트 1단계 literal 스캔)를 **비블로킹 ADVISORY**로 추가(라이브 3 스크립트·alias 0, 심은 alias 1건은 보고됨 = 비공허). prover 확장: (AN) jump 토폴로지 + (AN2) lexical 복원 twin + (AN3)/(AN4) 구현별 분리 twin + (AO) cycle 예산, 각각 premise 단언 동반. 신규 2건 등재(P2-72 · P3-134 = 중간 컴포넌트 별칭, 두 resolver 모두 미차단 — 측정·register-only) + P3-133 closed → 분모 308→310, 수렴 271/310 **87%**.
 
@@ -364,6 +364,18 @@ R25). *이름이 세션 기록에만 있던 항목을 여기로 영구화했다.
 - [x] P2-75 **`pipa-article-24-2026-05`가 practices를 2026-08-17 time_decay RED로 몰고 있고, 재fetch도 삭제도 막혀 있다** — law.go.kr은 plain curl에 iframe/과부하 셸만 반환(LSW·검색·DRF·elaw·assembly·moleg·Wayback 전수 프로브 실패)하고, 삭제는 `templates/DECISIONS.md[TD-2026-05-18-031]`의 ADR evidence가 이 upstream_id를 인용해 evidence_guard가 BLOCK(실측). 즉 **가드 두 개가 서로를 막는 교착**. done-when 후보 3택1: (a) `snapshot-extract.sh`에 User-Agent 추가 후 재시도(브라우저가 보내는 헤더를 보내는 것은 doctoring 아님) (b) 해당 ADR evidence를 `source_type: external`+citation/url로 **정정 주석과 함께** 전환하고 upstream_id 제거 (c) RED 수용하고 만료 후 재평가. 출처: 2026-08-01 Lane A. closure: 2026-08-01 (38행 소진 웨이브, Lane F) — (a) **측정-실패 기록 후** (b) 실행. (a): 심층 조문 라우트가 HTTP 200+5278B 자기 과부하 페이지이고 Chrome UA 추가 시 **바이트 동일**, 헤더 4종 조합도 Content-Language만 변경, m.law.go.kr는 404, 루트는 정상 → UA 벽이 아니라 그 라우트의 백엔드 조건(부수 정정: 기존 'iframe 셸' 서술도 부정확 — iframe 0건). **결정적 사실**: 스냅숏이 디스크에 **없고** manifest sha가 rolling-nibble placeholder = 한 번도 fetch된 적 없는 파일의 날조 digest(삭제된 kisa 스텁과 동일 계열)이며, 기계 검사되는 참조는 ADR 1곳뿐. (b): ADR에서 upstream_id/section 제거 + **법령 자체** url 추가(측정 HTTP 200/1279B/title 확인), 가시적·날짜 기입 정정 주석, 거짓 산문 provenance 정정, 그리고 날조 manifest 레코드 **삭제**. 결과: practices RED **2026-08-17 → 2026-10-13** — 미룬 게 아니라 사유를 없앰.
 - [x] P2-76 선언된 JSON 스키마에 **실행 소비자가 없다** (직전 P1 행 — plugin 채널 silent-miss — 의 계열 원인). 측정 2026-08-09: `practices-react/eslint-plugin-ax/schemas/ax.config.schema.json` 실행 소비자 **0**(SKILL.md 3곳의 산문 참조뿐) · `specs/personas/persona-registry.schema.json` 실행 소비자 **0**(`dogfood_ledger_guard.sh`는 grep으로 원장 파일 모양만 보고 스키마를 로드하지 않는다) · `verify/manifest.schema.json`은 `verify/scripts/run_verify_triplet.py`가 로드하되 **`required[]` 키만** 읽는다(전체 검증 아님). 레포 전체에 ajv 등 스키마 검증 라이브러리 없음. **정직 단서**: "스키마 3개가 전부 죽었다"는 과장 — 1개는 부분 실행되므로 계열 주장은 그만큼 좁혀 기록한다. done-when: 스키마 파일마다 (a) 실행 소비자가 존재하거나 (b) `문서 전용`으로 사유와 함께 등재되도록 강제하는 가드 + fixture 쌍. 근거: 실행되지 않는 스키마는 강제한다는 **착각만** 만들고, 그 착각이 정확히 그 P1을 출하시켰다. → **closed 2026-08-10**: 신규 가드 [109] `schema_executable_consumer_guard.sh` + `schema_consumer_manifest.yaml` — 5불변식(등재 완전성/역존재/일대일/상태형태/**consumer 실재** — 존재·가독·basename 참조를 단일 boolean으로 병합해 중복탐지가 변이검증을 무력화하던 결함을 [87]이 적발·봉합) + fixture 3종(pass/fail_unregistered/fail_phantom) + kill-manifest 등재(76/76 non-vacuous). 재측정 결과 3스키마 상태 유지: ax.config·persona-registry는 documented-only(사유 명기 — 전자는 layoutFrom이 스키마 파일을 읽지 않고 손검증+R110 throw로 대체), manifest.schema는 run_verify_triplet.py가 소비하되 required[]만 읽는 한계 명기. 가드수 108→109 연쇄(헤드라인·CLAUDE.md 산문·SKILL.md).
 - [x] P2-77 — **closed 2026-08-10 (E2E dogfood)**: react-enforcement 설치 recipe가 TypeScript 프로젝트에서 **또 하나의 silent-miss**를 출하할 수 있었다 — 기본 espree 파서는 .ts/.tsx에서 Parsing error를 내고 ESLint는 그 파일을 **전 룰에 대해 건너뛰므로** ax 룰이 조용히 0건이 된다. 설치 스킬의 probe(위반 심기→검출→삭제)도 TS 전용 문법이 없어 이 사각을 **통과**시켰다(E2E 실측: headless 세션이 임기응변으로 typescript-eslint를 설치한 뒤에야 심은 위반이 표면화). 봉합: SKILL.md Step 3에 TS 감지→`typescript-eslint` 설치+parser 동일 블록 배선 명문화(왜 없으면 전 룰 skip인지 포함) + Step 4 probe에 TS-only 문법(`__axProbe: string`) 의무화로 파서 부재 시 probe가 **소리내어 실패**하도록 + parsing-error 서명은 ax 진단이 아니라 파서 배선 결함으로 라우팅. PLUGIN-CHANNEL §4단계 한 줄 동기화. headless 권한 요구(acceptEdits로는 npm/probe 불가)도 USAGE-GUIDE §5에 동봉 문서화.
+- [ ] P2-78 — guard suite의 Apple stock-bash 3.2 이식성: `$(...)` 안에 중첩된 quoted heredoc은
+  본문 **아포스트로피 개수가 홀수**면 bash 3.2.57 파서가 오파싱한다(최소 재현:
+  `echo "$(cat <<'PY'` + `guard's own` + `PY` + `)"` → unexpected EOF; 동일 heredoc을
+  top-level로 쓰면 정상). 2026-08-10 이 결함으로 `fixture_kill_proof_guard`가 stock-bash
+  머신에서 live 즉사(`parse_rc: unbound` — ITEMS 미할당 후 set -u)했고 같은 커밋에서
+  temp-file 패턴(top-level `cat <<'PY' > "$TMP"` 후 `python3 "$TMP"`)으로 봉합 +
+  `pyyaml_preflight_coverage_guard`의 probe가 ambient JAVA_HOME(JDK17)에 가려지던 것도
+  JDK21 해석 주입으로 봉합. **잔여(이 항목의 open 사유)**: 동일 지뢰 클래스가
+  `doc_headline_count_guard.sh`·`pre_push_decision_guard.sh`·`vacuity_class_proof_guard.sh`에
+  남아 있다 — 오늘은 아포스트로피 짝수라 우연히 통과 중이며, 주석 한 줄이 패리티를 바꾸면
+  같은 방식으로 죽는다. done-when: 세 파일 temp-file 패턴 전환(또는 동등 면역화) + stock-bash
+  3.2 `bash -n` 스모크를 이식성 체크에 등재. 출처: 2026-08-10 이 머신 R25 FAIL 실측 진단.
 
 ## P3 — industry-niche deferrals (generic 아님 — 낮은 우선순위)
 
@@ -698,6 +710,32 @@ fork하지 않는 기존 프로젝트가 ax-template 카탈로그를 Claude Code
   (`LIVE_MIN_ITEMS` 73→74). live 실측: `marketplace update`+`update`로 0.1.1→0.1.2가
   `updated from 0.1.1 to 0.1.2`를 출력하며 새 스냅숏 디렉터리 생성 확인(고립 `CLAUDE_CONFIG_DIR`,
   실사용 설치 무영향). 상세: `practices/DECISIONS.md` R111.
+- [ ] D-8 — ax-install-hooks: linked git worktree 환경 안내 부재. 다운스트림 실사용 피드백
+  (2026-08-10, bless-two 계열): 대상이 linked worktree면 `git config core.hooksPath`가 공유
+  config에 쓰여 **형제 워크트리 전체**의 훅 경로를 바꾼다. 카탈로그 판정: `extensions.worktreeConfig
+  true` + `git config --worktree core.hooksPath` 변형 **승인**(불변식은 배선 방식이 아니라 probe
+  비공허성). done-when: SKILL.md가 `.git`이 파일인 경우를 감지해 --worktree 변형을 안내 +
+  형제 불간섭 확인 스텝.
+- [ ] D-9 — ax-install-hooks: 훅 템플릿 경로-스코프 기본화. 같은 피드백: 현 템플릿은 모든
+  커밋에서 무조건 게이트를 돌려, 카탈로그 대상 밖(예: Python) 커밋이 차단된다. PLUGIN-CHANNEL
+  3단계 규칙 6("root 밖 파일에는 카탈로그 미적용")과 부정합 — staged 파일이 react.root/java.root
+  를 건드릴 때만 해당 게이트 실행으로 판정 **승인**. done-when: 템플릿에 staged-경로 조건 분기 +
+  probe 양방향(스코프 안 위반→차단, 밖 커밋→통과) 명문화.
+- [ ] D-10 — ax-install-hooks: 템플릿의 `cd backend` placeholder를 ax.config.json의
+  `java.root`에서 읽도록(또는 치환 실패 시 소리내어 실패). 치환 지시가 주석에만 있어 놓치기
+  쉬움(같은 피드백에서 하드 전제로 오인됨). done-when: 템플릿이 config를 파싱하거나, 미치환
+  기본값 실행 시 명시 에러.
+- [ ] D-11 — R25 검증 시간 단축: perf-log + CI 샤딩 구현 (maintainer 승인 2026-08-10).
+  설계는 `docs/VERIFICATION-PERF-AND-SHARDING.md` §2·§3에 이미 존재 — 이 항목은 그 **구현**.
+  동기(실측): 2026-06 기준 per-domain 15–16분(78 tasks)이던 스위트가 117 tasks + PIT +
+  guard 109종으로 성장해 이 머신 기준 R25 전주기 ~90분, load~6 경합일엔 watchdog 143이
+  하루 3회 발생(2026-08-10 — per-domain 90/113 지점 1회, run-all-guards 중반 2회; 동일
+  스텝 단독 실행은 전건 PASS = 순수 wall-clock 문제). 원칙(전수 인증)은 유지하고 속도만
+  공학으로: (a) verify-completion이 스텝별 소요를 audit 로그에 기록(perf-log, §2 스키마)
+  (b) 실측 비용 기준 N-way 샤딩으로 병렬화(§3 — count가 아니라 observed cost로 분할).
+  done-when: perf-log 필드가 last_run.jsonl에 기록되고, 샤딩 실행 경로가 단일-러너
+  결과와 동일 판정을 내는 것이 증명됨(동일 HEAD 비교 1회). 출처: maintainer 비용 문제
+  제기 → 승인 (2026-08-10 세션).
 
 ## 운영 규약
 
