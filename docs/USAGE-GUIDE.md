@@ -101,10 +101,15 @@ claude plugin list          # ax-transform@ax-transform · Status: ✔ enabled �
 | `/ax-install-java-enforcement` | ArchUnit 시작 체크 3종 + `testPractices` task | JDK, gradle |
 | `/ax-install-hooks` | pre-commit 훅 | git |
 
-**react·java 설치 스킬**은 설치 직후 **probe 검증**(위반 심기 → 검출 확인 → 삭제)까지
-자동 수행한다 — "설치했는데 조용히 아무것도 안 잡는" 상태를 그 자리에서 걸러낸다.
-hooks 스킬은 probe 없이 self-check 체크리스트로 마무리하므로, 훅 배선 후 위반 커밋을
-한 번 시도해 차단을 직접 확인하는 것을 권장한다.
+**세 설치 스킬 모두** 배선 직후 **probe 검증**(위반 심기 → `git commit`/lint/test 시도 →
+차단 확인 → 삭제)까지 자동 수행한다 — "설치했는데 조용히 아무것도 안 잡는" 상태를 그
+자리에서 걸러낸다. 다만 각 probe가 증명하는 범위는 스킬마다 다르다: react/java probe는
+"그 스택의 특정 룰이 실제로 검출되는가"까지 증명하고(rule id / RED 테스트 클래스명이
+출력에 뜬다), hooks probe는 "git이 훅을 실제로 실행해 커밋을 막는가"까지 증명한다 —
+스택별 게이트가 이미 설치돼 있으면 그 스킬의 probe 파일을 그대로 재사용해 전체 체인
+(`git commit` → 훅 → `npm run lint`/`./gradlew testPractices` → 카탈로그 룰)을 검증하고,
+아직 아무 게이트도 없으면 훅 파일에 임시 `exit 1`을 심어 배선 자체(hooksPath/husky/
+lefthook → 실제 커밋 차단)만 검증한다.
 
 > **헤드리스 실행 주의**: 이 절의 설치 스킬(특히 `/ax-install-react-enforcement`)은 `npm install`과
 > probe 실행에 Bash가 필요하다. `claude -p` 등 헤드리스 실행에서 `--permission-mode acceptEdits`는

@@ -95,7 +95,20 @@ if [ "$COUNT" -eq 0 ]; then
     exit 2
 fi
 
-python3 - "$CATALOG" "$OUT" "${SORTED[@]}" <<'PYEOF'
+# Unique per-invocation tmp path (not a fixed "$OUT.tmp"): two concurrent runs
+# targeting the same OUT (e.g. a dev running --catalog practices twice, or two
+# CI jobs racing) previously wrote to the identical "$OUT.tmp" name and could
+# truncate/clobber each other's in-flight write before either reached the
+# os.replace() below. mktemp's XXXXXX suffix gives each invocation its own
+# file in the same dir as OUT (required so os.replace() below is same-
+# filesystem atomic). The EXIT trap is the outer safety net: if python exits
+# non-zero (or is killed) before it reaches its own os.replace()/os.remove()
+# cleanup, this still removes the orphan — `rm -f` is a no-op once python has
+# already renamed the tmp file away on success.
+TMP_PATH="$(mktemp "${OUT}.XXXXXX")"
+trap 'rm -f "$TMP_PATH"' EXIT
+
+python3 - "$CATALOG" "$OUT" "$TMP_PATH" "${SORTED[@]}" <<'PYEOF'
 import sys
 import hashlib
 import os
@@ -104,7 +117,8 @@ import yaml
 
 catalog = sys.argv[1]
 out_path = sys.argv[2]
-rule_paths = sys.argv[3:]
+tmp_path = sys.argv[3]  # unique per-invocation, created by the bash wrapper's mktemp
+rule_paths = sys.argv[4:]
 
 
 def rule_id(path):
@@ -288,11 +302,13 @@ if unclassified_count != 0:
     )
     sys.exit(1)
 
-# ── atomic write: render to a tmp file in the same dir as out_path, then
+# ── atomic write: render to tmp_path (a unique per-invocation file in the
+#    same dir as out_path, created by the bash wrapper's mktemp — see there
+#    for why this can no longer be a fixed "out_path + '.tmp'"), then
 #    os.replace() into place. A crash/error mid-write (disk full, permissions)
-#    leaves the tmp file orphaned but out_path itself untouched — never a
-#    half-written or stale-content INDEX.md. ──
-tmp_path = out_path + '.tmp'
+#    leaves tmp_path orphaned but out_path itself untouched — never a
+#    half-written or stale-content INDEX.md; the bash EXIT trap is the outer
+#    backstop for the orphan. ──
 try:
     with open(tmp_path, 'w', encoding='utf-8') as fh:
         fh.write('\n'.join(body))

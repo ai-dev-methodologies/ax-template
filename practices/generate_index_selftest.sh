@@ -14,7 +14,10 @@
 #
 # Also asserts the atomic-write property (PRD T2-1 F-write): a run that exits 1
 # (missing/malformed) must leave a pre-existing out file byte-for-byte
-# untouched, and must not leave a `.tmp` file behind.
+# untouched, and must not leave an orphaned tmp file behind. The generator's
+# tmp file is named "$OUT.XXXXXX" (mktemp, unique per invocation — not a fixed
+# "$OUT.tmp", so two concurrent runs can't truncate each other's write); the
+# residue check below globs "$OUT.*" rather than a literal ".tmp" suffix.
 #
 # bash 3.2 compatible (no mapfile, no associative arrays) — same posture as
 # generate_index.sh / generate_agents.sh.
@@ -97,8 +100,8 @@ elif ! grep -q 'unclassified' "$TMP_DIR/missing.stderr"; then
     fail "missing fixture: expected 'unclassified' BLOCK message on stderr, not found"
 elif [ "$(cat "$MISSING_OUT")" != "$SENTINEL_CONTENT" ]; then
     fail "missing fixture: atomicity violated — pre-existing $MISSING_OUT was overwritten on a failed run"
-elif [ -f "$MISSING_OUT.tmp" ]; then
-    fail "missing fixture: atomicity violated — orphaned $MISSING_OUT.tmp left behind"
+elif MISSING_RESIDUE=$(shopt -s nullglob; echo "$MISSING_OUT".*) && [ -n "$MISSING_RESIDUE" ]; then
+    fail "missing fixture: atomicity violated — orphaned $MISSING_RESIDUE left behind"
 else
     pass "missing fixture: rc=1 unclassified BLOCK, pre-existing out file untouched (atomic write)"
 fi
@@ -113,8 +116,8 @@ elif ! grep -q "no closing '---' delimiter" "$TMP_DIR/malformed.stderr"; then
     fail "malformed fixture: expected 'no closing ... delimiter' message on stderr, not found"
 elif [ "$(cat "$MALFORMED_OUT")" != "$SENTINEL_CONTENT" ]; then
     fail "malformed fixture: atomicity violated — pre-existing $MALFORMED_OUT was overwritten on a failed run"
-elif [ -f "$MALFORMED_OUT.tmp" ]; then
-    fail "malformed fixture: atomicity violated — orphaned $MALFORMED_OUT.tmp left behind"
+elif MALFORMED_RESIDUE=$(shopt -s nullglob; echo "$MALFORMED_OUT".*) && [ -n "$MALFORMED_RESIDUE" ]; then
+    fail "malformed fixture: atomicity violated — orphaned $MALFORMED_RESIDUE left behind"
 else
     pass "malformed fixture: rc=1 parse-error BLOCK, pre-existing out file untouched (atomic write)"
 fi
