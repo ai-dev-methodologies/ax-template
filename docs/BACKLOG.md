@@ -710,21 +710,31 @@ fork하지 않는 기존 프로젝트가 ax-template 카탈로그를 Claude Code
   (`LIVE_MIN_ITEMS` 73→74). live 실측: `marketplace update`+`update`로 0.1.1→0.1.2가
   `updated from 0.1.1 to 0.1.2`를 출력하며 새 스냅숏 디렉터리 생성 확인(고립 `CLAUDE_CONFIG_DIR`,
   실사용 설치 무영향). 상세: `practices/DECISIONS.md` R111.
-- [ ] D-8 — ax-install-hooks: linked git worktree 환경 안내 부재. 다운스트림 실사용 피드백
+- [x] D-8 — ax-install-hooks: linked git worktree 환경 안내 부재. 다운스트림 실사용 피드백
   (2026-08-10, bless-two 계열): 대상이 linked worktree면 `git config core.hooksPath`가 공유
   config에 쓰여 **형제 워크트리 전체**의 훅 경로를 바꾼다. 카탈로그 판정: `extensions.worktreeConfig
   true` + `git config --worktree core.hooksPath` 변형 **승인**(불변식은 배선 방식이 아니라 probe
   비공허성). done-when: SKILL.md가 `.git`이 파일인 경우를 감지해 --worktree 변형을 안내 +
-  형제 불간섭 확인 스텝.
-- [ ] D-9 — ax-install-hooks: 훅 템플릿 경로-스코프 기본화. 같은 피드백: 현 템플릿은 모든
+  형제 불간섭 확인 스텝. → **closed 2026-08-11 (bless-two-staging 실배선 검증 F-1~F-3 반영;
+  F-2=bare 사전점검, F-3=probe ④ 일반화 동반)**: `skills/ax-install-hooks/SKILL.md` Branch A0가
+  `.git` 파일/디렉터리 판별 후 `--worktree` 변형 + F-2 bare/worktree 사전점검(공유 config의
+  `core.bare`/`core.worktree` 선이전) 안내, A2가 F-3 기준(형제의 `--show-origin` 값+출처 불변,
+  `config.worktree` 신규 파일 정확히 1개)으로 형제 불간섭을 확인.
+- [x] D-9 — ax-install-hooks: 훅 템플릿 경로-스코프 기본화. 같은 피드백: 현 템플릿은 모든
   커밋에서 무조건 게이트를 돌려, 카탈로그 대상 밖(예: Python) 커밋이 차단된다. PLUGIN-CHANNEL
   3단계 규칙 6("root 밖 파일에는 카탈로그 미적용")과 부정합 — staged 파일이 react.root/java.root
   를 건드릴 때만 해당 게이트 실행으로 판정 **승인**. done-when: 템플릿에 staged-경로 조건 분기 +
-  probe 양방향(스코프 안 위반→차단, 밖 커밋→통과) 명문화.
-- [ ] D-10 — ax-install-hooks: 템플릿의 `cd backend` placeholder를 ax.config.json의
+  probe 양방향(스코프 안 위반→차단, 밖 커밋→통과) 명문화. → **closed 2026-08-11**: 공유 훅 본문이
+  `git diff --cached --name-only`로 react.root/java.root 접두 매치(root가 `.`이면 확장자 프록시)
+  시에만 해당 게이트 실행, Non-vacuous verification 절차 3단계가 스코프-밖 커밋의 통과를 명문
+  확인 항목으로 요구.
+- [x] D-10 — ax-install-hooks: 템플릿의 `cd backend` placeholder를 ax.config.json의
   `java.root`에서 읽도록(또는 치환 실패 시 소리내어 실패). 치환 지시가 주석에만 있어 놓치기
   쉬움(같은 피드백에서 하드 전제로 오인됨). done-when: 템플릿이 config를 파싱하거나, 미치환
-  기본값 실행 시 명시 에러.
+  기본값 실행 시 명시 에러. → **closed 2026-08-11**: 훅 본문이 커밋 시점에 `ax.config.json`을
+  python3(우선)/sed(bash 3.2 폴백, 단일 라인, heredoc-in-`$()` 미사용 — P2-78 회피)로 파싱해
+  react.root/java.root를 해석; 미해석 시 하드코딩 기본값으로 넘어가지 않고 `exit 1`로 소리내어
+  실패.
 - [ ] D-11 — R25 검증 시간 단축: perf-log + CI 샤딩 구현 (maintainer 승인 2026-08-10).
   설계는 `docs/VERIFICATION-PERF-AND-SHARDING.md` §2·§3에 이미 존재 — 이 항목은 그 **구현**.
   동기(실측): 2026-06 기준 per-domain 15–16분(78 tasks)이던 스위트가 117 tasks + PIT +
