@@ -115,10 +115,19 @@ import axPlugin from '@ax/eslint-plugin-ax'
 import tseslint from 'typescript-eslint'   // omit this import if the project has no TS sources
 
 const axConfig = JSON.parse(fs.readFileSync('./ax.config.json', 'utf8'))
+const srcDir = axConfig.react?.srcDir
+if (!srcDir) {
+  throw new Error(
+    "ax.config.json is missing react.srcDir -- the ESLint 'files' glob cannot be built " +
+      "without it (a silent 'src' default would match zero files on any layout that " +
+      'differs, and report 0 problems indistinguishably from "clean"). Run ax-init-config ' +
+      '(see skills/ax-init-config/SKILL.md) or add react.srcDir to ax.config.json manually.'
+  )
+}
 
 export default [
   {
-    files: [`${axConfig.react?.srcDir ?? 'src'}/**/*.{ts,tsx,js,jsx}`],
+    files: [`${srcDir}/**/*.{ts,tsx,js,jsx}`],
     languageOptions: { parser: tseslint.parser },   // omit this line too if no TS sources
     plugins: { ax: axPlugin },
     settings: { ax: axConfig.react },
@@ -136,11 +145,15 @@ recommended set afterward (e.g. `'ax/no-god-route': 'warn'`) if the project need
 a lighter starting point; never replace the object with a hand-picked list that
 starts empty.
 
-> ⚠️ **Never hardcode the `files` glob to a fixed `"src"` top-level directory.** If `react.srcDir` in `ax.config.json`
-> is anything other than `src`, a hardcoded glob silently matches zero files —
-> ESLint reports `0 problems` and it looks identical to "clean." Always
-> parameterize the glob from `axConfig.react?.srcDir` with a `'src'` fallback, as
-> shown above — never write the literal string `src/**` into the config.
+> ⚠️ **Never hardcode the `files` glob to a fixed `"src"` top-level directory, and never
+> silently default `react.srcDir` to `'src'` either.** A `?? 'src'` fallback is the same
+> class of defect as F-024/#86's `-P`-less java hook invocation — a config value that
+> failed to resolve gets papered over with a generic default instead of failing loud, so
+> the gate goes silently vacuous (glob matches zero files on any layout that isn't
+> literally `src`; ESLint reports `0 problems`, indistinguishable from "clean"). Always
+> resolve `axConfig.react?.srcDir` explicitly and `throw` when it is missing, as shown
+> above — never write the literal string `src/**` into the config, and never fall back to
+> a default value for an unresolved `react.srcDir`.
 >
 > If `react.root` in `ax.config.json` is not the repo root (e.g. a monorepo
 > package), read `ax.config.json` and resolve `eslint.config.mjs` paths relative
@@ -194,9 +207,14 @@ right" are not evidence it is actually catching anything. Prove it:
 
 4. **Delete the probe file** — it must not remain in the project.
 
+**If `npx eslint` throws immediately** mentioning `react.srcDir` before it even
+attempts to lint the probe, that is Step 3's fail-loud guard firing — fix
+`ax.config.json`'s `react.srcDir`, this is not a glob/settings defect and the
+4-step diagnostic below is the wrong tool for it.
+
 If step 3 does not show `ax/no-upward-layer-import` (and the output is not a
-parsing error — see above), work through this diagnostic order — do not guess
-which layer failed:
+parsing error or the srcDir throw above), work through this diagnostic order
+— do not guess which layer failed:
 
 1. **Plugin load** — `npx eslint --print-config <probe>` — does `ax` appear
    under `plugins` at all? If not, the `file:` install or the `import axPlugin`
@@ -226,7 +244,7 @@ which layer failed:
 - [ ] `ax.config.json` existed (or `ax-init-config` was invoked and the run stopped there)
 - [ ] The plugin path was `ls`-verified before `npm i -D file:...`
 - [ ] If the project has TypeScript sources, `typescript-eslint` was installed and `languageOptions: { parser: tseslint.parser }` is on the same config block as the ax plugin
-- [ ] `eslint.config.mjs`'s `files` glob is parameterized from `axConfig.react?.srcDir` — the literal string `src/**` does not appear anywhere in it
+- [ ] `eslint.config.mjs`'s `files` glob is parameterized from `axConfig.react?.srcDir` — the literal string `src/**` does not appear anywhere in it, and an unresolved `react.srcDir` throws instead of silently defaulting to `'src'`
 - [ ] `settings: { ax: axConfig.react }` is present on the block that matches the project's real source files
 - [ ] The probe→detect→delete check ran, `ax/no-upward-layer-import` was observed in `npx eslint` output (not a parsing error), and the probe file was deleted afterward
 - [ ] If detection failed, the failure signature was checked first (parsing error → Step 3 parser wiring; missing rule id → the 4-step diagnostic order below, not guessed)

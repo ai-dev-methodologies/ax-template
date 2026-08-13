@@ -152,6 +152,17 @@ claude plugin install ax-transform@ax-transform         # ② 최신 main으로 
 claude plugin list                                      # 확인 — 적용은 새 세션부터
 ```
 
+> ⚠️ **갱신 후 CLI 프로세스를 완전히 재시작하라 — `/clear`로는 부족하다** (GH #88, 실측).
+> 스킬 레지스트리는 **프로세스 시작 시점의 스냅숏**이라, 실행 중인 세션은 갱신 전 버전을 계속
+> 서빙한다. 반면 `claude plugin list`는 별도 서브프로세스로 **디스크 상태**를 읽으므로 새 버전을
+> 보고한다 — 즉 세션이 자연스럽게 확인할 그 신호가 실제 로드된 것과 어긋난다. 실측 사례: `plugin
+> list`가 0.1.5를 보고하는 동안 Skill 툴은 0.1.3을 서빙했고, 그대로 검증했다면 이미 고쳐진 결함을
+> "여전히 깨짐"으로 **거짓 보고**할 뻔했다.
+>
+> **세션이 실제로 실행 중인 버전을 확인하는 유일한 신뢰 신호**: Skill 호출 출력의
+> `Base directory for this skill:` 경로에 박힌 버전 번호. 릴리스 검증은 반드시 **새로 띄운 CLI
+> 프로세스**에서 하라. (근본 원인은 Claude Code 하네스 동작이며 ax-template이 강제할 수 없다.)
+
 **갱신 후 — react 기계 강제를 배선한 프로젝트는 심링크 재결박 (경로에 버전이 박혀 있다):**
 플러그인 스냅숏 경로는 `…/cache/ax-transform/ax-transform/<plugin버전>/` 형태라, **버전이
 올라간 갱신 뒤에는** 소비 프로젝트의 `node_modules/@ax/eslint-plugin-ax` 심링크가 **옛 버전

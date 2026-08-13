@@ -35,6 +35,14 @@
 ai-dev-methodologies/ax-template` → `claude plugin install ax-transform@ax-transform`,
 **설치 후 새 세션부터** 로드됨).
 
+> ⚠️ **버전 확인은 `claude plugin list`로 하지 마라** (GH #88, 실측). 그 명령은 별도 프로세스로
+> **디스크**를 읽지만, 이 세션의 스킬 레지스트리는 **프로세스 시작 시점의 스냅숏**이라 갱신 직후에도
+> 옛 버전을 계속 서빙한다(`/clear`로도 갱신되지 않는다). 실제로 `plugin list`가 0.1.5를 보고하는
+> 동안 Skill 툴이 0.1.3을 서빙한 사례가 있고, 그 상태로 검증하면 이미 고쳐진 결함을 "여전히 깨짐"
+> 으로 거짓 보고하게 된다.
+> **네가 실행 중인 버전의 유일한 신뢰 신호는 Skill 호출 출력의 `Base directory for this skill:`
+> 경로에 박힌 버전 번호다.** 그 경로가 기대 버전과 다르면 멈추고 사용자에게 CLI 재시작을 요청하라.
+
 ## [1] 프로젝트 파악 — 조사 먼저, 질문은 그 다음
 
 디렉토리 트리·package.json·build.gradle(.kts)·tsconfig 등을 직접 읽고 파악한다:

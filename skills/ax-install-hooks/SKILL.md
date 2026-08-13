@@ -52,8 +52,8 @@ Pick **one** of the three branches below (check for `.husky/` or `lefthook.yml`
 first; default to `core.hooksPath` if neither present). Before writing
 anything, check `ax.config.json`'s `stacks` array — delete the react block
 below if `"react"` is absent, the java block if `"java"` is absent. The hook
-body itself also reads `react.root`/`java.root` from `ax.config.json` at
-commit time, instead of hardcoding a path.
+body itself also reads `react.root`/`java.root`/`java.rootPackage` from
+`ax.config.json` at commit time, instead of hardcoding a path.
 
 ### Hook body — shared verbatim by all three branches (D-9 path-scope, D-10 config-driven)
 
@@ -79,9 +79,22 @@ print(d.get('react', {}).get('root', '') or '')" 2>/dev/null)"
   JAVA_ROOT="$(python3 -c "import json
 d = json.load(open('$CONFIG'))
 print(d.get('java', {}).get('root', '') or '')" 2>/dev/null)"
+  JAVA_ROOT_PACKAGE="$(python3 -c "import json
+d = json.load(open('$CONFIG'))
+print(d.get('java', {}).get('rootPackage', '') or '')" 2>/dev/null)"
 else
   REACT_ROOT="$(sed -n 's/.*"react"[[:space:]]*:[[:space:]]*{[^}]*"root"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$CONFIG" | head -1)"
-  JAVA_ROOT="$(sed -n 's/.*"java"[[:space:]]*:[[:space:]]*{[^}]*"root"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$CONFIG" | head -1)"
+  # java.root/java.rootPackage: isolate the "java" key's own line first, then
+  # extract each field directly off that isolated line (no [^}]* bridging) --
+  # the old single-sed bridge pattern silently failed to match whenever a
+  # nested object sat between "{" and the target field on the same line.
+  # This still assumes the "java" object is written on ONE line (true for
+  # ax.config.sample.json's convention); a hand-formatted multi-line "java"
+  # block will not match here -- python3 above has no such limit, so this
+  # branch is only a fallback for python3-less environments.
+  JAVA_LINE="$(grep '"java"[[:space:]]*:' "$CONFIG" | head -1 || true)"
+  JAVA_ROOT="$(printf '%s' "$JAVA_LINE" | sed -n 's/.*"root"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')"
+  JAVA_ROOT_PACKAGE="$(printf '%s' "$JAVA_LINE" | sed -n 's/.*"rootPackage"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')"
 fi
 # react -- delete this block if "react" is not in ax.config.json's stacks[].
 # Unresolved root is a config defect -- fail loud, never silently default.
@@ -96,13 +109,14 @@ fi
 # java -- delete this block if "java" is not in ax.config.json's stacks[].
 # "testPractices" is the ax-template default task; swap for the project's real one.
 [ -n "$JAVA_ROOT" ] || { echo "ax-hook: java.root not resolved from $CONFIG" >&2; exit 1; }
+[ -n "$JAVA_ROOT_PACKAGE" ] || { echo "ax-hook: java.rootPackage not resolved from $CONFIG" >&2; exit 1; }
 JAVA_TOUCHED=0
 if [ "$JAVA_ROOT" = "." ]; then
   git diff --cached --name-only | grep -qE '\.java$' && JAVA_TOUCHED=1
 else
   git diff --cached --name-only | grep -q "^${JAVA_ROOT}/" && JAVA_TOUCHED=1
 fi
-[ "$JAVA_TOUCHED" = 1 ] && ( cd "$JAVA_ROOT" && ./gradlew testPractices )
+[ "$JAVA_TOUCHED" = 1 ] && ( cd "$JAVA_ROOT" && ./gradlew testPractices -PaxRootPackage="$JAVA_ROOT_PACKAGE" )  # -P is mandatory: without it ArchUnit falls back to build.gradle.kts's generic default package, scans 0 real classes, and PASSes silently even with real violations present (F-024 / #86)
 exit 0   # a legitimate skip must not leak the last test's own nonzero status
 ```
 
@@ -254,7 +268,8 @@ example is coupled to its R25 audit log and cannot be lifted as-is.
 
 - [ ] `.githooks/` was NOT copied wholesale from ax-template; no `pre-push` hook was added by this skill
 - [ ] Exactly one of core.hooksPath / husky / lefthook was wired, matching the project; `.git` was checked (file vs directory) first, and if a file, `--worktree` + the F-2 preflight + the A2 sibling non-interference check all ran and passed
-- [ ] The hook reads `react.root`/`java.root` from `ax.config.json` at commit time — no hardcoded `cd backend`/`cd frontend` placeholder remains, and the react/java blocks present match exactly the `stacks` array (the other block deleted, not commented out)
+- [ ] The hook reads `react.root`/`java.root`/`java.rootPackage` from `ax.config.json` at commit time — no hardcoded `cd backend`/`cd frontend` placeholder remains, and the react/java blocks present match exactly the `stacks` array (the other block deleted, not commented out)
+- [ ] The java block's `./gradlew testPractices` call passes `-PaxRootPackage="$JAVA_ROOT_PACKAGE"` — a `-P`-less invocation lets ArchUnit fall back to the build file's generic default package and PASS silently on real violations (F-024 / #86); `JAVA_ROOT_PACKAGE` unresolved fails loud (`exit 1`), same as `JAVA_ROOT`
 - [ ] The probe→BLOCK→clean→scope-skip check ran (both in-scope and out-of-scope `git commit`), all evidence captured, the probe removed, and `git status` shows no residue
 - [ ] If the commit succeeded instead of blocking, the 5-step diagnostic order was followed, not guessed
 - [ ] The user was told, explicitly, why `.githooks/pre-push` cannot be copied (R25 recency guard requires ax-template's own audit log)

@@ -28,9 +28,9 @@ signature를 발견**(17/17)함으로써 경험적으로 반증되었다 — 발
 |---|---|---|---|
 | P0 (expiry-bound / live defects) | 30 | 30 | **100%** |
 | P1 (generic signature backlog) | 74 | 74 | **100%** |
-| P2 (verification escapes) | 90 | 89 | **99%** |
+| P2 (verification escapes) | 94 | 93 | **99%** |
 | P3 (industry-niche deferrals) | 141 | 141 | **100%** |
-| **P0–P3 합계 (수렴 분모)** | **335** | **334** | **100%** |
+| **P0–P3 합계 (수렴 분모)** | **339** | **338** | **100%** |
 
 > 2026-08-01 P1-seal 라운드 14 — reviewer P1 **2건**을 서로 다른 처방으로 봉합. **(P1-A) lexical `..`가 실재 alias를 놓친다**: 라운드 13은 심링크 타깃을 **lexical**로 해석해 `..`를 **follow 이전에** 텍스트로 접었다. 커널은 중간 symlink를 **follow 한 뒤** `..`를 pop한다. reviewer 토폴로지(커밋 내용만, 환경 통제 0): `backend/jump -> real/sub` + `backend/gradlew -> jump/../GRADLEW-REAL` over tracked `backend/real/gradlew-real` → POSIX는 `backend/real/GRADLEW-REAL`에 도달하고 case-insensitive APFS가 그것을 **추적 파일로 서비스**하므로 R25가 래퍼를 실제로 실행하고 green, lexical 후보 `backend/GRADLEW-REAL`은 **부재**라 두 구현 모두 dangling 종료로 **침묵**(측정: HEAD helper exit 0 + 클린트리 상수 `0a815065…`), case-**sensitive** 수신자는 **DANGLING gradlew**. 봉합: `_resolve_link_target`을 **component-by-component** 커널 해석으로 교체(중간 follow / 최종 컴포넌트는 lstat이므로 follow 안 함 / `..`는 follow 이후 pop / 중간 절대 타깃은 수신자 루트로 이탈 / 결측·판독불가 중간은 최종 lstat이 판정) + **예산 2종**(follow 40 = Linux MAXSYMLINKS와 macOS SYMLOOP_MAX 32 중 **큰 쪽**, component 4096) 소진 시 **침묵이 아니라** 신규 코드 `GIT_SYMLINK_RESOLUTION_UNBOUNDED`(fingerprint exit 16)로 BLOCK — 미완주 walk는 alias 질문에 **답하지 못한 것**이고 그 상태를 침묵으로 바꾸는 것이 라운드 8 이후 매 라운드가 닫아온 결함이며, 커밋된 cycle은 수신자에게 ELOOP다(측정: `loopa -> loopb/x`·`loopb -> loopa`, 커널 ELOOP, HEAD exit 0 → round-14 exit 16). 두 구현 대칭 봉합(helper + recency guard 12c). **P3-133은 SUPERSEDE — 그 행의 done-when(“발산 시 침묵”)은 이 P1을 보존한다**(reviewer 논거 인용과 함께 REJECT로 닫음), 그 행의 over-inclusive 반례를 새 resolver로 **재측정**: HEAD exit 15(부당 차단) → round-14 **exit 0 + 클린트리 상수**(첫 `..`에서 escapes). 정당한 **9형태 전부 재빌드해 exit 0**(HEAD·round-14 동일), 비공허성은 최종 컴포넌트 별칭 1건 추가 시 exit 15. 라운드 13 직접형 재확인: (AJ) 대소문자 · (AK) 정규화 **양쪽 모두 exit 15 유지**. 라이브 트리: symlink 2건 통과, digest **불변**(감사 가능 레시피 — clean `0a815065…` / dirty `8a91e493…`, HEAD 사본과 이번 사본 바이트 일치), 5회 평균 0.2738→0.2758 s/run(+0.7%, 노이즈). **(P1-B) 커밋된 런타임 경로 문자열**: R25가 체크리스트의 `command`/`working_directory`를 **verbatim** 실행(verify-completion.sh:1086 → :1561 `cd`+`bash -c`)하는데 그 문자열이 **기록된 스펠링**인지 아무도 묻지 않았다. 재현(커밋 내용만): `practices/evals/spec_policy_ref_guard.sh` → `PRACTICES/evals/…` 한 글자 케이스 변경 → APFS에서 명령 **exit 0**, `git cat-file -e HEAD:PRACTICES/…` **exit 128**, 트리 CLEAN, fingerprint **클린트리 상수**, [58] task-coverage exit 0, R25 위반 버킷 10종 전부 EMPTY = **green 증거 위조**. 처방을 **두 부분으로 분리**: **(1) 강제** — 신규 가드 [104] `checklist_command_path_spelling_guard.sh`가 체크리스트의 모든 경로형 토큰을 working_directory 기준 repo-relative로 풀어 **기록된 스펠링(추적 경로 또는 그 디렉터리 컴포넌트)** 이어야 하고, 아니면서 **공유 fold**(`tree_fingerprint.py`의 `_fold_path_key`를 import — 재구현 0)로 동치면 `CHECKLIST_PATH_ALIAS` BLOCK. **(st_dev, st_ino) 판별자를 쓰지 않는다** — 주제가 커밋된 파일 안의 **문자열**이지 검증 파일시스템 위의 경로가 아니므로 측정할 로컬 동일성이 없고 판정하는 것은 **수신자의** 파일시스템이다(그 덕에 가드와 fixture가 **파일시스템 독립**). candidate 규칙 7종을 헤더에 전수 열거하고 **라이브 체크리스트 오탐 0을 측정**: 367 토큰 → recorded 240 / unrelated 125 / skipped(flag) 2 / **alias 0**(`--show`로 표 출력). fixture 3종(pass_recorded_spellings / fail_command_case_alias = 재현 그대로 / fail_working_directory_alias). **(2) 정직한 한계** — 임의 커밋 내용의 경로 문자열 일반형은 **inspection으로 결정불가능**이므로 휴리스틱 스캐너를 출하하지 않고 **P2-72로 열어둔다**: 유일한 완전 처방은 **aliasing 하지 않는(대소문자·정규화 민감) 체크아웃에서 스위트를 실제로 돌리는 것**(이 프로젝트가 이미 구성 가능함을 증명한 `hdiutil create -fs "Case-sensitive APFS"`), 비용·채택 조건을 행에 명기. 값싼 완화책으로 `--advisory-scripts`(체크리스트가 **직접 호출하는** 셸 스크립트 1단계 literal 스캔)를 **비블로킹 ADVISORY**로 추가(라이브 3 스크립트·alias 0, 심은 alias 1건은 보고됨 = 비공허). prover 확장: (AN) jump 토폴로지 + (AN2) lexical 복원 twin + (AN3)/(AN4) 구현별 분리 twin + (AO) cycle 예산, 각각 premise 단언 동반. 신규 2건 등재(P2-72 · P3-134 = 중간 컴포넌트 별칭, 두 resolver 모두 미차단 — 측정·register-only) + P3-133 closed → 분모 308→310, 수렴 271/310 **87%**.
 
@@ -452,6 +452,48 @@ R25). *이름이 세션 기록에만 있던 항목을 여기로 영구화했다.
   플러그인 업그레이드/교체 또는 Gradle Report API 마이그레이션 후 Gradle 9에서 PIT 게이트
   ([84][85] vacuity_class_proof 계열)가 동일 판정을 내는 것 확인. 출처: P2-86 봉합 중
   probe 실측(2026-08-13).
+
+**plugin-channel dogfood 2차 (GH #86~#88) — 2026-08-14 전건 봉합**
+
+- [x] P2-89 — **closed 2026-08-14 (GH #86, WORKAROUND)**: 훅이 설치한 java 게이트가 **무증상
+  공허 GREEN**. 추적된 데이터 흐름: 훅이 `-PaxRootPackage` 없이 호출 → build.gradle.kts의
+  `?: "com.example.app"` [silent default ①] → 테스트의 `getProperty(..., "com.example.app")`
+  [② ] → `importPackages()`가 존재하지 않는 패키지를 스캔해 **0 클래스**(예외 아님) →
+  `allowEmptyShould(true)`가 그 0을 PASS로 확정. 실제 위반이 있어도 green.
+  **판별자**: 올바른 패키지의 fresh 프로젝트는 import ≥1이되 `that()` 매치가 0(= allowEmptyShould의
+  정당한 용도), 틀린 패키지는 **import 자체가 0** — 두 공허성이 혼동돼 있었다.
+  봉합 4층: (F0a) build 쪽 default 제거→`error(...)` (F0b) systemProperty를 `withType<Test>`로
+  공급하되 엄격 강제는 테스트의 `@Test` 본문에(static init 아님 — 명명된 실패로 보고)
+  (F0c) React의 동일 클래스 `?? 'src'`도 throw로 (F2) 훅이 `java.rootPackage`를 파싱해 `-P`
+  전달, 미해석 시 `exit 1`(기존 `JAVA_ROOT` 관례 동형; sed 폴백을 isolate-then-extract로
+  재작성해 필드 순서·중첩에 견고화).
+  **차등 실측**(실제 Gradle 프로젝트 6 시나리오): 실위반→RED(클래스명 출력) / 틀린 패키지+
+  비어있지 않은 main→**FAIL**(#86 회귀 테스트) / 올바른 패키지+무위반→GREEN / 빈 스캐폴드→SKIP /
+  `-P` 부재→즉시 BUILD FAILED / 내장 `test`→무영향. 훅 측 5케이스(A~E)는 throwaway repo에서
+  `-P` 전달·미해석 차단·python3 부재 시 sed 폴백·필드 순서 무관까지 확인.
+- [x] P2-90 — **closed 2026-08-14 (GH #87, COSMETIC)**: §5.3이 "실패 출력에 probe 클래스명"을
+  요구하는데 기본 Gradle 콘솔은 테스트 **메서드**까지만 출력해 검증 불가(클래스명은 XML/HTML
+  리포트에만). 봉합: §3 스니펫에 `testLogging { exceptionFormat = FULL }`. **실증**: 없으면
+  `AssertionError at LayerBoundaryArchTest.java:28`만, 있으면 ArchUnit 위반 전문이
+  `ProbeService`·`ProbeController`를 명시. `events("failed")`는 불필요함도 확인(단정으로 기술).
+  ax-template 본체에는 미적용(R25 로그 폭증 대비 이득 없음).
+- [x] P2-91 — **closed 2026-08-14 (GH #88, WORKAROUND — 문서 층)**: 플러그인 업그레이드가
+  **실행 중인 CLI 세션에 안 보인다**. 스킬 레지스트리는 프로세스 시작 시점 스냅숏이라
+  `/clear`로도 갱신되지 않는데, `claude plugin list`는 별도 프로세스로 **디스크**를 읽어 새 버전을
+  보고한다 — 세션이 자연히 확인할 그 신호가 실제 로드본과 어긋난다. 실측: list가 0.1.5를 보고하는
+  동안 Skill 툴이 0.1.3을 서빙 → 그대로 검증했다면 이미 고쳐진 결함을 "여전히 깨짐"으로 **거짓
+  보고**. 근본 원인은 Claude Code 하네스라 우리가 강제 불가. 봉합: `USAGE-GUIDE` §6 +
+  `BOOTSTRAP-SKILL` [0]에 경고 — update 후 **CLI 완전 재시작** 필수, 유일한 신뢰 신호는 Skill
+  호출의 `Base directory` 경로. 부트스트랩 쪽은 AI가 버전 불일치 시 **스스로 멈추도록** 지시.
+  **기계화 절반은 의도적 폐기**: 27개 SKILL.md에 버전 marker를 박는 것은 이 저장소의 house rule
+  (`doc_headline_count_guard.sh:16-18` "카운트는 계산하며 하드코딩하지 않는다")이 경계하는 형태이고,
+  `Base directory` 판별자가 이미 모든 Skill 호출에서 관측 가능해 두 번째 진리원이 불필요하다.
+- [x] P2-92 — **closed 2026-08-14 (리뷰가 발견한 진짜 결함 클래스)**: **검증 호출 ≠ 운영 호출**.
+  §5:210이 `-P`를 붙인 수동 호출로 probe를 검증하고 :222가 "rootPackage 불일치"를 진단 후보로
+  이미 열거하고 있었음에도 #86을 못 잡았다 — 훅이 **다른 명령**을 돌리기 때문. F2는 이 인스턴스만
+  닫으므로 재발을 막지 못한다. 봉합: §5에 6단계 신설 — probe를 **설치된 훅을 통해**(stage 후
+  `git commit`) 검증하고, self-check에 "RED를 훅 경로에서 관측했다"를 요구. 진단 (d) 추가:
+  "3단계는 RED인데 6단계가 아니면 훅 호출에 `-P`가 빠진 것". 출처: ralplan Critic 패스(2026-08-14).
 - [x] P2-87 — eslint-plugin-ax ↔ 카탈로그 문서 드리프트 가드 부재 + 잔여 미문서 3룰:
   GH #80 봉합 중 `no-god-route`·`no-route-client-data-fetching`·`no-server-state-in-local-state`도
   문서·`rule_id` 교차참조가 **전무**함이 전수 grep으로 확인됐다(이슈가 지목한 4건 밖). 이슈
