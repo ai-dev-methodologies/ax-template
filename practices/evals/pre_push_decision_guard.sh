@@ -168,7 +168,12 @@ run_hook() {
 check_parity() {
     [[ -f "$SCENARIOS_YAML" ]] || { echo "pre_push_decision_guard: FAIL — scenarios.yaml missing at $SCENARIOS_YAML" >&2; exit 2; }
     local declared
-    declared="$(python3 - "$SCENARIOS_YAML" <<'PY'
+    # P2-78: bash 3.2 mis-parses a quoted heredoc nested inside $(...) whenever the body's
+    # apostrophe count is odd — write the python body to a top-level temp file and invoke it
+    # by path instead of nesting the heredoc in $(...).
+    local declared_ids_py
+    declared_ids_py="$(mktemp "${TMPDIR:-/tmp}/pp_declared_ids.XXXXXX")"
+    cat <<'PY' > "$declared_ids_py"
 import sys, re
 ids = []
 for ln in open(sys.argv[1]):
@@ -177,7 +182,8 @@ for ln in open(sys.argv[1]):
         ids.append(m.group(1))
 print("\n".join(ids))
 PY
-)"
+    declared="$(python3 "$declared_ids_py" "$SCENARIOS_YAML")"
+    rm -f "$declared_ids_py"
     # store for post-run comparison
     DECLARED_IDS="$declared"
 }

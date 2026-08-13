@@ -85,7 +85,12 @@ check_plugin_marketplace_version_sync() {
         return
     fi
     local report
-    report="$(python3 - "$plugin_json" "$marketplace_json" <<'PY'
+    # P2-78: bash 3.2 mis-parses a quoted heredoc nested inside $(...) whenever the body's
+    # apostrophe count is odd (a single stray "'version'" edit flips it) — write the python body
+    # to a top-level temp file and invoke it by path instead of nesting the heredoc in $(...).
+    local version_sync_py
+    version_sync_py="$(mktemp "${TMPDIR:-/tmp}/doc_headline_version_sync.XXXXXX")"
+    cat <<'PY' > "$version_sync_py"
 import json
 import sys
 
@@ -124,7 +129,8 @@ if metadata_version != plugin_version:
     print(f"METADATA_VERSION_MISMATCH {marketplace_path}: metadata.version={metadata_version!r} "
           f"but {plugin_path} version={plugin_version!r}")
 PY
-)"
+    report="$(python3 "$version_sync_py" "$plugin_json" "$marketplace_json")"
+    rm -f "$version_sync_py"
     if [ -n "$report" ]; then
         while IFS= read -r line; do
             [ -z "$line" ] && continue

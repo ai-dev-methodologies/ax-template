@@ -704,3 +704,30 @@ items:
     applicable: true
     applicable_to: [react, nextjs]
     notes: "ESLint-enforced (ax/no-cross-feature-deep-import in @ax/eslint-plugin-ax). Rule body + evidence: practices-react/rules/no-cross-feature-deep-import.md. Layout source: docs/superpowers/specs/2026-06-08-frontend-decomposition-rules-design.md §4 (TIER-0)."
+
+  - id: "REACT-PRACTICES-ROUTE-001"
+    chapter: "Routing / Thin route files"
+    requirement: "A Next.js App Router route file (app/**/page.tsx or layout.tsx) marked \"use client\" SHOULD stay under a configurable line-count threshold (default 100); a file exceeding it likely holds form state, business logic, and inline UI that belongs in a @/features/<f> container instead. Server route files (no \"use client\") are not covered by this item — their size is typically data-layer composition, a different concern."
+    test_method: "react_practices_ROUTE_001_noGodRoute"
+    verification_type: "lint"
+    applicable: true
+    applicable_to: [react, nextjs]
+    notes: "ESLint-enforced, advisory/warn (ax/no-god-route in @ax/eslint-plugin-ax). A gameable line-count heuristic by design — surfaces a TIER-1 remediation signal rather than blocking the build. Rule body + evidence: practices-react/rules/no-god-route.md. Layout source: docs/superpowers/specs/2026-06-08-frontend-decomposition-rules-design.md §4 (TIER-1, FE-ROUTE-THIN)."
+
+  - id: "REACT-PRACTICES-ROUTE-002"
+    chapter: "Routing / Thin route files"
+    requirement: "A Next.js App Router route file (app/**/page.tsx or layout.tsx) marked \"use client\" MUST NOT call a client data-fetching hook (useSWR, useQuery, useMutation, useInfiniteQuery, or equivalent) or raw fetch() directly. Client-side data orchestration MUST be delegated to a @/features/<f> hook that the route renders. A server route file (no \"use client\") awaiting fetch() directly is unaffected — that is the idiomatic App Router server data layer."
+    test_method: "react_practices_ROUTE_002_noRouteClientDataFetching"
+    verification_type: "static_analysis"
+    applicable: true
+    applicable_to: [react, nextjs]
+    notes: "ESLint-enforced, ERROR (ax/no-route-client-data-fetching in @ax/eslint-plugin-ax). Bindings are tracked name-agnostically, so a renamed hook import or aliased axios import cannot bypass it. Honest limit: a route calling a local wrapper hook that internally uses useSWR is not caught (the wrapper IS the intended feature-hook delegation). Rule body + evidence: practices-react/rules/no-route-client-data-fetching.md. Layout source: docs/superpowers/specs/2026-06-08-frontend-decomposition-rules-design.md §4 (TIER-1, FE-ROUTE-THIN)."
+
+  - id: "REACT-PRACTICES-STATE-001"
+    chapter: "Client state / Server-state boundary"
+    requirement: "A component MUST NOT seed useState(...) directly from a server-state query result's .data (useState(useSWR(...).data) or useState(useQuery(...).data)); the query/SWR cache is the source of truth for server state and reading it directly (const { data } = useSWR(...)) keeps the component in sync with revalidation, background refetch, and cache invalidation, which a one-time useState snapshot cannot follow."
+    test_method: "react_practices_STATE_001_noServerStateInLocalState"
+    verification_type: "lint"
+    applicable: true
+    applicable_to: [react, nextjs, vite]
+    notes: "ESLint-enforced, advisory/warn (ax/no-server-state-in-local-state in @ax/eslint-plugin-ax). Honest limit: only the direct, unambiguous shape useState(<queryCall>(...).data) is caught — copying the result through an intermediate variable first is not detected (no data-flow analysis). Rule body + evidence: practices-react/rules/no-server-state-in-local-state.md. Layout source: docs/superpowers/specs/2026-06-08-frontend-decomposition-rules-design.md §4 (TIER-1, FE-STATE-BOUNDARY). Review-tier sibling: practices-react/rules/client-swr-dedup.md (REACT-PRACTICES-CLIENT-001)."

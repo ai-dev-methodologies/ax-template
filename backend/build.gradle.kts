@@ -88,6 +88,18 @@ dependencies {
 }
 
 tasks.withType<Test> {
+    // BACKLOG P2-86 — Gradle 9 latent vacuous-green. Every `register<Test>(...)` task below
+    // (116 of them) relies on the `java` plugin's convention wiring of testClassesDirs/classpath
+    // onto Test tasks. That convention wiring holds on Gradle 8.x (the current wrapper — see
+    // gradle/wrapper/gradle-wrapper.properties) but is NOT applied to manually `register`-ed
+    // Test tasks on Gradle 9 (confirmed downstream, GH #78): without an explicit assignment,
+    // every `test{Domain}` task silently discovers ZERO test classes and reports
+    // "BUILD SUCCESSFUL" — exactly the vacuous-green failure mode this catalog's guards exist
+    // to prevent, except here it would be in our OWN harness. Assign explicitly so the wiring
+    // does not depend on convention-application timing/version at all, on 8.x or 9.x alike.
+    testClassesDirs = sourceSets["test"].output.classesDirs
+    classpath = sourceSets["test"].runtimeClasspath
+
     useJUnitPlatform()
     // The PRACTICES suite runs many @SpringBootTest/@DataJpaTest contexts alongside several
     // whole-tree ArchUnit imports (layering, no-cycle, DDD decomposition). The default test
@@ -208,6 +220,44 @@ pitest {
     outputFormats.set(setOf("XML", "HTML"))
     threads.set(1)
     verbose.set(project.hasProperty("pit.verbose"))
+}
+
+// BACKLOG P2-86 — runtime (not textual/grep) assertion that every Test task in the build MODEL
+// has non-empty testClassesDirs + classpath. A grep for "testClassesDirs =" only proves the
+// string appears somewhere in this file; it cannot see whether a task registered inside a
+// conditional branch, an afterEvaluate block, or plugin-injected configuration actually ends up
+// wired at execution time. This task instead walks tasks.withType<Test>() itself — iterating
+// that live TaskCollection forces Gradle to realize (create + fully configure, including any
+// afterEvaluate mutation) every Test-typed task in the project, whether or not it is part of the
+// invoked task graph — and inspects the resulting testClassesDirs/classpath FileCollections
+// directly. This is the same class of check the java plugin's own convention wiring is supposed
+// to satisfy; it exists so a future Gradle/plugin change that silently breaks that convention
+// (as happened between Gradle 8.x and 9.x — see the tasks.withType<Test> comment above) is
+// caught by an assertion this project owns, offline, on the current 8.x wrapper, without needing
+// to actually reproduce the Gradle 9 failure locally.
+tasks.register("assertTestTasksWired") {
+    group = "verification"
+    description = "BACKLOG P2-86 — asserts every Test task in the build model has non-empty " +
+        "testClassesDirs and classpath (catches the Gradle 9 vacuous-green failure mode where " +
+        "register<Test>() tasks silently discover 0 tests)."
+    doLast {
+        // .toList() forces realization of every Test task known to the project, not just ones
+        // reachable from this task's dependency graph.
+        val testTasks = tasks.withType<Test>().toList()
+        val violations = testTasks.filter { it.testClassesDirs.isEmpty || it.classpath.isEmpty }
+        if (violations.isNotEmpty()) {
+            throw GradleException(
+                "assertTestTasksWired FAILED — the following Test tasks have empty " +
+                    "testClassesDirs and/or classpath, and would silently discover ZERO tests " +
+                    "(BUILD SUCCESSFUL with 0 tests run) instead of failing loudly: " +
+                    violations.joinToString(", ") { it.name }
+            )
+        }
+        println(
+            "assertTestTasksWired: OK — ${testTasks.size} Test task(s) all have non-empty " +
+                "testClassesDirs + classpath"
+        )
+    }
 }
 
 tasks.register<Test>("testCrud") {

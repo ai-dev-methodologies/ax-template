@@ -140,7 +140,11 @@ fi
 # ════════════════════════════════════════════════════════════════════════════════════════
 
 # Enumerate declared items: (spec_file, item_id, vacuity_class, gate_method, kill_mutator)
-ITEMS="$(python3 - "$SPECS_DIR" <<'PY'
+# P2-78: bash 3.2 mis-parses a quoted heredoc nested inside $(...) whenever the body's
+# apostrophe count is odd — write the python body to a top-level temp file and invoke it
+# by path instead of nesting the heredoc in $(...).
+ENUM_ITEMS_PY="$(mktemp "${TMPDIR:-/tmp}/vacuity_enum_items.XXXXXX")"
+cat <<'PY' > "$ENUM_ITEMS_PY"
 import sys, os, glob, yaml
 specs_dir = sys.argv[1]
 rows = []
@@ -160,8 +164,9 @@ for f in sorted(glob.glob(os.path.join(specs_dir, '*.yaml'))):
 for r in rows:
     print(r)
 PY
-)"
+ITEMS="$(python3 "$ENUM_ITEMS_PY" "$SPECS_DIR")"
 ENUM_RC=$?
+rm -f "$ENUM_ITEMS_PY"
 
 # An enumerator that FAILED produces the same empty output as a tree with no declared
 # contracts. Treating "no output" as "nothing to prove" is how this guard reported PASS

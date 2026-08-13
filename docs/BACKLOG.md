@@ -28,9 +28,9 @@ signature를 발견**(17/17)함으로써 경험적으로 반증되었다 — 발
 |---|---|---|---|
 | P0 (expiry-bound / live defects) | 30 | 30 | **100%** |
 | P1 (generic signature backlog) | 74 | 74 | **100%** |
-| P2 (verification escapes) | 89 | 86 | **97%** |
+| P2 (verification escapes) | 90 | 89 | **99%** |
 | P3 (industry-niche deferrals) | 141 | 141 | **100%** |
-| **P0–P3 합계 (수렴 분모)** | **334** | **331** | **99%** |
+| **P0–P3 합계 (수렴 분모)** | **335** | **334** | **100%** |
 
 > 2026-08-01 P1-seal 라운드 14 — reviewer P1 **2건**을 서로 다른 처방으로 봉합. **(P1-A) lexical `..`가 실재 alias를 놓친다**: 라운드 13은 심링크 타깃을 **lexical**로 해석해 `..`를 **follow 이전에** 텍스트로 접었다. 커널은 중간 symlink를 **follow 한 뒤** `..`를 pop한다. reviewer 토폴로지(커밋 내용만, 환경 통제 0): `backend/jump -> real/sub` + `backend/gradlew -> jump/../GRADLEW-REAL` over tracked `backend/real/gradlew-real` → POSIX는 `backend/real/GRADLEW-REAL`에 도달하고 case-insensitive APFS가 그것을 **추적 파일로 서비스**하므로 R25가 래퍼를 실제로 실행하고 green, lexical 후보 `backend/GRADLEW-REAL`은 **부재**라 두 구현 모두 dangling 종료로 **침묵**(측정: HEAD helper exit 0 + 클린트리 상수 `0a815065…`), case-**sensitive** 수신자는 **DANGLING gradlew**. 봉합: `_resolve_link_target`을 **component-by-component** 커널 해석으로 교체(중간 follow / 최종 컴포넌트는 lstat이므로 follow 안 함 / `..`는 follow 이후 pop / 중간 절대 타깃은 수신자 루트로 이탈 / 결측·판독불가 중간은 최종 lstat이 판정) + **예산 2종**(follow 40 = Linux MAXSYMLINKS와 macOS SYMLOOP_MAX 32 중 **큰 쪽**, component 4096) 소진 시 **침묵이 아니라** 신규 코드 `GIT_SYMLINK_RESOLUTION_UNBOUNDED`(fingerprint exit 16)로 BLOCK — 미완주 walk는 alias 질문에 **답하지 못한 것**이고 그 상태를 침묵으로 바꾸는 것이 라운드 8 이후 매 라운드가 닫아온 결함이며, 커밋된 cycle은 수신자에게 ELOOP다(측정: `loopa -> loopb/x`·`loopb -> loopa`, 커널 ELOOP, HEAD exit 0 → round-14 exit 16). 두 구현 대칭 봉합(helper + recency guard 12c). **P3-133은 SUPERSEDE — 그 행의 done-when(“발산 시 침묵”)은 이 P1을 보존한다**(reviewer 논거 인용과 함께 REJECT로 닫음), 그 행의 over-inclusive 반례를 새 resolver로 **재측정**: HEAD exit 15(부당 차단) → round-14 **exit 0 + 클린트리 상수**(첫 `..`에서 escapes). 정당한 **9형태 전부 재빌드해 exit 0**(HEAD·round-14 동일), 비공허성은 최종 컴포넌트 별칭 1건 추가 시 exit 15. 라운드 13 직접형 재확인: (AJ) 대소문자 · (AK) 정규화 **양쪽 모두 exit 15 유지**. 라이브 트리: symlink 2건 통과, digest **불변**(감사 가능 레시피 — clean `0a815065…` / dirty `8a91e493…`, HEAD 사본과 이번 사본 바이트 일치), 5회 평균 0.2738→0.2758 s/run(+0.7%, 노이즈). **(P1-B) 커밋된 런타임 경로 문자열**: R25가 체크리스트의 `command`/`working_directory`를 **verbatim** 실행(verify-completion.sh:1086 → :1561 `cd`+`bash -c`)하는데 그 문자열이 **기록된 스펠링**인지 아무도 묻지 않았다. 재현(커밋 내용만): `practices/evals/spec_policy_ref_guard.sh` → `PRACTICES/evals/…` 한 글자 케이스 변경 → APFS에서 명령 **exit 0**, `git cat-file -e HEAD:PRACTICES/…` **exit 128**, 트리 CLEAN, fingerprint **클린트리 상수**, [58] task-coverage exit 0, R25 위반 버킷 10종 전부 EMPTY = **green 증거 위조**. 처방을 **두 부분으로 분리**: **(1) 강제** — 신규 가드 [104] `checklist_command_path_spelling_guard.sh`가 체크리스트의 모든 경로형 토큰을 working_directory 기준 repo-relative로 풀어 **기록된 스펠링(추적 경로 또는 그 디렉터리 컴포넌트)** 이어야 하고, 아니면서 **공유 fold**(`tree_fingerprint.py`의 `_fold_path_key`를 import — 재구현 0)로 동치면 `CHECKLIST_PATH_ALIAS` BLOCK. **(st_dev, st_ino) 판별자를 쓰지 않는다** — 주제가 커밋된 파일 안의 **문자열**이지 검증 파일시스템 위의 경로가 아니므로 측정할 로컬 동일성이 없고 판정하는 것은 **수신자의** 파일시스템이다(그 덕에 가드와 fixture가 **파일시스템 독립**). candidate 규칙 7종을 헤더에 전수 열거하고 **라이브 체크리스트 오탐 0을 측정**: 367 토큰 → recorded 240 / unrelated 125 / skipped(flag) 2 / **alias 0**(`--show`로 표 출력). fixture 3종(pass_recorded_spellings / fail_command_case_alias = 재현 그대로 / fail_working_directory_alias). **(2) 정직한 한계** — 임의 커밋 내용의 경로 문자열 일반형은 **inspection으로 결정불가능**이므로 휴리스틱 스캐너를 출하하지 않고 **P2-72로 열어둔다**: 유일한 완전 처방은 **aliasing 하지 않는(대소문자·정규화 민감) 체크아웃에서 스위트를 실제로 돌리는 것**(이 프로젝트가 이미 구성 가능함을 증명한 `hdiutil create -fs "Case-sensitive APFS"`), 비용·채택 조건을 행에 명기. 값싼 완화책으로 `--advisory-scripts`(체크리스트가 **직접 호출하는** 셸 스크립트 1단계 literal 스캔)를 **비블로킹 ADVISORY**로 추가(라이브 3 스크립트·alias 0, 심은 alias 1건은 보고됨 = 비공허). prover 확장: (AN) jump 토폴로지 + (AN2) lexical 복원 twin + (AN3)/(AN4) 구현별 분리 twin + (AO) cycle 예산, 각각 premise 단언 동반. 신규 2건 등재(P2-72 · P3-134 = 중간 컴포넌트 별칭, 두 resolver 모두 미차단 — 측정·register-only) + P3-133 closed → 분모 308→310, 수렴 271/310 **87%**.
 
@@ -364,7 +364,7 @@ R25). *이름이 세션 기록에만 있던 항목을 여기로 영구화했다.
 - [x] P2-75 **`pipa-article-24-2026-05`가 practices를 2026-08-17 time_decay RED로 몰고 있고, 재fetch도 삭제도 막혀 있다** — law.go.kr은 plain curl에 iframe/과부하 셸만 반환(LSW·검색·DRF·elaw·assembly·moleg·Wayback 전수 프로브 실패)하고, 삭제는 `templates/DECISIONS.md[TD-2026-05-18-031]`의 ADR evidence가 이 upstream_id를 인용해 evidence_guard가 BLOCK(실측). 즉 **가드 두 개가 서로를 막는 교착**. done-when 후보 3택1: (a) `snapshot-extract.sh`에 User-Agent 추가 후 재시도(브라우저가 보내는 헤더를 보내는 것은 doctoring 아님) (b) 해당 ADR evidence를 `source_type: external`+citation/url로 **정정 주석과 함께** 전환하고 upstream_id 제거 (c) RED 수용하고 만료 후 재평가. 출처: 2026-08-01 Lane A. closure: 2026-08-01 (38행 소진 웨이브, Lane F) — (a) **측정-실패 기록 후** (b) 실행. (a): 심층 조문 라우트가 HTTP 200+5278B 자기 과부하 페이지이고 Chrome UA 추가 시 **바이트 동일**, 헤더 4종 조합도 Content-Language만 변경, m.law.go.kr는 404, 루트는 정상 → UA 벽이 아니라 그 라우트의 백엔드 조건(부수 정정: 기존 'iframe 셸' 서술도 부정확 — iframe 0건). **결정적 사실**: 스냅숏이 디스크에 **없고** manifest sha가 rolling-nibble placeholder = 한 번도 fetch된 적 없는 파일의 날조 digest(삭제된 kisa 스텁과 동일 계열)이며, 기계 검사되는 참조는 ADR 1곳뿐. (b): ADR에서 upstream_id/section 제거 + **법령 자체** url 추가(측정 HTTP 200/1279B/title 확인), 가시적·날짜 기입 정정 주석, 거짓 산문 provenance 정정, 그리고 날조 manifest 레코드 **삭제**. 결과: practices RED **2026-08-17 → 2026-10-13** — 미룬 게 아니라 사유를 없앰.
 - [x] P2-76 선언된 JSON 스키마에 **실행 소비자가 없다** (직전 P1 행 — plugin 채널 silent-miss — 의 계열 원인). 측정 2026-08-09: `practices-react/eslint-plugin-ax/schemas/ax.config.schema.json` 실행 소비자 **0**(SKILL.md 3곳의 산문 참조뿐) · `specs/personas/persona-registry.schema.json` 실행 소비자 **0**(`dogfood_ledger_guard.sh`는 grep으로 원장 파일 모양만 보고 스키마를 로드하지 않는다) · `verify/manifest.schema.json`은 `verify/scripts/run_verify_triplet.py`가 로드하되 **`required[]` 키만** 읽는다(전체 검증 아님). 레포 전체에 ajv 등 스키마 검증 라이브러리 없음. **정직 단서**: "스키마 3개가 전부 죽었다"는 과장 — 1개는 부분 실행되므로 계열 주장은 그만큼 좁혀 기록한다. done-when: 스키마 파일마다 (a) 실행 소비자가 존재하거나 (b) `문서 전용`으로 사유와 함께 등재되도록 강제하는 가드 + fixture 쌍. 근거: 실행되지 않는 스키마는 강제한다는 **착각만** 만들고, 그 착각이 정확히 그 P1을 출하시켰다. → **closed 2026-08-10**: 신규 가드 [109] `schema_executable_consumer_guard.sh` + `schema_consumer_manifest.yaml` — 5불변식(등재 완전성/역존재/일대일/상태형태/**consumer 실재** — 존재·가독·basename 참조를 단일 boolean으로 병합해 중복탐지가 변이검증을 무력화하던 결함을 [87]이 적발·봉합) + fixture 3종(pass/fail_unregistered/fail_phantom) + kill-manifest 등재(76/76 non-vacuous). 재측정 결과 3스키마 상태 유지: ax.config·persona-registry는 documented-only(사유 명기 — 전자는 layoutFrom이 스키마 파일을 읽지 않고 손검증+R110 throw로 대체), manifest.schema는 run_verify_triplet.py가 소비하되 required[]만 읽는 한계 명기. 가드수 108→109 연쇄(헤드라인·CLAUDE.md 산문·SKILL.md).
 - [x] P2-77 — **closed 2026-08-10 (E2E dogfood)**: react-enforcement 설치 recipe가 TypeScript 프로젝트에서 **또 하나의 silent-miss**를 출하할 수 있었다 — 기본 espree 파서는 .ts/.tsx에서 Parsing error를 내고 ESLint는 그 파일을 **전 룰에 대해 건너뛰므로** ax 룰이 조용히 0건이 된다. 설치 스킬의 probe(위반 심기→검출→삭제)도 TS 전용 문법이 없어 이 사각을 **통과**시켰다(E2E 실측: headless 세션이 임기응변으로 typescript-eslint를 설치한 뒤에야 심은 위반이 표면화). 봉합: SKILL.md Step 3에 TS 감지→`typescript-eslint` 설치+parser 동일 블록 배선 명문화(왜 없으면 전 룰 skip인지 포함) + Step 4 probe에 TS-only 문법(`__axProbe: string`) 의무화로 파서 부재 시 probe가 **소리내어 실패**하도록 + parsing-error 서명은 ax 진단이 아니라 파서 배선 결함으로 라우팅. PLUGIN-CHANNEL §4단계 한 줄 동기화. headless 권한 요구(acceptEdits로는 npm/probe 불가)도 USAGE-GUIDE §5에 동봉 문서화.
-- [ ] P2-78 — guard suite의 Apple stock-bash 3.2 이식성: `$(...)` 안에 중첩된 quoted heredoc은
+- [x] P2-78 — guard suite의 Apple stock-bash 3.2 이식성: `$(...)` 안에 중첩된 quoted heredoc은
   본문 **아포스트로피 개수가 홀수**면 bash 3.2.57 파서가 오파싱한다(최소 재현:
   `echo "$(cat <<'PY'` + `guard's own` + `PY` + `)"` → unexpected EOF; 동일 heredoc을
   top-level로 쓰면 정상). 2026-08-10 이 결함으로 `fixture_kill_proof_guard`가 stock-bash
@@ -376,6 +376,12 @@ R25). *이름이 세션 기록에만 있던 항목을 여기로 영구화했다.
   남아 있다 — 오늘은 아포스트로피 짝수라 우연히 통과 중이며, 주석 한 줄이 패리티를 바꾸면
   같은 방식으로 죽는다. done-when: 세 파일 temp-file 패턴 전환(또는 동등 면역화) + stock-bash
   3.2 `bash -n` 스모크를 이식성 체크에 등재. 출처: 2026-08-10 이 머신 R25 FAIL 실측 진단.
+  → **closed 2026-08-13**: 3파일 전부 temp-file 패턴(top-level `cat <<'PY' > "$TMP"` → `python3 "$TMP"`,
+  `fixture_kill_proof_guard` 선례) 전환. **차등 기록**(요구된 대로 "통과했다"가 아니라 pre/post 대조):
+  홀수 아포스트로피 주석 주입 시 pre-fix가 `/bin/bash` 3.2.57에서 exit 2 `unexpected EOF`
+  (doc_headline:250 · pre_push_decision:552 · vacuity_class_proof:260), 동일 주입 post-fix는
+  설계된 판정 exit로 복귀. 회귀망: doc_headline·vacuity fixture 쌍 + pre_push_decision 시나리오 18/18.
+  판정 로직 byte 무변경 — 파싱 매체만 교체.
 
 **plugin-channel(경로 B) dogfood 7건 — GitHub #85 umbrella (#78~#84), 2026-08-13 전건 봉합**
 
@@ -417,7 +423,7 @@ R25). *이름이 세션 기록에만 있던 항목을 여기로 영구화했다.
 
 **위 dogfood가 파생시킨 신규 발견 (미봉합)**
 
-- [ ] P2-86 — ax-template 자체 빌드의 Gradle 9 잠복 vacuous-green: `backend/build.gradle.kts`의
+- [x] P2-86 — ax-template 자체 빌드의 Gradle 9 잠복 vacuous-green: `backend/build.gradle.kts`의
   `register<Test>` **116개** 전부가 `testClassesDirs`/`classpath`를 명시하지 않고 java 플러그인
   convention에 의존한다. 현재 Gradle 8.14.5에서는 동작(testPractices 결과 XML 72건 실측)하나,
   P2-79의 차등 실측이 보여주듯 **Gradle 9에서는 같은 형태가 0개 테스트로 green**이 된다 —
@@ -426,12 +432,40 @@ R25). *이름이 세션 기록에만 있던 항목을 여기로 영구화했다.
   독립 검증하지 않았고 8.14.5↔9.5.1 차등 사실만 확보했다. done-when: (a) 116 task에 두 줄을
   명시하거나 `tasks.withType<Test>` 블록에서 일괄 설정 + (b) Gradle 9 스모크로 테스트 수 > 0
   확인. 출처: GH #78 봉합 중 교차 확인(2026-08-13).
-- [ ] P2-87 — eslint-plugin-ax ↔ 카탈로그 문서 드리프트 가드 부재 + 잔여 미문서 3룰:
+  → **closed 2026-08-13**: (a) 단일 `tasks.withType<Test>` 블록에 두 속성 일괄 설정(116개 개별
+  수정 아님 — 원칙 3). (b) **런타임 단언** `assertTestTasksWired` 신설 + R25 structural-pregate 등재:
+  빌드 모델을 순회해 전 Test 태스크의 non-empty를 단언한다(grep은 텍스트-진리일 뿐 조건분기·
+  afterEvaluate·플러그인 주입을 못 본다는 리뷰 지적 반영). (c) **차등 실측**(별도 probe worktree,
+  Gradle 9.5.1): 수정 전 `testCrud → NO-SOURCE`(결과 디렉토리 자체 부재 = 진짜 0) → 수정 후
+  `tests="7"`; 같은 worktree에서 `assertTestTasksWired` 117/117 통과로 **표본→전수 승격**.
+  (d) 8.14.5 회귀 0(testCrud 7=7, testAsvs 52=52). 일탈 정직 기록: probe에서만 pitest를 비활성화했다
+  (측정 대상과 직교 — 그 비호환 자체는 P2-88로 분리 등재).
+- [ ] P2-88 — Gradle 9 승격의 **선행 차단자**: `info.solidsoft.pitest` **1.15.0**이 Gradle 9와
+  비호환이라 **플러그인 적용 단계에서** 빌드가 죽는다(어떤 태스크도 실행 전). 실측 원문:
+  `An exception occurred applying plugin request [id: 'info.solidsoft.pitest', version: '1.15.0']
+  > Failed to apply plugin 'info.solidsoft.pitest'. > Could not get unknown property 'baseDir'
+  for extension 'reporting' of type org.gradle.api.reporting.ReportingExtension.`
+  Gradle 9가 `ReportingExtension.baseDir`를 제거/변경했는데 1.15.0이 여전히 참조한다.
+  P2-86과 **별개**다 — P2-86은 Test 태스크 배선이고 이것은 승격 자체의 전제조건이다.
+  (P2-86의 Gradle 9 차등은 probe worktree에서 pitest를 비활성화해 확보했다 — 측정 대상과
+  직교하므로 유효하나, 본체 승격에는 이 항목 해소가 선행돼야 한다.) done-when: pitest
+  플러그인 업그레이드/교체 또는 Gradle Report API 마이그레이션 후 Gradle 9에서 PIT 게이트
+  ([84][85] vacuity_class_proof 계열)가 동일 판정을 내는 것 확인. 출처: P2-86 봉합 중
+  probe 실측(2026-08-13).
+- [x] P2-87 — eslint-plugin-ax ↔ 카탈로그 문서 드리프트 가드 부재 + 잔여 미문서 3룰:
   GH #80 봉합 중 `no-god-route`·`no-route-client-data-fetching`·`no-server-state-in-local-state`도
   문서·`rule_id` 교차참조가 **전무**함이 전수 grep으로 확인됐다(이슈가 지목한 4건 밖). 이슈
   제안 2(모든 `eslint-plugin-ax/rules/*.js`에 대응 문서 존재를 강제하는 guard)는 이 3건이
   선행 봉합돼야 non-vacuous하게 도입 가능하다. done-when: 3룰 문서 작성 + 드리프트 guard 신설
   (별칭 매칭 설계 포함) + fixture 쌍. 출처: GH #80 봉합 중 발견(2026-08-13).
+  → **closed 2026-08-13**: 3룰 문서 작성(no-god-route · no-route-client-data-fetching ·
+  no-server-state-in-local-state — Next.js/TanStack Query 스냅숏 인용으로 앵커, spec item
+  ROUTE-001/002·STATE-001 신설) + INDEX·AGENTS.md·SKILL.md 3종 재생성(각 2회 diff 0) →
+  React 룰 105→108. 드리프트 guard `react_eslint_rule_doc_coverage_guard.sh` [110] 신설 —
+  **두 해소 경로를 모두 계수**(파일명 일치 OR frontmatter `verification.rule_id`가 `ax/<id>`):
+  bundle-barrel-imports↔no-broad-barrel-imports, rerender-no-inline-components↔
+  no-inline-component-definition이 후자로만 커버되므로 파일명 단독 검사는 허위 갭을 낸다.
+  3-way: live 15/15 · fail_missing_doc exit 1 · pass_covered exit 0.
 
 ## P3 — industry-niche deferrals (generic 아님 — 낮은 우선순위)
 
@@ -791,7 +825,7 @@ fork하지 않는 기존 프로젝트가 ax-template 카탈로그를 Claude Code
   python3(우선)/sed(bash 3.2 폴백, 단일 라인, heredoc-in-`$()` 미사용 — P2-78 회피)로 파싱해
   react.root/java.root를 해석; 미해석 시 하드코딩 기본값으로 넘어가지 않고 `exit 1`로 소리내어
   실패.
-- [ ] D-11 — R25 검증 시간 단축: perf-log + CI 샤딩 구현 (maintainer 승인 2026-08-10).
+- [x] D-11 — R25 검증 시간 단축: perf-log + CI 샤딩 구현 (maintainer 승인 2026-08-10).
   설계는 `docs/VERIFICATION-PERF-AND-SHARDING.md` §2·§3에 이미 존재 — 이 항목은 그 **구현**.
   동기(실측): 2026-06 기준 per-domain 15–16분(78 tasks)이던 스위트가 117 tasks + PIT +
   guard 109종으로 성장해 이 머신 기준 R25 전주기 ~90분, load~6 경합일엔 watchdog 143이
@@ -802,6 +836,14 @@ fork하지 않는 기존 프로젝트가 ax-template 카탈로그를 Claude Code
   done-when: perf-log 필드가 last_run.jsonl에 기록되고, 샤딩 실행 경로가 단일-러너
   결과와 동일 판정을 내는 것이 증명됨(동일 HEAD 비교 1회). 출처: maintainer 비용 문제
   제기 → 승인 (2026-08-10 세션).
+  → **perf-log 절반 closed 2026-08-13; 샤딩(§3)은 측정 확보까지 명시 연기.** 구현은
+  **사이드카** `.ax-verify/perf.jsonl`로 했다 — `runs.jsonl` 필드 추가는 exact-schema pin에
+  더해 **`.githooks/pre-push`가 이전 릴리스의 recency guard를 먼저 실행**하므로 "현재 guard가
+  받아준다"가 증명이 되지 않고 2-릴리스 마이그레이션이 필요하다는 리뷰 지적을 반영한 것.
+  기존 4파일 무변경(sha 동일 확인). tracked `.ax-verify/`(fixture 트리)에는 기록하지 않고
+  이유를 출력한다. 비-게이트 제약은 문서 약속이 아니라 guard로 강제:
+  `perf_log_no_gate_input_guard.sh` [111] — evals/scripts/githooks 전역에서 perf.jsonl **읽기**
+  참조 0 단언(판례: `quick_verify_no_audit_guard`), fixture 쌍 포함. 3-way 통과.
 
 ## 운영 규약
 

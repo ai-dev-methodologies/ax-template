@@ -2722,6 +2722,26 @@ if xs:
     print("  n=%d  total=%.1fs  median=%.3fs  p95=%.3fs  p99=%.3fs  max=%.3fs"
           % (len(xs), sum(xs), q(0.50), q(0.95), q(0.99), xs[-1]))
 ' 2>/dev/null || true
+echo "[110] react_eslint_rule_doc_coverage_guard.sh (P2-87 — every shipped ESLint rule in practices-react/eslint-plugin-ax/rules/*.js MUST have a reachable catalog doc, because ax-practices routes EXCLUSIVELY through the generated INDEX: a rule with no doc row is invisible to the knowledge layer while still blocking commits at the enforcement layer, so the two layers disagree about what the catalog contains. That exact split shipped — ax/no-upward-layer-import was simultaneously BOOTSTRAP-SKILL section 4's headline observable and completely undocumented (GH #80), and three more rules were found undocumented while closing it. Coverage counts BOTH resolution paths, because filename and rule id legitimately diverge: (1) filename match practices-react/rules/<id>.md, or (2) any doc whose frontmatter verification.rule_id equals ax/<id> — bundle-barrel-imports.md covers no-broad-barrel-imports and rerender-no-inline-components.md covers no-inline-component-definition purely via path 2, so a filename-only check would report false gaps. Deliberately grep-based (no PyYAML import) so it carries no preflight obligation. Fixtures: pass_covered 0 (exercises BOTH match paths) / fail_missing_doc 1 (an orphan .js with neither a filename match nor any rule_id reference).)"
+run_guard "react_eslint_rule_doc_coverage/live" 0 \
+    bash "$SCRIPT_DIR/react_eslint_rule_doc_coverage_guard.sh"
+if [ "$INCLUDE_FIXTURES" -eq 1 ]; then
+    run_guard "react_eslint_rule_doc_coverage/fixture_pass_covered" 0 \
+        bash "$SCRIPT_DIR/react_eslint_rule_doc_coverage_guard.sh" --root "$SCRIPT_DIR/fixtures/react_eslint_rule_doc_coverage/pass_covered"
+    run_guard "react_eslint_rule_doc_coverage/fixture_fail_missing_doc" 1 \
+        bash "$SCRIPT_DIR/react_eslint_rule_doc_coverage_guard.sh" --root "$SCRIPT_DIR/fixtures/react_eslint_rule_doc_coverage/fail_missing_doc"
+fi
+
+echo "[111] perf_log_no_gate_input_guard.sh (D-11 — the perf sidecar .ax-verify/perf.jsonl must NEVER become an input to any gate. It carries no forgery resistance by design: it is written for measurement only, so if a guard, script or hook ever READ it, an unverified artifact would silently acquire gating authority. This is the same class quick_verify_no_audit_guard.sh enforces for quick-verify — that precedent is why this constraint is a guard and not a doc promise: a documented rule that only lives in prose is one edit away from being false. Why a sidecar at all: runs.jsonl carries a pinned exact-schema check AND .githooks/pre-push runs the PREVIOUS RELEASE's copy of the recency guard first, so adding a field there would need a two-release migration; the sidecar avoids that entirely by touching no pinned file. Asserts 0 read-references to perf.jsonl across practices/evals/*.sh, practices/scripts/*.sh and .githooks/* — the write site in verify-completion.sh is the sole permitted mention. Fixtures: pass_clean 0 / fail_reads_perf_log 1 (a guard that greps the sidecar for a verdict).)"
+run_guard "perf_log_no_gate_input/live" 0 \
+    bash "$SCRIPT_DIR/perf_log_no_gate_input_guard.sh"
+if [ "$INCLUDE_FIXTURES" -eq 1 ]; then
+    run_guard "perf_log_no_gate_input/fixture_pass_clean" 0 \
+        bash "$SCRIPT_DIR/perf_log_no_gate_input_guard.sh" --root "$SCRIPT_DIR/fixtures/perf-log-no-gate-input/pass_clean"
+    run_guard "perf_log_no_gate_input/fixture_fail_reads_perf_log" 1 \
+        bash "$SCRIPT_DIR/perf_log_no_gate_input_guard.sh" --root "$SCRIPT_DIR/fixtures/perf-log-no-gate-input/fail_reads_perf_log"
+fi
+
 echo ""
 echo "Total: $PASS passed, $FAIL failed"
 

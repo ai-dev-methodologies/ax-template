@@ -1,7 +1,7 @@
 ---
 sentinel:
-  source_concat_sha256: "c4e33f316ad1242903e6196e9accfeed25c1f7f8cc669a35ee2410fe3d5632ba"
-  rule_count: 105
+  source_concat_sha256: "88c49a6600aabf1666223c5a54dc5eccb8f0ac0c227cc672e3564d8286ab276e"
+  rule_count: 108
   generated_by: "practices-react/generate_agents.sh"
 ---
 
@@ -7118,6 +7118,120 @@ Reference: [Feature-Sliced Design — Public API](https://feature-sliced.design/
 Reference: [practices-react/rules/no-cross-feature-deep-import.md](no-cross-feature-deep-import.md) — the sibling rule covering feature-to-feature deep imports.
 
 
+<!-- @source rules/no-god-route.md -->
+
+---
+title: A "use client" route file should stay thin — a route that grows past a line threshold likely belongs in a feature container
+impact: MEDIUM
+impactDescription: "A route file (app/**/page.tsx or layout.tsx) that accumulates form state, business logic, and inline UI instead of delegating to a @/features/<f> container becomes the thing every other change touches — it cannot be reused outside the route, cannot be unit-tested without the full routing/rendering harness, and every unrelated feature change risks touching the same file. Line count is a gameable proxy (a rule can be satisfied by splitting into equally-tangled helper files in the same directory), so this ships advisory (warn), not a hard block — it is a visible remediation signal, not a guarantee of decomposition quality."
+tags: [architecture, routing, feature-layout, size-heuristic, eslint]
+applicable_to: [react, nextjs]
+spec_ref: "specs/react-practices-l0.yaml#REACT-PRACTICES-ROUTE-001"
+verification:
+  type: lint
+  rule_id: "ax/no-god-route"
+  status: shipped
+  notes: "Shipped + enabled (advisory/warn by design): ax/no-god-route flags a \"use client\" file under app/**/page|layout whose physical line count exceeds a configurable threshold (default 100, via the rule's maxLines option). Only CLIENT route files are checked — a server route file (no \"use client\" directive) is not flagged, since server-side data-layer code is a different concern than client UI/business-logic bloat. Registered in the plugin and enforcing as warn; promotion to error is tracked separately (see practices-react/DECISIONS.md, BACKLOG P2-2) because line count alone cannot distinguish a genuinely tangled route from one that is merely verbose (e.g. a long but flat list of typed form fields)."
+provenance: { pilot: false, pipeline_version: "2026-06-08", pipeline_steps: [phaseA_frontend_decomposition_design, phaseB_rule_authoring, phaseC_teeth_proof] }
+audit:
+  accuracy: { status: verified, last_verified: "2026-08-13" }
+  freshness: { status: current, last_verified: "2026-08-13", next_review_by: "2026-11-11" }
+  completeness: { status: complete, amendments: ["Catalog doc authored post-ship — rule and tests predate this file; see practices-react/eslint-plugin-ax/rules/no-god-route.js and tests/no-god-route.test.js.", "P2-87: documented the honest advisory/gameable-proxy limit explicitly rather than presenting the line threshold as a correctness guarantee."] }
+  gap_check: { status: complete }
+upstream:
+  - id: nextjs-fetching-data
+    title: "Next.js 16 — Fetching Data (Server Components vs Client Components)"
+    url: "https://nextjs.org/docs/app/getting-started/fetching-data"
+    role: seed
+evidence:
+  - upstream_id: nextjs-fetching-data
+    section: "Fetching Data — Server Components / With the fetch API"
+    quote: "To fetch data with the `fetch` API, turn your component into an asynchronous function, and await the `fetch` call."
+    anchors: generic_principle_only
+  - upstream_id: nextjs-fetching-data
+    section: "Fetching Data — Client Components / Community libraries"
+    quote: "You can use a community library like SWR or React Query to fetch data in Client Components. These libraries have their own semantics for caching, streaming, and other features."
+    anchors: generic_principle_only
+sibling_rules: [no-route-client-data-fetching, no-server-state-in-local-state]
+---
+
+## A "use client" route file should stay thin
+
+**Impact: MEDIUM (advisory) — Line count is a gameable proxy for "this route is doing a feature container's job," not a correctness guarantee. It surfaces the smell visibly (warn) without breaking the build on a false positive.**
+
+Next.js's own documented split is that **Server Components** are where `fetch`/database/ORM
+calls belong (`await fetch(...)` inside an async component), while **Client Components**
+that need data reach for a dedicated library (`use()`, SWR, React Query) rather than
+hand-rolling the fetch. A `"use client"` route file (`app/**/page.tsx` or `layout.tsx`) that
+instead grows a large body of inline form state, branching business logic, and JSX is doing
+a feature container's job in the routing layer — the anchored generic principle is *fetching
+and business logic have a documented home that is not the route file itself*; the specific
+line threshold and "extract to `@/features/<f>`" convention below are this catalog's own
+decomposition heuristic, not a Next.js requirement.
+
+`ax/no-god-route` only checks **client** route files — a server route (no `"use client"`)
+is not flagged, because Server Component data-layer code is a different concern from client
+UI/business-logic bloat.
+
+### Incorrect — a fat client route holding form state + business logic + inline UI
+
+```tsx
+// src/app/(authenticated)/dashboard/page.tsx
+'use client'
+
+export default function Page() {
+  const [name, setName] = useState('')
+  const [email, setEmail] = useState('')
+  const [errors, setErrors] = useState<Record<string, string>>({})
+  // ...100+ more lines of validation, submit handling, and inline JSX...
+  return (
+    <form onSubmit={handleSubmit}>
+      {/* a whole feature's worth of markup lives here */}
+    </form>
+  )
+}
+```
+
+Past the line threshold (default 100), `ax/no-god-route` warns: this route is doing the job
+of a `@/features/<f>` container instead of delegating to one.
+
+### Correct — the route delegates to a feature container
+
+```tsx
+// src/app/(authenticated)/dashboard/page.tsx
+'use client'
+import { DashboardForm } from '@/features/dashboard'
+
+export default function Page() {
+  return <DashboardForm />
+}
+```
+
+The form state, validation, and business logic live in `@/features/dashboard`, where they
+are unit-testable in isolation and reusable outside the route.
+
+### What this rule does NOT flag
+
+- **Server route files** (no `"use client"` directive) — their size is typically data-layer
+  composition, not UI/business logic, and is out of scope for this rule.
+- **Non-route files** — anything outside `app/**/page.tsx` / `layout.tsx` is unaffected.
+- **A short client route that legitimately needs the space** — the threshold is
+  configurable (`maxLines` option) per project.
+
+### Honest limit
+
+Line count cannot distinguish a genuinely tangled route (mixed concerns, hard to test) from
+one that is merely verbose (e.g. a long but flat list of typed props or copy strings). A
+route can dodge this warning by moving code into equally-tangled sibling files in the same
+`app/` directory without ever touching `@/features/<f>` — the rule surfaces a signal for
+human/TIER-2 review, it does not verify the decomposition actually happened. This is why the
+rule ships `warn`, not `error`.
+
+Reference: [Next.js 16 — Fetching Data](https://nextjs.org/docs/app/getting-started/fetching-data)
+
+Reference: [practices-react/rules/no-route-client-data-fetching.md](no-route-client-data-fetching.md) — the sibling TIER-1 rule that blocks the most common source of route bloat (inline client data-fetching) outright.
+
+
 <!-- @source rules/no-hardcoded-user-facing-string-in-l4.md -->
 
 ---
@@ -7473,6 +7587,144 @@ Reference: [Next.js App Router — route colocation](https://nextjs.org/docs/app
 Reference: [Failing fixture: practices/evals/fixtures/no-l4-cross-import/fail_cross_import/PaymentPage.tsx](practices/evals/fixtures/no-l4-cross-import/fail_cross_import/PaymentPage.tsx)
 
 
+<!-- @source rules/no-route-client-data-fetching.md -->
+
+---
+title: A "use client" route file must not call client data-fetching hooks or raw fetch directly — delegate to a feature hook
+impact: HIGH
+impactDescription: "A route (app/**/page.tsx or layout.tsx) marked \"use client\" that calls useSWR/useQuery/useMutation/axios or a raw fetch() directly hard-couples routing to a specific data-fetching implementation and a specific endpoint shape. The route becomes untestable without mocking the network, unreusable if the same data is needed from a different route, and the data logic cannot be unit-tested independently of the App Router rendering harness. Unlike the route-thinness size heuristic (ax/no-god-route), this pattern is a precise AST shape (a known hook/library call or fetch()), so it ships as a hard ERROR, not advisory."
+tags: [architecture, routing, feature-layout, data-fetching, client-server-boundary, eslint]
+applicable_to: [react, nextjs]
+spec_ref: "specs/react-practices-l0.yaml#REACT-PRACTICES-ROUTE-002"
+verification:
+  type: lint
+  rule_id: "ax/no-route-client-data-fetching"
+  status: shipped
+  notes: "Shipped + enabled (ERROR): ax/no-route-client-data-fetching flags, inside a \"use client\" file under app/**/page|layout, any call to useSWR/useSWRInfinite/useSWRMutation/useQuery/useMutation/useInfiniteQuery/useQueryClient/useSuspenseQuery, any raw fetch(...), and any call through a local binding imported from swr/@tanstack/react-query/axios (name-agnostic — `import { useSWR as useFetch } from 'swr'` and `import http from 'axios'; http.get(...)` are both still caught, closing a bypass an audit found for naive name matching). A SERVER route (no \"use client\") is not checked — `await fetch()` there is the idiomatic App Router server data layer. Honest limit: a route calling a LOCAL wrapper hook that internally uses useSWR (e.g. useDashboardData() defined in @/features/dashboard) is not caught, because seeing through the wrapper needs data-flow analysis — this is the intended escape hatch (the wrapper IS the feature hook this rule wants), not a loophole. Registered in the plugin and enforcing."
+provenance: { pilot: false, pipeline_version: "2026-06-08", pipeline_steps: [phaseA_frontend_decomposition_design, phaseB_rule_authoring, phaseC_teeth_proof] }
+audit:
+  accuracy: { status: verified, last_verified: "2026-08-13" }
+  freshness: { status: current, last_verified: "2026-08-13", next_review_by: "2026-11-11" }
+  completeness: { status: complete, amendments: ["Catalog doc authored post-ship — rule and tests predate this file; see practices-react/eslint-plugin-ax/rules/no-route-client-data-fetching.js and tests/no-route-client-data-fetching.test.js.", "P2-87: documented the renamed-import / aliased-axios bypass the 2026-06-08 audit found and confirmed the rule closes it."] }
+  gap_check: { status: complete }
+upstream:
+  - id: nextjs-fetching-data
+    title: "Next.js 16 — Fetching Data (Client Components: use() vs community libraries)"
+    url: "https://nextjs.org/docs/app/getting-started/fetching-data"
+    role: seed
+evidence:
+  - upstream_id: nextjs-fetching-data
+    section: "Fetching Data — Client Components / Streaming data with the use API"
+    quote: "You can use React's `use` API to stream data from the server to client. Start by fetching data in your Server component, and pass the promise to your Client Component as prop."
+    anchors: generic_principle_only
+  - upstream_id: nextjs-fetching-data
+    section: "Fetching Data — Client Components / Community libraries"
+    quote: "You can use a community library like SWR or React Query to fetch data in Client Components. These libraries have their own semantics for caching, streaming, and other features."
+    anchors: generic_principle_only
+sibling_rules: [no-god-route, no-server-state-in-local-state]
+---
+
+## A "use client" route file must not fetch client data directly
+
+**Impact: HIGH — This is a precise AST shape (a known data-fetching hook/library call or raw fetch), not a heuristic, so it ships as a hard ERROR. A route that fetches its own data cannot be reused, cannot be tested without mocking the network, and couples routing to one implementation.**
+
+Next.js's own documented data-fetching model draws a clear line: a **Server Component**
+fetches with `await fetch(...)` directly; a **Client Component** that needs data either
+receives a promise from its Server Component parent (`use()`), or reaches for a
+**community library** (SWR / React Query) — either way, data-fetching in a Client Component
+is meant to go through a dedicated mechanism, not be inlined ad hoc. `ax/no-route-client-data-fetching`
+takes that generic principle and applies it specifically to **route files**: the route is the
+routing layer, so even the "dedicated mechanism" call (`useSWR`, `useQuery`, ...) belongs in
+a `@/features/<f>` hook that the route renders, not in the route file itself. That last
+step — routes delegate to a feature hook rather than calling the library directly — is this
+catalog's own layering decision, not a Next.js requirement.
+
+### Incorrect — client route calling useSWR directly
+
+```tsx
+// src/app/(authenticated)/dashboard/page.tsx
+'use client'
+import useSWR from 'swr'
+
+export default function Page() {
+  const { data } = useSWR('/api/me')
+  return <div>{data?.name}</div>
+}
+```
+
+### Incorrect — client route calling raw fetch
+
+```tsx
+// src/app/(authenticated)/dashboard/page.tsx
+'use client'
+
+export default function Page() {
+  fetch('/api/x')
+  return null
+}
+```
+
+### Incorrect — renamed import / aliased axios still caught
+
+```tsx
+// VIOLATION: renaming the binding does not bypass the rule — bindings imported from
+// swr / @tanstack/react-query / axios are tracked name-agnostically.
+'use client'
+import { useSWR as useFetch } from 'swr'
+
+export default function Page() {
+  const { data } = useFetch('/api/me')
+  return <div>{data?.name}</div>
+}
+```
+
+### Correct — server route awaits fetch directly (idiomatic)
+
+```tsx
+// src/app/showcase/page.tsx — no "use client": Server Component, unaffected
+export default async function Page() {
+  const res = await fetch('/api/x')
+  const data = await res.json()
+  return <div>{data.name}</div>
+}
+```
+
+### Correct — client route delegates to a feature hook
+
+```tsx
+// src/app/(authenticated)/dashboard/page.tsx
+'use client'
+import { useDashboardData } from '@/features/dashboard'
+
+export default function Page() {
+  const { data } = useDashboardData()
+  return <div>{data?.name}</div>
+}
+```
+
+```ts
+// src/features/dashboard/useDashboardData.ts — the feature hook, NOT a route file
+import useSWR from 'swr'
+
+export function useDashboardData() {
+  return useSWR('/api/me')
+}
+```
+
+### Honest limit
+
+A route calling a **local wrapper hook** that internally uses `useSWR` (`useDashboardData()`
+defined in `@/features/dashboard`, as above) is not caught — seeing through the wrapper to
+detect the underlying `useSWR` call needs data-flow analysis this rule does not do. This is
+not a loophole to close: the wrapper hook **is** the feature-hook delegation this rule wants
+routes to have. Genuine in-route data orchestration (the hook/library call written directly
+in the route file) is what gets blocked.
+
+Reference: [Next.js 16 — Fetching Data](https://nextjs.org/docs/app/getting-started/fetching-data)
+
+Reference: [practices-react/rules/no-god-route.md](no-god-route.md) — the sibling advisory size heuristic covering the broader "route doing too much" smell this rule's precise shape does not fully capture.
+
+
 <!-- @source rules/no-rrn-display-without-legal-basis-gate.md -->
 
 ---
@@ -7755,6 +8007,125 @@ Frontend companion to: `no-rrn-logging.md` in `practices/rules/`.
 Reference: [개인정보보호법 제24조 — 고유식별정보의 처리 제한](https://www.law.go.kr/법령/개인정보보호법)
 
 Reference: [KISA 개인정보보호법 가이드라인 — 주민등록번호 처리](https://www.kisa.or.kr/2060301/form?postSeq=14&lang_type=KO)
+
+
+<!-- @source rules/no-server-state-in-local-state.md -->
+
+---
+title: Do not seed useState with a query/SWR result's .data — the query cache is the source of truth
+impact: MEDIUM
+impactDescription: "useState(useSWR(...).data) / useState(useQuery(...).data) copies a snapshot of server state into local component state at mount/render time. The two then drift: revalidation, background refetch, and cache invalidation update the query cache, but the copied useState value does not follow unless the developer wires an extra useEffect to resync it — at which point the local state was never needed. The component can render stale data even while the cache holds the fresh value."
+tags: [architecture, client, server-state, state-boundary, eslint]
+applicable_to: [react, nextjs, vite]
+spec_ref: "specs/react-practices-l0.yaml#REACT-PRACTICES-STATE-001"
+verification:
+  type: lint
+  rule_id: "ax/no-server-state-in-local-state"
+  status: shipped
+  notes: "Shipped + enabled (advisory/warn by design): ax/no-server-state-in-local-state flags the direct, unambiguous shape useState(<queryCall>(...).data) where <queryCall> is useSWR/useSWRInfinite/useQuery/useInfiniteQuery/useSuspenseQuery. Honest limit (documented in the rule source): copying a query result through an intermediate variable first (const r = useSWR('/x'); const [d, setD] = useState(r.data)) is NOT caught — this is a heuristic that catches the most common direct-seed mistake, not a data-flow analysis. Registered in the plugin and enforcing as warn."
+provenance: { pilot: false, pipeline_version: "2026-06-08", pipeline_steps: [phaseA_frontend_decomposition_design, phaseB_rule_authoring, phaseC_teeth_proof] }
+audit:
+  accuracy: { status: verified, last_verified: "2026-08-13" }
+  freshness: { status: current, last_verified: "2026-08-13", next_review_by: "2026-11-11" }
+  completeness: { status: complete, amendments: ["Catalog doc authored post-ship — rule and tests predate this file; see practices-react/eslint-plugin-ax/rules/no-server-state-in-local-state.js and tests/no-server-state-in-local-state.test.js.", "P2-87: cross-referenced client-swr-dedup.md (the review-tier sibling covering the broader server-state-caching practice) so the two do not read as unrelated."] }
+  gap_check: { status: complete }
+upstream:
+  - id: tanstack-query-v5
+    title: "TanStack Query v5 — React Overview (server state vs client state)"
+    url: "https://tanstack.com/query/latest/docs/framework/react/overview"
+    role: seed
+evidence:
+  - upstream_id: tanstack-query-v5
+    section: "Overview"
+    quote: "TanStack Query makes fetching, caching, synchronizing and updating async state trivial."
+    anchors: generic_principle_only
+  - upstream_id: tanstack-query-v5
+    section: "When to Use vs Zustand"
+    quote: "Do NOT duplicate server state into Zustand stores."
+    anchors: generic_principle_only
+sibling_rules: [client-swr-dedup, no-god-route, no-route-client-data-fetching]
+---
+
+## Do not seed useState with a query/SWR result's .data
+
+**Impact: MEDIUM (advisory) — A heuristic that catches the most common direct-seed mistake. The query cache (SWR / TanStack Query) is the source of truth for server state; copying its `.data` into `useState` creates a second, independently-stale copy.**
+
+The upstream evidence generalizes past any one library: **server state is not client state**,
+and a caching library's entire reason to exist is to own synchronization, revalidation, and
+staleness for it — so much so that TanStack Query's own guidance is explicit that server
+state must not be duplicated into a separate client store. `useState(useSWR(...).data)` /
+`useState(useQuery(...).data)` commits exactly that mistake at the component level: it takes
+a value the cache already owns and re-owns it in local state, which the cache's revalidation
+cycle then has no way to keep in sync.
+
+### Incorrect — SWR result seeded into useState
+
+```tsx
+function Profile() {
+  const [data, setData] = useState(useSWR('/api/me').data)
+  // `data` is a snapshot taken once. When SWR revalidates in the background,
+  // the cache updates but `data` does not — this component can render stale.
+  return <div>{data?.name}</div>
+}
+```
+
+### Incorrect — TanStack Query result seeded into useState
+
+```tsx
+function Profile() {
+  const [data, setData] = useState(useQuery({ queryKey: ['me'], queryFn: fetchMe }).data)
+  return <div>{data?.name}</div>
+}
+```
+
+### Correct — read from the query cache directly
+
+```tsx
+function Profile() {
+  const { data } = useSWR('/api/me')
+  // No useState — every render reads the current cache value. Revalidation,
+  // background refetch, and mutation-driven cache updates are all reflected
+  // automatically.
+  return <div>{data?.name}</div>
+}
+```
+
+```tsx
+function Profile() {
+  const { data } = useQuery({ queryKey: ['me'], queryFn: fetchMe })
+  return <div>{data?.name}</div>
+}
+```
+
+### When useState with an initial prop value is fine
+
+```tsx
+// FINE: seeding local UI state from a prop (not a query result) is unrelated to this rule.
+function Editable({ initial }: { initial: string }) {
+  const [value, setValue] = useState(initial)
+  return <input value={value} onChange={(e) => setValue(e.target.value)} />
+}
+```
+
+### Honest limit
+
+Only the **direct, unambiguous shape** `useState(<queryCall>(...).data)` is flagged. Copying
+a query result through an intermediate variable first is not caught:
+
+```tsx
+// NOT caught — the query result is bound to `r` before being read, and the rule does not
+// perform data-flow analysis to trace `r.data` back to a query call.
+const r = useSWR('/api/me')
+const [data, setData] = useState(r.data)
+```
+
+This keeps the rule a precise, low-false-positive heuristic rather than a general "never
+mirror any derived value into state" checker, at the cost of missing the indirected form of
+the same mistake.
+
+Reference: [TanStack Query v5 — React Overview](https://tanstack.com/query/latest/docs/framework/react/overview)
+
+Reference: [practices-react/rules/client-swr-dedup.md](client-swr-dedup.md) — the review-tier sibling covering the broader practice (dedupe client-side server-state reads with a cache layer) that this rule's narrow ESLint shape enforces one slice of.
 
 
 <!-- @source rules/no-upward-layer-import.md -->

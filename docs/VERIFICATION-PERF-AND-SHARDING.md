@@ -85,8 +85,38 @@ shard k of N:  ./gradlew <the test{Domain} tasks assigned to shard k>
 
 ## 4. Status
 
-- perf-log schema + sharding strategy: **designed** (this doc). The schema is additive and the
-  sharding maps 1:1 to the existing `test{Domain}` tasks, so adoption is mechanical when the
-  single-runner wall-clock warrants it (the §2 time series is the trigger).
-- Implementing the `steps[]` timing emission in `verify-completion.sh` and a reference CI
-  shard matrix are follow-ups a fork-receiver does per their CI; the catalog stays CI-agnostic.
+- **Perf-log: IMPLEMENTED (2026-08, D-11 / BACKLOG:420)** — `verify-completion.sh` appends one
+  line per run to a **new, independent sidecar**, `.ax-verify/perf.jsonl`, timing each step with
+  bash's `$SECONDS` builtin (`record_step_perf`, called once per step-loop iteration) and writing
+  after the run completes (mirroring the existing `toolpaths.json` sidecar's write-after-audit,
+  non-blocking, `O_NOFOLLOW`-guarded shape). One line looks like:
+  ```jsonc
+  {"ts": "...", "head_sha": "...", "total_seconds": 11,
+   "steps": [{"id": "catalog-meta-guards", "seconds": 8}],
+   "domain_task_count": 78, "full_run": false, "exit": 0,
+   "note": "sidecar only — independent of runs.jsonl; no gate reads this file"}
+  ```
+  This is **not** the `steps[]`-extended `runs.jsonl` shape §2 originally sketched — see below for
+  why the shape changed on implementation. `.ax-verify/` is already anchored in `.gitignore`
+  (`/.ax-verify/`), so no ignore-rule change was needed. Structurally enforced as observability-only
+  by `practices/evals/perf_log_no_gate_input_guard.sh` (not yet wired into `run-all-guards.sh` —
+  see the report for that follow-up), which BLOCKs if anything under `practices/evals/*.sh`,
+  `practices/scripts/*.sh` or `.githooks/*` ever reads `perf.jsonl`.
+
+  **Why a sidecar and not an extension of `runs.jsonl`** (a real constraint discovered during
+  implementation, not a stylistic choice): `runs.jsonl`'s field set is pinned byte-for-byte by
+  `completion_checklist_recency_guard.sh` (`AUDIT_WRITER_SCHEMA_DRIFT` — see the "THIS printf IS
+  THE AUDIT SCHEMA" comment in `verify-completion.sh`), and `.githooks/pre-push` additionally runs
+  a **PRIOR RELEASE's copy** of that guard against the log at push time. Adding a `steps[]` field
+  to the pinned schema would make every push fail `AUDIT_WRITER_SCHEMA_DRIFT` against the OLD
+  guard until a release ships that both writes the new field AND accepts it — a two-release
+  migration for a field no gate needs to read. A wholly separate file has no such pin and needs no
+  migration, at the cost of not being byte-adjacent to the audit record (both share `head_sha`/`ts`
+  for correlation instead).
+
+- **CI sharding: still a design, deliberately NOT implemented this round.** §3's partition-by-tag
+  strategy is unchanged and remains adoption-ready once the §2 time series (now genuinely being
+  collected via `perf.jsonl`) shows the single-runner wall-clock warrants it — that measurement
+  window is the explicit trigger, and it has not started long enough yet to justify building a
+  shard matrix against it. A reference CI shard matrix stays a fork-receiver follow-up; the
+  catalog stays CI-agnostic.

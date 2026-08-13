@@ -1,6 +1,6 @@
 ---
 name: practices-react
-description: React 19 / Next.js 16 best-practices reviewer for the ax-template practices-react catalog. Triggers when editing practices-react/rules/*.md, specs/react-practices-l0.yaml, or frontend/ source files. Provides the 8-family / 105-rule evidence-anchored catalog (Vercel react-best-practices seed cross-checked against React 19 / Next.js 16 / MDN canonical docs and codex consensus).
+description: React 19 / Next.js 16 best-practices reviewer for the ax-template practices-react catalog. Triggers when editing practices-react/rules/*.md, specs/react-practices-l0.yaml, or frontend/ source files. Provides the 8-family / 108-rule evidence-anchored catalog (Vercel react-best-practices seed cross-checked against React 19 / Next.js 16 / MDN canonical docs and codex consensus).
 metadata:
   priority: 4
   docs:
@@ -62,7 +62,7 @@ retrieval:
 
 # practices-react SKILL
 
-This is the AI agent entry-point for the **`practices-react/`** catalog: 105 rules covering React 19 / Next.js 16 best practices — evidence-anchored, codex-reviewed, and continuously time-decay-guarded.
+This is the AI agent entry-point for the **`practices-react/`** catalog: 108 rules covering React 19 / Next.js 16 best practices — evidence-anchored, codex-reviewed, and continuously time-decay-guarded.
 
 ## When this skill activates
 
@@ -89,7 +89,7 @@ both this table and the rule count above.
 | js- | 13 | JavaScript performance (Set/Map, immutable arrays, regex, caching, iteration) |
 | advanced- | 3 | Advanced effect callback patterns (useEffectEvent, init-once, handler refs) |
 | nextjs- | 4 | Next.js-specific extensions (use-cache directive, async params, use-cache private/remote) |
-| (other) | 37 | ESLint-style no-/prefer- enforcement + L2/domain singletons (saved-, currency-, combobox-, impersonation-, rich-, traceid-, virtualized-, business-) not in a named family |
+| (other) | 40 | ESLint-style no-/prefer- enforcement + L2/domain singletons (saved-, currency-, combobox-, impersonation-, rich-, traceid-, virtualized-, business-) not in a named family |
 <!-- END:auto-family-table -->
 
 ## Pipeline

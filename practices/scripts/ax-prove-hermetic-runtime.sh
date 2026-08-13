@@ -703,7 +703,11 @@ build_sb_red() {
     build_sb "$sb" || return 2
     write_audit "$sb"
     [ -n "$neuter" ] && { round6_neuter "$sb" "$neuter" || return 3; }
-    rm -f "$sb/repo/.ax-verify/runs.jsonl" "$sb/repo/.ax-verify/last_run.jsonl"
+    # D-11 (BACKLOG:420): perf.jsonl is a separate sidecar (practices/scripts/verify-completion.sh)
+    # that no gate reads — nothing in this harness writes it today (the sandboxes above hand-author
+    # runs.jsonl/last_run.jsonl directly rather than running verify-completion.sh), but it is listed
+    # here so a RED sandbox stays exhaustive over .ax-verify/ if that ever changes.
+    rm -f "$sb/repo/.ax-verify/runs.jsonl" "$sb/repo/.ax-verify/last_run.jsonl" "$sb/repo/.ax-verify/perf.jsonl"
     return 0
 }
 

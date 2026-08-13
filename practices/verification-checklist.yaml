@@ -67,10 +67,23 @@ checklist:
     fail_fast: true  # a structural/DDD/layering break short-circuits the ~89 per-domain tasks (18min→1min)
     timeout_seconds: 900
     commands:
+      # P2-86 (2026-08-13): assert the BUILD MODEL, not the text. Every Test task must carry
+      # non-empty testClassesDirs/classpath. On Gradle 8.x the java-plugin convention supplies
+      # them, so a missing wiring is invisible; on Gradle 9 the same shape yields a 0-test
+      # BUILD SUCCESSFUL — measured: testCrud NO-SOURCE pre-fix vs tests="7" post-fix. A grep
+      # cannot see conditional/afterEvaluate/plugin-injected config, so this walks the live
+      # task graph instead. Runs first here because a de-wired gate makes every step below vacuous.
+      - command: "./gradlew assertTestTasksWired"
+        working_directory: "backend"
+        expected_exit: 0
       - command: "./gradlew testPractices"
         working_directory: "backend"
         expected_exit: 0
     fix_playbook: |
+      If assertTestTasksWired failed: a Test task lost its testClassesDirs/classpath wiring.
+      Fix the `tasks.withType<Test>` block in backend/build.gradle.kts (it must set BOTH), never
+      by patching individual tasks — the point is that the class holds, not one instance.
+
       A structural / architecture rule failed (DDD aggregate bijection, controller→repository
       layering, @Tag binding, or ProblemDetail). This step runs BEFORE the ~89 per-domain tasks
       so the regression shows in ~1 min, not ~18.

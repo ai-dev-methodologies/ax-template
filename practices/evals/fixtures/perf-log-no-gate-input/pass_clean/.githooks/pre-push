@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+# fixture: a pre-push stand-in that reads runs.jsonl (the legitimate audit log) and only
+# mentions perf.jsonl in a comment. Reading runs.jsonl must not trigger this guard (it only
+# forbids reading perf.jsonl); the perf.jsonl mention here is prose, not a read.
+set -uo pipefail
+cat .ax-verify/runs.jsonl >/dev/null 2>&1 || true
+echo "pre-push fixture: perf.jsonl stays observability-only, never a gate input"
+exit 0

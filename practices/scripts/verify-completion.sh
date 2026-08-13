@@ -551,6 +551,9 @@ CHECKLIST="$REPO_ROOT/practices/verification-checklist.yaml"
 AUDIT_DIR="$REPO_ROOT/.ax-verify"
 AUDIT_LOG="$AUDIT_DIR/runs.jsonl"
 RESUME_LOG="$AUDIT_DIR/last_run.jsonl"
+# D-11 (BACKLOG:420) perf-log sidecar — independent of AUDIT_LOG/RESUME_LOG, see the write site
+# near the bottom of this script for why it is a separate file rather than a runs.jsonl field.
+PERF_LOG="$AUDIT_DIR/perf.jsonl"
 COLLAPSE_HELPER="$SCRIPT_DIR/_collapse_plan.py"
 
 STEP_FILTER=""
@@ -618,6 +621,10 @@ if preflight_faked yaml || { ! "$AX_PY_BIN" -E -c 'import yaml' >/dev/null 2>&1 
 fi
 
 mkdir -p "$AUDIT_DIR"
+# D-11 perf-log: wall-clock start of this run, for the perf.jsonl sidecar's total_seconds.
+# $SECONDS is a bash builtin (integer seconds since THIS shell started); nothing else in this
+# file resets it, so a plain subtraction at write-time gives the run's wall-clock duration.
+AX_PERF_RUN_T0=$SECONDS
 
 # ── P1-1 (ROUND 4, TD-2026-07-30-P1-anchor-runtime): git must interpret objects as they ARE ──
 # `git replace <real> <fabricated>` keeps every sha identical and swaps the OBJECT every ordinary
@@ -954,6 +961,14 @@ PLAN_FILE=$("$AX_MKTEMP_BIN")
 RESULTS_FILE=$("$AX_MKTEMP_BIN")
 PLAYBOOK_DIR=$(_ax_mktemp_d verify-completion) || exit 2
 RESUME_TMP=$("$AX_MKTEMP_BIN")
+# ── D-11 (BACKLOG:420) perf-log sidecar: per-step wall-clock, tab-separated `<sid>\t<seconds>` ──
+# rows, one per loop iteration (see record_step_perf below). Consumed ONLY at the end of this
+# script to build .ax-verify/perf.jsonl — a NEW, independent file. It is deliberately NOT
+# runs.jsonl: that file's schema is pinned byte-for-byte by completion_checklist_recency_guard.sh
+# (see the "THIS printf IS THE AUDIT SCHEMA" comment below) and the pre-push hook runs a PRIOR
+# release's copy of that guard against it, so widening the schema needs a two-release migration.
+# perf.jsonl carries no such pin and no gate reads it — see docs/VERIFICATION-PERF-AND-SHARDING.md.
+PERF_STEPS_FILE=$("$AX_MKTEMP_BIN")
 # The logical steps the checklist DEMANDED for this run (<index>\t<id>), written by the
 # emitter beside the plan. Independent of the plan so "a step vanished" is detectable.
 DECLARED_STEPS="$PLAN_FILE.steps"
@@ -962,7 +977,7 @@ cleanup() {
     # trap before it is set does not trip `set -u`. The .failfast/.steps sidecars are
     # written next to PLAN_FILE by the python emitter — remove them here too.
     rm -f "$PLAN_FILE" "$PLAN_FILE.failfast" "$DECLARED_STEPS" "$RESULTS_FILE" \
-        "$RESUME_TMP" "${RESUME_NEW:-}"
+        "$RESUME_TMP" "${RESUME_NEW:-}" "$PERF_STEPS_FILE"
     rm -rf "$PLAYBOOK_DIR"
 }
 trap cleanup EXIT
@@ -1489,6 +1504,17 @@ emit_step_verdict() {
     return 0
 }
 
+# ── D-11 perf-log: one row per step iteration, `<sid>\t<elapsed_seconds>` ────────────
+# Called exactly once per pass through the step loop below (both the RESUME-SKIP early-continue
+# and the normal end of an iteration), so PERF_STEPS_FILE ends up with one row per step this run
+# actually reached — a step short-circuited by fail-fast simply never gets a row, which is honest
+# (it was not timed because it did not run).
+record_step_perf() {
+    local sid="$1" t0="$2" elapsed
+    elapsed=$((SECONDS - t0))
+    printf '%s\t%s\n' "$sid" "$elapsed" >> "$PERF_STEPS_FILE"
+}
+
 # ── 4. Watchdog wrapper: run command with timeout, line-buffered streaming ──
 # We background the command (so its stdout/stderr stay attached to OUR fds —
 # stream live), then background a watchdog that SIGTERMs on timeout and SIGKILL
@@ -1586,6 +1612,7 @@ for sid in $STEP_ORDER; do
     # Step header.
     title=$(awk -F'\t' -v s="$sid" '$1==s { print $2; exit }' "$PLAN_FILE")
     echo "── [$sid] $title ──────────────────────────────────────────────"
+    _ax_perf_t0=$SECONDS
 
     # Sample the tree BEFORE the step: this is the code the step is about to verify, and the
     # tree any resume record it publishes will be bound to.
@@ -1599,6 +1626,7 @@ for sid in $STEP_ORDER; do
         echo -e "$sid\tRESUME-SKIP\tPASS\t0\tfalse\tresumed" >> "$RESULTS_FILE"
         SKIP_RESUME_COUNT=$((SKIP_RESUME_COUNT + 1))
         emit_resume "$sid" "PASS" "resumed"
+        record_step_perf "$sid" "$_ax_perf_t0"
         continue
     fi
 
@@ -1771,6 +1799,7 @@ for sid in $STEP_ORDER; do
     fi
 
     rm -f "$COLLAPSED_PLAN"
+    record_step_perf "$sid" "$_ax_perf_t0"
 
     # fail-fast: a HARD_FAIL in a `fail_fast: true` step short-circuits the remaining steps.
     if [ "$HARD_FAIL" -gt "$STEP_HARD_FAIL_BEFORE" ] && printf '%s\n' "$FAIL_FAST_SIDS" | grep -qxF "$sid"; then
@@ -2058,6 +2087,81 @@ except OSError as exc:
         "  the write was refused rather than allowed to follow whatever that name resolves to.\n"
         % (exc.__class__.__name__, exc))
 ' "$AUDIT_DIR/toolpaths.json" "$TS" "$CURRENT_HEAD" "$AX_GIT_BIN" "${AX_PY_BIN:-}" || true
+
+# ── D-11 (BACKLOG:420) perf-log sidecar: .ax-verify/perf.jsonl — a time series, not the audit ──
+# log. DESIGN CONSTRAINT (see docs/VERIFICATION-PERF-AND-SHARDING.md §4): this is a NEW, wholly
+# independent file, never an extension of runs.jsonl. runs.jsonl's field set is pinned
+# byte-for-byte by completion_checklist_recency_guard.sh (see "THIS printf IS THE AUDIT SCHEMA"
+# above), and .githooks/pre-push additionally runs a PRIOR RELEASE's copy of that guard against
+# it — so widening that schema needs a two-release migration before "the current guard accepts
+# it" is even a valid argument. A sidecar with its own schema needs neither. Like toolpaths.json
+# above: written AFTER the audit line, read by NO gate (enforced structurally by
+# perf_log_no_gate_input_guard.sh), and non-blocking — a write failure is reported and ignored.
+#
+# ⚠ NOT written into a git-TRACKED .ax-verify/ (a handful of `practices/evals/fixtures/**/.ax-
+# verify/` directories are committed test data for completion_checklist_recency_guard.sh, even
+# though the repo-root `.gitignore` anchor `/.ax-verify/` keeps the real one untracked). This
+# script's own SCRIPT_DIR/REPO_ROOT never resolves into one of those fixture trees today (none of
+# them carries a copy of this script), but the check below is the structural guarantee rather
+# than that observation: if `.ax-verify` is ever git-tracked at the resolved REPO_ROOT, the write
+# is skipped and said so on stderr, isolating fixture/tracked trees from live recording rather
+# than trusting "it happens not to occur".
+_ax_perf_tracked=0
+if [ -n "${AX_GIT_BOUND_ROOT:-}" ] \
+   && [ -n "$("$AX_GIT_BIN" --no-replace-objects -C "$REPO_ROOT" ls-files -- ".ax-verify" 2>/dev/null)" ]; then
+    _ax_perf_tracked=1
+fi
+if [ "$_ax_perf_tracked" -eq 1 ]; then
+    echo "verify-completion: perf sidecar SKIPPED — .ax-verify/ is git-tracked at this root" \
+         "(fixture/test tree); recording only happens on an untracked, live .ax-verify/." >&2
+else
+    AX_PERF_TOTAL_SECONDS=$((SECONDS - AX_PERF_RUN_T0))
+    AX_PERF_DOMAIN_COUNT=$(awk -F'\t' '$1=="per-domain-tests" && $6!="true" { c++ } END { print c+0 }' \
+        "$PLAN_FILE" 2>/dev/null || echo 0)
+    "$AX_PY_BIN" -I -S -c '
+import json, os, sys
+path, ts, head, total_s, steps_path, full_run, exit_code, domain_count = sys.argv[1:9]
+steps = []
+try:
+    with open(steps_path, "r", encoding="utf-8") as fh:
+        for line in fh:
+            line = line.rstrip("\n")
+            if not line:
+                continue
+            parts = line.split("\t")
+            if len(parts) != 2:
+                continue
+            sid, secs = parts
+            try:
+                steps.append({"id": sid, "seconds": int(secs)})
+            except ValueError:
+                continue
+except OSError:
+    steps = []
+doc = {
+    "ts": ts,
+    "head_sha": head,
+    "total_seconds": int(total_s),
+    "steps": steps,
+    "domain_task_count": int(domain_count),
+    "full_run": full_run == "true",
+    "exit": int(exit_code),
+    "note": "sidecar only — independent of runs.jsonl; no gate reads this file "
+            "(see docs/VERIFICATION-PERF-AND-SHARDING.md)",
+}
+try:
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_APPEND | os.O_NOFOLLOW, 0o644)
+    with os.fdopen(fd, "a", encoding="utf-8") as fh:
+        fh.write(json.dumps(doc, ensure_ascii=False) + "\n")
+except OSError as exc:
+    sys.stderr.write(
+        "verify-completion: perf sidecar NOT written (%s: %s).\n"
+        "  This file is observability only and no gate reads it, so the run is unaffected — but\n"
+        "  the write was refused rather than allowed to follow whatever that name resolves to.\n"
+        % (exc.__class__.__name__, exc))
+' "$PERF_LOG" "$TS" "$CURRENT_HEAD" "$AX_PERF_TOTAL_SECONDS" "$PERF_STEPS_FILE" "$FULL_RUN" "$EXIT_CODE" \
+        "$AX_PERF_DOMAIN_COUNT" || true
+fi
 
 # ── ax-ledger capture — every verify run leaves a per-project usage trace (progress / violation),
 # so a fork-receiver's gate history is reviewable (복기) and improvable. Never fails the gate. ──

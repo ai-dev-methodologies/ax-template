@@ -1,7 +1,7 @@
 ---
 sentinel:
-  source_concat_sha256: "60a025dc4278b66849ba1216d31583e5dbdd91af7fcb31dfc9e98db6d4e78242"
-  rule_count: 105
+  source_concat_sha256: "48196b825102a79a7cf07d8966084512587777430f392f0f23818a036267c0f3"
+  rule_count: 108
   generated_by: "practices/generate_index.sh"
 ---
 
@@ -20,7 +20,7 @@ sentinel:
 - **api-routes** (1) — async-api-routes
 - **app-router** (1) — next-async-params-parallel
 - **app-startup** (1) — advanced-init-once
-- **architecture** (5) — no-cross-feature-deep-import, no-feature-internal-import, no-l4-cross-import, no-upward-layer-import, prefer-recipe-over-l4-page-cross-import
+- **architecture** (8) — no-cross-feature-deep-import, no-feature-internal-import, no-god-route, no-l4-cross-import, no-route-client-data-fetching, no-server-state-in-local-state, no-upward-layer-import, prefer-recipe-over-l4-page-cross-import
 - **arrays** (5) — js-combine-iterations, js-flatmap-filter, js-length-check-first, js-min-max-loop, js-tosorted-immutable
 - **assets** (1) — rendering-svg-precision
 - **async** (7) — async-defer-await, async-dependencies, async-parallel, async-suspense-boundaries, next-async-params-parallel, rendering-script-defer-async, server-after-nonblocking
@@ -44,7 +44,8 @@ sentinel:
 - **catalog** (1) — practices-frontend-catalog-browser
 - **checkout** (1) — payment-frontend-checkout-idempotent-states
 - **checksum** (1) — business-registration-checksum-required
-- **client** (4) — client-event-listeners, client-localstorage-schema, client-passive-event-listeners, client-swr-dedup
+- **client** (5) — client-event-listeners, client-localstorage-schema, client-passive-event-listeners, client-swr-dedup, no-server-state-in-local-state
+- **client-server-boundary** (1) — no-route-client-data-fetching
 - **closures** (1) — rerender-functional-setstate
 - **code-splitting** (1) — bundle-dynamic-imports
 - **codification** (1) — ux-block-uses-design-tokens-and-a11y
@@ -70,7 +71,7 @@ sentinel:
 - **currency** (2) — currency-amount-no-raw-jsx-render, locale-aware-number-date-format
 - **cwv** (1) — virtualized-table-when-rowcount-gt-1000
 - **data-blocks** (1) — l2-prefer-data-prop-over-direct-fetch
-- **data-fetching** (2) — client-swr-dedup, l2-prefer-data-prop-over-direct-fetch
+- **data-fetching** (3) — client-swr-dedup, l2-prefer-data-prop-over-direct-fetch, no-route-client-data-fetching
 - **data-minimization** (1) — client-localstorage-schema
 - **data-structures** (1) — js-set-map-lookups
 - **data-table** (1) — crud-frontend-pages-bind-crud-contract
@@ -92,7 +93,7 @@ sentinel:
 - **effects** (1) — advanced-use-latest
 - **error-boundary** (1) — audit-log-frontend-viewer-rbac-virtualized
 - **error-handling** (3) — file-storage-frontend-render-a11y-error, rate-limit-must-surface-to-user, traceid-propagated-client
-- **eslint** (4) — no-caller-identity-from-props, no-cross-feature-deep-import, no-feature-internal-import, no-upward-layer-import
+- **eslint** (7) — no-caller-identity-from-props, no-cross-feature-deep-import, no-feature-internal-import, no-god-route, no-route-client-data-fetching, no-server-state-in-local-state, no-upward-layer-import
 - **event-handlers** (1) — advanced-event-handler-refs
 - **event-listeners** (2) — client-event-listeners, client-passive-event-listeners
 - **events** (1) — rerender-move-effect-to-event
@@ -101,7 +102,7 @@ sentinel:
 - **feature-flags** (2) — feature-flags-frontend-admin-toggle, prefer-feature-gate-over-env-check
 - **feature-gates** (1) — bundle-conditional
 - **feature-isolation** (1) — no-cross-feature-deep-import
-- **feature-layout** (3) — no-cross-feature-deep-import, no-feature-internal-import, no-upward-layer-import
+- **feature-layout** (5) — no-cross-feature-deep-import, no-feature-internal-import, no-god-route, no-route-client-data-fetching, no-upward-layer-import
 - **file-storage** (1) — file-storage-frontend-render-a11y-error
 - **filter** (1) — js-flatmap-filter
 - **financial** (1) — payment-frontend-checkout-idempotent-states
@@ -206,7 +207,7 @@ sentinel:
 - **resource-hints** (1) — rendering-resource-hints
 - **reuse** (1) — no-app-local-ui-primitives
 - **rich-content** (1) — rich-content-must-use-dynamic-import
-- **routing** (1) — practices-frontend-catalog-browser
+- **routing** (3) — no-god-route, no-route-client-data-fetching, practices-frontend-catalog-browser
 - **rrn** (2) — no-rrn-display-without-legal-basis-gate, no-rrn-in-form-fields
 - **rsc** (6) — nextjs-use-cache, rich-content-must-use-dynamic-import, server-cache-react, server-dedup-props, server-parallel-fetching, server-serialization
 - **runtime-control** (1) — prefer-feature-gate-over-env-check
@@ -221,14 +222,16 @@ sentinel:
 - **server** (11) — nextjs-use-cache, nextjs-use-cache-private, nextjs-use-cache-remote, server-after-nonblocking, server-auth-actions, server-cache-lru, server-cache-react, server-dedup-props, server-hoist-static-io, server-parallel-fetching, server-serialization
 - **server-actions** (4) — async-api-routes, l2-prefer-onsubmit-prop, server-auth-actions, traceid-propagated-client
 - **server-components** (1) — async-suspense-boundaries
-- **server-state** (1) — client-swr-dedup
+- **server-state** (2) — client-swr-dedup, no-server-state-in-local-state
 - **session** (1) — auth-frontend-pages-bind-auth-contract
 - **set** (1) — js-set-map-lookups
 - **side-effects** (3) — advanced-init-once, rerender-move-effect-to-event, server-after-nonblocking
+- **size-heuristic** (1) — no-god-route
 - **sorting** (1) — js-min-max-loop
 - **ssr** (3) — rendering-hydration-no-flicker, rendering-hydration-suppress-warning, rich-content-must-use-dynamic-import
 - **startTransition** (1) — rerender-transitions
 - **state** (4) — js-tosorted-immutable, rendering-usetransition-loading, rerender-derived-state-no-effect, rerender-use-ref-transient-values
+- **state-boundary** (1) — no-server-state-in-local-state
 - **state-preservation** (1) — rendering-activity
 - **static** (1) — rendering-hoist-jsx
 - **static-assets** (1) — server-hoist-static-io
@@ -330,11 +333,14 @@ sentinel:
 | no-caller-identity-from-props | HIGH | lint | Caller identity for authz-relevant data calls must come from the caller-id hook — never from props, params, searchParams, or a destructured function argument |
 | no-cross-feature-deep-import | HIGH | lint | A feature must not deep-import another feature's internals — cross-feature reuse goes through the target's barrel or the shared kernel |
 | no-feature-internal-import | HIGH | lint | Outside a feature, import it only through its published barrel — never deep into a slice's internals |
+| no-god-route | MEDIUM | lint | A "use client" route file should stay thin — a route that grows past a line threshold likely belongs in a feature container |
 | no-hardcoded-user-facing-string-in-l4 | HIGH | regex_scan | User-facing strings in L4 templates must use t() — no hardcoded Korean or natural-language literals |
 | no-impersonation-bypass-via-helper-rename | HIGH | script | Impersonation bypass via helper rename is not permitted |
 | no-l4-cross-import | HIGH | review | L4 domain pages must not import from other L4 domains |
+| no-route-client-data-fetching | HIGH | lint | A "use client" route file must not call client data-fetching hooks or raw fetch directly — delegate to a feature hook |
 | no-rrn-display-without-legal-basis-gate | CRITICAL | review | Frontend components must not collect or display raw RRN (주민등록번호) fields without an explicit legal-basis disclosure gate |
 | no-rrn-in-form-fields | CRITICAL | review | Frontend forms must not include RRN (주민등록번호) input fields by default |
+| no-server-state-in-local-state | MEDIUM | lint | Do not seed useState with a query/SWR result's .data — the query cache is the source of truth |
 | no-upward-layer-import | HIGH | lint | Layers are single-direction (app -> features -> shared) — a module must never import from a higher layer |
 | notification-frontend-inbox-settings-bell | MEDIUM | review | Notification UI must realize the notification contract — virtualized inbox with status filter, mark-read/dismiss actions, preference toggles (partial update), and an unread-count bell |
 | payment-frontend-checkout-idempotent-states | HIGH | review | Payment UI must realize the payment contract — checkout with method picker + idempotency-key handler + slow-provider warning, idempotent success/failure pages, methods list/detail, refund |
