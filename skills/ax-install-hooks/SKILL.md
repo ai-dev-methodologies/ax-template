@@ -92,7 +92,7 @@ if [ "$REACT_ROOT" = "." ]; then
 else
   git diff --cached --name-only | grep -q "^${REACT_ROOT}/" && REACT_TOUCHED=1
 fi
-[ "$REACT_TOUCHED" = 1 ] && { npm run lint --if-present; npm test --if-present; }
+[ "$REACT_TOUCHED" = 1 ] && ( cd "$REACT_ROOT" && npm run lint --if-present && npm test --if-present )  # cd subshell keeps cwd clean for the java block below; && (not ;) propagates a lint failure instead of letting the last command's status hide it (#79)
 # java -- delete this block if "java" is not in ax.config.json's stacks[].
 # "testPractices" is the ax-template default task; swap for the project's real one.
 [ -n "$JAVA_ROOT" ] || { echo "ax-hook: java.root not resolved from $CONFIG" >&2; exit 1; }
@@ -216,22 +216,23 @@ invokes it, blocks a bad commit, or skips an out-of-scope one. Prove all
 three, as `ax-install-react-enforcement`/`ax-install-java-enforcement` prove
 their own gates.
 
-**Probe choice:** stack-specific gate already installed → reuse that skill's
-own probe file verbatim, staged under `react.root`/`java.root` so the
-path-scope check also fires (don't invent a second, disconnected check). No
-stack-specific gate yet → prove the *wiring*: append `exit 1` as the hook's
-last line, temporarily.
+**Probe choice:** stack-specific gate already installed → reuse that skill's own
+probe file verbatim, staged under `react.root`/`java.root` so the path-scope check
+also fires (don't invent a second, disconnected check). No stack-specific gate yet →
+prove the *wiring*: append `exit 1` as the hook's last line, temporarily.
 
 **Procedure:** (1) stage a throwaway change under the scoped root, attempt
-`git commit -m "ax-install-hooks probe — expect BLOCK"`, assert nonzero exit +
-a recognizable message; (2) remove the probe, confirm a normal `git commit`
-(same scoped path) succeeds; (3) **scope-skip, both directions (D-9)** — stage
-a throwaway change OUTSIDE both roots (or with neither extension, when a root
-is `.`) and confirm `git commit` succeeds WITHOUT `npm`/`gradlew` output, i.e.
-a scoped-out commit passes cleanly and not "by accident because nothing was
-staged"; (4) `git status` clean afterward — no probe residue, hook restored
-exactly. Report the BLOCK, PASS, AND scope-skip evidence — "I wrote the hook"
-≠ "I confirmed it blocks the right things and skips the rest."
+`git commit -m "ax-install-hooks probe — expect BLOCK"`, assert nonzero exit
+**and** the gate's own signal in the output — `ax/*` rule id for react, probe
+class/test name for java (exit code alone is insufficient: a wiring defect
+also exits nonzero, #85); (2) remove the probe, confirm a normal `git commit`
+(same scoped path) succeeds; (3) **scope-skip, both directions (D-9)** —
+stage a throwaway change OUTSIDE both roots (or with neither extension, when
+a root is `.`) and confirm `git commit` succeeds WITHOUT `npm`/`gradlew`
+output, i.e. a scoped-out commit passes cleanly and not "by accident because
+nothing was staged"; (4) `git status` clean afterward — no probe residue,
+hook restored exactly. Report the BLOCK, PASS, AND scope-skip evidence — "I
+wrote the hook" ≠ "I confirmed it blocks the right things and skips the rest."
 
 **If the commit succeeds instead of blocking, diagnose in order:** (1)
 `git config --get core.hooksPath` (`--worktree` for a worktree install) points

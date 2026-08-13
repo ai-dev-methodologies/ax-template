@@ -60,7 +60,7 @@ ax-template is the codebase that gives you 1-3 from commit 0.
 ```
 fork ax-template
        ↓
-25 L4 domains + 11 active recipes · 233 Java rules · 102 React rules · 15 ESLint rules · 109 hard guards · L0 fork-receiver-kit · L2 rate-limit-banner · AGENTS.md sentinel
+25 L4 domains + 11 active recipes · 233 Java rules · 105 React rules · 15 ESLint rules · 109 hard guards · L0 fork-receiver-kit · L2 rate-limit-banner · AGENTS.md sentinel
        ↓
 add new domain (Payment / Notification / …)  ←——— playbook: METHODOLOGY.md (5 steps)
        ↓
@@ -92,7 +92,7 @@ loop.
 | Backend reference workload | `backend/` — Spring Boot 4 + Java 21, 14 auth endpoints (signup/login/OAuth Google·Naver·Kakao/password reset/RBAC ADMIN·MANAGER·MEMBER), 5 CRUD endpoints, 1 rate-limit endpoint | TDD-built; per-domain `./gradlew test{Domain}` is binary pass/fail (status matrix in CLAUDE.md Build & Test) |
 | Frontend reference workload | `frontend/` — React 19 + Next.js 15, OAuth UI, login pages, e2e Playwright tests | self-tests the ESLint plugin |
 | Java/Spring rule catalog | `practices/` — 233 rules / 22+ categories with evidence-anchored frontmatter | runs against backend via `testPractices`; advisory probes via `practices/evals/run.sh` |
-| React/Next.js rule catalog | `practices-react/` — 102 rules / 9 families, citing canonical React 19 / Next.js 16 docs | runs via 3 hard gates (`practices-react/evals/run.sh`) |
+| React/Next.js rule catalog | `practices-react/` — 105 rules / 9 families, citing canonical React 19 / Next.js 16 docs | runs via 3 hard gates (`practices-react/evals/run.sh`) |
 | ESLint plugin (React enforcement) | `practices-react/eslint-plugin-ax/` — 15 custom rules (incl. 3 frontend-decomposition: cross-feature / layer-direction / published-API-barrel) | RuleTester suites; install in any downstream project |
 | Spec Trio (per domain) | `specs/<domain>.yaml` + `contracts/<domain>-openapi.yaml` + `blueprints/<domain>-manifest.yaml` | enforced by `spec_ref_guard.sh` — every rule must point to a spec item |
 | 4 hard gates | `practices/evals/{spec_ref,substance,time_decay,evidence}_guard.sh` (Java) + `practices-react/evals/run.sh` (React) | block commits / pushes via `.githooks/{pre-commit,pre-push}` when catalog quality degrades |

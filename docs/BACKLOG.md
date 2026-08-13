@@ -28,9 +28,9 @@ signature를 발견**(17/17)함으로써 경험적으로 반증되었다 — 발
 |---|---|---|---|
 | P0 (expiry-bound / live defects) | 30 | 30 | **100%** |
 | P1 (generic signature backlog) | 74 | 74 | **100%** |
-| P2 (verification escapes) | 80 | 79 | **99%** |
+| P2 (verification escapes) | 89 | 86 | **97%** |
 | P3 (industry-niche deferrals) | 141 | 141 | **100%** |
-| **P0–P3 합계 (수렴 분모)** | **325** | **324** | **100%** |
+| **P0–P3 합계 (수렴 분모)** | **334** | **331** | **99%** |
 
 > 2026-08-01 P1-seal 라운드 14 — reviewer P1 **2건**을 서로 다른 처방으로 봉합. **(P1-A) lexical `..`가 실재 alias를 놓친다**: 라운드 13은 심링크 타깃을 **lexical**로 해석해 `..`를 **follow 이전에** 텍스트로 접었다. 커널은 중간 symlink를 **follow 한 뒤** `..`를 pop한다. reviewer 토폴로지(커밋 내용만, 환경 통제 0): `backend/jump -> real/sub` + `backend/gradlew -> jump/../GRADLEW-REAL` over tracked `backend/real/gradlew-real` → POSIX는 `backend/real/GRADLEW-REAL`에 도달하고 case-insensitive APFS가 그것을 **추적 파일로 서비스**하므로 R25가 래퍼를 실제로 실행하고 green, lexical 후보 `backend/GRADLEW-REAL`은 **부재**라 두 구현 모두 dangling 종료로 **침묵**(측정: HEAD helper exit 0 + 클린트리 상수 `0a815065…`), case-**sensitive** 수신자는 **DANGLING gradlew**. 봉합: `_resolve_link_target`을 **component-by-component** 커널 해석으로 교체(중간 follow / 최종 컴포넌트는 lstat이므로 follow 안 함 / `..`는 follow 이후 pop / 중간 절대 타깃은 수신자 루트로 이탈 / 결측·판독불가 중간은 최종 lstat이 판정) + **예산 2종**(follow 40 = Linux MAXSYMLINKS와 macOS SYMLOOP_MAX 32 중 **큰 쪽**, component 4096) 소진 시 **침묵이 아니라** 신규 코드 `GIT_SYMLINK_RESOLUTION_UNBOUNDED`(fingerprint exit 16)로 BLOCK — 미완주 walk는 alias 질문에 **답하지 못한 것**이고 그 상태를 침묵으로 바꾸는 것이 라운드 8 이후 매 라운드가 닫아온 결함이며, 커밋된 cycle은 수신자에게 ELOOP다(측정: `loopa -> loopb/x`·`loopb -> loopa`, 커널 ELOOP, HEAD exit 0 → round-14 exit 16). 두 구현 대칭 봉합(helper + recency guard 12c). **P3-133은 SUPERSEDE — 그 행의 done-when(“발산 시 침묵”)은 이 P1을 보존한다**(reviewer 논거 인용과 함께 REJECT로 닫음), 그 행의 over-inclusive 반례를 새 resolver로 **재측정**: HEAD exit 15(부당 차단) → round-14 **exit 0 + 클린트리 상수**(첫 `..`에서 escapes). 정당한 **9형태 전부 재빌드해 exit 0**(HEAD·round-14 동일), 비공허성은 최종 컴포넌트 별칭 1건 추가 시 exit 15. 라운드 13 직접형 재확인: (AJ) 대소문자 · (AK) 정규화 **양쪽 모두 exit 15 유지**. 라이브 트리: symlink 2건 통과, digest **불변**(감사 가능 레시피 — clean `0a815065…` / dirty `8a91e493…`, HEAD 사본과 이번 사본 바이트 일치), 5회 평균 0.2738→0.2758 s/run(+0.7%, 노이즈). **(P1-B) 커밋된 런타임 경로 문자열**: R25가 체크리스트의 `command`/`working_directory`를 **verbatim** 실행(verify-completion.sh:1086 → :1561 `cd`+`bash -c`)하는데 그 문자열이 **기록된 스펠링**인지 아무도 묻지 않았다. 재현(커밋 내용만): `practices/evals/spec_policy_ref_guard.sh` → `PRACTICES/evals/…` 한 글자 케이스 변경 → APFS에서 명령 **exit 0**, `git cat-file -e HEAD:PRACTICES/…` **exit 128**, 트리 CLEAN, fingerprint **클린트리 상수**, [58] task-coverage exit 0, R25 위반 버킷 10종 전부 EMPTY = **green 증거 위조**. 처방을 **두 부분으로 분리**: **(1) 강제** — 신규 가드 [104] `checklist_command_path_spelling_guard.sh`가 체크리스트의 모든 경로형 토큰을 working_directory 기준 repo-relative로 풀어 **기록된 스펠링(추적 경로 또는 그 디렉터리 컴포넌트)** 이어야 하고, 아니면서 **공유 fold**(`tree_fingerprint.py`의 `_fold_path_key`를 import — 재구현 0)로 동치면 `CHECKLIST_PATH_ALIAS` BLOCK. **(st_dev, st_ino) 판별자를 쓰지 않는다** — 주제가 커밋된 파일 안의 **문자열**이지 검증 파일시스템 위의 경로가 아니므로 측정할 로컬 동일성이 없고 판정하는 것은 **수신자의** 파일시스템이다(그 덕에 가드와 fixture가 **파일시스템 독립**). candidate 규칙 7종을 헤더에 전수 열거하고 **라이브 체크리스트 오탐 0을 측정**: 367 토큰 → recorded 240 / unrelated 125 / skipped(flag) 2 / **alias 0**(`--show`로 표 출력). fixture 3종(pass_recorded_spellings / fail_command_case_alias = 재현 그대로 / fail_working_directory_alias). **(2) 정직한 한계** — 임의 커밋 내용의 경로 문자열 일반형은 **inspection으로 결정불가능**이므로 휴리스틱 스캐너를 출하하지 않고 **P2-72로 열어둔다**: 유일한 완전 처방은 **aliasing 하지 않는(대소문자·정규화 민감) 체크아웃에서 스위트를 실제로 돌리는 것**(이 프로젝트가 이미 구성 가능함을 증명한 `hdiutil create -fs "Case-sensitive APFS"`), 비용·채택 조건을 행에 명기. 값싼 완화책으로 `--advisory-scripts`(체크리스트가 **직접 호출하는** 셸 스크립트 1단계 literal 스캔)를 **비블로킹 ADVISORY**로 추가(라이브 3 스크립트·alias 0, 심은 alias 1건은 보고됨 = 비공허). prover 확장: (AN) jump 토폴로지 + (AN2) lexical 복원 twin + (AN3)/(AN4) 구현별 분리 twin + (AO) cycle 예산, 각각 premise 단언 동반. 신규 2건 등재(P2-72 · P3-134 = 중간 컴포넌트 별칭, 두 resolver 모두 미차단 — 측정·register-only) + P3-133 closed → 분모 308→310, 수렴 271/310 **87%**.
 
@@ -376,6 +376,62 @@ R25). *이름이 세션 기록에만 있던 항목을 여기로 영구화했다.
   남아 있다 — 오늘은 아포스트로피 짝수라 우연히 통과 중이며, 주석 한 줄이 패리티를 바꾸면
   같은 방식으로 죽는다. done-when: 세 파일 temp-file 패턴 전환(또는 동등 면역화) + stock-bash
   3.2 `bash -n` 스모크를 이식성 체크에 등재. 출처: 2026-08-10 이 머신 R25 FAIL 실측 진단.
+
+**plugin-channel(경로 B) dogfood 7건 — GitHub #85 umbrella (#78~#84), 2026-08-13 전건 봉합**
+
+- [x] P2-79 — **closed 2026-08-13 (GH #78, BLOCKING)**: `ax-install-java-enforcement` §3의
+  `testPractices` 스니펫이 `testClassesDirs`/`classpath` 미설정이라 **0개 테스트로 BUILD
+  SUCCESSFUL** — §5 probe까지 green이라 완전히 공허한 게이트를 설치하고도 성공 보고. 봉합:
+  두 줄 추가 + 삭제 방지 주석. **원인 차등 실측**: ax-template 자신(Gradle 8.14.5)은 java
+  플러그인 legacy convention 덕에 동작(testPractices XML 72건)하나 보고 환경(9.5.1)은 inert
+  — 수정은 양 버전 모두에서 안전. 파생 잠복 결함은 아래 P2-86.
+- [x] P2-80 — **closed 2026-08-13 (GH #79, BLOCKING)**: `ax-install-hooks` 훅 본문이
+  `REACT_ROOT`를 해석해놓고 쓰지 않아 repo 루트에서 npm 실행 → `react.root != "."`인 모든
+  프로젝트에서 ENOENT(exit 254)로 **react 커밋 영구 차단**. 봉합: `( cd "$REACT_ROOT" && … )`
+  서브셸 + `;`→`&&`(그룹은 마지막 상태만 남아 lint 실패가 조용히 버려짐). 검증: throwaway
+  repo 4케이스 + **버그 재현 대조**(수정 전 npm이 repo 루트에서 실행됨 실측).
+- [x] P2-81 — **closed 2026-08-13 (GH #80, WORKAROUND)**: ESLint 15룰 중 일부가 카탈로그
+  문서·INDEX 부재로 **지식 레이어에서 도달 불가** — 특히 `ax/no-upward-layer-import`는
+  BOOTSTRAP-SKILL §[4]의 대표 관측 신호인데 문서가 없었다. 봉합: 3룰 문서 신규 작성(FSD
+  공식 문서·ADP 인용으로 evidence 앵커, WebFetch 검증) + `specs/react-practices-l0.yaml`에
+  REACT-PRACTICES-ARCH-001~003 신설 + INDEX 재생성(102→105, 멱등 확인) +
+  `rerender-no-inline-components.md`에 ESLint id 교차참조. **이슈 교정**: `no-broad-barrel-imports`는
+  이미 `bundle-barrel-imports.md`로 문서화돼 있어 대상은 4건이 아닌 3건.
+- [x] P2-82 — **closed 2026-08-13 (GH #81, WORKAROUND)**: `ax-install-java-enforcement` §4가
+  no-cyclic/DTO-record를 산문으로 압축해 `.allowEmptyShould(true)`가 누락 → 갓 스캐폴딩된
+  프로젝트는 매치셋이 비어 **baseline RED**, GREEN→RED→GREEN 검증의 기준점이 파괴됨. 봉합:
+  3개 rule body 전문 명시 + "fresh 프로젝트는 구성상 매치셋이 비므로 전 룰에 필요" 명문화.
+- [x] P2-83 — **closed 2026-08-13 (GH #82, COSMETIC)**: `ax-init-config`가 schema/sample을
+  repo-상대 경로로 지목 — plugin 채널의 제1규칙(clone/복사 안 함)과 모순이라 미해석. D-3
+  체인의 **첫 스킬**이라 세션이 캐시 탐색 습관을 못 들인 지점. 봉합: `ax-practices` §2 패턴
+  적용(캐시·체크아웃 2경로 + `ls` 선행 + 둘 다 없을 때 보고 문구).
+- [x] P2-84 — **closed 2026-08-13 (GH #83, COSMETIC)**: `ax-practices` §4의 non-review 종류
+  열거(`gradle:*`/`eslint:*`/`guard:*`)가 practices-react의 실제 값(`lint`/`script`/`regex_scan`)을
+  누락해 **exhaustive처럼 보이는 오도** — prefix 매칭 구현자가 미인식을 pass-through로
+  처리하면 React 룰 6개가 조용히 enforced로 승격. 봉합: 열거 폐기, deny-by-default allowlist
+  규칙만 진술 + "예시는 non-exhaustive" 명시.
+- [x] P2-85 — **closed 2026-08-13 (GH #84, COSMETIC)**: 룰의 `protects_template_id`(ax-template
+  내부 L1–L4 경로)가 `ax-practices` §6의 root-기반 스코핑과 충돌 — 같은 파일에 두 해석이
+  정반대 결과를 내고, 문자 그대로 읽는 정직한 리뷰어일수록 **과소보고**. 봉합: §6에
+  "provenance이지 스코프 제한이 아니다 — root 아래 구조적으로 유사한 코드에 적용" 명문화.
+
+**위 dogfood가 파생시킨 신규 발견 (미봉합)**
+
+- [ ] P2-86 — ax-template 자체 빌드의 Gradle 9 잠복 vacuous-green: `backend/build.gradle.kts`의
+  `register<Test>` **116개** 전부가 `testClassesDirs`/`classpath`를 명시하지 않고 java 플러그인
+  convention에 의존한다. 현재 Gradle 8.14.5에서는 동작(testPractices 결과 XML 72건 실측)하나,
+  P2-79의 차등 실측이 보여주듯 **Gradle 9에서는 같은 형태가 0개 테스트로 green**이 된다 —
+  승격 시 per-domain 게이트 전체가 조용히 무력화되며, 이는 이 카탈로그가 가장 경계하는
+  vacuous-green이 자기 트리에 있는 경우다. 근본 원인(Gradle 9의 convention 제거)은 이 세션에서
+  독립 검증하지 않았고 8.14.5↔9.5.1 차등 사실만 확보했다. done-when: (a) 116 task에 두 줄을
+  명시하거나 `tasks.withType<Test>` 블록에서 일괄 설정 + (b) Gradle 9 스모크로 테스트 수 > 0
+  확인. 출처: GH #78 봉합 중 교차 확인(2026-08-13).
+- [ ] P2-87 — eslint-plugin-ax ↔ 카탈로그 문서 드리프트 가드 부재 + 잔여 미문서 3룰:
+  GH #80 봉합 중 `no-god-route`·`no-route-client-data-fetching`·`no-server-state-in-local-state`도
+  문서·`rule_id` 교차참조가 **전무**함이 전수 grep으로 확인됐다(이슈가 지목한 4건 밖). 이슈
+  제안 2(모든 `eslint-plugin-ax/rules/*.js`에 대응 문서 존재를 강제하는 guard)는 이 3건이
+  선행 봉합돼야 non-vacuous하게 도입 가능하다. done-when: 3룰 문서 작성 + 드리프트 guard 신설
+  (별칭 매칭 설계 포함) + fixture 쌍. 출처: GH #80 봉합 중 발견(2026-08-13).
 
 ## P3 — industry-niche deferrals (generic 아님 — 낮은 우선순위)
 

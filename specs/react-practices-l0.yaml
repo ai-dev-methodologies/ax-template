@@ -677,3 +677,30 @@ items:
     applicable: true
     applicable_to: [react, nextjs]
     notes: "ESLint-enforced (ax/no-caller-identity-from-props in @ax/eslint-plugin-ax). Rule body + evidence: practices-react/rules/no-caller-identity-from-props.md. Backend mirror: practices/rules/caller-authentication-only-no-userid-param.md (never accept userId via path/query — derive from Authentication)."
+
+  - id: "REACT-PRACTICES-ARCH-001"
+    chapter: "Architecture / Feature-layer boundaries"
+    requirement: "A `src/`-tree module MUST NOT import from a higher layer than its own. Layers are single-direction, app (top) -> features -> shared (components/lib, bottom): shared code must not import from features or app, and a feature must not import from app. Same-layer feature-to-feature imports are governed separately (REACT-PRACTICES-ARCH-003), not by this item."
+    test_method: "react_practices_ARCH_001_noUpwardLayerImport"
+    verification_type: "static_analysis"
+    applicable: true
+    applicable_to: [react, nextjs]
+    notes: "ESLint-enforced (ax/no-upward-layer-import in @ax/eslint-plugin-ax, lib/feature-layout.js classifies app/features/shared by configurable settings.ax layout). Rule body + evidence: practices-react/rules/no-upward-layer-import.md. Layout source: docs/superpowers/specs/2026-06-08-frontend-decomposition-rules-design.md §4 (TIER-0)."
+
+  - id: "REACT-PRACTICES-ARCH-002"
+    chapter: "Architecture / Feature-layer boundaries"
+    requirement: "A file OUTSIDE a feature's own tree (app/, components/, lib/, or another feature) MUST consume that feature only through its published barrel (`@/features/<feature>` or a slice barrel `@/features/<feature>/<slice>`) — never by reaching past the barrel into a slice's internal files. The feature's own internal files reaching into their own feature are unaffected; deep imports FROM inside a sibling feature are governed by REACT-PRACTICES-ARCH-003, not this item."
+    test_method: "react_practices_ARCH_002_noFeatureInternalImport"
+    verification_type: "static_analysis"
+    applicable: true
+    applicable_to: [react, nextjs]
+    notes: "ESLint-enforced (ax/no-feature-internal-import in @ax/eslint-plugin-ax). Rule body + evidence: practices-react/rules/no-feature-internal-import.md. Layout source: docs/superpowers/specs/2026-06-08-frontend-decomposition-rules-design.md §4 (TIER-0)."
+
+  - id: "REACT-PRACTICES-ARCH-003"
+    chapter: "Architecture / Feature-layer boundaries"
+    requirement: "A file inside `src/features/<A>/` MUST NOT reach into another feature `src/features/<B>/`'s internals (a deep import past `<B>`'s slice barrel). Cross-feature reuse must go through the target feature's published barrel (`@/features/<B>` or `@/features/<B>/<slice>`) or the shared kernel (components/lib) — never a sibling feature's internal file."
+    test_method: "react_practices_ARCH_003_noCrossFeatureDeepImport"
+    verification_type: "static_analysis"
+    applicable: true
+    applicable_to: [react, nextjs]
+    notes: "ESLint-enforced (ax/no-cross-feature-deep-import in @ax/eslint-plugin-ax). Rule body + evidence: practices-react/rules/no-cross-feature-deep-import.md. Layout source: docs/superpowers/specs/2026-06-08-frontend-decomposition-rules-design.md §4 (TIER-0)."

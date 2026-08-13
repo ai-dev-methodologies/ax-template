@@ -1,7 +1,7 @@
 ---
 sentinel:
-  source_concat_sha256: "a9158d5c618c2b16109e684537f1cde6370061dedfe0523c8914e6fb78dd840c"
-  rule_count: 102
+  source_concat_sha256: "c4e33f316ad1242903e6196e9accfeed25c1f7f8cc669a35ee2410fe3d5632ba"
+  rule_count: 105
   generated_by: "practices-react/generate_agents.sh"
 ---
 
@@ -6870,6 +6870,254 @@ Reference: [OWASP API Security Top 10 (2023) — API1:2023 BOLA](https://owasp.o
 Reference: [practices/rules/caller-authentication-only-no-userid-param.md](../../practices/rules/caller-authentication-only-no-userid-param.md) — backend mirror.
 
 
+<!-- @source rules/no-cross-feature-deep-import.md -->
+
+---
+title: A feature must not deep-import another feature's internals — cross-feature reuse goes through the target's barrel or the shared kernel
+impact: HIGH
+impactDescription: "Features are meant to be siblings: independently understandable, independently deletable, composed at the app layer or via the shared kernel. A feature that reaches past another feature's barrel into its internal files creates the same undeclared coupling as two backend modules sharing a private class directly — a change inside the target feature that its own owner considers purely internal now silently breaks a sibling feature."
+tags: [architecture, layering, imports, feature-layout, feature-isolation, eslint]
+applicable_to: [react, nextjs]
+spec_ref: "specs/react-practices-l0.yaml#REACT-PRACTICES-ARCH-003"
+verification:
+  type: lint
+  rule_id: "ax/no-cross-feature-deep-import"
+  status: shipped
+  notes: "Shipped + enabled: ax/no-cross-feature-deep-import governs files INSIDE a feature (src/features/<A>/**) and flags an import that resolves into a DIFFERENT feature (src/features/<B>/...) past B's barrel — the feature's own internals and a cross-feature BARREL import (@/features/<B> or @/features/<B>/<slice>) are both allowed; only a deep import past B's barrel is a violation. Fires on static import, dynamic import(), and require() alike — the ESLint RuleTester suite specifically asserts dynamic import() and require() are not a bypass. Registered in the plugin and enforcing."
+provenance: { pilot: false, pipeline_version: "2026-06-08", pipeline_steps: [phaseA_frontend_decomposition_design, phaseB_rule_authoring, phaseC_teeth_proof] }
+audit:
+  accuracy: { status: verified, last_verified: "2026-08-13" }
+  freshness: { status: current, last_verified: "2026-08-13", next_review_by: "2026-11-11" }
+  completeness: { status: complete, amendments: ["Catalog doc authored post-ship — rule and tests predate this file; see practices-react/eslint-plugin-ax/rules/no-cross-feature-deep-import.js and tests/no-cross-feature-deep-import.test.js (RuleTester asserts dynamic import()/require() cannot bypass the rule)."] }
+  gap_check: { status: complete }
+upstream:
+  - id: feature-sliced-design-slices-segments
+    title: "Feature-Sliced Design — Slices and segments reference"
+    url: "https://feature-sliced.design/docs/reference/slices-segments"
+    role: seed
+evidence:
+  - source_type: external
+    anchors: generic_principle_only
+    citation: "Feature-Sliced Design — Slices and segments reference: an ideal slice is independent from its sibling slices on the same layer (zero coupling). (Anchors only the generic same-layer sibling-isolation principle; ax-template's own barrel-exemption shape — a cross-feature import IS allowed through the target's published barrel, only a deep internal import is forbidden — and the app/features/shared layer split are an ax-template layer decision, not an FSD requirement.)"
+    url: "https://feature-sliced.design/docs/reference/slices-segments"
+    quote: "An ideal slice is independent from other slices on its layer (zero coupling) and contains most of the code related to its primary goal (high cohesion)."
+    quoted_at: "2026-08-13"
+sibling_rules: [no-upward-layer-import, no-feature-internal-import]
+---
+
+## A feature must not deep-import another feature's internals
+
+**Impact: HIGH — Features are siblings, not a shared implementation pool. Reaching past a sibling feature's barrel creates the exact coupling the feature boundary exists to prevent — a change the target feature's owner considers purely internal can silently break a caller they have no way to discover.**
+
+`ax/no-cross-feature-deep-import` governs files **inside** a feature
+(`src/features/<A>/**`). It allows a feature to import anything within its own tree, the
+shared kernel (`@/components/**`, `@/lib/**`, `@ax/ui`, `@ax/blocks`), and another feature's
+**published barrel** — but forbids reaching past that barrel into a sibling feature's
+internal files.
+
+(For a non-feature importer — `app/`, `components/`, `lib/` — reaching into a feature's
+internals is a separate concern, covered by `ax/no-feature-internal-import`.)
+
+### Incorrect — billing reaches into payment's internal file
+
+```tsx
+// src/features/billing/checkout/CheckoutForm.tsx — inside feature "billing"
+// VIOLATION: reaches past feature "payment"'s barrel into its internal capture.ts
+import { capture } from '@/features/payment/panel/capture'
+
+export function CheckoutForm() {
+  const result = capture({ amount: 4200 })
+  return <div>{result.status}</div>
+}
+```
+
+`billing` now depends on the exact file layout of `payment/panel/capture.ts`. If the
+`payment` feature owner splits `capture.ts` into two files, or moves the capture logic under
+a different slice, `billing` breaks — with no signal visible from inside `payment`'s own
+directory that a sibling feature depends on that path.
+
+### Incorrect — dynamic import() and require() are not an escape hatch
+
+```tsx
+// src/features/billing/checkout/CheckoutForm.tsx
+// VIOLATION: switching import syntax does not change what is being imported
+const capture = await import('@/features/payment/panel/capture')
+const captureCjs = require('@/features/payment/panel/capture')
+```
+
+### Correct — go through the target feature's published barrel
+
+```tsx
+// src/features/billing/checkout/CheckoutForm.tsx
+// Cross-feature reuse through payment's PUBLISHED barrel — allowed.
+import { Payment } from '@/features/payment'
+import { PaymentPanel } from '@/features/payment/panel'
+
+export function CheckoutForm() {
+  return <PaymentPanel amount={4200} />
+}
+```
+
+### Correct — or move the shared logic to the kernel
+
+```tsx
+// src/features/billing/checkout/CheckoutForm.tsx
+// If capture() is genuinely shared, the fix is to lift it to the shared kernel —
+// not to import it out of payment's internals.
+import { Button } from '@/components/ui/button'
+import { formatCurrency } from '@/lib/format'
+
+export function CheckoutForm() {
+  return <Button>{formatCurrency(4200)}</Button>
+}
+```
+
+### What counts as the target feature's "barrel" (allowed)
+
+Same shape as `no-feature-internal-import`: the target feature's root
+(`@/features/<B>`), a single slice directory (`@/features/<B>/<slice>`), or an explicit
+index file. Anything one segment deeper is a deep internal import.
+
+### What this rule does NOT flag
+
+- **A feature importing its own internals** (`billing` importing another file inside
+  `billing`) — unrestricted; only cross-feature imports are governed.
+- **A cross-feature BARREL import** — `@/features/payment` or
+  `@/features/payment/panel` from inside `billing` is the intended, allowed way to reuse
+  another feature.
+- **Imports of the shared kernel** — `@/components/**`, `@/lib/**`, `@ax/ui`, `@ax/blocks`
+  — never a feature, so never in scope for this rule.
+- **A non-feature file reaching into a feature's internals** — `src/app/page.tsx` importing
+  `@/features/payment/panel/internal` is `ax/no-feature-internal-import`'s job, not this
+  rule's (the importer here is not itself inside a feature).
+
+Reference: [Feature-Sliced Design — Slices and segments](https://feature-sliced.design/docs/reference/slices-segments)
+
+Reference: [practices-react/rules/no-feature-internal-import.md](no-feature-internal-import.md) — the sibling rule covering non-feature importers reaching into a feature.
+
+
+<!-- @source rules/no-feature-internal-import.md -->
+
+---
+title: Outside a feature, import it only through its published barrel — never deep into a slice's internals
+impact: HIGH
+impactDescription: "A feature's slice barrel (index.ts) is its public API — the one surface app/, components/, lib/, and other features are meant to depend on. A non-feature file that reaches past the barrel into a specific internal file (@/features/<f>/<slice>/<file>) couples itself to an implementation detail the feature owner never promised to keep stable; renaming or restructuring a file inside the feature now breaks callers the feature owner has no way to discover from the feature's own directory."
+tags: [architecture, layering, imports, feature-layout, public-api, eslint]
+applicable_to: [react, nextjs]
+spec_ref: "specs/react-practices-l0.yaml#REACT-PRACTICES-ARCH-002"
+verification:
+  type: lint
+  rule_id: "ax/no-feature-internal-import"
+  status: shipped
+  notes: "Shipped + enabled: ax/no-feature-internal-import governs every NON-feature importer (app/, components/, lib/, project root, and any other out-of-tree file) — feature-to-feature deep imports are governed separately by ax/no-cross-feature-deep-import, so the two rules never double-report the same violation. It flags an import that resolves into src/features/<feature>/... at any depth beyond the feature root or a slice's barrel (feature root, a bare slice directory, or an explicit index file all count as the barrel — everything deeper is internal). Fires on static import, dynamic import(), and require() alike. Registered in the plugin and enforcing."
+provenance: { pilot: false, pipeline_version: "2026-06-08", pipeline_steps: [phaseA_frontend_decomposition_design, phaseB_rule_authoring, phaseC_teeth_proof] }
+audit:
+  accuracy: { status: verified, last_verified: "2026-08-13" }
+  freshness: { status: current, last_verified: "2026-08-13", next_review_by: "2026-11-11" }
+  completeness: { status: complete, amendments: ["Catalog doc authored post-ship — rule and tests predate this file; see practices-react/eslint-plugin-ax/rules/no-feature-internal-import.js and tests/no-feature-internal-import.test.js."] }
+  gap_check: { status: complete }
+upstream:
+  - id: feature-sliced-design-public-api
+    title: "Feature-Sliced Design — Public API reference"
+    url: "https://feature-sliced.design/docs/reference/public-api"
+    role: seed
+evidence:
+  - source_type: external
+    anchors: generic_principle_only
+    citation: "Feature-Sliced Design — Public API reference: a slice's public API is the contract and gate a consumer must go through; only what is exported there is reachable from outside. (Anchors only the generic published-API/gate principle; ax-template's own barrel-detection rule — feature root, a slice directory, or any explicit index file counts as the barrel — and the app/features/shared layer split are an ax-template layer decision, not an FSD requirement.)"
+    url: "https://feature-sliced.design/docs/reference/public-api"
+    quote: "A public API is a contract between a group of modules, like a slice, and the code that uses it. It also acts as a gate, only allowing access to certain objects, and only through that public API."
+    quoted_at: "2026-08-13"
+sibling_rules: [no-upward-layer-import, no-cross-feature-deep-import]
+---
+
+## Outside a feature, import it only through its published barrel
+
+**Impact: HIGH — A feature's barrel is the one surface it promises to keep stable. Reaching past it couples a caller to an implementation detail the feature owner can rename or delete without ever knowing a caller depends on it.**
+
+`ax/no-feature-internal-import` governs every file OUTSIDE the feature tree — `src/app/`,
+`src/components/`, `src/lib/`, and the project root. It requires those files to consume a
+feature only through its **published barrel**: the feature root (`@/features/<feature>`) or
+a slice barrel (`@/features/<feature>/<slice>`). A "barrel" import is one that resolves to a
+directory (its `index`) — reaching past that into a named file inside the slice is a
+**feature-internal import** and is forbidden from outside the feature.
+
+(Feature-to-feature deep imports are a separate concern, covered by
+`ax/no-cross-feature-deep-import` — this rule targets non-feature importers only, so the two
+rules never fire on the same import.)
+
+### Incorrect — an app page reaches past the slice barrel into a specific file
+
+```tsx
+// src/app/(auth)/login/page.tsx
+// VIOLATION: reaches past the login slice's barrel into its internal LoginForm.tsx file
+import { LoginForm } from '@/features/auth/login/LoginForm'
+
+export default function LoginPage() {
+  return <LoginForm />
+}
+```
+
+The feature owner is free to rename `LoginForm.tsx`, split it into two files, or move it
+into a subdirectory — none of that is a breaking change from the feature's own perspective,
+because the barrel (`@/features/auth/login`, i.e. its `index.ts`) is the only promised
+surface. This import silently depends on a file the feature owner never agreed to keep in
+place.
+
+### Incorrect — a shared component reaches into a feature's internal file
+
+```tsx
+// src/components/nav/Nav.tsx
+// VIOLATION: components/ is the shared layer; it must import payment's BARREL, not its
+// internal capture.ts implementation file
+import { capture } from '@/features/payment/panel/capture'
+```
+
+### Correct — import the feature's published barrel
+
+```tsx
+// src/app/(auth)/login/page.tsx
+// The login slice's index.ts re-exports LoginForm — this is the public surface.
+import { LoginForm } from '@/features/auth/login'
+
+export default function LoginPage() {
+  return <LoginForm />
+}
+```
+
+```tsx
+// Also correct: an explicit index import, or the feature-root barrel.
+import { X } from '@/features/auth/login/index'
+import { Auth } from '@/features/auth'
+```
+
+### What counts as "the barrel" (not flagged)
+
+1. The feature root: `@/features/<feature>`.
+2. A single slice directory: `@/features/<feature>/<slice>` (resolves to that slice's
+   `index`).
+3. An explicit index file at any level: `@/features/<feature>/<slice>/index` (any module
+   extension — `.ts`, `.tsx`, `.js`, `.jsx`, `.mjs`, `.cjs`, `.mts`, `.cts`).
+
+Anything with one more path segment past those three shapes — `@/features/<feature>/<slice>/<file>`
+— is feature-internal and flagged when the importer is outside the feature.
+
+### What this rule does NOT flag
+
+- **A feature importing its own internals** — `src/features/auth/login/LoginForm.tsx`
+  importing a sibling file inside the same feature is unrestricted; this rule only governs
+  non-feature importers.
+- **A feature importing another feature's internals** — that shape is real, but it is
+  `ax/no-cross-feature-deep-import`'s job, not this rule's, so the two never double-report.
+- **Imports that don't resolve into `src/features/**`** — shared kernel imports
+  (`@/components/...`, `@/lib/...`) and bare/external specifiers (`react`, `@ax/ui`) are out
+  of scope.
+
+Reference: [Feature-Sliced Design — Public API](https://feature-sliced.design/docs/reference/public-api)
+
+Reference: [practices-react/rules/no-cross-feature-deep-import.md](no-cross-feature-deep-import.md) — the sibling rule covering feature-to-feature deep imports.
+
+
 <!-- @source rules/no-hardcoded-user-facing-string-in-l4.md -->
 
 ---
@@ -7507,6 +7755,176 @@ Frontend companion to: `no-rrn-logging.md` in `practices/rules/`.
 Reference: [개인정보보호법 제24조 — 고유식별정보의 처리 제한](https://www.law.go.kr/법령/개인정보보호법)
 
 Reference: [KISA 개인정보보호법 가이드라인 — 주민등록번호 처리](https://www.kisa.or.kr/2060301/form?postSeq=14&lang_type=KO)
+
+
+<!-- @source rules/no-upward-layer-import.md -->
+
+---
+title: Layers are single-direction (app -> features -> shared) — a module must never import from a higher layer
+impact: HIGH
+impactDescription: "Layers exist to bound blast radius: shared code (components/lib) is meant to be safe to import from anywhere, and a feature is meant to be safe to delete without touching app or shared. An upward import (shared -> features, shared -> app, or features -> app) breaks both guarantees — the 'foundational' code now depends on the thing built on top of it, so deleting or changing a feature can break shared UI, and a change anywhere in shared risks a circular rebuild through the layer it was supposed to be beneath."
+tags: [architecture, layering, imports, feature-layout, eslint]
+applicable_to: [react, nextjs]
+spec_ref: "specs/react-practices-l0.yaml#REACT-PRACTICES-ARCH-001"
+verification:
+  type: lint
+  rule_id: "ax/no-upward-layer-import"
+  status: shipped
+  notes: "Shipped + enabled: ax/no-upward-layer-import classifies every file under settings.ax's configured src layout (default: src/app -> app, src/features/<feature> -> features, src/components + src/lib -> shared) and flags any import whose target layer outranks the importer's layer (app=3 > features=2 > shared=1). Same-layer feature<->feature imports are exempted here — governed by ax/no-cross-feature-deep-import instead. Fires on static import, dynamic import(), and require() alike (lib/feature-layout.js's shared importVisitors), so switching import syntax cannot bypass it. Registered in the plugin and enforcing."
+provenance: { pilot: false, pipeline_version: "2026-06-08", pipeline_steps: [phaseA_frontend_decomposition_design, phaseB_rule_authoring, phaseC_teeth_proof] }
+audit:
+  accuracy: { status: verified, last_verified: "2026-08-13" }
+  freshness: { status: current, last_verified: "2026-08-13", next_review_by: "2026-11-11" }
+  completeness: { status: complete, amendments: ["Catalog doc authored post-ship — rule and tests predate this file; see practices-react/eslint-plugin-ax/rules/no-upward-layer-import.js and tests/no-upward-layer-import.test.js."] }
+  gap_check: { status: complete }
+upstream:
+  - id: acyclic-dependencies-principle
+    title: "Wikipedia — Acyclic dependencies principle"
+    url: "https://en.wikipedia.org/wiki/Acyclic_dependencies_principle"
+    role: seed
+  - id: feature-sliced-design-layers
+    title: "Feature-Sliced Design — Layers (import rule)"
+    url: "https://feature-sliced.design/docs/reference/layers"
+    role: seed
+evidence:
+  - source_type: external
+    anchors: generic_principle_only
+    citation: "Acyclic Dependencies Principle (Martin, Agile Software Development: Principles, Patterns, and Practices) — the dependency graph of packages must have no cycles; a package that depends on a sibling it may in turn be depended upon by introduces a cycle that prevents independent build and release. (Anchors only the generic acyclic/single-direction dependency principle; the concrete app/features/shared layer split and its rank order are an ax-template layer decision, not a requirement of the principle itself.)"
+    url: "https://en.wikipedia.org/wiki/Acyclic_dependencies_principle"
+    quoted_at: "2026-08-13"
+  - source_type: external
+    anchors: generic_principle_only
+    citation: "Feature-Sliced Design — Layers reference: layers are ordered and a module may only import downward. (Anchors only the generic single-direction-import-between-layers principle; ax-template's own three-layer app/features/shared split, directory names, and settings.ax configurability are an ax-template layer decision, not an FSD requirement — this project does not adopt FSD's full layer set or naming.)"
+    url: "https://feature-sliced.design/docs/reference/layers"
+    quote: "A module (file) in a slice can only import other slices when they are located on layers strictly below."
+    quoted_at: "2026-08-13"
+sibling_rules: [no-feature-internal-import, no-cross-feature-deep-import]
+---
+
+## Layers are single-direction — a module must never import from a higher layer
+
+**Impact: HIGH — Layers only bound blast radius if the dependency direction actually holds. An upward import silently turns "foundational" code into code that depends on the thing built on top of it.**
+
+`ax/no-upward-layer-import` enforces a three-layer directory convention (configurable via
+`eslint.config.mjs`'s flat-config `settings.ax`, default shown below):
+
+```text
+src/app/                          -- routing layer (top, rank 3)
+src/features/<feature>/<slice>/   -- feature slices (rank 2)
+src/components/, src/lib/         -- shared kernel (bottom, rank 1)
+```
+
+The allowed import direction is **app -> features -> shared** — never the reverse. A module
+may import from its own layer or any layer strictly below it; importing from a layer above
+is always a violation.
+
+### Incorrect — a shared component imports a feature
+
+```tsx
+// src/components/nav/Nav.tsx — SHARED layer (rank 1)
+// VIOLATION: shared imports from features (rank 2) — upward
+import { LoginForm } from '@/features/auth/login'
+
+export function Nav() {
+  return <nav><LoginForm /></nav>
+}
+```
+
+`src/components/**` is meant to be safe to import from anywhere — app, every feature, and
+other shared code. Once `Nav` depends on `features/auth`, deleting or refactoring the auth
+feature can break navigation, and the "foundational" layer is no longer foundational.
+
+### Incorrect — a feature imports from app
+
+```tsx
+// src/features/payment/checkout/CheckoutForm.tsx — FEATURES layer (rank 2)
+// VIOLATION: features imports from app (rank 3) — upward
+import { rootMetadata } from '@/app/layout'
+
+export function CheckoutForm() {
+  return <form aria-label={rootMetadata.title}>{/* ... */}</form>
+}
+```
+
+A feature is meant to be deletable without touching `app/`. A feature that reaches up into
+`app/` couples the routing layer to a specific feature's internals — removing or moving the
+feature now requires editing `app/` too.
+
+### Correct — respect the app -> features -> shared direction
+
+```tsx
+// src/app/(auth)/login/page.tsx — APP layer, importing DOWNWARD — fine
+import { LoginForm } from '@/features/auth/login'
+import { Card } from '@/components/ui/card'
+
+export default function LoginPage() {
+  return <Card><LoginForm /></Card>
+}
+```
+
+```tsx
+// src/features/payment/checkout/CheckoutForm.tsx — FEATURES importing shared — fine
+import { Button } from '@/components/ui/button'
+import { formatCurrency } from '@/lib/format'
+
+export function CheckoutForm() {
+  return <Button>{formatCurrency(4200)}</Button>
+}
+```
+
+### Allowed vs. forbidden import direction
+
+| Importer layer | Target layer | Allowed? |
+|---|---|---|
+| app | features | Yes — downward |
+| app | shared | Yes — downward |
+| features | shared | Yes — downward |
+| shared | shared | Yes — same layer |
+| features | features (own or sibling barrel) | Governed by `no-cross-feature-deep-import`, not this rule |
+| shared | features | No — upward |
+| shared | app | No — upward |
+| features | app | No — upward |
+
+### What this rule does NOT flag
+
+- **Same-layer feature-to-feature imports** — `src/features/billing/*` importing
+  `src/features/payment/*` is a same-rank (features -> features) import, out of scope for
+  this rule. See `ax/no-cross-feature-deep-import` for the sibling-feature isolation rule.
+- **Bare/external module specifiers** (`react`, `next/navigation`, `@ax/ui`) — anything that
+  does not resolve into the configured `src/` layout is not classified into a layer and is
+  not this rule's concern.
+- **Files outside the configured `src/` tree entirely.**
+
+### Configuring a different layout
+
+Projects with a different `srcDir`, path alias, or top-level directory names declare them
+via flat-config `settings.ax` (`eslint.config.mjs`); the layer **ranks** and the
+app -> features -> shared **direction** are fixed, but directory names are not:
+
+```js
+// eslint.config.mjs
+export default [
+  {
+    settings: {
+      ax: {
+        srcDir: 'src',
+        alias: { '@/': 'src/' },
+        layers: {
+          app: ['app'],
+          features: ['features', 'modules'],
+          shared: ['components', 'lib', 'ui'],
+        },
+      },
+    },
+  },
+]
+```
+
+Reference: [Wikipedia — Acyclic dependencies principle](https://en.wikipedia.org/wiki/Acyclic_dependencies_principle)
+
+Reference: [Feature-Sliced Design — Layers](https://feature-sliced.design/docs/reference/layers)
+
+Reference: [practices-react/rules/no-l4-cross-import.md](no-l4-cross-import.md) — the L4-page analog of the same acyclic-dependency principle, applied to `templates/L4/` domains rather than `src/features/`.
 
 
 <!-- @source rules/notification-frontend-inbox-settings-bell.md -->
@@ -10323,6 +10741,12 @@ sibling_rules: []
 ## Never define a component inside another component
 
 **Impact: HIGH — This is a correctness bug, not just perf. New component type each render → remount → lost state.**
+
+**ESLint rule id: `ax/no-inline-component-definition`.** This catalog document's filename
+(`rerender-no-inline-components`) does not match the ESLint rule id it documents — if you
+arrived here from a lint failure naming `ax/no-inline-component-definition`, this is the
+right page; if you are searching the catalog by ESLint rule id, `no-inline-component-definition`
+resolves to this file.
 
 ### Incorrect — Avatar/Stats remount on every UserProfile render
 

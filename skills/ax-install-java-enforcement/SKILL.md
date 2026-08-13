@@ -89,6 +89,12 @@ per-invocation without editing the build file:
 
 ```kotlin
 tasks.register<Test>("testPractices") {
+    // A `Test` task created via `tasks.register<Test>(...)` starts with EMPTY
+    // testClassesDirs/classpath — Gradle's `java` plugin only populates those
+    // for the built-in `test` task. Without the two lines below this task
+    // scans nothing, reports `BUILD SUCCESSFUL`, and never gates anything.
+    testClassesDirs = sourceSets["test"].output.classesDirs
+    classpath = sourceSets["test"].runtimeClasspath
     useJUnitPlatform { includeTags("PRACTICES") }
     systemProperty("ax.rootPackage", project.findProperty("axRootPackage") ?: "com.example.app")
 }
@@ -109,21 +115,33 @@ ax-template's own reference-workload root package and exist to test ax-template'
 own reference workload, not to be ported byte-for-byte into a different project's
 package tree.
 
-Below is one worked example (layer-boundary — check 1 of the 3 above). The other
-two checks (no-cyclic-package via `SlicesRuleDefinition.slices().beFreeOfCycles()`,
-DTO-as-record via `classes().that().haveSimpleNameEndingWith("Request").or()...
-.should().beRecords()`) follow the same shape: swap the `ArchRule` body, keep the
-`ROOT_PACKAGE` + `ClassFileImporter` scaffolding identical.
+All three checks below are spelled out **in full** — not two described in
+prose and one worked example. `.allowEmptyShould(true)` is not part of the
+`ROOT_PACKAGE` + `ClassFileImporter` scaffolding kept identical across checks;
+it is part of the `ArchRule` body being swapped, and it is required on
+**every** rule, not just the first:
+
+**A freshly-scaffolded downstream project has an empty match set by
+construction** — zero sub-packages under `rootPackage` (no-cyclic-package),
+zero `*Request`/`*Response` classes (DTO-as-record), and often zero
+violations of any kind on day one. ArchUnit fails a rule that matched nothing
+unless `.allowEmptyShould(true)` is set, so omitting it on any of the three
+checks leaves the baseline **RED before a single real violation exists** —
+indistinguishable from step 5's probe firing, and the natural "fix" (adding
+`allowEmptyShould` reflexively wherever a test is failing) is the same reflex
+that would mask a genuine violation if applied carelessly elsewhere.
 
 ```java
 package com.example.app.archunit;
 
+import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.classes;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
 
 import com.tngtech.archunit.core.domain.JavaClasses;
 import com.tngtech.archunit.core.importer.ClassFileImporter;
 import com.tngtech.archunit.core.importer.ImportOption;
 import com.tngtech.archunit.lang.ArchRule;
+import com.tngtech.archunit.library.dependencies.SlicesRuleDefinition;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
@@ -145,27 +163,63 @@ class LayerBoundaryArchTest {
                 .allowEmptyShould(true);
         rule.check(CLASSES);
     }
+
+    @Test
+    void featureSlicesAreFreeOfCycles() {
+        ArchRule rule = SlicesRuleDefinition.slices()
+                .matching(ROOT_PACKAGE + ".(*)..")
+                .should().beFreeOfCycles()
+                .allowEmptyShould(true);
+        rule.check(CLASSES);
+    }
+
+    @Test
+    void requestAndResponseClassesAreRecords() {
+        ArchRule rule = classes()
+                .that().haveSimpleNameEndingWith("Request")
+                .or().haveSimpleNameEndingWith("Response")
+                .should().beRecords()
+                .allowEmptyShould(true);
+        rule.check(CLASSES);
+    }
 }
 ```
 
 ### 5. Non-vacuous verification (mandatory — do not skip)
 
 A green `testPractices` run with zero violating classes proves nothing if the
-check never actually runs against real code. Prove it fires:
+check never actually runs against real code — either because no rule matched
+anything real, or because the task itself executed zero tests (a `Test` task
+registered without `testClassesDirs`/`classpath` reports `BUILD SUCCESSFUL`
+while scanning nothing — see §3). Prove it fires, **in this order**:
 
-1. Temporarily add a probe class in the target project that violates the rule —
+1. **First, confirm the task actually executed tests at all.** After any
+   `testPractices` run:
+   ```bash
+   ls <java.root>/build/test-results/testPractices/*.xml
+   ```
+   Open the XML (or read the console summary) and check the test count. An
+   absent directory, or a report showing `tests="0"`, means the task itself is
+   inert — go back to §3 and confirm `testClassesDirs`/`classpath` are set.
+   Do not treat a `0 tests` `BUILD SUCCESSFUL` as a passing gate, and do not
+   move on to step 2 until this shows a nonzero, expected test count.
+2. Temporarily add a probe class in the target project that violates the rule —
    e.g. a `ProbeService` whose method signature references a `ProbeController`
    type, so `dependOnClassesThat().haveSimpleNameEndingWith("Controller")` matches.
-2. Run `./gradlew testPractices -PaxRootPackage=<the real root package>` and
-   confirm the layer-boundary test **fails (RED)** with the probe class named in
-   the failure output.
-3. **Delete the probe class.**
-4. Re-run `testPractices` and confirm it passes (GREEN) again.
+3. Run `./gradlew testPractices -PaxRootPackage=<the real root package>` and
+   confirm the layer-boundary test **fails (RED)**, and that the failure
+   output **names the probe class** (e.g. `ProbeService`/`ProbeController` in
+   the violation message or stack trace) — a nonzero exit code alone is not
+   proof; it could be a compile error or an unrelated failure.
+4. **Delete the probe class.**
+5. Re-run `testPractices` and confirm it passes (GREEN) again, with the same
+   nonzero test count as step 1 — not `0 tests`.
 
-If the probe does not turn the test RED, the most likely causes are: `rootPackage`
-mismatch between the `-PaxRootPackage` value and the probe's actual package, or
-the probe class living outside the package tree `importPackages(ROOT_PACKAGE)`
-actually scans.
+If the probe does not turn the test RED, check in this order: (a) did step 1
+already show `tests="0"` — if so the task itself is inert and the fix is in
+§3, not in the probe; (b) `rootPackage` mismatch between the
+`-PaxRootPackage` value and the probe's actual package; (c) the probe class
+living outside the package tree `importPackages(ROOT_PACKAGE)` actually scans.
 
 ## What this skill does NOT do
 
@@ -179,6 +233,9 @@ actually scans.
 
 - [ ] The scope statement (3 checks only, not "the Java catalog") was said to the user before installing anything
 - [ ] `ax.config.json` existed (or `ax-init-config` was invoked and the run stopped there)
+- [ ] The `testPractices` task sets `testClassesDirs`/`classpath` from `sourceSets["test"]` — not just `useJUnitPlatform` — so it scans compiled test classes instead of running an inert empty task
 - [ ] `testPractices` reads `ax.rootPackage` via `systemProperty`/`-P`, never a literal package string baked into the build file
 - [ ] The written ArchUnit test class(es) are new, project-specific files — no literal ax-template reference-workload package name appears anywhere in them
-- [ ] The probe→RED→delete→GREEN check ran and the failure output named the probe class
+- [ ] All three rule bodies (layer-boundary, no-cyclic-package, DTO-as-record) include `.allowEmptyShould(true)` — a fresh project's baseline is empty-matched by construction
+- [ ] `build/test-results/testPractices/*.xml` was checked and showed a nonzero test count before trusting any GREEN result
+- [ ] The probe→RED→delete→GREEN check ran, the RED failure output named the probe class (not just a nonzero exit code), and the GREEN re-run showed the same nonzero test count as before

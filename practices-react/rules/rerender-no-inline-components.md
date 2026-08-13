@@ -33,6 +33,12 @@ sibling_rules: []
 
 **Impact: HIGH — This is a correctness bug, not just perf. New component type each render → remount → lost state.**
 
+**ESLint rule id: `ax/no-inline-component-definition`.** This catalog document's filename
+(`rerender-no-inline-components`) does not match the ESLint rule id it documents — if you
+arrived here from a lint failure naming `ax/no-inline-component-definition`, this is the
+right page; if you are searching the catalog by ESLint rule id, `no-inline-component-definition`
+resolves to this file.
+
 ### Incorrect — Avatar/Stats remount on every UserProfile render
 
 ```tsx

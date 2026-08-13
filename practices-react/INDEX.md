@@ -1,7 +1,7 @@
 ---
 sentinel:
-  source_concat_sha256: "fed166e7c03825ac46ddc0764e87f64b0a8b1f4c9ce0ea5f0526a3ef437e2aab"
-  rule_count: 102
+  source_concat_sha256: "60a025dc4278b66849ba1216d31583e5dbdd91af7fcb31dfc9e98db6d4e78242"
+  rule_count: 105
   generated_by: "practices/generate_index.sh"
 ---
 
@@ -20,7 +20,7 @@ sentinel:
 - **api-routes** (1) — async-api-routes
 - **app-router** (1) — next-async-params-parallel
 - **app-startup** (1) — advanced-init-once
-- **architecture** (2) — no-l4-cross-import, prefer-recipe-over-l4-page-cross-import
+- **architecture** (5) — no-cross-feature-deep-import, no-feature-internal-import, no-l4-cross-import, no-upward-layer-import, prefer-recipe-over-l4-page-cross-import
 - **arrays** (5) — js-combine-iterations, js-flatmap-filter, js-length-check-first, js-min-max-loop, js-tosorted-immutable
 - **assets** (1) — rendering-svg-precision
 - **async** (7) — async-defer-await, async-dependencies, async-parallel, async-suspense-boundaries, next-async-params-parallel, rendering-script-defer-async, server-after-nonblocking
@@ -92,7 +92,7 @@ sentinel:
 - **effects** (1) — advanced-use-latest
 - **error-boundary** (1) — audit-log-frontend-viewer-rbac-virtualized
 - **error-handling** (3) — file-storage-frontend-render-a11y-error, rate-limit-must-surface-to-user, traceid-propagated-client
-- **eslint** (1) — no-caller-identity-from-props
+- **eslint** (4) — no-caller-identity-from-props, no-cross-feature-deep-import, no-feature-internal-import, no-upward-layer-import
 - **event-handlers** (1) — advanced-event-handler-refs
 - **event-listeners** (2) — client-event-listeners, client-passive-event-listeners
 - **events** (1) — rerender-move-effect-to-event
@@ -100,6 +100,8 @@ sentinel:
 - **falsy-values** (1) — rendering-conditional-render
 - **feature-flags** (2) — feature-flags-frontend-admin-toggle, prefer-feature-gate-over-env-check
 - **feature-gates** (1) — bundle-conditional
+- **feature-isolation** (1) — no-cross-feature-deep-import
+- **feature-layout** (3) — no-cross-feature-deep-import, no-feature-internal-import, no-upward-layer-import
 - **file-storage** (1) — file-storage-frontend-render-a11y-error
 - **filter** (1) — js-flatmap-filter
 - **financial** (1) — payment-frontend-checkout-idempotent-states
@@ -124,7 +126,7 @@ sentinel:
 - **ime** (1) — combobox-respects-hangul-ime-composition
 - **immutability** (1) — js-tosorted-immutable
 - **impersonation** (2) — impersonation-banner-required-when-acting-as-other-user, no-impersonation-bypass-via-helper-rename
-- **imports** (2) — bundle-barrel-imports, no-l4-cross-import
+- **imports** (5) — bundle-barrel-imports, no-cross-feature-deep-import, no-feature-internal-import, no-l4-cross-import, no-upward-layer-import
 - **indexing** (1) — js-index-maps
 - **initialization** (2) — advanced-init-once, rerender-lazy-state-init
 - **integer-minor-units** (1) — currency-amount-no-raw-jsx-render
@@ -140,6 +142,7 @@ sentinel:
 - **l4** (1) — no-billing-payment-ui-boundary
 - **l4-layer** (2) — no-l4-cross-import, prefer-recipe-over-l4-page-cross-import
 - **l4-template** (3) — no-hardcoded-user-facing-string-in-l4, prefer-feature-gate-over-env-check, rich-content-must-use-dynamic-import
+- **layering** (3) — no-cross-feature-deep-import, no-feature-internal-import, no-upward-layer-import
 - **layout-thrashing** (1) — js-batch-dom-css
 - **lazy-loading** (1) — bundle-conditional
 - **loading** (1) — rendering-usetransition-loading
@@ -184,6 +187,7 @@ sentinel:
 - **promise-graph** (1) — async-dependencies
 - **promises** (1) — async-parallel
 - **props** (2) — server-dedup-props, server-serialization
+- **public-api** (1) — no-feature-internal-import
 - **rate-limit** (1) — rate-limit-must-surface-to-user
 - **rbac** (1) — audit-log-frontend-viewer-rbac-virtualized
 - **react** (6) — advanced-event-handler-refs, async-parallel, bundle-barrel-imports, js-tosorted-immutable, rerender-functional-setstate, rerender-lazy-state-init
@@ -324,11 +328,14 @@ sentinel:
 | no-app-local-ui-primitives | HIGH | lint | Per-persona apps must reuse the shared catalog (@ax/ui / @ax/blocks) — never define app-local UI primitives |
 | no-billing-payment-ui-boundary | HIGH | review | billing UI components must not import from payment UI components and vice versa; the L4/billing ↔ L4/payment boundary is enforceable via the project ESLint config (import/no-restricted-paths) |
 | no-caller-identity-from-props | HIGH | lint | Caller identity for authz-relevant data calls must come from the caller-id hook — never from props, params, searchParams, or a destructured function argument |
+| no-cross-feature-deep-import | HIGH | lint | A feature must not deep-import another feature's internals — cross-feature reuse goes through the target's barrel or the shared kernel |
+| no-feature-internal-import | HIGH | lint | Outside a feature, import it only through its published barrel — never deep into a slice's internals |
 | no-hardcoded-user-facing-string-in-l4 | HIGH | regex_scan | User-facing strings in L4 templates must use t() — no hardcoded Korean or natural-language literals |
 | no-impersonation-bypass-via-helper-rename | HIGH | script | Impersonation bypass via helper rename is not permitted |
 | no-l4-cross-import | HIGH | review | L4 domain pages must not import from other L4 domains |
 | no-rrn-display-without-legal-basis-gate | CRITICAL | review | Frontend components must not collect or display raw RRN (주민등록번호) fields without an explicit legal-basis disclosure gate |
 | no-rrn-in-form-fields | CRITICAL | review | Frontend forms must not include RRN (주민등록번호) input fields by default |
+| no-upward-layer-import | HIGH | lint | Layers are single-direction (app -> features -> shared) — a module must never import from a higher layer |
 | notification-frontend-inbox-settings-bell | MEDIUM | review | Notification UI must realize the notification contract — virtualized inbox with status filter, mark-read/dismiss actions, preference toggles (partial update), and an unread-count bell |
 | payment-frontend-checkout-idempotent-states | HIGH | review | Payment UI must realize the payment contract — checkout with method picker + idempotency-key handler + slow-provider warning, idempotent success/failure pages, methods list/detail, refund |
 | practices-frontend-catalog-browser | LOW | review | The practices catalog browser UI must list both catalogs with counts, filter by category, render rule detail with metadata, and 404 unknown rules |

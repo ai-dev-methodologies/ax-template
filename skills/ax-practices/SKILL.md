@@ -99,14 +99,18 @@ actually applied (a human/AI judgment call) versus what would need an installed 
    user rather than absorbed quietly.
 
 4. **Route by `verification_kind`** (the normalized value `practices/generate_index.sh`
-   writes into the INDEX's `verification` column). This routing is **exhaustive and
-   deny-by-default** — `review` is the only allowlisted kind:
+   writes into the INDEX's `verification` column). This routing is **deny-by-default**
+   — `review` is the **only** allowlisted kind:
    - `review` → apply directly: read the rule, judge the code against it, report
      findings inline.
-   - **Everything else** — `gradle:*`, `eslint:*`, `guard:*`, and any kind this
-     skill has never seen before — → **"not installed — see the install guide"**
-     only. Never claim this skill enforced or verified a machine-checked rule; it
-     did not run the check.
+   - **Any other value** → **"not installed — see the install guide"** only. Never
+     claim this skill enforced or verified a machine-checked rule; it did not run
+     the check. The two catalogs use different token shapes for these values
+     (`practices/INDEX.md`: colon-qualified like `gradle:*`/`eslint:*`/`guard:*`;
+     `practices-react/INDEX.md`: bare tokens like `lint`/`script`/`regex_scan`/
+     `eslint`/`guard`) — treat both shapes, and any value not yet seen in either
+     catalog, the same way. Any example list of kinds is illustrative only, never
+     exhaustive; an unrecognized token is never pass-through.
 
    A new `verification_kind` value that doesn't match `review` must still fall
    into the "not installed" branch, never into "apply directly" — the failure mode
@@ -121,6 +125,15 @@ actually applied (a human/AI judgment call) versus what would need an installed 
    apply only under `ax.config.json`'s `java.root`; React rules apply only under
    `react.root`. A file outside both roots gets no catalog-derived findings from
    this skill, regardless of how relevant a rule might look.
+
+   Some rule bodies additionally carry a narrower-looking scope hint — a
+   `protects_template_id` pointing at an ax-template artifact (e.g.
+   `templates/L2/blocks/status-badge.tsx`), or an L4-structure premise (tags like
+   `no-l4-cross-import`, `prefer-recipe-over-l4-page-cross-import`). Read these as
+   **provenance** (what ax-template artifact the rule was extracted from), not as
+   a scope restriction narrower than `react.root`/`java.root`. A target project
+   need not have that literal path or an L4 layout at all — apply the rule to
+   whatever structurally analogous code exists under the declared root.
 
 ## What this skill does NOT do
 

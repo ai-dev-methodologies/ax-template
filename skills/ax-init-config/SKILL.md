@@ -45,10 +45,21 @@ install guides exist to avoid).
 
 ## Output shape
 
-The proposed config must validate against
-`practices-react/eslint-plugin-ax/schemas/ax.config.schema.json` — a plain object with
-`version`, `stacks`, `react`, `java`, `design`, `rules`. See `ax.config.sample.json`
-in the repo root for one filled-in example of the shape.
+The proposed config must validate against `ax.config.schema.json` — a plain object
+with `version`, `stacks`, `react`, `java`, `design`, `rules`. The schema and a
+filled-in example (`ax.config.sample.json`) each live at two possible locations
+depending on how this skill was installed — check both, in this order, and use
+whichever exists:
+- Plugin install: `${CLAUDE_PLUGIN_ROOT}/practices-react/eslint-plugin-ax/schemas/ax.config.schema.json`
+  / `${CLAUDE_PLUGIN_ROOT}/ax.config.sample.json`
+- Clone / fork checkout: `practices-react/eslint-plugin-ax/schemas/ax.config.schema.json`
+  / `ax.config.sample.json` (repo-relative to wherever the catalog lives)
+
+`ls` the candidate path before reading it — do not assume either location exists.
+If **neither** location resolves, report that explicitly ("could not locate
+`ax.config.schema.json` — checked `${CLAUDE_PLUGIN_ROOT}/...` and `<repo>/...`")
+rather than skipping validation silently, and fall back to validating only against
+the field list above (`version`/`stacks`/`react`/`java`/`design`/`rules`).
 
 ## Procedure (fixed order)
 
