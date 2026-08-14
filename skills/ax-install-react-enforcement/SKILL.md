@@ -57,7 +57,7 @@ not enforcing it.
 **Principle.** Enforcement here is exactly what ESLint reports on the files it
 actually lints. If the plugin loads but the `files` glob matches nothing, or
 `settings.ax` was never injected, ESLint will report `0 problems` — which looks
-identical to "the project is clean." Step 4 below exists specifically to rule that
+identical to "the project is clean." Step 5 below exists specifically to rule that
 out before this skill reports success.
 
 ## Procedure (fixed order)
@@ -80,22 +80,56 @@ this order, and use whichever exists (`ls` it before installing, do not assume):
   `<ax-template-clone>/practices-react/eslint-plugin-ax` (a sibling or ancestor
   checkout of ax-template — resolve its actual path, do not assume `../ax-template`)
 
+<!-- ax:artifact id=react-plugin-dep path=- kind=command base=repo substs=env.axPluginPath -->
 ```bash
-ls "<resolved-path>/package.json"   # confirm before installing — do not assume either path resolves
-npm i -D "file:<resolved-path>"
+# The plugin path is supplied by the install environment, not by ax.config.json: which of the two
+# locations above exists depends on how this skill is being run, not on the consuming project.
+# ax:subst env.axPluginPath
+AX_PLUGIN_PATH="@@env.axPluginPath@@"
+ls "$AX_PLUGIN_PATH/package.json"   # confirm before installing -- do not assume the path resolves
+npm i -D "file:$AX_PLUGIN_PATH"
 ```
 
 `npm install file:<dir>` creates a symlink, so this works without publishing to
 npm. It also means the plugin's own `package.json` `files` allowlist is bypassed
 for local installs — this is expected in this channel, not a bug to fix here.
 
-### 3. Wire `eslint.config.mjs`
+### 3. Prescribe the `lint` (and `test`) npm scripts
+
+The pre-commit hook from `ax-install-hooks` runs the project's **own** `npm run lint`. Until this
+step, no ax skill ever created that script — and `npm run lint --if-present` against a project with
+no `lint` script exits **0 with zero bytes of output**, so the react gate looked green while it had
+never executed a single rule (F-031). The hook therefore no longer uses `--if-present`: it names a
+missing script and fails. Merge these into `<react.root>/package.json`:
+
+<!-- ax:artifact id=react-lint-script path=package.json kind=file-fragment base=react.root -->
+```json5
+{
+  "scripts": {
+    "lint": "eslint . --max-warnings 0",
+    "test": "echo 'no frontend test suite wired yet -- see ax-install-react-enforcement' >&2"
+  }
+}
+```
+
+`--max-warnings 0` is deliberate: the ax recommended set ships some rules at `warn`, and a warning
+that never fails a build is not a gate. The `test` entry is a **placeholder to be replaced** with
+the project's real runner (`vitest run`, `jest`, …). If the project genuinely has no frontend test
+suite, leave the placeholder: it exits 0 and prints one visible line, so "this project chose not to
+run frontend tests" is recorded in `package.json` where a reviewer can see it — which is exactly
+what `--if-present`'s invisible zero-output skip could not express.
+
+### 4. Wire `eslint.config.mjs`
 
 **First, check whether the project has TypeScript**: a `tsconfig.json` at or above
-`axConfig.react?.root`, or `.ts`/`.tsx` files under `axConfig.react?.srcDir`. If so, install
-`typescript-eslint` and wire its parser **on the same config block** as the ax plugin — do not
-treat this as optional or defer it:
+`axConfig.react?.root`, or `.ts`/`.tsx` files under `axConfig.react?.srcDir`. Record the answer in
+`ax.config.json` as `react.typescript` (boolean) — the two TypeScript-only lines in the config
+below are gated on exactly that key, so the decision is made once, in config, rather than being
+re-derived by prose at every install (F-033). When it is true, install `typescript-eslint` and wire
+its parser **on the same config block** as the ax plugin — this is not optional and must not be
+deferred:
 
+<!-- ax:artifact id=react-ts-eslint-dep path=- kind=command base=react.root when=config.react.typescript -->
 ```bash
 npm i -D typescript-eslint
 ```
@@ -106,15 +140,46 @@ rule — not just ax's. A run that reports `0 problems` because every `.ts` file
 looks identical, at a glance, to a run that reports `0 problems` because the project is clean.
 Skipping the parser wiring means every ax rule silently never executes on `.ts`/`.tsx` files.
 
-If the project has no TypeScript sources, skip the `typescript-eslint` install and omit the
-`languageOptions` line below — the default parser is correct for plain JS/JSX.
+When `react.typescript` is false or absent, the `typescript-eslint` install above and both
+`ax:if config.react.typescript` regions below drop out together — the default `espree` parser is
+correct for plain JS/JSX.
 
+<!-- ax:artifact id=react-eslint-config path=eslint.config.mjs kind=file base=react.root -->
 ```js
 import fs from 'node:fs'
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 import axPlugin from '@ax/eslint-plugin-ax'
-import tseslint from 'typescript-eslint'   // omit this import if the project has no TS sources
+// ax:if config.react.typescript   (the typescript-eslint parser is wired only for a TS project)
+import tseslint from 'typescript-eslint'
+// ax:endif
 
-const axConfig = JSON.parse(fs.readFileSync('./ax.config.json', 'utf8'))
+// F-030: this file is NOT always loaded from the repo root. The pre-commit hook runs
+// `npm run lint` with cwd = react.root, so a hardcoded './ax.config.json' resolves to
+// <react.root>/ax.config.json and dies with ENOENT. A fixed '../ax.config.json' is equally wrong:
+// it breaks whenever react.root is '.', where ax.config.json is a sibling and not a parent.
+// Search UPWARD from this file's own directory instead, and throw when nothing is found -- a
+// silent fallback here would leave the whole gate unconfigured while still reporting 0 problems.
+function findAxConfig(startDir) {
+  let dir = startDir
+  for (;;) {
+    const candidate = path.join(dir, 'ax.config.json')
+    if (fs.existsSync(candidate)) return candidate
+    const parent = path.dirname(dir)
+    if (parent === dir) {
+      throw new Error(
+        `ax.config.json not found in ${startDir} or any ancestor directory -- eslint.config.mjs ` +
+          'cannot build its files glob without react.srcDir. Run ax-init-config ' +
+          '(see skills/ax-init-config/SKILL.md).'
+      )
+    }
+    dir = parent
+  }
+}
+
+const axConfig = JSON.parse(
+  fs.readFileSync(findAxConfig(path.dirname(fileURLToPath(import.meta.url))), 'utf8')
+)
 const srcDir = axConfig.react?.srcDir
 if (!srcDir) {
   throw new Error(
@@ -128,7 +193,9 @@ if (!srcDir) {
 export default [
   {
     files: [`${srcDir}/**/*.{ts,tsx,js,jsx}`],
-    languageOptions: { parser: tseslint.parser },   // omit this line too if no TS sources
+    // ax:if config.react.typescript   (espree, the default parser, is correct for plain JS/JSX)
+    languageOptions: { parser: tseslint.parser },
+    // ax:endif
     plugins: { ax: axPlugin },
     settings: { ax: axConfig.react },
     rules: axPlugin.configs.recommended.rules,
@@ -159,7 +226,7 @@ starts empty.
 > package), read `ax.config.json` and resolve `eslint.config.mjs` paths relative
 > to `react.root`, and say so explicitly in what you report back.
 
-### 4. Non-vacuous verification (mandatory — do not skip)
+### 5. Non-vacuous verification (mandatory — do not skip)
 
 A plugin that "installed successfully" and an `eslint.config.mjs` that "looks
 right" are not evidence it is actually catching anything. Prove it:
@@ -169,7 +236,7 @@ right" are not evidence it is actually catching anything. Prove it:
    with an import that reaches into a higher layer. The import target must use
    the project's actual `axConfig.react?.layers?.app[0]` directory name (or
    `layers?.features[0]`) — a hardcoded `app` will silently fail to trigger the
-   rule on a custom layout. **If the project has TypeScript sources (Step 3
+   rule on a custom layout. **If the project has TypeScript sources (Step 4
    above), the probe must also contain a TypeScript-only construct** — a bare
    ESM import/export is also valid plain JavaScript, so a probe without one
    would still parse and "pass" even if the TypeScript parser wiring is
@@ -199,7 +266,7 @@ right" are not evidence it is actually catching anything. Prove it:
    Only then is the gate proven live. **If the output is a parsing error
    instead** (e.g. mentioning the `: string` annotation or "Unexpected
    token"), that is a *different* failure signature — the TypeScript parser
-   wiring from Step 3 (the `typescript-eslint` install / `languageOptions:
+   wiring from Step 4 (the `typescript-eslint` install / `languageOptions:
    { parser: tseslint.parser }` line) is missing or broken, not the ax
    plugin. Fix that wiring first, then re-run the probe from step 1 — the
    4-step diagnostic below assumes the file parsed and is the wrong tool for
@@ -208,7 +275,7 @@ right" are not evidence it is actually catching anything. Prove it:
 4. **Delete the probe file** — it must not remain in the project.
 
 **If `npx eslint` throws immediately** mentioning `react.srcDir` before it even
-attempts to lint the probe, that is Step 3's fail-loud guard firing — fix
+attempts to lint the probe, that is Step 4's fail-loud guard firing — fix
 `ax.config.json`'s `react.srcDir`, this is not a glob/settings defect and the
 4-step diagnostic below is the wrong tool for it.
 
@@ -243,8 +310,10 @@ parsing error or the srcDir throw above), work through this diagnostic order
 
 - [ ] `ax.config.json` existed (or `ax-init-config` was invoked and the run stopped there)
 - [ ] The plugin path was `ls`-verified before `npm i -D file:...`
+- [ ] `<react.root>/package.json` now has a real `lint` script (`eslint . --max-warnings 0`) and a `test` script — without them the pre-commit hook has nothing to run and, before F-031, `--if-present` made that absence indistinguishable from a pass
+- [ ] `eslint.config.mjs` locates `ax.config.json` by searching **upward from its own directory** (`import.meta.url`), not via `'./ax.config.json'` or a fixed `'../ax.config.json'` — the hook lints with cwd = `react.root` (F-030), and a not-found config throws rather than defaulting
 - [ ] If the project has TypeScript sources, `typescript-eslint` was installed and `languageOptions: { parser: tseslint.parser }` is on the same config block as the ax plugin
 - [ ] `eslint.config.mjs`'s `files` glob is parameterized from `axConfig.react?.srcDir` — the literal string `src/**` does not appear anywhere in it, and an unresolved `react.srcDir` throws instead of silently defaulting to `'src'`
 - [ ] `settings: { ax: axConfig.react }` is present on the block that matches the project's real source files
 - [ ] The probe→detect→delete check ran, `ax/no-upward-layer-import` was observed in `npx eslint` output (not a parsing error), and the probe file was deleted afterward
-- [ ] If detection failed, the failure signature was checked first (parsing error → Step 3 parser wiring; missing rule id → the 4-step diagnostic order below, not guessed)
+- [ ] If detection failed, the failure signature was checked first (parsing error → Step 4 parser wiring; missing rule id → the 4-step diagnostic order below, not guessed)

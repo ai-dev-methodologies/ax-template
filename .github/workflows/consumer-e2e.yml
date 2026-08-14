@@ -1,0 +1,293 @@
+name: consumer-e2e
+
+# BACKLOG downstream-fixture E2E — the scheduled counterpart to
+# `practices/scripts/verify-downstream.sh` (Layer 1, manual/pre-release).
+#
+# WHY THIS EXISTS. `verify-downstream.sh` materializes the install skills'
+# `ax:artifact` blocks (skills/ax-install-{hooks,java-enforcement,react-enforcement}/SKILL.md)
+# into a throwaway consumer fixture and asserts the resulting gates actually FIRE (RED on a
+# planted violation, GREEN once removed) — not merely that the install steps complete without
+# error. That question does not answer itself once and stay answered: the fixture harness, the
+# ArchUnit/ESLint snippets it materializes, and the toolchains it depends on (JDK 21, Gradle's
+# distribution service, npm's registry) can all drift independently of any commit to this repo.
+# This workflow re-asks the question on a fixed cadence so drift is caught before a maintainer
+# notices it by hand.
+#
+# WHY ADVISORY. Same posture as practices-case-normalization.yml: this is a probe that measures,
+# not a gate that blocks. `continue-on-error: true` at the job level and every step means this
+# workflow can never fail a PR or a merge — it can only report.
+#
+# PREMISE-FIRST DISCIPLINE (mirrors practices-case-normalization.yml's shape exactly):
+#   1. `id: probe` measures every precondition — toolchain presence AND network reachability —
+#      before anything that depends on them runs. `set +e -u` inside the probe so the probe's
+#      OWN early exit never skips the `$GITHUB_OUTPUT` write (a probe that dies silently would
+#      render as "unknown" in the summary instead of as a measured failure).
+#   2. The harness step is gated `if: steps.probe.outcome == 'success'` — a runner that fails the
+#      premise probe does not attempt the harness at all.
+#   3. The `Summary` step runs `if: always()` and writes the measurement table, the harness
+#      result (if it ran), and what this run does NOT cover — every single time, pass or fail.
+#   4. If the premise was not established, the summary says exactly
+#      "PREMISE NOT ESTABLISHED — no measurement was taken", emits `::warning::`, and exits 0.
+#      A network hiccup against npm's registry or Gradle's distribution host is NOT treated as a
+#      "real finding" about the fixture harness — it is treated as an unmeasured run, because
+#      conflating the two would make a registry outage look like a catalog regression.
+#
+# R26 (private-boundary): this file is inside private_boundary_guard.sh's scan surface
+# (`.github` is enumerated same as any other public-tree directory). Every string in this file is
+# generic — no fork-receiver company name, brand, or internal URL. Only public hosts
+# (registry.npmjs.org, services.gradle.org, github.com) and generic package names.
+#
+# WHAT THIS RUN DOES NOT COVER — also printed in the job summary on every run:
+#   - R25 as a whole (`verify-completion.sh` is never invoked here).
+#   - The husky / lefthook branch of `ax-install-hooks` (this harness's toolchain assertions
+#     below only establish git + JDK 21 + node/npm; husky and lefthook are additional npm
+#     dependencies a consumer project may or may not have, and are exercised by
+#     `verify-downstream.sh` itself, not by this workflow's premise probe).
+#   - Any Gradle or Node major version other than the ones pinned below.
+#   - Windows runners (this job is `ubuntu-latest` only).
+#   - The `react.root: "."` single-package-root project shape (see ax.config.json schema) —
+#     whichever shape `verify-downstream.sh`'s fixture project uses is the only shape measured.
+#   - The install skills' prose steps (user confirmation prompts, scope statements read aloud to
+#     a user) — only the `ax:artifact` fenced blocks that those skills materialize are exercised.
+
+on:
+  schedule:
+    - cron: "0 9 * * 1"     # every Monday 09:00 UTC — one hour after practices-case-normalization
+  workflow_dispatch:
+
+jobs:
+  downstream-fixture-e2e:
+    runs-on: ubuntu-latest
+    continue-on-error: true   # advisory — never blocks a PR or a merge
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Set up JDK 21 (Temurin)
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+
+      # ── Premise first. Toolchain AND network are both measured before the harness runs.
+      - name: Toolchain + network premise probe (fail loudly — never skip)
+        id: probe
+        continue-on-error: true   # so the Summary step still runs and says WHY
+        run: |
+          # GitHub runs `run:` under `bash -e`. Turn -e OFF on purpose: this step does its own
+          # rc accounting, and an -e abort would skip the $GITHUB_OUTPUT write, so a runner that
+          # FAILED the probe would render as "unknown" instead of as a measured failure.
+          set +e -u
+          rc=0
+
+          # --- toolchain presence -----------------------------------------------------
+          java_ok=no
+          if command -v java >/dev/null 2>&1 && java -version 2>&1 | grep -q '"21'; then
+            java_ok=yes
+          fi
+          echo "java:   ok=${java_ok}  $(java -version 2>&1 | head -1)"
+          [ "$java_ok" = "yes" ] || rc=1
+
+          node_ok=no
+          if command -v node >/dev/null 2>&1; then
+            node_ok=yes
+          fi
+          echo "node:   ok=${node_ok}  $(node -v 2>/dev/null || echo '(absent)')"
+          [ "$node_ok" = "yes" ] || rc=1
+
+          npm_ok=no
+          if command -v npm >/dev/null 2>&1; then
+            npm_ok=yes
+          fi
+          echo "npm:    ok=${npm_ok}  $(npm -v 2>/dev/null || echo '(absent)')"
+          [ "$npm_ok" = "yes" ] || rc=1
+
+          git_ok=no
+          if command -v git >/dev/null 2>&1; then
+            git_ok=yes
+          fi
+          echo "git:    ok=${git_ok}  $(git --version 2>/dev/null || echo '(absent)')"
+          [ "$git_ok" = "yes" ] || rc=1
+
+          python_ok=no
+          if command -v python3 >/dev/null 2>&1; then
+            python_ok=yes
+          fi
+          echo "python3: ok=${python_ok}  $(python3 --version 2>/dev/null || echo '(absent)')"
+          [ "$python_ok" = "yes" ] || rc=1
+
+          # --- network reachability ----------------------------------------------------
+          # A registry/distribution-host outage is a PREMISE gap, not a finding about the
+          # fixture harness — classified and reported as such below, never conflated with a
+          # real catalog regression.
+          npm_registry_ok=no
+          if curl -fsSL --max-time 15 -o /dev/null -w '%{http_code}' \
+               "https://registry.npmjs.org/" 2>/dev/null | grep -q '^2'; then
+            npm_registry_ok=yes
+          fi
+          echo "npm registry (registry.npmjs.org): reachable=${npm_registry_ok}"
+          [ "$npm_registry_ok" = "yes" ] || rc=1
+
+          gradle_dist_ok=no
+          if curl -fsSL --max-time 15 -o /dev/null -w '%{http_code}' \
+               "https://services.gradle.org/distributions/" 2>/dev/null | grep -q '^2'; then
+            gradle_dist_ok=yes
+          fi
+          echo "gradle distribution host (services.gradle.org): reachable=${gradle_dist_ok}"
+          [ "$gradle_dist_ok" = "yes" ] || rc=1
+
+          # --- leave no trace: the harness below inspects the working tree -------------
+          dirty="$(git status --porcelain 2>/dev/null)"
+          tree_clean=yes
+          if [ -n "$dirty" ]; then
+            echo "probe: REFUSING — the probe left the tree dirty, which would corrupt the harness run:" >&2
+            echo "$dirty" >&2
+            tree_clean=no
+            rc=1
+          else
+            echo "probe: tree clean after setup (git status --porcelain empty)"
+          fi
+
+          {
+            echo "java_ok=${java_ok}"
+            echo "node_ok=${node_ok}"
+            echo "npm_ok=${npm_ok}"
+            echo "git_ok=${git_ok}"
+            echo "python_ok=${python_ok}"
+            echo "npm_registry_ok=${npm_registry_ok}"
+            echo "gradle_dist_ok=${gradle_dist_ok}"
+            echo "tree_clean=${tree_clean}"
+          } >> "$GITHUB_OUTPUT"
+
+          if [ "$rc" -ne 0 ]; then
+            echo "::error::premise probe FAILED — toolchain and/or network reachability for the downstream fixture harness is not established on this runner. The harness is NOT run, because a pass measured without these preconditions would be meaningless."
+          fi
+          exit "$rc"
+
+      - name: verify-downstream.sh
+        id: harness
+        if: steps.probe.outcome == 'success'
+        continue-on-error: true
+        run: |
+          # -e off: PIPESTATUS must be read before bash aborts, so the exit code reported is
+          # verify-downstream.sh's own and not tee's.
+          set +e -u -o pipefail
+          SCRIPT="practices/scripts/verify-downstream.sh"
+          if [ ! -f "$SCRIPT" ]; then
+            echo "::error::${SCRIPT} not found on this ref. The downstream fixture harness is expected to exist — this is a REAL failure of this job, not a premise gap, and it is reported LOUDLY rather than skipped."
+            exit 1
+          fi
+          # The log MUST NOT be written into the working tree: verify-downstream.sh (like
+          # run-all-guards.sh) is expected to assert `git status --porcelain` is empty at various
+          # points, so a log file next to the checkout would fabricate its own failure.
+          bash "$SCRIPT" 2>&1 | tee "$RUNNER_TEMP/consumer-e2e.log"
+          rc="${PIPESTATUS[0]}"
+          echo "verify-downstream.sh exit=$rc"
+          exit "$rc"
+
+      - name: Upload harness log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: consumer-e2e-log
+          path: ${{ runner.temp }}/consumer-e2e.log
+          if-no-files-found: ignore
+
+      # ── Publish the answer where a human reading the run can see it without digging.
+      - name: Summary
+        if: always()
+        run: |
+          set +e -u
+          S="$GITHUB_STEP_SUMMARY"
+          {
+            echo "## consumer-e2e (advisory — never blocks)"
+            echo ""
+            echo "Answers one question: does \`practices/scripts/verify-downstream.sh\` still find"
+            echo "that the install skills' gates ACTUALLY BLOCK a planted violation in a throwaway"
+            echo "consumer fixture — not merely that install completes without error?"
+            echo ""
+            echo "### 1. Toolchain + network premise"
+            echo ""
+            echo "| property | measured |"
+            echo "|---|---|"
+            echo "| JDK 21 present | \`${{ steps.probe.outputs.java_ok || 'unknown' }}\` |"
+            echo "| node present | \`${{ steps.probe.outputs.node_ok || 'unknown' }}\` |"
+            echo "| npm present | \`${{ steps.probe.outputs.npm_ok || 'unknown' }}\` |"
+            echo "| git present | \`${{ steps.probe.outputs.git_ok || 'unknown' }}\` |"
+            echo "| python3 present | \`${{ steps.probe.outputs.python_ok || 'unknown' }}\` |"
+            echo "| npm registry (registry.npmjs.org) reachable | \`${{ steps.probe.outputs.npm_registry_ok || 'unknown' }}\` |"
+            echo "| gradle distribution host (services.gradle.org) reachable | \`${{ steps.probe.outputs.gradle_dist_ok || 'unknown' }}\` |"
+            echo "| tree clean after setup | \`${{ steps.probe.outputs.tree_clean || 'unknown' }}\` |"
+            echo "| probe step outcome | \`${{ steps.probe.outcome }}\` |"
+            echo ""
+          } >> "$S"
+
+          if [ "${{ steps.probe.outcome }}" != "success" ]; then
+            {
+              echo "> **PREMISE NOT ESTABLISHED — no measurement was taken.**"
+              echo ">"
+              echo "> Either a required toolchain component was absent on this runner, or npm's"
+              echo "> registry / Gradle's distribution host was not reachable, or the runner's setup"
+              echo "> steps left the tree dirty. This is classified as an **unmeasured run**, not a"
+              echo "> catalog regression — a registry/host outage would look identical to a real"
+              echo "> defect if the two were conflated, so this run reports *nothing* about the"
+              echo "> downstream fixture harness itself. Read the probe step log for the exact"
+              echo "> measurement before reading anything into subsequent runs."
+            } >> "$S"
+            echo "::warning::premise not established — downstream fixture harness skipped, this run measured nothing about it"
+            exit 0
+          fi
+
+          {
+            echo "### 2. Downstream fixture harness result"
+            echo ""
+            echo "- step outcome: \`${{ steps.harness.outcome }}\`"
+          } >> "$S"
+
+          LOG="$RUNNER_TEMP/consumer-e2e.log"
+          if [ -f "$LOG" ]; then
+            echo "- log captured (${{ steps.harness.outcome }}) — see the \`consumer-e2e-log\` artifact for the full transcript." >> "$S"
+            echo "" >> "$S"
+            fails="$(grep -nE 'FAIL|ERROR' "$LOG" | head -50 || true)"
+            if [ -n "$fails" ]; then
+              {
+                echo "#### Lines matching FAIL/ERROR (first 50)"
+                echo ""
+                echo '```'
+                echo "$fails"
+                echo '```'
+              } >> "$S"
+              echo "::warning::downstream fixture harness reported FAIL/ERROR lines — see the summary. Advisory only, does not block merges."
+            else
+              echo "_No FAIL/ERROR lines in the log._" >> "$S"
+            fi
+          else
+            echo "- \`$LOG\` is missing — the harness step did not produce a log (script may be absent on this ref — see the harness step's own output above)." >> "$S"
+          fi
+
+          {
+            echo ""
+            echo "### 3. What this run does NOT cover"
+            echo ""
+            echo "- **R25 as a whole** — \`verify-completion.sh\` is not invoked here."
+            echo "- **The husky / lefthook branch of \`ax-install-hooks\`** — only the toolchain"
+            echo "  (git + JDK 21 + node/npm) is asserted by the premise probe above; husky and"
+            echo "  lefthook wiring is exercised only to whatever extent"
+            echo "  \`verify-downstream.sh\` itself covers it."
+            echo "- **Any Gradle or Node major version other than the ones pinned in this workflow**"
+            echo "  (JDK 21 / node 24)."
+            echo "- **Windows runners** — this job is \`ubuntu-latest\` only."
+            echo "- **The \`react.root: \".\"\` single-package-root project shape** — only whichever"
+            echo "  fixture project shape \`verify-downstream.sh\` materializes is measured."
+            echo "- **The install skills' prose steps** (scope statements, user confirmation"
+            echo "  prompts) — only their \`ax:artifact\` fenced blocks are exercised."
+          } >> "$S"

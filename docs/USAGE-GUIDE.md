@@ -178,6 +178,124 @@ claude plugin uninstall ax-transform@ax-transform
 claude plugin marketplace remove ax-transform
 ```
 
+## 6b. 이미 설치된 프로젝트 직접 패치 (0.1.6 → 0.1.7 업데이트 없이)
+
+`/ax-install-java-enforcement`로 **0.1.6** 스냅숏을 이미 설치한 프로젝트는 §6의 갱신 경로(재설치)를
+밟지 않고도 아래 3개 BLOCKING 결함을 손으로 고칠 수 있다. 셋 다 GH 이슈로 보고됐고 이미
+`skills/ax-install-java-enforcement/SKILL.md`에서 봉합됐다 — **아래 패치의 최종 형태는 그 파일의
+현재 내용과 정확히 일치해야 한다.** 이 절과 그 SKILL.md가 어긋나면 SKILL.md가 정본이다.
+
+- [GH #89](https://github.com/ai-dev-methodologies/ax-template/issues/89) — `compileTestJava` 실패
+- [GH #90](https://github.com/ai-dev-methodologies/ax-template/issues/90) — `-P` 없는 모든 gradle 호출 실패
+- [GH #91](https://github.com/ai-dev-methodologies/ax-template/issues/91) — `-P`를 줘도 `test`/`build`/CI 실패
+
+세 결함 모두 프로젝트의 `<java.root>/build.gradle.kts`와
+`<java.root>/src/test/java/<rootPackage>/archunit/LayerBoundaryArchTest.java`(§3 4단계에서 생성된
+파일 — 프로젝트마다 `rootPackage` 경로만 다르다)를 손으로 편집해 고친다.
+
+### #89 — `compileTestJava` 실패
+
+**증상**: `./gradlew compileTestJava`가 `method that in class JavaClasses cannot be applied to
+given types` 로 실패.
+
+**원인**: `LayerBoundaryArchTest`가 이미 `private static JavaClasses classes()` 헬퍼를 갖고 있는데,
+`ArchRuleDefinition.classes`를 **static import**하면 같은 simple name 충돌에서 멤버 메서드가
+이긴다 — DTO 룰의 비한정 `classes().that()...beRecords()` 호출이 (ArchUnit의 팩토리가 아니라)
+그 헬퍼에 바인딩돼 시그니처가 안 맞는다.
+
+**패치** (`LayerBoundaryArchTest.java`):
+1. `import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.classes;` 줄을 **제거**한다
+   (`noClasses`의 static import는 유지 — 이름 충돌이 없어 그대로 안전하다).
+2. 비한정 `import com.tngtech.archunit.lang.syntax.ArchRuleDefinition;` (non-static)이 없다면
+   추가한다.
+3. `requestAndResponseClassesAreRecords()` 안의 호출을 한정 호출로 바꾼다:
+   ```java
+   // before
+   ArchRule rule = classes()
+           .that().haveSimpleNameEndingWith("Request")
+   // after
+   ArchRule rule = ArchRuleDefinition.classes()
+           .that().haveSimpleNameEndingWith("Request")
+   ```
+   (`.or().haveSimpleNameEndingWith("Response").should().beRecords().allowEmptyShould(true);`
+   이하는 변경 없음.)
+
+### #90 — `-P` 없는 **모든** gradle 호출 실패
+
+**증상**: `-PaxRootPackage`를 주지 않은 임의의 gradle 호출이 전부 실패한다 — `./gradlew tasks`
+조차 `Could not create task ':testPractices'`로 죽는다.
+
+**원인**: `?: error("axRootPackage unresolved...")`가 `testPractices` task **등록 블록 안,
+configuration 시점**에 있었다. 스톡 Spring Initializr 스캐폴드가 이미 eager한
+`tasks.withType<Test> { useJUnitPlatform() }`를 갖고 있어 이 task를 포함한 모든 `Test` task가
+configuration 단계에서 realize되고, 그 순간 `-P`가 없으면 즉시 예외가 던져져 build 전체가
+죽는다 — 게이트 하나가 무관한 다른 모든 task까지 인질로 잡는 셈이다.
+
+**패치** (`build.gradle.kts`): 그 `?: error(...)` 라인(과 그것이 계산하는
+`systemProperty("ax.rootPackage", rootPackage)` / `systemProperty("ax.mainClassesDirs", ...)`
+호출)을 task 등록 몸체 최상위에서 꺼내 **`doFirst { }` 블록 안으로 옮긴다** — configuration
+시점이 아니라 **execution 시점**에 평가되게 한다:
+   ```kotlin
+   tasks.register<Test>("testPractices") {
+       group = "verification"
+       description = "Runs the ax practices ArchUnit gate (JUnit tag PRACTICES)."
+       testClassesDirs = sourceSets["test"].output.classesDirs
+       classpath = sourceSets["test"].runtimeClasspath
+       useJUnitPlatform { includeTags("PRACTICES") }
+       testLogging {
+           exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL
+       }
+
+       // execution time, not configuration time — an unresolved axRootPackage must abort
+       // THIS task, not every task in the build.
+       doFirst {
+           val rootPackage = axRootPackage.orNull
+               ?: error("axRootPackage unresolved -- pass -PaxRootPackage=<your root package>")
+           systemProperty("ax.rootPackage", rootPackage)
+           systemProperty(
+               "ax.mainClassesDirs",
+               sourceSets["main"].output.classesDirs.files.joinToString(File.pathSeparator) { it.absolutePath }
+           )
+       }
+   }
+   ```
+   `-P` 없이 던지던 예외가 `doFirst`로 옮겨진 뒤에도 **`testPractices`를 직접 돌리면 여전히
+   fail-closed로 죽는다** — 달라지는 것은 그 실패가 `testPractices` 자신의 실행에만 국한되고,
+   `./gradlew tasks`/`build`/무관한 다른 task는 더 이상 물귀신으로 끌려가지 않는다는 점이다.
+
+### #91 — `-P`를 줘도 `test`/`build`/CI가 실패
+
+**증상**: `-PaxRootPackage`를 정확히 줘도 `./gradlew test`, `./gradlew build`, CI 파이프라인이
+실패한다.
+
+**원인**: 기본 `test` task가 `@Tag("PRACTICES")`가 붙은 ArchUnit 클래스까지 흡수해서 실행하는데,
+`test` task 실행 경로에는 `testPractices`만 채우는 `ax.mainClassesDirs` 시스템 프로퍼티가 없어
+그 클래스들이 거기서 죽는다.
+
+**패치** (`build.gradle.kts`): 기본 `test` task에서 `PRACTICES` 태그를 명시적으로 제외하는 블록을
+추가한다:
+   ```kotlin
+   tasks.named<Test>("test") {
+       useJUnitPlatform { excludeTags("PRACTICES") }
+   }
+   ```
+
+   ⚠️ **반드시 `tasks.named<Test>("test") { ... }`로 `test` task 하나만 한정**해야 한다. 이미
+   프로젝트에 공유 `tasks.withType<Test>` 블록이 있다고 해서 그 안에 `excludeTags("PRACTICES")`를
+   합치면, **`testPractices` 자신에게까지 그 exclude가 적용**되어 항상 0개 테스트로
+   `BUILD SUCCESSFUL`을 내는 **무증상 공허(vacuous) GREEN**이 된다 — 정확히 GH #86~#88이 봉합한
+   실패 형태다. `test`와 `testPractices`의 태그 필터는 서로 반대 방향이므로 절대 같은
+   `tasks.withType<Test>` 블록에 두지 않는다.
+
+### 패치 후 재검증 (건너뛰지 말 것)
+
+세 패치를 손으로 적용한 뒤에는 `skills/ax-install-java-enforcement/SKILL.md` §5의 non-vacuous
+verification 절차(0a `compileTestJava` → 0b `-P` 없는 `./gradlew tasks` → 0c
+`./gradlew test -PaxRootPackage=...` → probe 위반 심기 RED → 삭제 GREEN)를 **처음부터 다시**
+돌려 배선이 실제로 살아있는지 확인한다. 패치만 적용하고 재검증을 생략하면, 겉보기엔 고쳐진
+것 같아도 §5가 잡는 정확히 그 종류의 "green이지만 실제로는 아무것도 안 잡는" 상태로 되돌아갈
+수 있다.
+
 ---
 
 ## 7. 트러블슈팅

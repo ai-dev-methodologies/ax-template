@@ -40,6 +40,10 @@
             "features": { "type": "array", "items": { "type": "string" } },
             "shared": { "type": "array", "items": { "type": "string" } }
           }
+        },
+        "typescript": {
+          "type": "boolean",
+          "description": "Whether the project has TypeScript sources (a tsconfig.json or .ts/.tsx files). Drives the typescript-eslint parser wiring in eslint.config.mjs -- when true, the installed config imports typescript-eslint and sets languageOptions.parser; when false/absent, the default espree parser is used (F-033)."
         }
       }
     },
@@ -57,6 +61,10 @@
         "rootPackage": {
           "type": "string",
           "description": "Base Java package for the project."
+        },
+        "testTask": {
+          "type": "string",
+          "description": "The Gradle task the pre-commit hook invokes to run the project's practices gate (default meaning: \"testPractices\", the ax-template reference workload's own task name). Rename this when the consuming project's practices gate task has a different name -- the installed hook otherwise hardcodes ax-template's own task name and breaks silently on any project that named it differently (F-032)."
         }
       }
     },

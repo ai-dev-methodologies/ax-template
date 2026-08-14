@@ -171,7 +171,21 @@ items = doc.get('items') or []
 # derived_block_license_guard (fail_unregistered), same reasoning.
 # 2026-08-10 (D-7): 73 → 74. One kill-proof was appended for doc_headline_count_guard's
 # new plugin.json/marketplace.json version-sync check (fail_version_mismatch).
-LIVE_MIN_ITEMS = 74
+# 2026-08-14 (GH #92 registration): 74 → 86. Ten kill-proofs were appended for the three
+# newly-registered guards: install_artifact_extractability_guard.sh [112] (5 —
+# fail_missing_marker, fail_duplicate_id, fail_free_text_conditional,
+# fail_wrong_comment_prefix, fail_unparseable_shell), cross_artifact_contract_guard.sh [113]
+# (2 — fail_p_contract_drift, fail_rule_not_in_index), downstream_release_recency_guard.sh
+# [114] (3 — fail_stale_head, fail_partial_assertions, fail_digest_mismatch). A 4th [114]
+# fixture, fail_missing_log, was measured (not assumed) to be fail-closed-by-construction —
+# every single-anchor neuter that bypasses its `not os.path.isfile(log_path)` pre-check still
+# crashes at the following `open(log_path, ...)` with an uncaught FileNotFoundError, which
+# CPython also exits with status 1, so no minimal mutation flips it to exit 0. Disclosed in
+# fixture_kill_manifest.yaml's comment at that fixture's (absent) entry rather than registered
+# with a fake anchor. Prior disk truth was 76 unique items (2 above the previous floor of 74);
+# the floor now tracks the new disk truth of 86 exactly, so none of the 10 new proofs are
+# removable without breaching the registry floor.
+LIVE_MIN_ITEMS = 86
 
 structural = []
 
@@ -472,6 +486,14 @@ PY
     # The guards consult this variable ONLY when their committed helper path is absent, so it
     # is inert on every real tree and cannot substitute a weakened helper into a live run.
     export AX_RELEASE_ANCHOR_LIB="$REPO_ROOT/practices/scripts/lib/release_anchor.sh"
+    # Same affordance for the two ax_markers.py-importing guards (install_artifact_
+    # extractability_guard.sh [112], downstream_release_recency_guard.sh [114], added GH #92):
+    # both resolve practices/scripts/lib/ax_markers.py and (the former also) the consumer-e2e
+    # fixture's ax.config.json via REPO_ROOT, which collapses to "/" from a bare temp path.
+    # Consulted ONLY when the committed path is absent AND the root is not a git work tree — see
+    # each guard's own comment at the point of use.
+    export AX_MARKERS_LIB_DIR="$REPO_ROOT/practices/scripts/lib"
+    export AX_CONSUMER_E2E_CONFIG="$REPO_ROOT/practices/evals/fixtures/consumer-e2e/project/ax.config.json"
     if [ -n "$fixture_arg" ]; then
         if [ -n "$fixture_arg2" ]; then
             bash "$TMP_GUARD" "$fixture_arg" "$FIXTURE_PATH" "$fixture_arg2" "$FIXTURE2_PATH" >/dev/null 2>&1

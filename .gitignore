@@ -35,3 +35,8 @@ dist/
 # ax-ledger — per-project usage/violation trace (machine-local, per fork-receiver). Reviewable via
 # practices/scripts/ax-ledger-review.sh; never committed (it is the local project's own history).
 .ax-ledger/
+
+# downstream_release_recency_guard.sh [114]'s audit log (machine-local, written by
+# practices/scripts/verify-downstream.sh). Anchor to repo root so fixture .ax-downstream/ dirs
+# (test data under practices/evals/fixtures/downstream_release_recency/) remain tracked.
+/.ax-downstream/

@@ -2742,6 +2742,50 @@ if [ "$INCLUDE_FIXTURES" -eq 1 ]; then
         bash "$SCRIPT_DIR/perf_log_no_gate_input_guard.sh" --root "$SCRIPT_DIR/fixtures/perf-log-no-gate-input/fail_reads_perf_log"
 fi
 
+echo "[112] install_artifact_extractability_guard.sh (GH #92 step-in-progress — the downstream verification harness (practices/scripts/verify-downstream.sh) EXTRACTS what it installs into a consumer project from the <!-- ax:artifact ... --> markers embedded in skills/ax-install-{hooks,java-enforcement,react-enforcement}/SKILL.md, and a malformed marker does not fail loudly there: the harness either extracts nothing for that artifact or extracts something silently wrong, and reports whatever it DID manage to install as a green run. This guard closes that silence at the SOURCE, before the harness ever runs. Ten checks: (1-8) delegated verbatim to practices/scripts/lib/ax_markers.py's discover()+lint() — the SAME parser verify-downstream.sh itself consumes, so an extractor bug is a bug in ONE place rather than two independently-maintained sweeps silently diverging — covering marker<->fence 1:1, id uniqueness, fence-language registration, ax:if/ax:endif balance, directive-prefix-matches-fence-language, substs<->body/path bidirectional agreement, and free-text conditional prose surviving outside a directive line; (9) COVERAGE, guard-owned — every skills/ax-install-*/SKILL.md (globbed from disk, never a hardcoded list) must carry >=1 marker; (10) SHELL RENDERABILITY, guard-owned — every bash/sh-fenced artifact is rendered via ax_markers.render() against the real consumer-e2e fixture's ax.config.json and then run through \`bash -n\`, since a marker can be structurally well-formed by every one of lint()'s rules and still render invalid shell. Exit: 0 PASS · 1 violation(s) found (checks 1-10) · 2 usage/setup error. Fixtures: pass_marked 0 / fail_missing_marker 1 (delegated, MARKER_NO_FENCE) / fail_duplicate_id 1 (delegated, DUPLICATE_ID) / fail_free_text_conditional 1 (delegated, FREE_TEXT_CONDITIONAL) / fail_wrong_comment_prefix 1 (delegated, DIRECTIVE_PREFIX_MISMATCH) / fail_unparseable_shell 1 (check 10, UNPARSEABLE_SHELL).)"
+run_guard "install_artifact_extractability/live" 0 \
+    bash "$SCRIPT_DIR/install_artifact_extractability_guard.sh"
+if [ "$INCLUDE_FIXTURES" -eq 1 ]; then
+    run_guard "install_artifact_extractability/fixture_pass_marked" 0 \
+        bash "$SCRIPT_DIR/install_artifact_extractability_guard.sh" --root "$SCRIPT_DIR/fixtures/install_artifact_extractability/pass_marked"
+    run_guard "install_artifact_extractability/fixture_fail_missing_marker" 1 \
+        bash "$SCRIPT_DIR/install_artifact_extractability_guard.sh" --root "$SCRIPT_DIR/fixtures/install_artifact_extractability/fail_missing_marker"
+    run_guard "install_artifact_extractability/fixture_fail_duplicate_id" 1 \
+        bash "$SCRIPT_DIR/install_artifact_extractability_guard.sh" --root "$SCRIPT_DIR/fixtures/install_artifact_extractability/fail_duplicate_id"
+    run_guard "install_artifact_extractability/fixture_fail_free_text_conditional" 1 \
+        bash "$SCRIPT_DIR/install_artifact_extractability_guard.sh" --root "$SCRIPT_DIR/fixtures/install_artifact_extractability/fail_free_text_conditional"
+    run_guard "install_artifact_extractability/fixture_fail_wrong_comment_prefix" 1 \
+        bash "$SCRIPT_DIR/install_artifact_extractability_guard.sh" --root "$SCRIPT_DIR/fixtures/install_artifact_extractability/fail_wrong_comment_prefix"
+    run_guard "install_artifact_extractability/fixture_fail_unparseable_shell" 1 \
+        bash "$SCRIPT_DIR/install_artifact_extractability_guard.sh" --root "$SCRIPT_DIR/fixtures/install_artifact_extractability/fail_unparseable_shell"
+fi
+
+echo "[113] cross_artifact_contract_guard.sh (GH #92 root-cause Class C 'cross-artifact drift' — two artifacts that must agree independently evolve, and nothing compared them. Two prior incidents motivate this, both fixed once by hand with nothing stopping either from drifting again: F-024/#86 (skills/ax-install-hooks/SKILL.md's hook body called -PaxRootPackage=... while skills/ax-install-java-enforcement/SKILL.md's build.gradle.kts snippet read a DIFFERENT gradleProperty name, so the ArchUnit gate silently fell back to a generic default package and PASSed on real violations) and F-019/#80 (a shipped practices-react/eslint-plugin-ax/rules/*.js id was absent from practices-react/INDEX.md, invisible to ax-practices' INDEX-only routing). Two checks, each deriving the compared value from EACH side INDEPENDENTLY rather than grepping one artifact for a string the other artifact's fix happened to introduce (a tautology that could never catch a FUTURE drift using a different literal): (a) the -P gradle property name declared by skills/ax-install-java-enforcement/SKILL.md's findProperty/gradleProperty calls must equal the one skills/ax-install-hooks/SKILL.md's gradlew invocation passes — 0 or >1 distinct names on EITHER side is itself a BLOCK (an ambiguous contract is exactly the shape that let F-024 hide); (b) every practices-react/eslint-plugin-ax/rules/*.js id (globbed from disk) must be visible in practices-react/INDEX.md, resolving the SAME [110] filename<->rule_id alias (a doc's verification.rule_id: \"ax/<id>\") before flagging a gap — a naive raw-id check would false-positive the 7 rules [110]'s own header documents as alias-only-covered. Deliberately grep/sed-based, no PyYAML import (see pyyaml_preflight_coverage_guard.sh [95]). Exit: 0 PASS · 1 drift found (check a or b) · 2 usage/setup error. Fixtures: pass_agreeing 0 / fail_p_contract_drift 1 (check a — the F-024/#86 shape reproduced) / fail_rule_not_in_index 1 (check b — the F-019/#80 shape reproduced).)"
+run_guard "cross_artifact_contract/live" 0 \
+    bash "$SCRIPT_DIR/cross_artifact_contract_guard.sh"
+if [ "$INCLUDE_FIXTURES" -eq 1 ]; then
+    run_guard "cross_artifact_contract/fixture_pass_agreeing" 0 \
+        bash "$SCRIPT_DIR/cross_artifact_contract_guard.sh" --root "$SCRIPT_DIR/fixtures/cross_artifact_contract/pass_agreeing"
+    run_guard "cross_artifact_contract/fixture_fail_p_contract_drift" 1 \
+        bash "$SCRIPT_DIR/cross_artifact_contract_guard.sh" --root "$SCRIPT_DIR/fixtures/cross_artifact_contract/fail_p_contract_drift"
+    run_guard "cross_artifact_contract/fixture_fail_rule_not_in_index" 1 \
+        bash "$SCRIPT_DIR/cross_artifact_contract_guard.sh" --root "$SCRIPT_DIR/fixtures/cross_artifact_contract/fail_rule_not_in_index"
+fi
+
+# ── [114] downstream_release_recency_guard.sh — FIXTURES ONLY, deliberately no live entry ──
+# Same posture as the 49th guard (completion_checklist_recency_guard.sh, NOTE at the top of this
+# file): this guard audits .ax-downstream/runs.jsonl, the log practices/scripts/verify-downstream.sh
+# writes for THE COMMIT BEING RELEASED. Registering a LIVE invocation here would create the exact
+# bootstrap deadlock R25's own NOTE already names for the 49th guard — a release commit that bumps
+# .claude-plugin/plugin.json's version can never carry a post-bump audit log entry inside the SAME
+# R25 run that verifies it, because R25 runs BEFORE that commit exists. This guard's live gate
+# therefore runs from `.githooks/pre-push` (see guard [114]'s own header, PLACEMENT section), not
+# from R25/this script — exactly where the 49th guard's live gate runs. `--fixtures` has no such
+# cycle: every fixture under practices/evals/fixtures/downstream_release_recency/ is FIXTURE-SHAPED
+# (no .git/), read entirely from disk, and never touches the live .ax-downstream/ tree.
+run_guard "downstream_release_recency/fixtures" 0 \
+    bash "$SCRIPT_DIR/downstream_release_recency_guard.sh" --fixtures
+
 echo ""
 echo "Total: $PASS passed, $FAIL failed"
 

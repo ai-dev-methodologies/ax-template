@@ -33,11 +33,14 @@
 
 # min_items — the unique item count MAY NOT BE REDUCED below this number, and it is the ONLY
 # place in this file that states it (BACKLOG P3-104 — a prose restatement rotted to 57 while the
-# directive read 62). Re-measured from disk 2026-08-10 after the D-7 append (doc_headline_count's
-# plugin/marketplace version-sync kill-proof): items, distinct ids and distinct (guard, fixture)
-# pairs are all equal to the value below. fixture_kill_proof_guard.sh pins the same number as
+# directive read 62). Re-measured from disk 2026-08-14 after the GH #92 registration append (guard
+# [112] install_artifact_extractability 5 + [113] cross_artifact_contract 2 + [114]
+# downstream_release_recency 3 = 10 new items on top of the prior 76 — a 4th [114] fixture,
+# fail_missing_log, was measured NOT single-anchor kill-proofable and is disclosed rather than
+# forced; see its comment block above): items, distinct ids and distinct (guard, fixture) pairs
+# are all equal to the value below. fixture_kill_proof_guard.sh pins the same number as
 # LIVE_MIN_ITEMS, so lowering the gate takes two coordinated edits rather than one silent deletion.
-min_items: 74
+min_items: 86
 
 items:
 
@@ -1217,4 +1220,173 @@ items:
     fixture: practices/evals/fixtures/schema-executable-consumer/fail_phantom_consumer
     fixture_arg: '--root'
     anchor: 'not consumer_valid'
+    neuter: 'False'
+
+  # ── install_artifact_extractability/{fail_missing_marker,fail_duplicate_id,
+  #    fail_free_text_conditional,fail_wrong_comment_prefix}: checks 1-8, delegated to
+  #    ax_markers.lint() ────────────────────────────────────────────────────────────────────
+  # These four fixtures each exercise a DIFFERENT lint() Problem code — MARKER_NO_FENCE (a
+  # marker id declared with no fenced block immediately after it — measured against the real
+  # fixture: this is what fail_missing_marker actually trips, NOT guard-owned check 9's
+  # NO_ARTIFACT_MARKER coverage test, which requires a SKILL.md with ZERO markers and has no
+  # dedicated fixture here), DUPLICATE_ID, FREE_TEXT_CONDITIONAL, and
+  # DIRECTIVE_PREFIX_MISMATCH respectively — but that detection logic lives entirely in
+  # practices/scripts/lib/ax_markers.py, a separate file this guard imports and delegates to,
+  # never re-implemented in install_artifact_extractability_guard.sh's own text (see that
+  # guard's header, "WHY THIS FORM"). fixture_kill_proof_guard.sh mutates only GUARD_PATH's
+  # source, so a per-code anchor inside ax_markers.py is not reachable from here. The one
+  # thing THIS guard's own text controls for all four is whether lint()'s findings ever reach
+  # `problems` at all — so all four share the SAME anchor/neuter pair, honestly coarser than a
+  # per-code proof: each item proves its fixture's failure flows through the lint()-delegation
+  # path this guard owns (as opposed to, say, check 10's independent append site, which uses
+  # its OWN anchor below and is unaffected by this neuter), not that the specific
+  # MARKER_NO_FENCE/DUPLICATE_ID/FREE_TEXT_CONDITIONAL/DIRECTIVE_PREFIX_MISMATCH sub-check
+  # individually fired.
+  # anchor:  the sole append inside the "for p in ax_markers.lint(artifacts):" loop.
+  # neuter:  condition-constant False as the loop body (`False` is a syntactically valid,
+  #          side-effect-free Python statement) → every lint()-derived Problem is discarded
+  #          before reaching `problems`, while check 9's and check 10's own appends
+  #          (different literal tuples) are untouched → exit 0 iff the fixture's failure came
+  #          from lint() alone.
+  - id: install_artifact_extractability/fail_missing_marker
+    guard: practices/evals/install_artifact_extractability_guard.sh
+    fixture: practices/evals/fixtures/install_artifact_extractability/fail_missing_marker
+    fixture_arg: '--root'
+    anchor: 'problems.append((p.code, p.source_file, p.line, p.message))'
+    neuter: 'False'
+
+  - id: install_artifact_extractability/fail_duplicate_id
+    guard: practices/evals/install_artifact_extractability_guard.sh
+    fixture: practices/evals/fixtures/install_artifact_extractability/fail_duplicate_id
+    fixture_arg: '--root'
+    anchor: 'problems.append((p.code, p.source_file, p.line, p.message))'
+    neuter: 'False'
+
+  - id: install_artifact_extractability/fail_free_text_conditional
+    guard: practices/evals/install_artifact_extractability_guard.sh
+    fixture: practices/evals/fixtures/install_artifact_extractability/fail_free_text_conditional
+    fixture_arg: '--root'
+    anchor: 'problems.append((p.code, p.source_file, p.line, p.message))'
+    neuter: 'False'
+
+  - id: install_artifact_extractability/fail_wrong_comment_prefix
+    guard: practices/evals/install_artifact_extractability_guard.sh
+    fixture: practices/evals/fixtures/install_artifact_extractability/fail_wrong_comment_prefix
+    fixture_arg: '--root'
+    anchor: 'problems.append((p.code, p.source_file, p.line, p.message))'
+    neuter: 'False'
+
+  # ── install_artifact_extractability/fail_unparseable_shell: check 10, guard-owned render ──
+  # fixture: a bash-fenced ax:artifact whose rendered body fails `bash -n`.
+  # anchor:  the bash -n exit-code test after rendering.
+  # neuter:  condition-constant False → a syntactically broken rendered body is never
+  #          reported → exit 0.
+  - id: install_artifact_extractability/fail_unparseable_shell
+    guard: practices/evals/install_artifact_extractability_guard.sh
+    fixture: practices/evals/fixtures/install_artifact_extractability/fail_unparseable_shell
+    fixture_arg: '--root'
+    anchor: 'result.returncode != 0'
+    neuter: 'False'
+
+  # ── cross_artifact_contract/fail_p_contract_drift: check (a), -P property name agreement ──
+  # fixture: java skill declares one gradleProperty name, hooks skill's gradlew call passes
+  #          a DIFFERENT -P name (the F-024/#86 shape).
+  # anchor:  the third bracket test in the compound `if [...] && [...] && [...]; then` that
+  #          compares the two independently-derived property names.
+  # neuter:  the WHOLE bracket test `[ "$java_props" != "$hook_props" ]` is replaced by the
+  #          bare command `false` (condition-constant shape; `false` is a valid bash command
+  #          in an `&&` list, exit 1, short-circuiting the chain) → the drift comparison never
+  #          fires, while the two ambiguous-name branches earlier in check (a) and all of
+  #          check (b) are untouched → exit 0.
+  - id: cross_artifact_contract/fail_p_contract_drift
+    guard: practices/evals/cross_artifact_contract_guard.sh
+    fixture: practices/evals/fixtures/cross_artifact_contract/fail_p_contract_drift
+    fixture_arg: '--root'
+    anchor: '[ "$java_props" != "$hook_props" ]'
+    neuter: 'false'
+
+  # ── cross_artifact_contract/fail_rule_not_in_index: check (b), rule id <-> INDEX.md ──────
+  # fixture: an eslint-plugin-ax rule .js whose id is neither directly visible in INDEX.md nor
+  #          covered via a doc's aliased verification.rule_id (the F-019/#80 shape).
+  # anchor:  the bracket test gating whether a rule already resolved as alias-covered skips
+  #          the VIOLATION(b) report.
+  # neuter:  no-op shape (`true`, a valid bash command, always exit 0) in place of the bracket
+  #          test → every rule in the loop is treated as covered → check (b) never reports a
+  #          violation, while check (a) is untouched → exit 0.
+  - id: cross_artifact_contract/fail_rule_not_in_index
+    guard: practices/evals/cross_artifact_contract_guard.sh
+    fixture: practices/evals/fixtures/cross_artifact_contract/fail_rule_not_in_index
+    fixture_arg: '--root'
+    anchor: '[ "$covered_via_alias" -eq 1 ]'
+    neuter: 'true'
+
+  # ── downstream_release_recency/fail_missing_log: NOT REGISTERED — measured non-fixture-
+  #    coverable, disclosed rather than forced ───────────────────────────────────────────────
+  # fixture: plugin.json version changed in range; no .ax-downstream/runs.jsonl at all (measured
+  #          — the file is genuinely absent, not empty: `ls .../fail_missing_log/.ax-downstream/`
+  #          lists only expected_head.txt and prev_version.txt).
+  # WHY NO KILL-PROOF ITEM EXISTS FOR THIS FIXTURE (measured, not assumed): the guard's own
+  # `not os.path.isfile(log_path)` pre-check is fail-closed-BY-CONSTRUCTION — neutering it to
+  # `False` (condition-constant) makes the code fall through to `with open(log_path, ...) as f:`,
+  # which for a genuinely-missing file raises an uncaught FileNotFoundError. CPython exits an
+  # unhandled exception with status 1, the SAME exit code the intentional
+  # `fail("AX_DOWNSTREAM_LOG_MISSING", ...)` call would have produced. Reproduced directly:
+  # `python3 -c` with the anchor replaced by `False`, run against this exact fixture, still exits
+  # 1 (a raw traceback, not the guard's clean diagnostic — but [87] compares only exit codes).
+  # There is no SINGLE minimal, shape-legal substitution that reaches exit 0 here: bypassing the
+  # isfile pre-check still crashes at open(); additionally bypassing that crash (e.g. neutering
+  # the open() call itself) still leaves `lines = []`, which the VERY NEXT check
+  # (`if not lines: fail(...)`, guarding the "exists but is empty" case) also fails on — so
+  # proving "neutered → exit 0" for this fixture would require simultaneously fabricating valid
+  # substitute log content (head_sha/tree_clean/assertions/digests), which is not neutering a
+  # detection, it is reconstructing a pass_fresh fixture. This is the same class of residual
+  # [74]/[101] already disclose in this codebase (anchor-bound / fail-closed logic that is
+  # correctly NOT fixture-coverable) rather than a gap in anchor selection — forcing a nominal
+  # anchor here would register a fake, silently-vacuous proof, which is exactly what [87] exists
+  # to prevent. The guard's OWN `--fixtures` self-test (registered live in run-all-guards.sh
+  # [114]) independently confirms this fixture's exit=1 behavior via direct execution, unrelated
+  # to this mutation-based registry.
+
+  # ── downstream_release_recency/fail_stale_head: latest audit line's head_sha mismatch ────
+  # fixture: runs.jsonl's latest head_sha does not equal .ax-downstream/expected_head.txt.
+  # anchor:  the head_sha equality check that trips AX_DOWNSTREAM_LOG_STALE_HEAD.
+  # neuter:  condition-constant False → a stale head_sha is silently accepted → exit 0.
+  - id: downstream_release_recency/fail_stale_head
+    guard: practices/evals/downstream_release_recency_guard.sh
+    fixture: practices/evals/fixtures/downstream_release_recency/fail_stale_head
+    fixture_arg: '--root'
+    anchor: 'latest.get("head_sha") != expected_head'
+    neuter: 'False'
+
+  # ── downstream_release_recency/fail_partial_assertions: one assertion is not true ────────
+  # fixture: runs.jsonl's latest `assertions` object is well-formed and non-empty, but one
+  #          value (A0) is boolean false rather than true.
+  # anchor:  the per-assertion filter predicate inside the `failing = sorted(k for k, v in
+  #          assertions.items() if v is not True)` generator — distinct from the earlier
+  #          "assertions missing/not-a-dict/empty" check, which stays live and unaffected.
+  # neuter:  condition-constant False as the generator's filter clause (syntactically valid —
+  #          the generator now always yields nothing) → `failing` is always empty → the
+  #          per-assertion violation never fires → exit 0.
+  - id: downstream_release_recency/fail_partial_assertions
+    guard: practices/evals/downstream_release_recency_guard.sh
+    fixture: practices/evals/fixtures/downstream_release_recency/fail_partial_assertions
+    fixture_arg: '--root'
+    anchor: 'v is not True'
+    neuter: 'False'
+
+  # ── downstream_release_recency/fail_digest_mismatch: recomputed digest != logged digest ──
+  # fixture: runs.jsonl's artifact_digests has a key present in both the recomputed and
+  #          logged maps, but the logged value is a fabricated sha (the SKILL.md was edited
+  #          after Layer 1 ran, or the line was hand-typed) — same key set, different value.
+  # anchor:  the per-key value-inequality predicate inside the `mismatched = sorted(k for k in
+  #          (recomputed_keys & logged_keys) if recomputed[k] != logged_digests[k])`
+  #          generator — distinct from the missing/extra-key set differences computed
+  #          alongside it, which stay live and unaffected.
+  # neuter:  condition-constant False as the generator's filter clause → `mismatched` is
+  #          always empty → a same-key value mismatch is never reported → exit 0.
+  - id: downstream_release_recency/fail_digest_mismatch
+    guard: practices/evals/downstream_release_recency_guard.sh
+    fixture: practices/evals/fixtures/downstream_release_recency/fail_digest_mismatch
+    fixture_arg: '--root'
+    anchor: 'recomputed[k] != logged_digests[k]'
     neuter: 'False'

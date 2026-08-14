@@ -5,9 +5,10 @@
     "root": "frontend",
     "srcDir": "src",
     "alias": { "@/": "src/" },
-    "layers": { "app": ["app"], "features": ["features"], "shared": ["components", "lib"] }
+    "layers": { "app": ["app"], "features": ["features"], "shared": ["components", "lib"] },
+    "typescript": true
   },
-  "java": { "root": "backend", "buildTool": "gradle", "rootPackage": "com.example.app" },
+  "java": { "root": "backend", "buildTool": "gradle", "rootPackage": "com.example.app", "testTask": "testPractices" },
   "design": { "useCatalog": true },
   "rules": { "excludeTags": [], "disabled": [] }
 }

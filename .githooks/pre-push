@@ -758,6 +758,70 @@ while read -r _local_ref local_sha _remote_ref remote_sha; do
         REGRESSION_NEEDED=1
         continue
     fi
+
+    # [114] downstream_release_recency_guard.sh — fires only when this ref's push range
+    # changed .claude-plugin/plugin.json's version (the guard itself detects that; this hook
+    # unconditionally invokes it and lets it decide). Reuses the SAME local_sha/base this ref
+    # already resolved above via pp_resolve_ref_base, per guard [114]'s own header ("this is
+    # how .githooks/pre-push wires it"), instead of re-resolving a second time. A base that
+    # failed to resolve already sent this ref down the REGRESSION_NEEDED/continue path above,
+    # so this check is unreached for that ref — the same fail-open-to-full-regression posture
+    # the existing pp_resolve_ref_base fallback already uses, not a new gap this hook opens.
+    # APPLICABILITY IS DECIDED FIRST, and it is NOT the same question as "should this check be
+    # skipped". Guard [114] audits the release of THIS PLUGIN: its whole trigger is a change to
+    # the `version` VALUE inside `.claude-plugin/plugin.json`. A pushed tree that carries no such
+    # manifest has no release surface for the gate to inspect — there is NOTHING TO CHECK, which
+    # is a different statement from "there is something to check and we are not checking it". The
+    # fail-closed branch below is the second statement and stays exactly as strict.
+    # MEASURED, and the reason this block exists: three guards
+    # (pre_push_decision_guard.sh, push_evidence_tree_binding_guard.sh, midrun_tree_mutation_guard.sh)
+    # behavior-test THIS hook by copying it into a SYNTHETIC minimal repo — a `git init` tree
+    # carrying docs/, backend/, .githooks/ and a stubbed recency guard, and no plugin manifest of
+    # any kind. With the existence check unconditional, every one of their scenarios blocked on a
+    # missing guard file: `pre_push_decision` reported s9-diff-failure-blocks as rc=1 WITHOUT the
+    # expected 'git diff failed' (blocked for the wrong reason, so the scenario it asserts was no
+    # longer being exercised), and the two tree-binding guards reported
+    # `clean-tree push : r25=0 push=1 landed=0 (want 0/0/1)` — a push that must SUCCEED was
+    # blocked. That is a false positive with no attack behind it: those trees never had a release
+    # to gate.
+    # NOT A BYPASS, stated because "just delete plugin.json" is the obvious objection: deleting
+    # the manifest does not publish a release, it unpublishes the plugin — and re-adding it later
+    # fires this gate anyway, because the re-adding range's base has no version and its head does,
+    # which the guard reads as a changed value.
+    # UNREADABLE IS NOT ABSENT: `git ls-tree` exits 0 with EMPTY output for a path that is not in
+    # the tree, and non-zero when the rev itself cannot be read. Only the first is "not
+    # applicable"; the second is "could not determine", and unknown never passes.
+    pj_listing="$("$AX_GIT_BIN" --no-replace-objects -C "$ROOT" ls-tree --name-only "$local_sha" -- .claude-plugin/plugin.json 2>/dev/null)"
+    pj_rc=$?
+    if [[ "$pj_rc" -ne 0 ]]; then
+        echo "[practices] ✗ the tree of ${local_sha:0:12} could not be read, so this gate cannot tell" >&2
+        echo "[practices]   whether the push carries .claude-plugin/plugin.json — and therefore cannot" >&2
+        echo "[practices]   tell whether the downstream release gate applies. BLOCKED (fail-closed)." >&2
+        exit 1
+    fi
+    if [[ -z "$pj_listing" ]]; then
+        echo "[practices] downstream release gate (guard [114]) does not apply to ${local_sha:0:12} — the pushed tree carries no .claude-plugin/plugin.json"
+    else
+        if [ ! -f practices/evals/downstream_release_recency_guard.sh ]; then
+            echo "[practices] ✗ practices/evals/downstream_release_recency_guard.sh is missing — cannot verify the downstream release gate. BLOCKED (fail-closed)." >&2
+            echo "[practices]   The pushed tree DOES carry .claude-plugin/plugin.json, so this is a release" >&2
+            echo "[practices]   surface with its gate removed — not an inapplicable check." >&2
+            exit 1
+        fi
+        echo "[practices] R25 — downstream release recency check (guard [114]) for ${local_sha:0:12}"
+        if ! bash practices/evals/downstream_release_recency_guard.sh --head "$local_sha" --base "$base"; then
+            echo "[practices] ✗ downstream_release_recency_guard FAILED for ${local_sha:0:12} — push BLOCKED"
+            echo "[practices]   plugin.json's version changed in this push range, but no fresh GREEN"
+            echo "[practices]   practices/scripts/verify-downstream.sh run exists for the pushed sha."
+            echo "[practices] Run the downstream harness against the pushed commit:"
+            echo "[practices]   git checkout ${local_sha:0:12} && bash practices/scripts/verify-downstream.sh"
+            echo "[practices] then re-attempt the push. (Legitimate base-commit-resolution failures only:"
+            echo "[practices]   AX_SKIP_DOWNSTREAM_RELEASE_GATE=1 opts out — see the guard's own diagnostics above.)"
+            exit 1
+        fi
+        echo "[practices] ✓ downstream release recency PASS for ${local_sha:0:12}"
+    fi
+
     # `git diff` failure (bad range, missing objects) is fail-closed: BLOCK,
     # never convert an error into a silent regression skip.
     diff_out="$(pp_diff_touches_scope "$base" "$local_sha")"; scope_rc=$?

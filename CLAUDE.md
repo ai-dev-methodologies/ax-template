@@ -172,7 +172,7 @@ template**. 모든 layer에서 **규칙을 기계적으로 강제하는 선 순�
 
 ```
 fork ax-template
-    ↓ (25 L4 domains + 11 active recipes + 233 Java rules + 108 React rules + 15 ESLint rules + 111 hard guards + AGENTS.md sentinel)
+    ↓ (25 L4 domains + 11 active recipes + 233 Java rules + 108 React rules + 15 ESLint rules + 114 hard guards + AGENTS.md sentinel)
 새 도메인 추가 — METHODOLOGY.md의 5-step 따라
     ↓
 AI agent가 Spring + React 코드 작성
@@ -468,7 +468,7 @@ ax-template/
 ├── practices/                 # AI-targeted catalog (skill 핵심 자산)
 │   ├── rules/                 # 233룰, 22+ categories (R50/R58/R61 추가분 포함)
 │   ├── upstream/              # 외부 사실 snapshot
-│   ├── evals/                 # 4 hard gates + 108 hard guards
+│   ├── evals/                 # 4 hard gates + 114 hard guards
 │   ├── AGENTS.md              # AI agent 진입점 (sha sentinel)
 │   ├── SKILL.md               # practices 서브시스템 skill
 │   ├── MAINTAINER.md
@@ -536,14 +536,17 @@ fork-receiver의 활성화는 opt-in이다.
 | PreToolUse hook (Claude Code) | `.claude/settings.local.json` | Write/Edit이 `practices/rules/` 파일에 닿을 때 | session-bound advisory (commit 시 재검증 필요) | claude 세션 자동 |
 | `.githooks/pre-commit` | `.githooks/pre-commit` | `practices/` 또는 `practices-react/` 변경 포함 커밋 — **spec_ref · substance · evidence · time_decay** 4개 binary gate 실행 | **commit-blocking** (exit 1이면 커밋 불가) | **opt-in per clone**: `bash practices/scripts/install-hooks.sh` |
 | `.githooks/pre-push` (49th guard) | `.githooks/pre-push` | 커밋을 ship하는 모든 push 시 (delete-only push는 제외) — `completion_checklist_recency_guard.sh`가 HEAD에 대한 최신 R25 audit log 항목을 요구 | **push-blocking** (audit log 없으면 push 불가) | **opt-in per clone**: `bash practices/scripts/install-hooks.sh` |
-| `run-all-guards.sh` (103 live guards) | `practices/evals/run-all-guards.sh` | R25 완료 선언 시 수동 호출 (verify-completion.sh 내부에서 실행) | **manual / R25 run** — 자동 트리거 없음 | 항상 사용 가능, 자동 실행 아님 |
+| `.githooks/pre-push` (릴리스 게이트, guard [114]) | `.githooks/pre-push` → `practices/evals/downstream_release_recency_guard.sh` | **`.claude-plugin/plugin.json`의 `version` 값이 푸시 범위에서 바뀔 때만** 발화 — `.ax-downstream/runs.jsonl`의 최신 항목이 `head_sha` 일치 · `tree_clean` · **단언별 boolean 전건 true** · **산출물 digest 재계산 일치**를 만족할 것을 요구 | **push-blocking** (fixture 검증 green 기록 없이 버전 bump 불가) | **opt-in per clone**; 명시적 opt-out은 `AX_SKIP_DOWNSTREAM_RELEASE_GATE=1` |
+| `verify-downstream.sh` (downstream-fixture E2E) | `practices/scripts/verify-downstream.sh` | 사람이 호출 — stock-shaped 2-스택 소비자 픽스처에 설치 산출물을 **SKILL.md 마커에서 추출·verbatim 설치**하고 "위반이 실제로 차단되는가"를 11개 단언(exit code **+ 게이트 자신의 신호 문자열**)으로 측정 | **periodic / manual** — merge gate 아님. 단 그 **로그가 [114]의 입력**이므로 릴리스에는 사실상 필수 | 항상 사용 가능(네트워크 + JDK 21 + node 필요; 전제 미달 시 "PREMISE NOT ESTABLISHED"로 **무측정** 명시) |
+| `consumer-e2e.yml` (스케줄된 짝) | `.github/workflows/consumer-e2e.yml` | 매주 월 09:00 UTC 크론 + `workflow_dispatch` — 툴체인·네트워크 premise probe 통과 시에만 하네스 실행, `always()` summary에 측정표 + 미커버 목록 | **advisory** (`continue-on-error: true`) — 누구에게도 아무것도 강제하지 않음 | GitHub Actions에 스케줄됨 |
+| `run-all-guards.sh` (114개 guard 전량 등록) | `practices/evals/run-all-guards.sh` | R25 완료 선언 시 수동 호출 (verify-completion.sh 내부에서 실행) | **manual / R25 run** — 자동 트리거 없음 | 항상 사용 가능, 자동 실행 아님 |
 | `per-domain ./gradlew test{Domain}` | `backend/build.gradle.kts` | 수동 또는 fork-receiver CI에서 호출 | **manual / CI** — 자동 트리거 없음 | 항상 사용 가능; CI 통합은 fork-receiver 자율 |
 | `ax-case-sensitive-sweep.sh` (P2-72 로컬/수동 절반) | `practices/scripts/ax-case-sensitive-sweep.sh` | 사람이 주기적으로 호출 (릴리스 전 1회 권장) — 대소문자-**민감** APFS 볼륨을 만들어 HEAD를 클론하고 그 위에서 `run-all-guards.sh --include-fixtures`를 돌린다. **정규화 반쪽은 못 덮는다**(이 볼륨이 NFC/NFD를 접는 것이 측정됨) | **periodic / manual** — 자동 트리거 없음, merge gate 아님 | 항상 사용 가능(macOS `hdiutil` 필요; 없으면 **소리내어 실패**하고 skip하지 않는다) |
 | `practices-case-normalization.yml` (P2-72+P3-138 **스케줄된** 짝) | `.github/workflows/practices-case-normalization.yml` | 매주 월 08:00 UTC 크론 + `workflow_dispatch` — `ubuntu-latest`에서 **먼저 파일시스템 능력 프로브**(`A`/`a` 두 inode, NFC `café`/NFD `cafe`+U+0301 두 inode)를 돌리고, 통과할 때만 `run-all-guards.sh --include-fixtures`를 돌려 pass/fail 수와 `FAIL [` 라인을 job summary에 싣는다 | **advisory** (`continue-on-error: true`) — 절대 머지를 막지 않음. 프로브 실패 시 스윕을 **돌리지 않고** "PREMISE NOT ESTABLISHED — no measurement was taken"이라고 적는다(무의미한 pass 금지) | GitHub Actions에 스케줄됨. ext4/overlayfs가 대소문자-민감 **+ 바이트 보존**이라 macOS 스크립트가 못 덮는 **정규화 반쪽까지** 덮는다 |
 
 ### 핵심 설명
 
-- **가드 파일(`*_guard.sh`)은 109개다** (practices/evals 107 + practices-react/evals 2 — `doc_headline_count_guard`가 이 수를 헤드라인과 대조해 강제; 정확한 수는 항상 `ls practices/evals/*_guard.sh practices-react/evals/*_guard.sh | wc -l`의 disk truth를 따른다). `run-all-guards.sh`는 R25 완료 선언 시 수동 호출된다(커밋마다 자동 실행되지 않는다). 일부 가드는 추가 진입점을 갖는다 — pre-commit 4 hard gates(`spec_ref`·`substance`·`evidence`·`time_decay`)는 practices/ 변경 커밋에서, `completion_checklist_recency`는 pre-push에서 돈다.
+- **가드 파일(`*_guard.sh`)은 114개다** (practices/evals 112 + practices-react/evals 2 — `doc_headline_count_guard`가 이 수를 헤드라인과 대조해 강제; 정확한 수는 항상 `ls practices/evals/*_guard.sh practices-react/evals/*_guard.sh | wc -l`의 disk truth를 따른다). `run-all-guards.sh`는 R25 완료 선언 시 수동 호출된다(커밋마다 자동 실행되지 않는다). 일부 가드는 추가 진입점을 갖는다 — pre-commit 4 hard gates(`spec_ref`·`substance`·`evidence`·`time_decay`)는 practices/ 변경 커밋에서, `completion_checklist_recency`는 pre-push에서 돈다. **114개 전량이 `run-all-guards.sh`에 등록돼 있다**(미등록 0 — `comm`으로 disk 목록과 대조해 실측). 단 **recency 계열 2개는 fixture-only 등록**이다: `completion_checklist_recency_guard.sh`(49th)와 `downstream_release_recency_guard.sh` [114]. 둘의 live 구동 위치는 `.githooks/pre-push`이며, R25 안에 live로 넣으면 *그 실행이 만들어야 할 기록을 그 실행이 이미 요구하는* 부트스트랩 사이클이 된다.
   R25 완료 선언 전에 `verify-completion.sh`를 실행하면 이 guard들이 모두 돌아간다.
 - **pre-commit / pre-push hook은 opt-in이다.** `install-hooks.sh`를 실행한 클론에서만 활성화된다.
   ax-template 자체 HEAD에서는 활성화되어 있다; fork-receiver가 활성화 여부를 결정한다.
@@ -590,6 +593,8 @@ enforcement을 막기 위한 falsification 증명. (적대적 감사 thesis: gat
 | pre-push (recency) | `completion_checklist_recency_guard.sh --fixtures` (pass_*/fail_* — HEAD 최신 audit면 통과, stale/없으면 차단). |
 | run-all-guards | falsification 증명 `practices/scripts/ax-prove-gate-blocks-agent.sh` (agent가 Map-반환 @ExceptionHandler→BLOCK→ProblemDetail→PASS). [76]가 backstop. 추가로 모든 guard가 `--include-fixtures`로 pass/fail fixture 쌍 실행. shell guard fail fixture의 non-vacuity는 [87](`fixture_kill_proof_guard`)이 기계 검증 — guard의 특정 탐지 로직을 anchor neuter로 무력화했을 때 fixture exit이 1→0으로 flip됨을 mutation으로 확인. |
 | per-domain test{Domain} | 각 task 자체가 binary pass/fail. 모든 도메인이 ViolationProofTest를 동봉 — 위반이 구조적으로 불가능함을 단언(by-construction falsification). |
+| **verify-downstream.sh** (설치 산출물) | **살아있는 결함으로 falsification-proven** — 수정 전(`a2551141`) 산출물을 `--artifact-override`로 주입해 결함별 RED를 실측: GH #89→**A0** RED(`method that in class JavaClasses cannot be applied to given types`) · GH #90→**A7** RED(`Could not create task ':testPractices'`) · GH #91→**A8** RED(`practicesGateActuallyScansTheProject() FAILED`) · F-030→**A1+A2** RED(`ENOENT ./ax.config.json`) · F-034→**A-pc+A5+A6** RED(배너 부재). 무주입 대조군은 11/11 PASS. 추가로 #78/#79/#86 형상 주입 시 각각 A4/A2/A3 RED. |
+| **[112][113][114]** | fixture 쌍 + **mutation differential** — 탐지 로직을 neuter하면 fail fixture가 exit 1→0으로 flip함을 실측 후 원상복구(`fixture_kill_proof_guard.sh` 규약, manifest 등재). 단 `downstream_release_recency/fail_missing_log`는 **fail-closed-by-construction**이라 단일 anchor로 flip 불가 — 가짜 anchor 등재 대신 [74]/[101] 선례를 따라 **미등재 + 사유 공시**. |
 
 → shell-testable 차단 표면(pre-commit · pre-push · run-all-guards · per-domain)은 전부 binary/falsification
 커버리지 보유. PreToolUse만 session-bound이라 by-construction 예외(gap 아님 — 트리거하는 게이트는 proven).

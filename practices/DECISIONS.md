@@ -3730,3 +3730,105 @@ versions agree"). `--version-fixture-root` pass/fail fixture 각각 exit 0/exit 
 START-PROMPTS.md`의 "plugin.json 버전이 0.1.0에 고정돼 있어 updater가 no-op한다"는 서술은
 이제 정확하지 않으나 해당 파일은 이 릴리스의 소유 범위 밖이라 갱신하지 않았다 — 소유
 레인에 인계.
+
+
+## R112 — 설치 스킬을 단일 진실원으로 둔 downstream-fixture 검증(마커 추출 + 조건 평가), 3층 배치 (GH #92 [META])
+
+**날짜**: 2026-08-14 · **닫는 백로그 항목**: BACKLOG P2-101(구조적 봉합) · 동반 closed
+P2-93~P2-100 (GH #89/#90/#91 + F-030~F-034)
+
+**결정.** `skills/ax-install-{hooks,java-enforcement,react-enforcement}/SKILL.md`를 설치 산출물의
+**단일 진실원**으로 확정하고, 그 fence들에 비가시 마커(`<!-- ax:artifact ... -->`)를 달아
+`practices/scripts/lib/ax_markers.py`가 **기계 추출**한다. 조건 분기(`ax:if`)와 값 치환(`ax:subst`)도
+같은 파서가 평가한다. `practices/scripts/verify-downstream.sh`가 이 산출물을 stock-shaped 2-스택
+픽스처(`practices/evals/fixtures/consumer-e2e/project/` — Spring Boot 4.1.0 / Gradle 9.5.1 /
+Spring Initializr가 실제로 생성하는 eager `tasks.withType<Test>` 블록 보존 / Next.js app-router /
+**두 root 모두 `.` 아님**)에 **verbatim 설치**한 뒤, 설치된 게이트에게 **진짜 위반을 차단하라고 요구**해
+11개 단언(A-pc · A0~A8 · A7b)을 검증한다. 모든 단언은 **exit code와 게이트 자신의 신호 문자열을
+쌍으로** 확인한다 — `git commit`은 게이트와 무관한 여러 이유로 실패하므로 "커밋이 실패했다"와
+"우리가 심은 이유로 ax 게이트가 거부했다"는 다른 주장이고 값이 있는 것은 후자뿐이다([85]의 규칙).
+배치는 **3층**이다:
+
+1. **오프라인·결정론 (R25 안)** — guard **[112]** `install_artifact_extractability_guard.sh`가 추출
+   **가능성 자체**를 게이트하고(마커가 깨지면 하네스는 조용히 아무것도 설치하지 않으며, 그 로그는
+   "설치할 게 없었다"와 구분되지 않는다), guard **[113]** `cross_artifact_contract_guard.sh`가 Class C
+   교차 산출물 합치를 **양쪽에서 독립 도출해 diff**한다(훅의 `-P` 플래그 이름 ↔ java 스니펫의
+   `gradleProperty(...)` 이름; eslint 룰 id ↔ INDEX 전수). 한쪽 리터럴만 바꿔도 도출 집합이 갈라지므로
+   **비-tautological**이다 — 고친 쪽의 문자열을 다른 쪽에서 grep하는 형태(자기 재확인)를 의도적으로
+   피했다.
+2. **릴리스 게이트 (pre-push)** — guard **[114]** `downstream_release_recency_guard.sh`가
+   `.claude-plugin/plugin.json`의 `version`이 푸시 범위에서 **값으로** 바뀔 때만 발화하고,
+   `.ax-downstream/runs.jsonl` 최신 행의 `head_sha` · `tree_clean` · 단언별 boolean **전건 true** ·
+   **산출물 digest 재계산 일치**를 요구한다.
+3. **E2E 실행 (주기/수동 seam)** — `verify-downstream.sh`는 사람이 부르는 seam이고,
+   `.github/workflows/consumer-e2e.yml`가 주간 advisory로 같은 것을 돌린다(premise probe를 **먼저**
+   돌려 실패하면 스윕을 아예 돌리지 않고 "PREMISE NOT ESTABLISHED"로 무측정을 명시 — 전제가 깨진
+   위에서 낸 pass는 무측정보다 나쁘다는 기존 관례, `practices-case-normalization.yml`와 동형).
+
+**동인.** (a) **살아있는 결함 검출** — 114개 guard와 R25는 전부 ax-template 자기 트리만 측정했고,
+설치 스킬이 소비 프로젝트에 만드는 산출물이 거기서 도는지는 어떤 게이트도 묻지 않았다. 1개 downstream
+bench 2일이 13건(F-017~F-029 = GH #78~#84 · #86~#91)을 냈는데 **전부 사람이** 찾았다(guard 발견 0건).
+(b) **stock scaffold 형상이 결함의 조건이다** — GH #78은 Gradle 8.14.5에서는 동작하고 9.5.1에서만
+inert였고, GH #79/F-030은 `react.root != "."`에서만, GH #90은 Initializr의 eager `withType<Test>`가
+있을 때만 재현된다. 즉 "우리 트리에서 green"은 이 결함들에 대해 **아무 말도 하지 않는다**.
+(c) **오프라인·결정론 게이트 posture 보존** — 이 카탈로그의 R25는 네트워크 없이 재현 가능해야 한다는
+기존 결정을 이번 도입으로 깨지 않는다(아래 대안 C 참조).
+
+**검토한 대안.**
+- **(A) 산출물 사본을 repo에 두고 parity guard로 SKILL.md와 대조** — rejected. 사본은 **조건 분기의
+  스냅숏을 고정**한다: `ax:if`/`ax:subst`가 있는 산출물은 렌더 결과가 config마다 다른데, 사본은 그중
+  한 렌더만 박제하므로 나머지 분기의 드리프트는 **영구 미관측**이 된다. 사본이 있으면 "무엇이 진실인가"가
+  두 곳에 적히고, 이 저장소가 반복해서 닫아온 결함(두 진리원이 조용히 갈라짐 — R111의 3-필드 version
+  동기화, [113]이 codify한 Class C)을 새로 만드는 셈이다. 마커 추출은 **사본 0**을 유지한다.
+- **(C) E2E 자체를 R25에 편입** — rejected. 하네스는 npm registry와 `services.gradle.org`에 접근하고
+  수십 분이 걸린다. R25는 오프라인·결정론이어야 하며, **직전 라운드에 Gradle 9 fixture가 정확히 같은
+  이유로 기각된 선례**가 있다. 대신 [112]/[113]이라는 **오프라인 대리 게이트**를 R25에 두어, E2E가
+  돌지 않는 날에도 "추출 가능성"과 "교차 계약 합치"는 매 커밋 강제된다.
+- **(D) 릴리스 게이트를 R25 안에** — rejected, **반증됨**: **부트스트랩 데드락**이다. 버전을 올리는
+  그 커밋은 자기 자신에 대한 audit 로그를 가질 수 없다(R25는 커밋 이전에 돈다). 그래서 [114]를
+  pre-push로 옮겼다 — 49th guard(`completion_checklist_recency_guard.sh`)가 같은 논리로 pre-push에
+  있는 것과 동일한 배치이며, 실행 순서는 `commit → verify-downstream.sh(로그 기록) → R25 → push([114])`다.
+- **(E) 컴파일되는 소스에서 문서 fence를 생성** — **연기·등재**(BACKLOG P2-102). Class B(문서 fence
+  안의 코드가 한 번도 컴파일된 적 없음, = GH #89)의 **더 강한 치료**다: 생성 방향이면 #89를 오프라인
+  javac로 **R25 안에서** 잡는다. 연기 사유는 커버리지와 비용 — 4개 산출물 중 java ArchUnit 1개만
+  대상이고(hook body는 셸, eslint config는 mjs, package.json 조각은 JSON) 별도 소스셋 신설이 필요하다.
+  **B와 배타적이지 않다**: 마커 추출 경로는 그대로 두고 fence의 **생성원**만 바뀐다.
+
+**결과(귀결).**
+- SKILL.md에 **비가시 마커 + 조건 문법**이 들어간다. 인간 가독 설명은 지시자 줄의 괄호 안에 보존해,
+  마커를 모르는 독자가 읽어도 문서가 그대로 읽히도록 유지한다.
+- **마커된 산출물은 기계 계약 아래에 놓인다** — fence를 지우거나 id를 충돌시키거나 `ax:subst` 선언을
+  본문과 어긋나게 두면 [112]가 커밋 시점에 BLOCK한다. 자유롭게 편집하던 문서 블록이 아니게 된다.
+- **E2E는 자동 강제되지 않지만 릴리스는 강제된다** — 평상시 커밋은 [112]/[113]만 통과하면 되고,
+  `plugin.json` version을 올리는 push는 [114]가 실제 하네스 GREEN 로그를 요구한다. 즉 "소비자에게
+  나가는 순간"에만 E2E 증거가 필수다.
+- fork-receiver는 `AX_SKIP_DOWNSTREAM_RELEASE_GATE=1`로 **명시 opt-out**할 수 있다 — 훅 자체가 clone마다
+  opt-in(`install-hooks.sh`)인 기존 posture와 같은 자율성 경계다. 우리 트리에서는 켜져 있다.
+- `ax.config.schema.json`에 **optional** 필드 2개가 생긴다: `java.testTask`(F-032 — 훅이 하드코딩하던
+  gradle 태스크명을 `ax:subst`로 치환) · `react.typescript`(F-033 — 파서 배선을 `ax:if`로 분기). 둘 다
+  **optional**로 둔 이유는 기존 fork의 `ax.config.json`을 소급 파괴하지 않기 위해서다(미지정 시 각각
+  `testPractices` / espree 기본 파서). **`java.testTask`의 오기가 #86류 조용한 결함이 아닌 근거**:
+  존재하지 않는 태스크명은 Gradle이 `Task 'x' not found`로 시끄럽게 실패하므로 오배선이 관측 가능하다 —
+  침묵하는 잘못된 기본값(#86의 `?: "com.example.app"`이 존재하지 않는 패키지를 스캔해 0 클래스를
+  PASS로 확정하던 형태)과 범주가 다르다. 따라서 이 필드에 fail-closed 강제를 걸지 않는다.
+
+**증거.** 하네스 11/11 PASS. **회귀 차등 3건** — `--artifact-override`로 #78/#79/#86의 pre-fix 형상을
+재주입하면 각각 A4/A2/A3이 RED(단언이 실제로 그 결함을 잡는다는 증명이지, "green이 났다"가 아니다).
+세 guard 전부 fixture 쌍 + **mutation differential**(탐지 로직을 무력화하면 fail fixture의 exit이 1→0으로
+flip, 이후 원상복구 diff 확인). M1/M2 — 8.14.5 wrapper jar가 Gradle 9.5.1을 기동하고, Spring Boot 4.1.0
+플러그인·Kotlin DSL 접근자·`includeTags`가 9.5.1에서 성립. guard 111 → **114**, plugin 0.1.6 → **0.1.7**.
+`backlog_convergence_integrity_guard.sh` exit 0(합계 347/354).
+
+**정직한 한계.** 이 하네스는 **재현 도구이지 발견 도구가 아니다** — 13건 전부 clean-room 인간 설치가
+찾았고 그것이 여전히 1차 발견 메커니즘이다. SKILL.md의 **산문 단계**(탐지 휴리스틱, husky/lefthook
+분기, worktree preflight, 수동 probe→detect→delete)는 실행되지 않아 미검증이고, **단일 형상**만 돈다.
+그래서 이번 웨이브의 수정 중 **하네스가 반증할 수 없는 것**들이 있다: `java.testTask`의 다른 이름 분기 ·
+`react.typescript=false` 분기 · F-030 수정의 `root:"."` 분기 · worktree preflight · husky/lefthook 분기.
+이 목록을 문서에만 적지 않고 백로그 행으로 등재했다(아래 후속).
+
+**후속 (BACKLOG 등재분).** P2-102(Option E — 컴파일되는 소스에서 fence 생성) · P2-103(husky/lefthook +
+worktree 배선 분기 미검증) · P2-104(config 조건 분기 미검증: `root:"."` / `typescript=false` /
+`testTask` 대체 이름) · P2-105(Next 특화 룰이 downstream에서 미발화 — P2-81/P2-87이 닫은 것은 문서
+도달성이지 발화가 아니다) · P2-106([114]의 위조저항이 49th guard 선례보다 약함 — digest 재계산 1종으로
+대체, 강도 차이는 헤더에 명시) · P3-143(버전 매트릭스 단일 점). 수렴률은 이 정직 등재로 100% → **98%**
+(347/354)로 내려가며, 북극성(2)의 IDW18+ 동결 해제선 70%는 계속 상회한다.

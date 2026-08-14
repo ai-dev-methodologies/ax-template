@@ -77,6 +77,9 @@ do not guess a package name.
 
 ### 2. Add the ArchUnit dependency
 
+Inside the project's existing `dependencies { }` block:
+
+<!-- ax:artifact id=java-archunit-dep path=build.gradle.kts kind=file-fragment base=java.root -->
 ```kotlin
 testImplementation("com.tngtech.archunit:archunit-junit5:1.3.0")
 ```
@@ -87,37 +90,60 @@ The root package must never be hardcoded into the test class — pass it through
 Gradle `systemProperty`, sourced from a project property so it can be overridden
 per-invocation without editing the build file:
 
+<!-- ax:artifact id=java-gradle-testpractices path=build.gradle.kts kind=file-fragment base=java.root -->
 ```kotlin
-// Supplies ax.rootPackage to every Test task WHEN -PaxRootPackage is passed; no error if absent —
+// Lazy handle on -PaxRootPackage. `providers.gradleProperty(...)` returns a Provider, which is NOT
+// resolved here at CONFIGURATION time (#90). The earlier shape put `?: error(...)` directly in the
+// task-registration body; a stock Spring Initializr scaffold already ships an eager
+// `tasks.withType<Test> { useJUnitPlatform() }`, which realizes every Test task including this one,
+// so EVERY `-P`-less Gradle invocation died with "Could not create task ':testPractices'". The gate
+// must fail when it RUNS, not hold `./gradlew tasks` (and every other task) hostage.
+val axRootPackage = providers.gradleProperty("axRootPackage")
+
+// Supplies ax.rootPackage to every Test task WHEN -PaxRootPackage is passed; no error if absent --
 // testPractices enforces its own presence below, §4 covers the last gap (an IDE runner bypassing Gradle).
 tasks.withType<Test>().configureEach {
-    (project.findProperty("axRootPackage") as String?)?.let { systemProperty("ax.rootPackage", it) }
+    axRootPackage.orNull?.let { systemProperty("ax.rootPackage", it) }
+}
+
+// #91: the built-in `test` task must EXCLUDE the gate's tag. Without this mirror, `./gradlew test`
+// absorbs the @Tag("PRACTICES") ArchUnit classes and FAILS there -- only testPractices' doFirst
+// sets ax.mainClassesDirs, so §4's 4th check throws under plain `test`.
+// This MUST be `tasks.named<Test>("test")`, never the shared `tasks.withType<Test>` block above:
+// an excludeTags applied to every Test task would silence testPractices itself.
+// Declared after the scaffold's own useJUnitPlatform(), so this configuration is the one that wins.
+tasks.named<Test>("test") {
+    useJUnitPlatform { excludeTags("PRACTICES") }
 }
 
 tasks.register<Test>("testPractices") {
+    // A7: a task with no `group` is structurally ABSENT from `./gradlew tasks` -- it surfaces only
+    // under "Other tasks" with `--all`. A gate a consumer cannot discover is a gate they will not run.
+    group = "verification"
+    description = "Runs the ax practices ArchUnit gate (JUnit tag PRACTICES)."
+
     // A `Test` task via `tasks.register<Test>(...)` starts EMPTY (only the built-in `test` gets
-    // these by convention) — without these two lines it scans nothing, reports `BUILD SUCCESSFUL`.
+    // these by convention) -- without these two lines it scans nothing, reports `BUILD SUCCESSFUL`.
     testClassesDirs = sourceSets["test"].output.classesDirs
     classpath = sourceSets["test"].runtimeClasspath
     useJUnitPlatform { includeTags("PRACTICES") }
 
-    // #86: a wrong-but-present package scans zero classes (§4's allowEmptyShould(true) then PASSes
-    // it silently) — fail LOUDLY instead of the literal fallback that made #86 possible.
-    systemProperty(
-        "ax.rootPackage",
-        project.findProperty("axRootPackage")
-            ?: error("axRootPackage unresolved — pass -PaxRootPackage=<your root package>")
-    )
-
     // #87: default logging shows only the failing METHOD, not the ArchUnit violation text naming
-    // the class. FULL alone (no `events` needed) restores it — confirmed empirically.
+    // the class. FULL alone (no `events` needed) restores it.
     testLogging {
         exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL
     }
 
-    // §4's 4th check needs main's compiled-class count. `doFirst`, not inline: `.files` eagerly
-    // resolves the FileCollection — this defers to EXECUTION time, after `compileJava` has run.
+    // EXECUTION time, not configuration time. Two independent reasons this block is `doFirst`:
+    //  - `.files` eagerly resolves the FileCollection, so it must run after `compileJava`;
+    //  - #90: an unresolved axRootPackage must abort THIS task, not every task in the build.
+    // #86 semantics are preserved exactly: a wrong-but-present package scans zero classes and
+    // §4's allowEmptyShould(true) would then PASS it silently, so an unresolved value fails LOUDLY
+    // here instead of falling back to a literal package name.
     doFirst {
+        val rootPackage = axRootPackage.orNull
+            ?: error("axRootPackage unresolved -- pass -PaxRootPackage=<your root package>")
+        systemProperty("ax.rootPackage", rootPackage)
         systemProperty(
             "ax.mainClassesDirs",
             sourceSets["main"].output.classesDirs.files.joinToString(File.pathSeparator) { it.absolutePath }
@@ -128,7 +154,8 @@ tasks.register<Test>("testPractices") {
 
 **Precedent asymmetry.** `backend/build.gradle.kts` also uses `?:` inside `tasks.withType<Test>` —
 `... ?: "128"` — but that's a harmless tuning knob; `ax.rootPackage` decides WHAT gets scanned, so
-it gets `?: error(...)` instead. Omitting it now fails immediately (`BUILD FAILED`), not silently:
+it gets `?: error(...)` instead — relocated into `doFirst` so the loudness costs the gate's own run,
+not the whole build (#90). Omitting `-P` fails immediately (`BUILD FAILED`), not silently:
 
 ```bash
 ./gradlew testPractices -PaxRootPackage=com.example.app
@@ -151,16 +178,24 @@ A **4th check**, `practicesGateActuallyScansTheProject`, is not an ArchRule and 
 `.allowEmptyShould(true)` — it tells that legitimate empty baseline apart from #86's wrong-package
 silent pass, which looks identical to the three rules above:
 
+<!-- ax:artifact id=java-archunit-test-class path=src/test/java/@@config.java.rootPackage|pkgdir@@/archunit/LayerBoundaryArchTest.java kind=file base=java.root substs=config.java.rootPackage -->
 ```java
-package com.example.app.archunit;
+// ax:subst config.java.rootPackage
+package @@config.java.rootPackage@@.archunit;
 
-import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.classes;
+// #89: `ArchRuleDefinition.classes` is deliberately NOT static-imported. This class already owns a
+// `private static JavaClasses classes()` helper, and a static import of the same simple name loses
+// to the member -- so the DTO rule's unqualified `classes().that()...beRecords()` bound to the
+// HELPER and the file did not compile ("method that in class JavaClasses cannot be applied to given
+// types"). `noClasses` has no such collision and stays static-imported; the one rule that needs the
+// other entry point calls it qualified, as `ArchRuleDefinition.classes()`, below.
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
 
 import com.tngtech.archunit.core.domain.JavaClasses;
 import com.tngtech.archunit.core.importer.ClassFileImporter;
 import com.tngtech.archunit.core.importer.ImportOption;
 import com.tngtech.archunit.lang.ArchRule;
+import com.tngtech.archunit.lang.syntax.ArchRuleDefinition;
 import com.tngtech.archunit.library.dependencies.SlicesRuleDefinition;
 import java.io.File;
 import org.junit.jupiter.api.Tag;
@@ -170,7 +205,7 @@ import org.junit.jupiter.api.Test;
 class LayerBoundaryArchTest {
 
     // No literal default (#86). Reading here is harmless (returns null); classes() below, called
-    // from each @Test body, throws — a named test failure, not an ExceptionInInitializerError.
+    // from each @Test body, throws -- a named test failure, not an ExceptionInInitializerError.
     private static final String ROOT_PACKAGE = System.getProperty("ax.rootPackage");
 
     private static JavaClasses cachedClasses;
@@ -178,10 +213,10 @@ class LayerBoundaryArchTest {
     private static JavaClasses classes() {
         if (ROOT_PACKAGE == null || ROOT_PACKAGE.isBlank()) {
             throw new IllegalStateException(
-                    "ax.rootPackage unresolved — run with -PaxRootPackage=<your root package>.");
+                    "ax.rootPackage unresolved -- run with -PaxRootPackage=<your root package>.");
         }
         if (cachedClasses == null) {
-            // DO_NOT_INCLUDE_TESTS: not redundant — `classpath` includes main transitively.
+            // DO_NOT_INCLUDE_TESTS: not redundant -- `classpath` includes main transitively.
             cachedClasses = new ClassFileImporter()
                     .withImportOption(ImportOption.Predefined.DO_NOT_INCLUDE_TESTS)
                     .importPackages(ROOT_PACKAGE);
@@ -209,7 +244,8 @@ class LayerBoundaryArchTest {
 
     @Test
     void requestAndResponseClassesAreRecords() {
-        ArchRule rule = classes()
+        // Qualified on purpose (#89) -- an unqualified `classes()` here resolves to the helper above.
+        ArchRule rule = ArchRuleDefinition.classes()
                 .that().haveSimpleNameEndingWith("Request")
                 .or().haveSimpleNameEndingWith("Response")
                 .should().beRecords()
@@ -218,14 +254,14 @@ class LayerBoundaryArchTest {
     }
 
     // F1: neither this nor the rules above can tell a wrong root package apart from a legitimately
-    // empty baseline — both scan zero. Compares main's compiled count vs. ROOT_PACKAGE's match count.
+    // empty baseline -- both scan zero. Compares main's compiled count vs. ROOT_PACKAGE's match count.
     @Test
     void practicesGateActuallyScansTheProject() {
         String mainClassesDirsProp = System.getProperty("ax.mainClassesDirs");
         if (mainClassesDirsProp == null || mainClassesDirsProp.isBlank()) {
-            // Absent, not empty: §3's doFirst never ran — unverifiable, FAIL.
+            // Absent, not empty: §3's doFirst never ran -- unverifiable, FAIL.
             throw new IllegalStateException(
-                    "ax.mainClassesDirs unresolved — the testPractices doFirst block in §3 did not run.");
+                    "ax.mainClassesDirs unresolved -- the testPractices doFirst block in §3 did not run.");
         }
 
         // Unscoped by ROOT_PACKAGE (unlike classes()); never fed into an ArchRule.
@@ -233,27 +269,57 @@ class LayerBoundaryArchTest {
                 .importPaths(mainClassesDirsProp.split(File.pathSeparator));
 
         if (mainClasses.isEmpty()) {
-            return; // legitimately empty scaffold/aggregator — SKIP, not FAIL
+            return; // legitimately empty scaffold/aggregator -- SKIP, not FAIL
         }
 
         int scoped = classes().size();
         if (scoped == 0) {
             // Non-empty main, zero under ROOT_PACKAGE: the exact #86 shape.
             throw new AssertionError(String.format(
-                    "ax.rootPackage=%s matched 0 of %d compiled main classes — wrong root package.",
+                    "ax.rootPackage=%s matched 0 of %d compiled main classes -- wrong root package.",
                     ROOT_PACKAGE, mainClasses.size()));
         }
     }
 }
 ```
 
-Verified empirically (Gradle 8.5 / ArchUnit 1.3.0 / JUnit 6.0.3): violation→RED, wrong package→FAIL, clean→GREEN, empty scaffold→SKIP.
+The four behaviours this class is supposed to have — violation→RED, wrong package→FAIL,
+clean→GREEN, empty scaffold→SKIP — are **not** asserted here by a prose claim. They are exercised
+mechanically against a throwaway consumer project by `practices/scripts/verify-downstream.sh`,
+which materializes this block verbatim from its `ax:artifact` marker and runs it. A hand-written
+"verified empirically" note ages silently the moment the snippet is edited; the fixture run does
+not. If you change this snippet, re-run that script — do not re-add a manual claim.
 
 ### 5. Non-vacuous verification (mandatory — do not skip)
 
 A green `testPractices` run with zero violating classes proves nothing if the check never actually
 runs against real code — either no rule matched anything real, or the task executed zero tests
 (§3). Prove it fires, **in this order**:
+
+**Step 0 — build-level sanity, before any probe.** Each of the three commands below failed on a
+stock Spring Initializr scaffold while every later step in this section still reported success —
+that is exactly why they are here, ahead of the probe: a gate can be simultaneously "green" and
+uninstallable, unlistable, or fatal to the ordinary build.
+
+```bash
+# 0a. the §4 snippet compiles UNMODIFIED -- a snippet that needs hand-editing to compile
+#     is not an installable artifact (#89: a static-imported `classes` lost to the helper
+#     of the same name, so the DTO rule did not compile at all).
+./gradlew compileTestJava
+
+# 0b. NO -P, and an ordinary task listing still succeeds -- the gate must not hold the whole
+#     build hostage (#90: `?: error(...)` at configuration time made every `-P`-less Gradle
+#     invocation fail, including this one). `testPractices` must ALSO appear in the output,
+#     under "Verification tasks" -- a task with no `group` is invisible here (A7).
+./gradlew tasks
+
+# 0c. the gate is ISOLATED from the ordinary test task (#91: without the excludeTags mirror in
+#     §3, plain `test` absorbs the @Tag("PRACTICES") classes and fails on ax.mainClassesDirs).
+./gradlew test -PaxRootPackage=<the real root package>
+```
+
+If any of 0a–0c fails, stop: the defect is in §3/§4, and every step below would be measuring a
+build that a consumer cannot actually use.
 
 1. **Confirm the task executed tests at all.** After any `testPractices` run:
    ```bash
@@ -296,5 +362,6 @@ If the probe does not turn RED: (a) step 1 already showed `tests="0"` — fix §
 - [ ] `testPractices` reads `ax.rootPackage` via `systemProperty`/`-P`, never a literal package string baked into the build file — an unresolved value fails the task immediately (`?: error(...)`), it does not fall back to `"com.example.app"` (ax-template #86)
 - [ ] The written ArchUnit test class(es) are new, project-specific files (no literal ax-template package name anywhere), and all three rule bodies include `.allowEmptyShould(true)`
 - [ ] The 4th check (`practicesGateActuallyScansTheProject`) is present, its non-null/empty resolution lives in a `@Test` body (never a `static` initializer), and `testLogging { exceptionFormat = FULL }` is set (ax-template #86/#87)
+- [ ] §5 Step 0 ran and all three passed: the §4 snippet compiled **unmodified** (`compileTestJava`), `./gradlew tasks` succeeded **without** `-PaxRootPackage` and listed `testPractices` under Verification tasks, and `./gradlew test -PaxRootPackage=<real>` passed with the gate excluded (#89 / #90 / A7 / #91)
 - [ ] `build/test-results/testPractices/*.xml` was checked and showed a nonzero test count before trusting any GREEN result
 - [ ] The probe→RED→delete→GREEN check ran (RED output named the probe class, GREEN re-run matched step 1's count), and — if a pre-commit hook is installed — the same RED was **also** observed through `git commit` (step 5.6), not only the manual `-P` call

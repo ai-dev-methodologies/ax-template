@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "stacks": ["react", "java"],
+  "react": {
+    "root": "frontend",
+    "srcDir": "src",
+    "typescript": true,
+    "alias": { "@/": "src/" },
+    "layers": { "app": ["app"], "features": ["features"], "shared": ["components", "lib"] }
+  },
+  "java": {
+    "root": "backend",
+    "buildTool": "gradle",
+    "rootPackage": "com.example.backend",
+    "testTask": "testPractices"
+  }
+}

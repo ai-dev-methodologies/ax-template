@@ -28,9 +28,11 @@ signature를 발견**(17/17)함으로써 경험적으로 반증되었다 — 발
 |---|---|---|---|
 | P0 (expiry-bound / live defects) | 30 | 30 | **100%** |
 | P1 (generic signature backlog) | 74 | 74 | **100%** |
-| P2 (verification escapes) | 94 | 93 | **99%** |
-| P3 (industry-niche deferrals) | 141 | 141 | **100%** |
-| **P0–P3 합계 (수렴 분모)** | **339** | **338** | **100%** |
+| P2 (verification escapes) | 108 | 102 | **94%** |
+| P3 (industry-niche deferrals) | 142 | 141 | **99%** |
+| **P0–P3 합계 (수렴 분모)** | **354** | **347** | **98%** |
+
+> 2026-08-14 downstream-fixture E2E 웨이브 — **1개 downstream bench 2일이 13건(F-017~F-029 = GH #78~#84 · #86~#91)을 냈고 전부 사람이 찾았다(guard 발견 0건)**. 이번 웨이브가 닫은 것: GH #89/#90/#91(#86의 봉합이 **스스로 낳은** BLOCKING 3건 — 셋 다 스킬 §5 self-verification을 통과했다: ArchUnit 스니펫 컴파일 불가 · configuration-시점 `error(...)`가 `-P` 없는 모든 gradle 호출을 죽임 · 기본 `test`가 `PRACTICES` 태그를 함께 돌림) + 세션 발견 5건(F-030 eslint config의 하드코딩 `./ax.config.json` ↔ `cd $REACT_ROOT` 충돌 · F-031 **처방된 적 없는** `lint` 스크립트를 `--if-present`로 부르는 훅 = react 게이트 미발화 · F-032 태스크명 하드코딩 · F-033 TS 유무를 에이전트 추측에 위임 · F-034 훅의 무조건 출력 부재로 "scope-skip 통과"와 "훅 미설치"가 구분 불가) + GH #92 [META]의 **구조적** 봉합(`verify-downstream.sh` 하네스 11 단언 + 마커 **단일 파서** `ax_markers.py` + guard [112]/[113] 오프라인 R25 + guard [114] pre-push 릴리스 게이트 + 주간 advisory 워크플로; guard 111→**114**, plugin 0.1.6→**0.1.7**). closed 9건(P2-93 ~ P2-101). **정직한 부기**: 하네스가 **반증할 수 없는** 잔여를 6건 신규 등재했다(P2-102 Option E · P2-103 husky/lefthook·worktree 배선 · P2-104 config 조건 분기 · P2-105 Next 특화 룰 · P2-106 [114] 위조저항 · P3-143 버전 매트릭스) — 하네스는 **재현 도구이지 발견 도구가 아니며**, 1차 발견 메커니즘은 여전히 clean-room 인간 설치다. 분모 339→**354**, closed 338→**347** = **98%**. 수렴률이 100%→98%로 내려간 것은 봉합보다 정직 등재가 많았다는 뜻이고 그것이 정확한 부기다. 북극성(2)의 IDW18+ **동결 해제선 70%는 계속 상회**하므로 동결 판정에는 변화가 없다.
 
 > 2026-08-01 P1-seal 라운드 14 — reviewer P1 **2건**을 서로 다른 처방으로 봉합. **(P1-A) lexical `..`가 실재 alias를 놓친다**: 라운드 13은 심링크 타깃을 **lexical**로 해석해 `..`를 **follow 이전에** 텍스트로 접었다. 커널은 중간 symlink를 **follow 한 뒤** `..`를 pop한다. reviewer 토폴로지(커밋 내용만, 환경 통제 0): `backend/jump -> real/sub` + `backend/gradlew -> jump/../GRADLEW-REAL` over tracked `backend/real/gradlew-real` → POSIX는 `backend/real/GRADLEW-REAL`에 도달하고 case-insensitive APFS가 그것을 **추적 파일로 서비스**하므로 R25가 래퍼를 실제로 실행하고 green, lexical 후보 `backend/GRADLEW-REAL`은 **부재**라 두 구현 모두 dangling 종료로 **침묵**(측정: HEAD helper exit 0 + 클린트리 상수 `0a815065…`), case-**sensitive** 수신자는 **DANGLING gradlew**. 봉합: `_resolve_link_target`을 **component-by-component** 커널 해석으로 교체(중간 follow / 최종 컴포넌트는 lstat이므로 follow 안 함 / `..`는 follow 이후 pop / 중간 절대 타깃은 수신자 루트로 이탈 / 결측·판독불가 중간은 최종 lstat이 판정) + **예산 2종**(follow 40 = Linux MAXSYMLINKS와 macOS SYMLOOP_MAX 32 중 **큰 쪽**, component 4096) 소진 시 **침묵이 아니라** 신규 코드 `GIT_SYMLINK_RESOLUTION_UNBOUNDED`(fingerprint exit 16)로 BLOCK — 미완주 walk는 alias 질문에 **답하지 못한 것**이고 그 상태를 침묵으로 바꾸는 것이 라운드 8 이후 매 라운드가 닫아온 결함이며, 커밋된 cycle은 수신자에게 ELOOP다(측정: `loopa -> loopb/x`·`loopb -> loopa`, 커널 ELOOP, HEAD exit 0 → round-14 exit 16). 두 구현 대칭 봉합(helper + recency guard 12c). **P3-133은 SUPERSEDE — 그 행의 done-when(“발산 시 침묵”)은 이 P1을 보존한다**(reviewer 논거 인용과 함께 REJECT로 닫음), 그 행의 over-inclusive 반례를 새 resolver로 **재측정**: HEAD exit 15(부당 차단) → round-14 **exit 0 + 클린트리 상수**(첫 `..`에서 escapes). 정당한 **9형태 전부 재빌드해 exit 0**(HEAD·round-14 동일), 비공허성은 최종 컴포넌트 별칭 1건 추가 시 exit 15. 라운드 13 직접형 재확인: (AJ) 대소문자 · (AK) 정규화 **양쪽 모두 exit 15 유지**. 라이브 트리: symlink 2건 통과, digest **불변**(감사 가능 레시피 — clean `0a815065…` / dirty `8a91e493…`, HEAD 사본과 이번 사본 바이트 일치), 5회 평균 0.2738→0.2758 s/run(+0.7%, 노이즈). **(P1-B) 커밋된 런타임 경로 문자열**: R25가 체크리스트의 `command`/`working_directory`를 **verbatim** 실행(verify-completion.sh:1086 → :1561 `cd`+`bash -c`)하는데 그 문자열이 **기록된 스펠링**인지 아무도 묻지 않았다. 재현(커밋 내용만): `practices/evals/spec_policy_ref_guard.sh` → `PRACTICES/evals/…` 한 글자 케이스 변경 → APFS에서 명령 **exit 0**, `git cat-file -e HEAD:PRACTICES/…` **exit 128**, 트리 CLEAN, fingerprint **클린트리 상수**, [58] task-coverage exit 0, R25 위반 버킷 10종 전부 EMPTY = **green 증거 위조**. 처방을 **두 부분으로 분리**: **(1) 강제** — 신규 가드 [104] `checklist_command_path_spelling_guard.sh`가 체크리스트의 모든 경로형 토큰을 working_directory 기준 repo-relative로 풀어 **기록된 스펠링(추적 경로 또는 그 디렉터리 컴포넌트)** 이어야 하고, 아니면서 **공유 fold**(`tree_fingerprint.py`의 `_fold_path_key`를 import — 재구현 0)로 동치면 `CHECKLIST_PATH_ALIAS` BLOCK. **(st_dev, st_ino) 판별자를 쓰지 않는다** — 주제가 커밋된 파일 안의 **문자열**이지 검증 파일시스템 위의 경로가 아니므로 측정할 로컬 동일성이 없고 판정하는 것은 **수신자의** 파일시스템이다(그 덕에 가드와 fixture가 **파일시스템 독립**). candidate 규칙 7종을 헤더에 전수 열거하고 **라이브 체크리스트 오탐 0을 측정**: 367 토큰 → recorded 240 / unrelated 125 / skipped(flag) 2 / **alias 0**(`--show`로 표 출력). fixture 3종(pass_recorded_spellings / fail_command_case_alias = 재현 그대로 / fail_working_directory_alias). **(2) 정직한 한계** — 임의 커밋 내용의 경로 문자열 일반형은 **inspection으로 결정불가능**이므로 휴리스틱 스캐너를 출하하지 않고 **P2-72로 열어둔다**: 유일한 완전 처방은 **aliasing 하지 않는(대소문자·정규화 민감) 체크아웃에서 스위트를 실제로 돌리는 것**(이 프로젝트가 이미 구성 가능함을 증명한 `hdiutil create -fs "Case-sensitive APFS"`), 비용·채택 조건을 행에 명기. 값싼 완화책으로 `--advisory-scripts`(체크리스트가 **직접 호출하는** 셸 스크립트 1단계 literal 스캔)를 **비블로킹 ADVISORY**로 추가(라이브 3 스크립트·alias 0, 심은 alias 1건은 보고됨 = 비공허). prover 확장: (AN) jump 토폴로지 + (AN2) lexical 복원 twin + (AN3)/(AN4) 구현별 분리 twin + (AO) cycle 예산, 각각 premise 단언 동반. 신규 2건 등재(P2-72 · P3-134 = 중간 컴포넌트 별칭, 두 resolver 모두 미차단 — 측정·register-only) + P3-133 closed → 분모 308→310, 수렴 271/310 **87%**.
 
@@ -509,6 +511,145 @@ R25). *이름이 세션 기록에만 있던 항목을 여기로 영구화했다.
   no-inline-component-definition이 후자로만 커버되므로 파일명 단독 검사는 허위 갭을 낸다.
   3-way: live 15/15 · fail_missing_doc exit 1 · pass_covered exit 0.
 
+**downstream-fixture E2E 웨이브 (GH #89~#92 + 세션 발견 F-030~F-034) — 2026-08-14**
+
+tier 배정 근거(기존 관례 대조): 이 결함 클래스는 "**검증 표면이 소비 지점을 못 본다**"이므로 P2가 맞다.
+#89/#90/#91은 live BLOCKING이지만 P0로 올리지 않는다 — P0 섹션의 스코프는 expiry-bound 부채 +
+**카탈로그(룰·템플릿) 자신의** live defect이고(P0-29가 그 형태), 소비자에게 배포되는 **설치 스킬
+산출물**의 BLOCKING 결함은 GH #78(P2-79)·GH #79(P2-80) 이래 일관되게 P2로 등재돼 왔다. 같은 클래스를
+같은 tier에 둔다 — tier를 사건의 시끄러움이 아니라 결함 클래스에 배정하는 것이 이 원장의 관례다.
+
+- [x] P2-93 — **closed 2026-08-14 (GH #89, BLOCKING)**: `ax-install-java-enforcement` §4의 ArchUnit
+  스니펫이 **컴파일되지 않는다** — `ArchRuleDefinition.classes`를 static import 하는데 같은 클래스가
+  `private static JavaClasses classes()` 헬퍼를 갖고 있어 이름이 충돌한다(자기 클래스 멤버가
+  single-static-import보다 우선하므로 인자 0개 호출이 헬퍼로 해석된다). 설치한 프로젝트가 받는 것은
+  게이트가 아니라 **컴파일 에러**다. 봉합: static import 목록에서 `classes` 제거 + DTO 룰만
+  `ArchRuleDefinition.classes()`로 한정 호출(나머지 룰 무변경). 출처: GH #86 봉합이 **스스로 낳은**
+  BLOCKING 3건 중 하나 — 셋 다 스킬 §5 self-verification을 통과했다(그 절차가 컴파일을 요구하지
+  않았다). 회귀 고정: 하네스 단언 A0(설치된 ArchUnit 클래스가 실제로 `build/classes/java/test`에
+  컴파일됐는가 — `compileTestJava` exit 0만으로는 부족하다).
+- [x] P2-94 — **closed 2026-08-14 (GH #90, BLOCKING)**: GH #86이 도입한 fail-loud `?: error(...)`가
+  **configuration 시점**에 평가된다. stock Spring Initializr가 생성하는 eager `tasks.withType<Test>`
+  블록이 `testPractices`를 configuration 중에 realize시키므로 `-PaxRootPackage` 없는 **모든** gradle
+  호출(`./gradlew tasks`·`build`·IDE sync)이 죽는다 — 게이트 하나가 빌드 전체를 인질로 잡는다.
+  봉합: `providers.gradleProperty(...)` + `doFirst { }`로 평가를 execution 시점으로 이동(#86의
+  fail-loud 의미론은 보존 — 그 태스크를 **실제로 돌릴 때만** 소리내어 실패한다). 회귀 고정: A7
+  (`-P` 없는 `tasks --all`이 exit 0이고 목록에 `testPractices`가 있다) + A7b(픽스처가 정말로 eager
+  블록을 갖는다는 **전제 단언** — 전제가 사라지면 A7은 조용히 공허해진다).
+- [x] P2-95 — **closed 2026-08-14 (GH #91, BLOCKING)**: 기본 `test` 태스크가 `PRACTICES` 태그 테스트를
+  **함께** 돌린다 — `testPractices`는 `includeTags("PRACTICES")`로 격리됐는데 `test`에는 대칭 배제가
+  없어, 소비 프로젝트의 평범한 `./gradlew test`/`build`가 카탈로그 게이트 실패로 깨진다. 봉합: 기본
+  `test`에 `excludeTags("PRACTICES")` 미러 추가. **경고 동반**: 공유 `tasks.withType<Test>`에 넣으면
+  `testPractices` 자신이 자기 태그를 배제해 **침묵**한다(같은 vacuous-green을 다른 자리에 만드는
+  형태) — 스니펫에 그 이유를 명문화했다. 회귀 고정: A8(`test`가 exit 0 · tests > 0 · 결과 XML에
+  `LayerBoundaryArchTest` **부재**).
+- [x] P2-96 — **closed 2026-08-14 (F-030, 본 세션 발견, BLOCKING)**: `ax-install-react-enforcement`가
+  설치하는 `eslint.config.mjs`가 `'./ax.config.json'`을 **하드코딩**하는데 훅은 `cd $REACT_ROOT`에서
+  eslint를 돌린다(P2-80 봉합의 직접 귀결) → `react.root != "."`인 모든 프로젝트에서 ENOENT. 두 봉합이
+  **각각은 옳은데 합쳐지면 깨지는** 형태라 어느 쪽 스킬의 §5도 잡을 수 없었다(§5는 자기 산출물만
+  본다). 봉합: config가 자기 위치에서 상향 탐색으로 `ax.config.json`을 찾는다 — `root: "."`도 그대로
+  성립한다(첫 탐색에서 발견). 회귀 고정: A-pc·A1·A2가 전부 `react.root="frontend"` 형상에서 **훅
+  경로로** 돈다(P2-92가 codify한 "검증 호출 ≠ 운영 호출"의 적용).
+- [x] P2-97 — **closed 2026-08-14 (F-031, 본 세션 발견, BLOCKING·무증상)**: 훅이
+  `npm run lint --if-present`를 부르는데 **어떤 설치 스킬도 `lint` 스크립트를 처방하지 않는다**.
+  `--if-present`는 스크립트 부재 시 exit 0 + 출력 0 → react 게이트가 **아예 발화하지 않는데 커밋은
+  전부 통과**한다. GH #86과 동형의 무증상 공허 GREEN이되 이번엔 게이트가 vacuous한 것이 아니라
+  **호출된 적이 없다** — 그래서 게이트 내부를 아무리 강화해도 잡히지 않는 층이다. 봉합: react 설치
+  스킬이 `lint`(+`test`) 스크립트를 명시 처방하고, 훅이 스크립트 **존재를 확인**해 없으면 소리내어
+  실패한다(`--if-present`의 침묵 제거). 회귀 고정: A-pc(positive control — 게이트가 심은 위반을 실제로
+  차단하고 훅 배너가 훅 실행을 증명한다; 이것이 통과-처리되면 그 run의 다른 모든 "BLOCKED" 판정이
+  무보증이므로 하네스는 그 경우를 **REAL FINDING**으로 취급한다).
+- [x] P2-98 — **closed 2026-08-14 (F-032, 본 세션 발견)**: 훅이 gradle 태스크명 `testPractices`를
+  **하드코딩**한다 — ax-template 자신의 태스크명이라, 다르게 명명한 소비 프로젝트에서는 배선이
+  어긋난다. 봉합: `ax.config.schema.json`에 **optional** `java.testTask` 필드 신설 + 훅 산출물이
+  `ax:subst`로 치환(미지정 시 `testPractices` 유지 — optional로 둔 이유는 기존 fork의 config를
+  소급 파괴하지 않기 위해서다). **#86류 조용한 결함이 아닌 근거**: 존재하지 않는 태스크명은 Gradle이
+  `Task 'x' not found`로 시끄럽게 실패한다 — 침묵하는 잘못된 기본값(#86의 `?: "com.example.app"`)과
+  달리 오배선이 관측 가능하므로, 이 필드의 부재/오기는 vacuous-green 계열이 아니다.
+- [x] P2-99 — **closed 2026-08-14 (F-033, 본 세션 발견)**: TypeScript 유무를 **에이전트 추측**에
+  맡겼다 — 파서 배선이 산문 지시로만 존재해 같은 스킬이 프로젝트마다 다른 산출물을 만들고, 그 차이를
+  아무도 측정하지 않는다(기계 계약 밖의 분기는 정의상 무측정이다). 봉합: **optional**
+  `react.typescript` 스키마 필드 신설 + 산출물이 `ax:if`로 조건 분기(true면 typescript-eslint 파서
+  배선, false/부재면 기본 espree). 하네스는 `typescript: true` 형상만 돈다 — false 분기는 여전히
+  미측정이며 아래 P2-104로 정직 등재한다.
+- [x] P2-100 — **closed 2026-08-14 (F-034, 본 세션 발견)**: 훅에 **무조건 출력이 없다** — scope-skip으로
+  통과한 커밋과 훅이 아예 설치되지 않은 커밋이 관측상 구분 불가라, "게이트가 안 걸렸다"가 "게이트가
+  없다"를 완벽히 위장한다(F-031이 정확히 그 위장 뒤에 숨어 있었다). 봉합: 훅이 스코프 판정 **이전에**
+  무조건 배너를 출력한다. 하네스는 이 배너를 **판별자로** 쓴다 — A5(양 root 밖 파일은 통과하되 배너는
+  있고 npm·gradle 마커는 없다 = PLUGIN-CHANNEL 규칙 6) + A6(A5의 전제: 파일이 실제로 staged됐고 훅이
+  실제로 돌았다).
+- [x] P2-101 — **closed 2026-08-14 (GH #92 [META], 구조적 봉합)**: 위 13건(F-017~F-029 = GH #78~#84 ·
+  #86~#91)이 **전부 사람이** 찾았다 — 114개 guard와 R25는 자기 트리만 검증하고, 설치 스킬이 소비
+  프로젝트에 만드는 산출물이 거기서 실제로 도는지는 어떤 게이트도 묻지 않았다(guard 발견 **0건**).
+  봉합 4층: **(1)** `practices/scripts/verify-downstream.sh` — stock-shaped 2-스택 픽스처
+  (`practices/evals/fixtures/consumer-e2e/project/`: Spring Boot 4.1.0 / Gradle 9.5.1 / Initializr의
+  eager `withType<Test>` 보존 / Next.js app-router / **두 root 모두 `.` 아님**)에 산출물을 SKILL.md
+  마커에서 **추출·verbatim 설치**하고 11개 단언(A-pc · A0~A8 · A7b)을 **exit code + 게이트 자신의 신호
+  문자열**로 검증한다(exit code 단독은 증거가 아니라는 [85]의 규칙 — `git commit`은 게이트와 무관한
+  열 가지 이유로 실패한다). 산출물 **사본 0** — 스킬을 고치면 내일 이 하네스가 그것을 돌린다.
+  **(2)** `practices/scripts/lib/ax_markers.py` — 마커 / `ax:if` / `ax:subst`의 **단일 파서**(하네스와
+  guard가 공유해 extractor 드리프트를 원천 차단; 독립 정규식 스윕 2벌이 조용히 갈라지는 형태를 만들지
+  않는다). **(3)** guard **[112]** `install_artifact_extractability_guard.sh`(오프라인, R25) — 추출
+  **가능성 자체**를 게이트한다(하네스가 마커를 못 찾으면 그 산출물은 조용히 무측정이 되고, 하네스
+  로그에서 "설치할 게 없었다"와 구분 불가다). guard **[113]** `cross_artifact_contract_guard.sh`
+  (오프라인, R25) — Class C(교차 산출물 드리프트) 합치를 **양쪽에서 독립 도출해 diff**한다(훅의 `-P`
+  플래그 이름 ↔ java 스니펫의 `gradleProperty(...)` 이름, eslint 룰 id ↔ INDEX 전수). 한쪽 리터럴만
+  바꿔도 도출 집합이 갈라지므로 비-tautological이다. guard **[114]**
+  `downstream_release_recency_guard.sh`(**pre-push**) — `.claude-plugin/plugin.json`의 `version`이 푸시
+  범위에서 **값으로** 바뀔 때만 발화하고, `.ax-downstream/runs.jsonl` 최신 행의 head_sha ·
+  tree_clean · 단언별 boolean **전건 true** · **산출물 digest 재계산 일치**를 요구한다. R25 안에 두면
+  **부트스트랩 데드락**(버전을 올리는 그 커밋이 자기 로그를 가질 수 없다)이라 49th guard와 같은 배치.
+  **(4)** `.github/workflows/consumer-e2e.yml` — 주간 advisory 스케줄(premise probe를 **먼저** 돌리고
+  실패하면 스윕을 아예 돌리지 않고 "PREMISE NOT ESTABLISHED"로 무측정을 명시 — 전제가 깨진 위에서 낸
+  pass는 무측정보다 나쁘다는 기존 관례). guard 111 → **114**, plugin 0.1.6 → **0.1.7**.
+  **실측**: 하네스 11/11 PASS · 회귀 차등 3건(#78/#79/#86 형상을 `--artifact-override`로 재주입하면
+  각각 A4/A2/A3이 RED) · 세 guard 전부 fixture 쌍 + **mutation differential**(탐지 로직을 무력화하면
+  fail fixture가 exit 1→0으로 flip, 이후 원상복구 diff 확인) · M1/M2(8.14.5 wrapper jar가 Gradle
+  9.5.1을 기동하고, Spring Boot 4.1.0 플러그인·Kotlin DSL 접근자·`includeTags`가 9.5.1에서 성립).
+  **정직한 한계 — 이 하네스는 재현 도구이지 발견 도구가 아니다**: 13건 전부 clean-room 인간 설치가
+  찾았고 그것이 여전히 **1차 발견 메커니즘**이다. SKILL.md의 **산문 단계**(탐지 휴리스틱, husky/lefthook
+  분기, worktree preflight, 수동 probe→detect→delete)는 실행되지 않아 미검증이고, **단일 형상**만
+  커버한다. 잔여는 아래 P2-102 ~ P2-106 · P3-143으로 정직 등재.
+
+- [ ] P2-102 — **Option E: 스니펫을 실제로 컴파일되는 파일로 두고 SKILL.md fence를 거기서 생성**
+  (Class B의 더 강한 치료). GH #89는 "문서 fence 안의 코드가 한 번도 컴파일된 적이 없다"는 형태였고,
+  이번 처방은 **하네스가 실제로 컴파일해서** 잡는다(A0) — 잡히기는 하되 **E2E 실행이 있어야만**
+  잡힌다. 생성 방향으로 뒤집으면 같은 결함이 **오프라인 javac로 R25 안에서** 차단된다(빠르고
+  네트워크 불요). 연기 사유: 4개 산출물 중 java ArchUnit **1개만** 이 처방의 대상이고(hook body는 셸,
+  eslint config는 mjs, package.json 조각은 JSON) ax-template 트리에 **별도 소스셋**을 신설해야 한다 —
+  비용이 이번 웨이브 범위를 넘는다. 마커 기반 추출(B)과 **배타적이지 않다**: 추출 경로는 그대로 두고
+  fence의 **생성원**만 바뀐다. done-when: java 산출물이 컴파일되는 소스에서 생성되고 fence↔소스
+  drift가 guard로 차단되며, #89 형상이 오프라인에서 RED. 출처: 2026-08-14 GH #92 설계 검토(등재만).
+- [ ] P2-103 — 훅 **배선 분기**를 하네스가 반증할 수 없다: `ax-install-hooks`는 `core.hooksPath`
+  (Branch A) · husky · lefthook 세 배선을 처방하는데 하네스는 A만 돈다. 같은 계열로 D-8이 도입한
+  worktree preflight(`.git`이 파일인 경우의 `--worktree` 변형, 공유 config의 `core.bare`/`core.worktree`
+  사전점검, 형제 불간섭 확인)도 **산문 절차**라 실행되지 않는다. 즉 이 분기들에 가한 수정은 하네스가
+  **반증할 수 없고**, green은 그 분기에 대해 아무 말도 하지 않는다 — 침묵을 성공으로 읽지 않기 위해
+  분리 등재한다. done-when: husky/lefthook 각 1형상 + linked-worktree 1형상을 픽스처로 추가하고 각
+  형상에서 A-pc(positive control)가 성립. 출처: 2026-08-14 하네스 자기-스코프 선언(등재만).
+- [ ] P2-104 — **config 조건 분기**를 하네스가 반증할 수 없다: 이번 웨이브가 도입·수정한 세 분기가
+  전부 미측정이다 — (a) F-030 수정의 `react.root:"."` 경로(상향 탐색이 첫 시도에서 성립하는 형상),
+  (b) `react.typescript=false`(espree 기본 파서 배선), (c) `java.testTask`가 기본값과 **다른** 이름인
+  경우. 하네스는 `root=frontend/backend` + `typescript=true` + 기본 태스크명이라는 **한 형상**만 돈다.
+  세 분기 모두 이번에 신설/수정된 코드 경로이므로 "기존에 돌던 것"이라는 방어도 없다. done-when: 세
+  분기를 픽스처 변형으로 추가하거나(비용: 형상마다 gradle/npm 왕복), 최소한 각 분기의 산출물 렌더
+  결과를 오프라인으로 단언. 출처: 2026-08-14 하네스 자기-스코프 선언(등재만).
+- [ ] P2-105 — Next 특화 카탈로그 룰이 downstream에서 미검증: 하네스는 `ax/no-upward-layer-import`
+  **하나**로 react 게이트의 발화를 증명한다(A1/A2). `no-god-route` · `no-route-client-data-fetching` ·
+  `no-server-state-in-local-state` 같은 app-router 의존 룰은 픽스처의 Next 앱에서 **한 번도 발화된 적이
+  없다**. P2-81/P2-87이 닫은 것은 그 룰들의 **문서 도달성**이지 downstream 발화가 아니므로, "룰이
+  소비 프로젝트에서 실제로 돈다"는 주장은 아직 근거가 없다. done-when: app-router 위반 1건을 픽스처에
+  심어 A1형 단언 추가(출력에서 룰 id 확인). 출처: 2026-08-14 하네스 커버리지 실측(등재만).
+- [ ] P2-106 — guard **[114]의 위조저항이 선례보다 약하다**: 49th guard
+  (`completion_checklist_recency_guard.sh` — 2515줄·14검사)는 여러 독립 판별자로 audit 로그 위조를
+  막는다. [114]는 그중 **산출물 digest 재계산 1종**으로 대체했다(SKILL.md에서 마커 본문을 다시 읽어
+  sha256을 재계산·대조 — `--artifact-override` run이 릴리스 증거로 오인될 수 없게 만드는 핵심
+  판별자다). 그러나 tree fingerprint 결박 · mid-run mutation 탐지 · resume 세탁 방어는 **없다**. 강도
+  차이를 guard 헤더에 명시했으나 명시가 차이를 없애지는 않는다. done-when: (a) [114]에 tree
+  fingerprint 결박을 추가하거나 (b) 이 게이트의 위협모델(릴리스 버전을 올리는 maintainer 자신)이 그
+  판별자들을 요구하지 않는다는 판정을 근거와 함께 기록하고 닫는다. 출처: 2026-08-14 GH #92 설계
+  자기평가(등재만).
+
 ## P3 — industry-niche deferrals (generic 아님 — 낮은 우선순위)
 
 > 2026-07-07 인라인화 시 세션기록 대조로 재집계. P3-1~21 확정 요지 인라인. P3-22~40은 IDW13-17
@@ -783,6 +924,14 @@ R25). *이름이 세션 기록에만 있던 항목을 여기로 영구화했다.
 - [x] P3-140 — **closed 2026-08-10 (E2E dogfood)**: `/ax-init-config`가 srcDir를 정확히 감지하고도 alias를 스키마 기본값 `{"@/": "src/"}`로 남겨 존재하지 않는 경로를 가리켰다(실측: srcDir=source 감지 성공, alias는 src/ 잔존). 봉합: tsconfig paths/vite alias 부재 시 **감지된 srcDir에서 유도**(`{"@/": "<srcDir>/"}`)하고, srcDir 자체를 못 찾은 경우에만 스키마 기본값 허용.
 - [x] P3-141 — **closed 2026-08-10 (git-소스 marketplace 실측)**: 플러그인 cache 경로에 plugin 버전이 박혀 있어(`…/cache/ax-transform/ax-transform/<버전>/`) D-7 범프 릴리스 뒤 소비 프로젝트의 `@ax/eslint-plugin-ax` 심링크가 옛 버전 디렉토리에 남는다 — GC되면 dangling(시끄러움), 남으면 stale 강제(조용함). 실측 확정분: git-소스 설치의 plugin root=cache 스냅숏, same-버전 재설치는 같은 경로 재생성으로 심링크 생존(inode 교체 후 require OK). 버전 이동 케이스 자체는 원격 범프 권한 밖이라 구조 추론. 봉합: USAGE-GUIDE §6에 갱신 후 심링크 재결박 절차(`npm i -D file:` 재실행 + probe 재확인) 명문화. 로컬-디렉토리 소스에서 관찰됐던 '소스 디렉토리 심링크' 현상은 git-소스에선 성립하지 않음이 실측됨(measured-FALSE).
 - [x] P3-142 **case-sensitive 검증 인프라의 TMPDIR 함정 + prover 잔여 케이스들의 동일 전제 (직전 행의 양팔 검증이 발견)** — ①`ax-prove-hermetic-runtime.sh`은 공격 토폴로지를 `${TMPDIR:-/tmp}` 밑 `$WORK`에 짓는다. 따라서 case-sensitive 볼륨 위 클론에서 실행해도 **TMPDIR을 볼륨으로 지정하지 않으면 부트 볼륨(폴딩) 의미론을 검사**한다 — `ax-case-sensitive-sweep.sh`의 `run-all-guards --include-fixtures` 호출(~line 270-273)도 TMPDIR 미지정이라 같은 함정: 기존 sweep green(357/0 ×2)의 TMPDIR-기반 프로브 부분은 **부분적으로 공허**했다(실측: TMPDIR 미지정 시 AQ/AR가 볼륨 위에서도 정상 실행 = false comfort). ②같은 볼륨 실측에서 이름 안 된 케이스들(`symmidfinal`(AP/AP2)·`casefold`·`dircase`·`nacase`·`symcase`·`symjump`)도 전역 `$WORK`가 case-insensitive라는 동일 전제로 VIOLATION — Linux ext4에서 이 가드가 여전히 RED일 추가 사유의 실측 확인(직전 행의 advisory 크론 판단을 재보강). done-when: sweep이 TMPDIR을 볼륨으로 강제(+leak 검증과 동일한 소리내는 실패) + 잔여 케이스들에 직전 행과 같은 축별 전제 게이팅 적용(또는 등가 토폴로지). 출처: 2026-08-10 직전 행 Arm-2 실측. → **closed 2026-08-10**: ①sweep이 TMPDIR을 볼륨 위 디렉토리로 강제 + 설정 직후 TMPDIR 내부 case-probe(두 스펠링→두 inode 요구, 실패 시 고유 exit로 소리내어 중단 — 기존 leak-검사 관행과 동형). ②잔여 6케이스 전부 fold-probe로 축별 게이팅(기존 `ax_fold_probe`/`WORK_FOLDS_*` 재사용, assertion 로직 무변경). 양팔 검증: 기본 APFS prover exit 0·SKIPPED 0(메인루프 독립 재현) / case-sensitive 볼륨+TMPDIR 강제에서 **VIOLATION 0**·SKIPPED-29(케이스별 사유+probe 증거)·최종 PASS(메인루프 독립 재현 — 수정 전 7건+ VIOLATION이던 표면). Linux advisory 크론의 첫 실행이 이제 전제 불일치 소음 없이 진짜 이식성 신호만 보고하게 된다.
+
+- [ ] P3-143 — downstream 하네스가 **버전 매트릭스의 한 점**만 돈다: Gradle 9.5.1 + Spring Boot 4.1.0 +
+  호출 머신에 설치된 Node/npm. 소비자가 쓰는 다른 Gradle(8.x — ax-template 자신이 8.14.5다) · 다른
+  Node major · Windows는 미측정이다. 이 축을 무시할 수 없는 이유: P2-79의 원인 자체가 **버전 차등**
+  (8.14.5에서는 동작, 9.5.1에서는 inert)이었으므로 이 축은 실제로 결함을 숨긴 전례가 있다. 다만
+  P2-103/P2-104(형상 축)와 달리 이 축은 조합 폭발로 비용이 발산하므로 낮은 우선순위로 분리 등재한다.
+  done-when: (a) 최소 2점(8.x · 9.x) 매트릭스를 weekly advisory 워크플로에만 추가하거나 (b) 단일 점
+  유지를 근거와 함께 결정하고 닫는다. 출처: 2026-08-14 하네스 자기-스코프 선언(등재만).
 
 ## P4 — trigger-bound scope_deferrals (수렴 분모 제외; by-design)
 

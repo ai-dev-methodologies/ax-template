@@ -92,6 +92,11 @@ the field list above (`version`/`stacks`/`react`/`java`/`design`/`rules`).
      `layers.app` / `layers.features` / `layers.shared` by name; directories that
      don't match any known layer name are left out and reported, not guessed into
      a layer.
+   - `typescript`: `true` if a `tsconfig.json` (or `jsconfig.json`) exists under
+     `root`, or any `.ts`/`.tsx` file exists under `srcDir`; `false` otherwise. This
+     drives whether the installed `eslint.config.mjs` wires the `typescript-eslint`
+     parser — leaving it unset on a TS project silently skips every ax rule on
+     `.ts`/`.tsx` files (see `skills/ax-install-react-enforcement/SKILL.md`).
 
 3. **For a detected Java stack, derive `java.*`:**
    - `root`: the directory containing the `build.gradle(.kts)`/`pom.xml`.
@@ -102,6 +107,12 @@ the field list above (`version`/`stacks`/`react`/`java`/`design`/`rules`).
      `com.example.app`). If the source tree is empty or has no common prefix
      deeper than one segment, report that and leave `rootPackage` for the user to
      fill in rather than guessing a one-segment package.
+   - `testTask`: default to `"testPractices"` (the ax-template reference
+     workload's own gate task name). Only override this default if the project's
+     `build.gradle(.kts)`/`pom.xml` already names its own practices/lint gate task
+     differently (e.g. a `registerTestTask`/custom `test` variant the project uses
+     for this purpose) — record that name instead and report which file it came
+     from. Do not guess a name that isn't backed by an actual task definition.
 
 4. **Leave `design.useCatalog` and `rules.excludeTags`/`rules.disabled` at schema
    defaults** (`useCatalog: true`, empty arrays) unless the user has already stated

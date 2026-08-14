@@ -333,16 +333,59 @@ contract as any other rule.
 
 ## 5d. Periodic jobs — one is scheduled, one you run yourself (added 2026-08-01)
 
-Three periodic checks exist. **One is now scheduled** (`practices-case-normalization`, weekly,
-advisory); the other two are **invocable but unscheduled** — no hook, no CI workflow and no R25
-step calls them, so they run exactly as often as a maintainer runs them. For those two the
-natural moment is **once before a release**, and that is the only cadence this section prescribes.
+Four periodic checks exist. **Two are now scheduled** (`practices-case-normalization`, weekly,
+advisory; downstream-fixture E2E, weekly, advisory) — the other two are **invocable but
+unscheduled** — no hook, no CI workflow and no R25 step calls them, so they run exactly as often
+as a maintainer runs them. For those two the natural moment is **once before a release**, and
+that is the only cadence this section prescribes. The downstream-fixture E2E row is the one
+exception to the scheduled/manual split above: it runs **both** ways — a weekly advisory cron
+that only ever reports, and a manual pre-release invocation whose GREEN output is a hard
+precondition for a release gate (see below the table).
 
 | Job | How it runs | Cost | What it answers |
 |---|---|---|---|
 | upstream URL spot audit | manual: `bash practices/scripts/external_url_spot_audit.sh` | network, minutes | do `source_type: external` citation URLs still resolve, and does the page still carry the id the citation claims? Three buckets: OK / SUSPICIOUS / UNREACHABLE. |
 | non-aliasing filesystem sweep (**case half only**) | manual: `bash practices/scripts/ax-case-sensitive-sweep.sh` | macOS only (`hdiutil`), ~16 min | does the guard suite still pass when the filesystem **does not fold case**? A committed path string can name a file by a spelling git never recorded, and the default case-insensitive APFS every macOS checkout lives on serves it anyway — the command runs, the tree is clean, R25 reports GREEN on evidence it never produced. |
 | non-aliasing filesystem sweep (**case + normalization**) | **scheduled**: `.github/workflows/practices-case-normalization.yml` — Mondays 08:00 UTC + `workflow_dispatch` | GitHub-hosted `ubuntu-latest`, minutes | the same question on a filesystem that folds **neither** case **nor** unicode normalization. ext4/overlayfs is case-sensitive *and* byte-preserving by default, so a Linux runner gets both halves for free where `hdiutil` gets only one. **Advisory (`continue-on-error: true`) — never blocks a merge.** |
+| downstream-fixture E2E | **scheduled**: `.github/workflows/consumer-e2e.yml` — Mondays 09:00 UTC + `workflow_dispatch` (one hour after the case-normalization sweep) **and** manual: `bash practices/scripts/verify-downstream.sh` | network (npm registry + Gradle distribution host), minutes | does the install skills' machinery — `skills/ax-install-{hooks,java-enforcement,react-enforcement}/SKILL.md`'s `ax:artifact` blocks, materialized into a throwaway consumer fixture — actually **block** a planted violation, not merely that installation completes without error? Answers "does the gate fire", not "did the install succeed". **The scheduled cron is advisory (`continue-on-error: true`) — never blocks a merge.** The manual invocation is not advisory in the same sense: it is the input a separate release gate consumes (below). |
+
+**The release gate this table's last row feeds.** `practices/evals/downstream_release_recency_guard.sh`
+[114] runs from `.githooks/pre-push`, but — unlike most guards in this repo — it does not fire on
+every push. It fires **only** when `.claude-plugin/plugin.json`'s `version` field's VALUE differs
+between the push range's base and the sha being pushed (a value comparison, not a file-touched
+comparison: the file can change shape without the version changing, and that must not trip this
+gate). When it does fire, it requires the **latest** line of `.ax-downstream/runs.jsonl` to show
+(i) `head_sha` matching the sha being pushed, (ii) `tree_clean: true`, (iii) every entry under
+`assertions` boolean true (not a single summary flag), and (iv) `artifact_digests` matching —
+key-for-key — a fresh sha256 recompute of every `ax:artifact` marker body in the SKILL.md files
+**at the pushed sha**, so editing a SKILL.md after `verify-downstream.sh` last ran is caught even
+if the JSONL line itself is left untouched. That log line is written by the **manual** invocation
+of `verify-downstream.sh` from this table — the scheduled cron writes no such log and cannot
+satisfy this gate by itself, because the gate demands the log match the exact sha being pushed,
+and a Monday cron run's sha is essentially never the sha of a later release push.
+
+**The fork-receiver asymmetry is real here too, stated plainly rather than left implicit.** A
+fork that bumps its OWN `plugin.json` version also trips this gate on ITS pushes, with the same
+requirement — a fresh `verify-downstream.sh` run against the sha being pushed. This mirrors the
+existing posture for every hook in this repo (`.githooks/pre-commit` / `.githooks/pre-push` are
+**opt-in per clone** via `practices/scripts/install-hooks.sh`; a fork that never installs the
+hooks never sees this gate at all). For the case where a maintainer needs to push a version bump
+and the gate's own preconditions genuinely cannot be met on that push (a root commit, a shallow
+clone, or the first push to a brand-new remote branch — the same base-resolution edge cases
+`completion_checklist_recency_guard.sh` already exempts by a distinct exit code), the guard's own
+explicit, named opt-out is `AX_SKIP_DOWNSTREAM_RELEASE_GATE=1` — documented here by name
+deliberately, so "just turn it off" is never advice a maintainer has to reverse-engineer from the
+guard's source.
+
+**Release order, and the cost of getting it wrong.** Commit everything first → run
+`verify-downstream.sh` against that exact committed tree (writes the `runs.jsonl` line this gate
+reads) → run the full R25 suite (`bash practices/scripts/verify-completion.sh`) → then push. If
+R25 comes back RED at that point, the fix requires a **new commit**, and a new commit changes the
+sha — which invalidates **both** the R25 audit log entry (`completion_checklist_recency_guard.sh`,
+the 49th guard, demands a recent entry for the exact sha at HEAD) **and** this gate's
+`.ax-downstream/runs.jsonl` entry (`head_sha` no longer matches). Both `verify-downstream.sh` and
+`verify-completion.sh` must be re-run against the new sha before the version-bump push can
+succeed — there is no partial-credit path where only one of the two re-runs.
 
 **Rule INDEX regeneration — not in the table above (it is triggered by an edit, not a
 schedule), but the same "runs when a human runs it" shape.** `practices/INDEX.md` and
