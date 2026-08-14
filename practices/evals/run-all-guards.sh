@@ -2786,6 +2786,16 @@ fi
 run_guard "downstream_release_recency/fixtures" 0 \
     bash "$SCRIPT_DIR/downstream_release_recency_guard.sh" --fixtures
 
+echo "[115] fixture_tracked_completeness_guard.sh (external adversarial critic CRITICAL-2 — every file that exists on disk under practices/evals/fixtures/** must be TRACKED IN HEAD, because a fixture file that lives only on the maintainer's machine makes every measurement taken on top of it unreproducible. This closes a REAL false-green, not a hypothetical one: practices/evals/fixtures/consumer-e2e/project/frontend/package-lock.json existed on disk and was silently absent from the repository because the MACHINE-LEVEL gitignore (core.excludesFile, e.g. ~/.gitignore_global) carries a package-lock.json line and \`git add -A\` skips ignored paths WITHOUT SAYING SO — practices/scripts/verify-downstream.sh runs \`npm ci\`, which REQUIRES that lockfile, so the harness's 11/11 PASS was produced by an uncommitted file and could not be reproduced anywhere else (not even the fixture's own README, which claimed the file was committed). Nothing else in the suite could see this, because every other gate reads the working tree, where the file IS present. Two modes, precedent [114]'s FIXTURE / --root DESIGN: GIT MODE (root is the git work-tree toplevel) diffs the disk file list under practices/evals/fixtures against \`git ls-tree -r HEAD\`, reporting each gap as STAGED-NOT-COMMITTED / IGNORED (with the verbatim \`git check-ignore -v\` line so the fix is on screen, not inferred) / NEVER-ADDED; submodule subtrees (read from HEAD's own gitlink entries, never hardcoded) and generated-but-empty node_modules/build/.gradle/.next trees are the only exclusions. FIXTURE-SHAPED MODE (root is not a work-tree toplevel) reads a .ax-fixture-tracked.txt manifest as the tracked-set stand-in, since git cannot answer 'is this tracked' inside a non-repo fixture directory. Exit: 0 PASS · 1 untracked fixture file(s) found · 2 usage/setup error (missing root, missing fixtures dir, unresolvable HEAD, missing fixture manifest in fixture-shaped mode). NOTE: the live entry below is EXPECTED RED until the fixtures this guard itself ships (practices/evals/fixtures/fixture_tracked_completeness/**, practices/evals/fixtures/downstream_release_recency/fail_forged_single_assertion/**, .../fail_override_present/**, .../fail_missing_assertion_key/**, and the consumer-e2e package-lock.json this guard was written to catch) are committed — this guard catching its OWN as-yet-uncommitted registration fixtures is the mechanism working, not a regression. Fixtures: pass_all_tracked 0 / fail_untracked_file 1 (a file present on disk absent from .ax-fixture-tracked.txt).)"
+run_guard "fixture_tracked_completeness/live" 0 \
+    bash "$SCRIPT_DIR/fixture_tracked_completeness_guard.sh"
+if [ "$INCLUDE_FIXTURES" -eq 1 ]; then
+    run_guard "fixture_tracked_completeness/fixture_pass_all_tracked" 0 \
+        bash "$SCRIPT_DIR/fixture_tracked_completeness_guard.sh" --root "$SCRIPT_DIR/fixtures/fixture_tracked_completeness/pass_all_tracked"
+    run_guard "fixture_tracked_completeness/fixture_fail_untracked_file" 1 \
+        bash "$SCRIPT_DIR/fixture_tracked_completeness_guard.sh" --root "$SCRIPT_DIR/fixtures/fixture_tracked_completeness/fail_untracked_file"
+fi
+
 echo ""
 echo "Total: $PASS passed, $FAIL failed"
 

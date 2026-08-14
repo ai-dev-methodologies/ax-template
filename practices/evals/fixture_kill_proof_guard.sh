@@ -185,7 +185,7 @@ items = doc.get('items') or []
 # with a fake anchor. Prior disk truth was 76 unique items (2 above the previous floor of 74);
 # the floor now tracks the new disk truth of 86 exactly, so none of the 10 new proofs are
 # removable without breaching the registry floor.
-LIVE_MIN_ITEMS = 86
+LIVE_MIN_ITEMS = 90
 
 structural = []
 

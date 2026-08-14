@@ -1,0 +1,3 @@
+# sub/ghost.txt is deliberately NOT listed here.
+README.md
+sub/a.txt

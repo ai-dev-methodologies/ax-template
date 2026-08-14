@@ -1,0 +1,5 @@
+# Stand-in for `git ls-tree -r HEAD` in FIXTURE-SHAPED mode: one root-relative
+# path per line. The manifest itself is excluded from the scan (it models git's
+# own bookkeeping, not a tracked blob).
+README.md
+sub/a.txt

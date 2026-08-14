@@ -5,3 +5,7 @@ satisfies every requirement: head_sha matches expected_head.txt, tree_clean is
 true, every recorded assertion is boolean true, and artifact_digests matches
 what the guard recomputes from `skills/*/SKILL.md` on disk (this fixture is not
 a git repo — see the guard header's FIXTURE-SHAPED mode). Expected: exit 0.
+
+The line also carries the complete declared assertion set (see
+`.ax-downstream/expected_assertions.txt`), `"verdict": "pass"`, and an empty
+`"override"` list — all three are now required.

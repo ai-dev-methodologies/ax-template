@@ -73,6 +73,18 @@
 #   A8    ./gradlew test -PaxRootPackage=... exits 0, build/test-results/test/*.xml reports
 #         tests > 0, AND LayerBoundaryArchTest is ABSENT from them (GH #91 gate isolation).
 #
+# ASSERTION MANIFEST — machine-readable, single source of truth, ONE line:
+# ax:assertions A-pc A0 A1 A2 A3 A4 A5 A6 A7 A7b A8
+#   guard [114] PARSES that line out of this file (at the pushed sha, via `git show`) and requires
+#   the audit log's `assertions` key set to match it EXACTLY — missing OR extra both BLOCK. Without
+#   it, [114] could only check "every assertion that happens to be RECORDED is true", which a
+#   one-line forgery (`{"forged-single": true}`) satisfies trivially; that was a real, reproduced
+#   hole in [114] before this manifest existed.
+#   A DECLARATION THAT DRIFTS FROM REALITY WOULD BE JUST AS VACUOUS, so this script CROSS-CHECKS
+#   itself at run time (step 4b below): the ids actually recorded by note() must equal the ids
+#   declared above, or the run fails with exit 8 and never reads as green. Add a note() call
+#   without touching the line above and the very next run says so.
+#
 # LOG: one line appended to .ax-downstream/runs.jsonl per run, pass or fail, in the schema guard
 # [114] (practices/evals/downstream_release_recency_guard.sh) already implements: head_sha,
 # tree_clean, assertions{id->bool}, artifact_digests{artifact id -> sha256 of the marker body
@@ -99,6 +111,10 @@
 #   4  network unreachable (npm registry / services.gradle.org) — NOT a skip
 #   5  the temporary tree could not be removed (leak)
 #   6  artifact extraction or installation failed
+#   7  a fixture file this run DEPENDS ON is not tracked in HEAD — the run would be measuring a
+#      tree nobody else can reconstruct (see the premise probe) — NOT a skip
+#   8  assertion-manifest drift: the ids recorded by note() do not equal the `# ax:assertions`
+#      declaration above, so guard [114]'s completeness check would be checking the wrong set
 set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -137,7 +153,8 @@ ${2:?--artifact-override needs <id>=<file>}"; shift 2 ;;
             OVERRIDE_ARGS="$OVERRIDE_ARGS
 ${1#--artifact-override=}"; shift ;;
         --keep) KEEP=1; shift ;;
-        -h|--help) sed -n '2,101p' "$0"; exit 0 ;;
+        # Print the whole header block, however long it grows — never a hardcoded line count.
+        -h|--help) awk 'NR>1 && /^[^#]/ {exit} NR>1' "$0"; exit 0 ;;
         *) echo "verify-downstream: unknown arg: $1" >&2; exit 2 ;;
     esac
 done
@@ -290,6 +307,39 @@ if [ "$PROBE_FAIL" != "0" ]; then
     echo "verify-downstream: TOOLCHAIN INCOMPLETE — no measurement was taken (this is a failure," >&2
     echo "  not a skip: an unmeasured run must never read as a green one)." >&2
     finish 3 "toolchain-missing"
+fi
+
+# FIXTURE REPRODUCIBILITY PREMISE — `npm ci` (below) REFUSES to run without frontend/package-lock
+# .json, so this run's very first step depends on that file. Existing ON DISK is NOT enough: a
+# lockfile that is present locally but absent from the repository makes every assertion in this run
+# irreproducible on a clean clone or a CI runner, while the run itself still prints a full green.
+# That is not hypothetical — it is exactly what happened: a MACHINE-LEVEL gitignore
+# (core.excludesFile) carries `package-lock.json`, `git add -A` skipped it SILENTLY, and this
+# harness's 11/11 PASS was produced by an uncommitted file. So the premise checked here is
+# TRACKED IN HEAD, not merely readable. (Guard [115],
+# practices/evals/fixture_tracked_completeness_guard.sh, enforces the same invariant across the
+# whole fixtures tree; this probe is the local, loud version for the one file this run cannot start
+# without.)
+LOCKFILE="$FIXTURE_SRC/frontend/package-lock.json"
+LOCK_REL="${LOCKFILE#$REPO_ROOT/}"
+if [ ! -f "$LOCKFILE" ]; then
+    echo "  MISSING: $LOCK_REL (npm ci cannot run without it)" >&2
+    echo "verify-downstream: FIXTURE PREMISE NOT ESTABLISHED — no measurement was taken." >&2
+    finish 7 "fixture-lockfile-missing"
+elif ! git -C "$REPO_ROOT" cat-file -e "HEAD:$LOCK_REL" 2>/dev/null; then
+    echo "  UNTRACKED: $LOCK_REL exists on disk but is NOT in HEAD." >&2
+    echo "    Everything this run measures would rest on a file only this machine has." >&2
+    IGNORED_BY="$(git -C "$REPO_ROOT" check-ignore -v -- "$LOCK_REL" 2>/dev/null)"
+    if [ -n "$IGNORED_BY" ]; then
+        echo "    git check-ignore -v says: $IGNORED_BY" >&2
+        echo "    That rule is machine-level, and \`git add -A\` obeys it SILENTLY." >&2
+    fi
+    echo "    FIX: git add -f \"$LOCK_REL\" && git commit" >&2
+    echo "verify-downstream: FIXTURE PREMISE NOT ESTABLISHED — no measurement was taken (this is" >&2
+    echo "  a failure, not a skip: an unreproducible run must never read as a green one)." >&2
+    finish 7 "fixture-lockfile-untracked"
+else
+    echo "  ok: $LOCK_REL tracked in HEAD"
 fi
 
 for url in "https://registry.npmjs.org/" "https://services.gradle.org/distributions/"; do
@@ -859,6 +909,34 @@ else
     tail -30 "$WORK/a8.log" | sed 's/^/      /'
     note "A8" false
 fi
+
+# ── 4b. ASSERTION MANIFEST CROSS-CHECK ───────────────────────────────────────────────────────
+# The `# ax:assertions` header line is what guard [114] reads to know how many assertions a
+# complete run must record. A declaration nobody checks is a second, silently-drifting source of
+# truth — so the set DECLARED there is compared here against the set this run ACTUALLY recorded via
+# note(). They must be equal: an assertion added below without updating the line (or a declared id
+# whose note() call was deleted) fails the run outright instead of quietly shrinking what [114]
+# demands. Only reached on the full path — the early finish() exits log a partial assertion set and
+# a non-"pass" verdict, which [114] rejects on its own terms.
+DECLARED_IDS="$(sed -n 's/^#[[:space:]]*ax:assertions[[:space:]]\{1,\}//p' "${BASH_SOURCE[0]}")"
+DECLARED_LINES="$(printf '%s\n' "$DECLARED_IDS" | grep -c . )"
+DECLARED_SORTED="$(printf '%s\n' $DECLARED_IDS | grep -v '^$' | sort -u)"
+RECORDED_SORTED="$(cut -f1 "$ASSERT_FILE" | grep -v '^$' | sort -u)"
+if [ "$DECLARED_LINES" != "1" ]; then
+    echo "verify-downstream: the '# ax:assertions' declaration must appear EXACTLY once in this" >&2
+    echo "  file (found $DECLARED_LINES). Guard [114] parses it to know the complete assertion set." >&2
+    finish 8 "assertion-manifest-drift"
+fi
+if [ "$DECLARED_SORTED" != "$RECORDED_SORTED" ]; then
+    echo "verify-downstream: ASSERTION MANIFEST DRIFT — the '# ax:assertions' declaration and the" >&2
+    echo "  ids this run actually recorded are not the same set." >&2
+    echo "    declared: $(printf '%s ' $DECLARED_SORTED)" >&2
+    echo "    recorded: $(printf '%s ' $RECORDED_SORTED)" >&2
+    echo "  Update the declaration (or restore the missing note() call) — guard [114] would" >&2
+    echo "  otherwise enforce completeness against a set that is not what this harness measures." >&2
+    finish 8 "assertion-manifest-drift"
+fi
+echo "  manifest: $(printf '%s ' $DECLARED_SORTED)— declared set == recorded set"
 
 # ── 5. VERDICT ───────────────────────────────────────────────────────────────────────────────
 PASSED="$(grep -c '	true$' "$ASSERT_FILE")"

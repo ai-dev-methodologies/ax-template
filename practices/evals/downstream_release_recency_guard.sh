@@ -25,10 +25,20 @@
 # WHAT "PASS" REQUIRES — the LATEST line of `.ax-downstream/runs.jsonl` must satisfy ALL of:
 #   (i)   head_sha            == the sha being pushed
 #   (ii)  tree_clean           is boolean true
-#   (iii) assertions           is a non-empty object whose values are ALL boolean true (not a
-#         single summary flag — Layer 1 records one entry per behavioral assertion it made, e.g.
-#         "A0", "A1", ... "A8", and every one of them must be true; a forged
-#         `echo '{"all_pass":true}' >> runs.jsonl` does not have this shape)
+#   (iii) assertions           is a non-empty object whose values are ALL boolean true AND whose
+#         KEY SET IS EXACTLY THE HARNESS'S DECLARED ASSERTION MANIFEST — missing key and extra key
+#         both BLOCK. "every value that happens to be present is true" is NOT enough and was a real
+#         hole: `{"forged-single": true}` satisfied it, so a single hand-typed line passed the
+#         release gate while claiming nothing. The manifest is NOT re-listed here (a second source
+#         of truth would drift); it is PARSED from the harness itself — the one
+#         `# ax:assertions <id> <id> …` line in practices/scripts/verify-downstream.sh, read AT THE
+#         PUSHED SHA. Add or remove a note() call there and this gate follows automatically, and
+#         the harness cross-checks that line against the ids it actually records at run time
+#         (exit 8 on drift), so the declaration cannot rot into a lie either.
+#   (iiib) verdict             == "pass", and override == [] (an empty list, and the key must be
+#         present). An --artifact-override run installs a body that is NOT what the SKILL.md
+#         carries — it is a regression differential by construction and can never be release
+#         evidence, no matter how green its assertions look.
 #   (iv)  artifact_digests      is an object mapping each ax:artifact id (see
 #         practices/scripts/lib/ax_markers.py) to the sha256 of that artifact's exact body text,
 #         and this guard RECOMPUTES that same map from the SKILL.md files as they exist AT THE
@@ -71,7 +81,10 @@
 #     dirty local edit after committing cannot influence the verdict.
 #   - FIXTURE-SHAPED mode (no .git): version-after comes from <root>/.claude-plugin/plugin.json,
 #     version-before from <root>/.ax-downstream/prev_version.txt, the sha to match against
-#     runs.jsonl's head_sha from <root>/.ax-downstream/expected_head.txt, and the SKILL.md content
+#     runs.jsonl's head_sha from <root>/.ax-downstream/expected_head.txt, the declared assertion
+#     manifest from <root>/.ax-downstream/expected_assertions.txt (whitespace-separated ids,
+#     #-comments ignored — the stand-in for parsing the harness, which a fixture tree does not
+#     carry), and the SKILL.md content
 #     for digest recompute is read directly from <root>/skills/*/SKILL.md on disk. This mode is
 #     used both by `--fixtures` (which drives it once per pass_*/fail_* subdirectory) and by any
 #     manual `--root DIR` invocation against a non-git directory.
@@ -208,6 +221,7 @@ import sys
 import os
 import json
 import hashlib
+import re
 import subprocess
 import tempfile
 import shutil
@@ -247,6 +261,54 @@ def read_json_file(path):
             return json.load(f)
     except (OSError, ValueError):
         return None
+
+
+HARNESS_REL = "practices/scripts/verify-downstream.sh"
+MANIFEST_RE = re.compile(r"^#\s*ax:assertions\s+(\S.*)$")
+MANIFEST_SOURCE = "(unresolved)"
+
+
+def declared_assertion_ids():
+    """The COMPLETE set of assertion ids a full harness run must record.
+
+    Derived, never duplicated: in live mode from the harness's single `# ax:assertions` line AS IT
+    EXISTS AT THE PUSHED SHA (so the gate follows the harness automatically, and a hand-edited
+    working copy cannot widen or narrow it); in fixture-shaped mode from the fixture's own
+    .ax-downstream/expected_assertions.txt, because a fixture tree carries no harness. An
+    unresolvable manifest is a BLOCK, never a skipped check.
+    """
+    global MANIFEST_SOURCE
+    if is_git:
+        MANIFEST_SOURCE = f"{HARNESS_REL} @ {expected_head}"
+        rc, content = git("show", f"{head_sha}:{HARNESS_REL}", cwd=root)
+        if rc != 0 or not content:
+            fail("AX_DOWNSTREAM_MANIFEST_UNRESOLVED",
+                 f"could not read {HARNESS_REL} at {head_sha!r}. The gate cannot know which "
+                 "assertions a complete run must record, so it refuses to accept the log.")
+        decls = [m.group(1) for m in
+                 (MANIFEST_RE.match(ln) for ln in content.splitlines()) if m]
+    else:
+        MANIFEST_SOURCE = ".ax-downstream/expected_assertions.txt"
+        path = os.path.join(root, ".ax-downstream", "expected_assertions.txt")
+        if not os.path.isfile(path):
+            fail("AX_DOWNSTREAM_MANIFEST_UNRESOLVED",
+                 f"{path} does not exist. In fixture-shaped mode this file declares the complete "
+                 "assertion set; without it the completeness check cannot run.")
+        with open(path, encoding="utf-8") as f:
+            body = "\n".join(ln for ln in f.read().splitlines()
+                             if ln.strip() and not ln.strip().startswith("#"))
+        decls = [body] if body.strip() else []
+
+    if len(decls) != 1:
+        fail("AX_DOWNSTREAM_MANIFEST_UNRESOLVED",
+             f"expected exactly ONE assertion-manifest declaration in {MANIFEST_SOURCE}, found "
+             f"{len(decls)}.")
+    ids = set(decls[0].split())
+    if not ids:
+        fail("AX_DOWNSTREAM_MANIFEST_UNRESOLVED",
+             f"the assertion manifest in {MANIFEST_SOURCE} declares zero ids — an empty manifest "
+             "would make the completeness check vacuous.")
+    return ids
 
 
 # ── Detect git-rootedness ────────────────────────────────────────────────────
@@ -406,6 +468,36 @@ try:
     if failing:
         fail("AX_DOWNSTREAM_LOG_PARTIAL_ASSERTIONS",
              f"the following assertion(s) are not boolean true: {failing}")
+
+    # ── COMPLETENESS: the recorded key set must be EXACTLY the harness's declared manifest ──
+    # Derived, never re-listed here (see header (iii)): parsed from the harness at the pushed sha
+    # in live mode, from the fixture's expected_assertions.txt in fixture-shaped mode. Without
+    # this, `{"forged-single": true}` passes every check above.
+    declared = declared_assertion_ids()
+    recorded_keys = set(assertions)
+    missing_assertions = sorted(declared - recorded_keys)
+    extra_assertions = sorted(recorded_keys - declared)
+    if missing_assertions or extra_assertions:
+        fail("AX_DOWNSTREAM_ASSERTION_SET_MISMATCH",
+             f"the audit log's assertion key set is not the harness's declared set "
+             f"({MANIFEST_SOURCE}). not_recorded={missing_assertions} "
+             f"undeclared_extra={extra_assertions}",
+             "A green line that records only some (or none) of the harness's assertions is not "
+             "evidence that the harness ran — it is evidence that SOMETHING wrote a line.")
+
+    if latest.get("verdict") != "pass":
+        fail("AX_DOWNSTREAM_LOG_NOT_PASS",
+             f"latest audit line's verdict={latest.get('verdict')!r}, not 'pass'. Only a run the "
+             "harness itself declared passing can back a release.")
+
+    override = latest.get("override")
+    if override != []:
+        fail("AX_DOWNSTREAM_LOG_OVERRIDE_PRESENT",
+             f"latest audit line's override={override!r}; a release requires an empty list. An "
+             "--artifact-override run installs a body the SKILL.md does not carry, so it is a "
+             "regression differential by construction, never release evidence. A MISSING "
+             "'override' key fails here too: it means the line was not written by the current "
+             "harness schema.")
 
     logged_digests = latest.get("artifact_digests")
     if not isinstance(logged_digests, dict):

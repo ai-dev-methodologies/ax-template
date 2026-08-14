@@ -33,14 +33,16 @@
 
 # min_items — the unique item count MAY NOT BE REDUCED below this number, and it is the ONLY
 # place in this file that states it (BACKLOG P3-104 — a prose restatement rotted to 57 while the
-# directive read 62). Re-measured from disk 2026-08-14 after the GH #92 registration append (guard
-# [112] install_artifact_extractability 5 + [113] cross_artifact_contract 2 + [114]
-# downstream_release_recency 3 = 10 new items on top of the prior 76 — a 4th [114] fixture,
-# fail_missing_log, was measured NOT single-anchor kill-proofable and is disclosed rather than
-# forced; see its comment block above): items, distinct ids and distinct (guard, fixture) pairs
-# are all equal to the value below. fixture_kill_proof_guard.sh pins the same number as
-# LIVE_MIN_ITEMS, so lowering the gate takes two coordinated edits rather than one silent deletion.
-min_items: 86
+# directive read 62). Re-measured from disk 2026-08-15 after the external-critic CRITICAL-2 closure
+# append (guard [115] fixture_tracked_completeness 1 + downstream_release_recency 3 more
+# single-audit-line fixtures the [114] registration pass had not yet covered
+# (fail_forged_single_assertion, fail_override_present, fail_missing_assertion_key) = 4 new items
+# on top of the prior 86 — a 4th downstream_release_recency fixture, fail_missing_log, was measured
+# NOT single-anchor kill-proofable and is disclosed rather than forced; see its comment block
+# above): items, distinct ids and distinct (guard, fixture) pairs are all equal to the value below.
+# fixture_kill_proof_guard.sh pins the same number as LIVE_MIN_ITEMS, so lowering the gate takes
+# two coordinated edits rather than one silent deletion.
+min_items: 90
 
 items:
 
@@ -1389,4 +1391,82 @@ items:
     fixture: practices/evals/fixtures/downstream_release_recency/fail_digest_mismatch
     fixture_arg: '--root'
     anchor: 'recomputed[k] != logged_digests[k]'
+    neuter: 'False'
+
+  # ── downstream_release_recency/fail_forged_single_assertion: one hand-typed key vacuously
+  #    satisfies "every present value is true" ──────────────────────────────────────────────
+  # fixture: runs.jsonl's `assertions` object is `{"forged-single": true}` — a single invented
+  #          key, boolean true. Every OTHER field on the line is genuinely clean (head_sha,
+  #          tree_clean, digests, verdict, override), so this fixture isolates exactly the
+  #          completeness gap the COMPLETENESS check exists to close: before it, one forged key
+  #          passed the earlier `v is not True` sweep vacuously (there is nothing false to find).
+  # anchor:  the set-difference guard comparing the recorded assertion key set against the
+  #          harness's declared manifest (missing OR extra keys) — shared with
+  #          fail_missing_assertion_key below (same check, two distinct fixture shapes: this one
+  #          has 10 undeclared-extra + 11 not-recorded, that one has exactly 1 not-recorded).
+  # neuter:  condition-constant False → the key-set mismatch is never reported regardless of
+  #          what `assertions` actually contains → exit 0.
+  - id: downstream_release_recency/fail_forged_single_assertion
+    guard: practices/evals/downstream_release_recency_guard.sh
+    fixture: practices/evals/fixtures/downstream_release_recency/fail_forged_single_assertion
+    fixture_arg: '--root'
+    anchor: 'missing_assertions or extra_assertions'
+    neuter: 'False'
+
+  # ── downstream_release_recency/fail_missing_assertion_key: one declared assertion is simply
+  #    absent from an otherwise all-true line ──────────────────────────────────────────────
+  # fixture: runs.jsonl's `assertions` object records 10 of the harness's 11 declared ids, every
+  #          one boolean true — A8 (the GH #91 gate-isolation assertion) is not a key at all, not
+  #          a false value. The earlier `v is not True` sweep over recorded keys only cannot see
+  #          a key that was never recorded.
+  # anchor:  the same set-difference guard as fail_forged_single_assertion above — this fixture
+  #          exercises the `missing_assertions` (not_recorded) branch specifically, with
+  #          `extra_assertions` empty, proving the check fires on a missing key alone and not
+  #          only on the wholesale-forged shape.
+  # neuter:  condition-constant False → a silently-dropped assertion key reads as a complete run
+  #          → exit 0.
+  - id: downstream_release_recency/fail_missing_assertion_key
+    guard: practices/evals/downstream_release_recency_guard.sh
+    fixture: practices/evals/fixtures/downstream_release_recency/fail_missing_assertion_key
+    fixture_arg: '--root'
+    anchor: 'missing_assertions or extra_assertions'
+    neuter: 'False'
+
+  # ── downstream_release_recency/fail_override_present: --artifact-override regression run
+  #    green cannot back a release ─────────────────────────────────────────────────────────
+  # fixture: every assertion is true, the key set is complete, digests match, verdict is `pass`
+  #          — but `"override": ["hook-body"]` records that the harness re-injected a pre-fix
+  #          artifact body (the mechanism `--artifact-override` exists for: watch an assertion
+  #          go RED against a known-bad shape). That override having been exercised makes the
+  #          line's green a regression-differential result, never release evidence, regardless
+  #          of how complete the rest of the line looks.
+  # anchor:  the override-presence check — a missing `override` key evaluates to `None`, which
+  #          also fails the `!= []` comparison, so the same anchor covers both "override was
+  #          used" and "the line predates the override field" in one predicate.
+  # neuter:  condition-constant False → a non-empty (or absent) override is silently accepted as
+  #          release evidence → exit 0.
+  - id: downstream_release_recency/fail_override_present
+    guard: practices/evals/downstream_release_recency_guard.sh
+    fixture: practices/evals/fixtures/downstream_release_recency/fail_override_present
+    fixture_arg: '--root'
+    anchor: 'override != []'
+    neuter: 'False'
+
+  # ── fixture_tracked_completeness/fail_untracked_file: a fixture file on disk absent from
+  #    the tracked-set stand-in ──────────────────────────────────────────────────────────────
+  # fixture: a fixture-shaped (non-git) root — sub/ghost.txt exists on disk under the root but
+  #          is not listed in .ax-fixture-tracked.txt (the fixture-shaped stand-in for
+  #          `git ls-tree -r HEAD`, per the guard's own header FIXTURE / --root DESIGN section).
+  # anchor:  the MANIFEST_NAME exclusion filter inside the fixture-shaped mode's disk walk
+  #          (`disk = [p for p in walk(root, root, [], tracked) if p != MANIFEST_NAME]`) —
+  #          the single boolean clause gating which paths enter `disk` at all in this mode.
+  # neuter:  condition-constant False → the list comprehension's filter never admits a path →
+  #          `disk` is always empty → `set(disk) - tracked` is always empty → no violation is
+  #          ever appended in fixture-shaped mode → exit 0. (Directly verified: original exits 1
+  #          on this fixture, neutered exits 0 on both this fixture and pass_all_tracked.)
+  - id: fixture_tracked_completeness/fail_untracked_file
+    guard: practices/evals/fixture_tracked_completeness_guard.sh
+    fixture: practices/evals/fixtures/fixture_tracked_completeness/fail_untracked_file
+    fixture_arg: '--root'
+    anchor: 'p != MANIFEST_NAME'
     neuter: 'False'

@@ -3832,3 +3832,14 @@ worktree 배선 분기 미검증) · P2-104(config 조건 분기 미검증: `roo
 도달성이지 발화가 아니다) · P2-106([114]의 위조저항이 49th guard 선례보다 약함 — digest 재계산 1종으로
 대체, 강도 차이는 헤더에 명시) · P3-143(버전 매트릭스 단일 점). 수렴률은 이 정직 등재로 100% → **98%**
 (347/354)로 내려가며, 북극성(2)의 IDW18+ 동결 해제선 70%는 계속 상회한다.
+
+**후속 2 (2026-08-15 외부 adversarial critic — codex, read-only).** shipped `ed5ca2a7`(위 R112 자신)에
+대해 `VERDICT: ITERATE`와 함께 9건이 나왔다. **CRITICAL 2건은 즉시 봉합**: P2-107(픽스처
+`frontend/package-lock.json`이 이 머신의 로컬 global gitignore에 흡수되어 미커밋 상태였다 — 위
+"증거"란의 11/11 PASS는 그 미커밋 파일 덕분이었고, 이는 이 R112 자신이 막으려던 "환경 누수
+false-green" 클래스가 R112 안에서 재발한 사례다; 신규 guard [115] `fixture_tracked_completeness_guard.
+sh`로 봉합) · P2-108(guard [114]가 단언 명부를 하드코딩 검사해 `{"forged-single": true}` 같은 위조
+로그를 통과시켰다 — [114]가 `verify-downstream.sh`의 11개 단언 이름을 파싱 도출해 정확 일치를 요구하는
+형태로 강화). **잔여 7건은 BACKLOG P2-109~P2-115로 정직 등재**(마커 필수속성 미검사 · [113] 비독립
+도출 · [114] 잔여 우회 3종+로드경로 불일치 · "사본 0"이 본문에만 참 · react-ts-eslint-dep 마커 공허 ·
+F-032/F-033 RED-차등 부재 · 커버리지 산문 과대주장). 수렴률 98%(347/354) → **96%**(349/363).

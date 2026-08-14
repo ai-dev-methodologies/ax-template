@@ -87,6 +87,17 @@ against `frontend/package.json` alone — no `node_modules/` was ever created or
 committed; `npm install --package-lock-only` resolves and writes the lockfile
 without materializing packages on disk.
 
+**It must be force-added: `git add -f`.** A machine-level gitignore
+(`core.excludesFile`, commonly `~/.gitignore_global`) very often carries a
+`package-lock.json` line, and `git add -A` then skips this file SILENTLY. That
+is not hypothetical here — it is exactly what happened once, and the harness's
+`npm ci` (which cannot run without the lockfile) went on printing a full green
+that no clean clone could reproduce. Two gates now refuse that state instead of
+trusting this paragraph: `verify-downstream.sh`'s premise probe stops with exit
+7 unless the lockfile is tracked **in HEAD**, and
+`practices/evals/fixture_tracked_completeness_guard.sh` [115] enforces the same
+invariant across every file under `practices/evals/fixtures/`.
+
 ## Naming
 
 All Java/config identifiers use `com.example.backend` / generic package names.

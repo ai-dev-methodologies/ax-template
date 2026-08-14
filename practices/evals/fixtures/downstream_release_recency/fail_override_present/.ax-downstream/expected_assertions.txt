@@ -1,0 +1,5 @@
+# The complete assertion set practices/scripts/verify-downstream.sh declares on its single
+# `# ax:assertions` line. A fixture tree carries no harness, so this file is the stand-in the
+# guard reads in FIXTURE-SHAPED mode (see its header). Whitespace-separated ids; #-comments
+# ignored.
+A-pc A0 A1 A2 A3 A4 A5 A6 A7 A7b A8
