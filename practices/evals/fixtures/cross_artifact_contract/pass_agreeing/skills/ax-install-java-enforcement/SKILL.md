@@ -5,6 +5,7 @@ description: fixture stub — java enforcement skill, gradle property contract o
 
 # Fixture — ax-install-java-enforcement (pass_agreeing)
 
+<!-- ax:artifact id=java-gradle-testpractices path=build.gradle.kts kind=file-fragment base=java.root -->
 ```kotlin
 // Lazy handle on -PaxRootPackage.
 val axRootPackage = providers.gradleProperty("axRootPackage")

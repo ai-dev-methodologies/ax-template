@@ -102,7 +102,7 @@ no `lint` script exits **0 with zero bytes of output**, so the react gate looked
 never executed a single rule (F-031). The hook therefore no longer uses `--if-present`: it names a
 missing script and fails. Merge these into `<react.root>/package.json`:
 
-<!-- ax:artifact id=react-lint-script path=package.json kind=file-fragment base=react.root -->
+<!-- ax:artifact id=react-lint-script path=package.json kind=file-fragment base=react.root merge=json-deep -->
 ```json5
 {
   "scripts": {
@@ -144,7 +144,7 @@ When `react.typescript` is false or absent, the `typescript-eslint` install abov
 `ax:if config.react.typescript` regions below drop out together — the default `espree` parser is
 correct for plain JS/JSX.
 
-<!-- ax:artifact id=react-eslint-config path=eslint.config.mjs kind=file base=react.root -->
+<!-- ax:artifact id=react-eslint-config path=eslint.config.mjs kind=file base=react.root merge=replace -->
 ```js
 import fs from 'node:fs'
 import path from 'node:path'

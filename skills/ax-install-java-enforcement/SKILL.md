@@ -79,7 +79,7 @@ do not guess a package name.
 
 Inside the project's existing `dependencies { }` block:
 
-<!-- ax:artifact id=java-archunit-dep path=build.gradle.kts kind=file-fragment base=java.root -->
+<!-- ax:artifact id=java-archunit-dep path=build.gradle.kts kind=file-fragment base=java.root merge=gradle-dependencies -->
 ```kotlin
 testImplementation("com.tngtech.archunit:archunit-junit5:1.3.0")
 ```
@@ -90,7 +90,7 @@ The root package must never be hardcoded into the test class — pass it through
 Gradle `systemProperty`, sourced from a project property so it can be overridden
 per-invocation without editing the build file:
 
-<!-- ax:artifact id=java-gradle-testpractices path=build.gradle.kts kind=file-fragment base=java.root -->
+<!-- ax:artifact id=java-gradle-testpractices path=build.gradle.kts kind=file-fragment base=java.root merge=append -->
 ```kotlin
 // Lazy handle on -PaxRootPackage. `providers.gradleProperty(...)` returns a Provider, which is NOT
 // resolved here at CONFIGURATION time (#90). The earlier shape put `?: error(...)` directly in the
@@ -178,7 +178,7 @@ A **4th check**, `practicesGateActuallyScansTheProject`, is not an ArchRule and 
 `.allowEmptyShould(true)` — it tells that legitimate empty baseline apart from #86's wrong-package
 silent pass, which looks identical to the three rules above:
 
-<!-- ax:artifact id=java-archunit-test-class path=src/test/java/@@config.java.rootPackage|pkgdir@@/archunit/LayerBoundaryArchTest.java kind=file base=java.root substs=config.java.rootPackage -->
+<!-- ax:artifact id=java-archunit-test-class path=src/test/java/@@config.java.rootPackage|pkgdir@@/archunit/LayerBoundaryArchTest.java kind=file base=java.root substs=config.java.rootPackage merge=replace -->
 ```java
 // ax:subst config.java.rootPackage
 package @@config.java.rootPackage@@.archunit;

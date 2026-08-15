@@ -185,7 +185,7 @@ items = doc.get('items') or []
 # with a fake anchor. Prior disk truth was 76 unique items (2 above the previous floor of 74);
 # the floor now tracks the new disk truth of 86 exactly, so none of the 10 new proofs are
 # removable without breaching the registry floor.
-LIVE_MIN_ITEMS = 90
+LIVE_MIN_ITEMS = 97
 
 structural = []
 
@@ -486,14 +486,17 @@ PY
     # The guards consult this variable ONLY when their committed helper path is absent, so it
     # is inert on every real tree and cannot substitute a weakened helper into a live run.
     export AX_RELEASE_ANCHOR_LIB="$REPO_ROOT/practices/scripts/lib/release_anchor.sh"
-    # Same affordance for the two ax_markers.py-importing guards (install_artifact_
-    # extractability_guard.sh [112], downstream_release_recency_guard.sh [114], added GH #92):
-    # both resolve practices/scripts/lib/ax_markers.py and (the former also) the consumer-e2e
-    # fixture's ax.config.json via REPO_ROOT, which collapses to "/" from a bare temp path.
-    # Consulted ONLY when the committed path is absent AND the root is not a git work tree — see
-    # each guard's own comment at the point of use.
+    # Same affordance for the ax_markers.py-importing guards (install_artifact_
+    # extractability_guard.sh [112], cross_artifact_contract_guard.sh [113],
+    # downstream_release_recency_guard.sh [114], added GH #92): all three resolve
+    # practices/scripts/lib/ax_markers.py, and [112] additionally resolves the consumer-e2e
+    # fixture's ax.config.json AND (P2-109) the committed ax.config.schema.json, via REPO_ROOT,
+    # which collapses to "/" from a bare temp path. Consulted ONLY when the committed path is
+    # absent AND the root is not a git work tree — see each guard's own comment at the point of
+    # use.
     export AX_MARKERS_LIB_DIR="$REPO_ROOT/practices/scripts/lib"
     export AX_CONSUMER_E2E_CONFIG="$REPO_ROOT/practices/evals/fixtures/consumer-e2e/project/ax.config.json"
+    export AX_CONFIG_SCHEMA="$REPO_ROOT/practices-react/eslint-plugin-ax/schemas/ax.config.schema.json"
     if [ -n "$fixture_arg" ]; then
         if [ -n "$fixture_arg2" ]; then
             bash "$TMP_GUARD" "$fixture_arg" "$FIXTURE_PATH" "$fixture_arg2" "$FIXTURE2_PATH" >/dev/null 2>&1

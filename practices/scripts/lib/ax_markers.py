@@ -19,7 +19,42 @@ MARKER SYNTAX (see the umbrella contract, section 1, for the authoritative spec 
 
         <!-- ax:artifact id=<kebab-id> path=<consumer-relative-path-or-"-">
                           kind=<file|file-fragment|command> [when=<config-path>]
-                          [base=<repo|java.root|react.root>] [substs=<comma-list>] -->
+                          [base=<repo|java.root|react.root>] [substs=<comma-list>]
+                          [merge=<json-deep|gradle-dependencies|append|replace>] -->
+
+    ATTRIBUTE VOCABULARY IS CLOSED (P2-109). REQUIRED_ATTRS (`id`, `path`, `kind`) must each be
+    present AND non-empty — an absent one used to default to the empty string and sail through
+    every downstream check, which is how a marker with no id/path/kind at all was measured to
+    lint clean (MISSING_REQUIRED_ATTR). `kind` must be one of REGISTERED_KINDS
+    (`file`/`file-fragment`/`command`) — anything else is UNREGISTERED_KIND, never a silent
+    pass-through to a harness that would then not know what to do with it. `path=-` (the "this
+    artifact installs no file" placeholder) is legal ONLY for `kind=command`
+    (INVALID_PATH_FOR_KIND). Any attribute NOT in ALLOWED_ATTRS is UNKNOWN_ATTR: an unrecognized
+    name is overwhelmingly a TYPO of a real one (`whn=`, `subst=`, `kidn=`), and silently
+    ignoring it means the intended constraint never applied while the marker still looked
+    well-formed. The same attribute appearing twice (`id=a id=b`) is DUPLICATE_ATTR — dict()
+    would keep the last and drop the first without a word about which the author meant.
+
+    `merge=` names HOW a fragment is combined with the file `path=` already contains (P2-112).
+    Before this attribute existed, that decision lived only inside the materializing harness
+    (verify-downstream.sh), which sniffed the target's basename/extension and the fragment's own
+    text to pick between JSON deep-merge, Gradle dependency-block injection, and append — a
+    placement RULE encoded as harness code, invisible to the marker that the rule is about, and
+    therefore free to diverge silently from what the skill author intended. The vocabulary is
+    exactly four values (REGISTERED_MERGES): `json-deep` (parse both sides as JSON and deep-merge
+    the incoming object in), `gradle-dependencies` (insert the fragment's dependency-notation
+    lines inside the target's `dependencies { }` block), `append` (concatenate to the end of the
+    target), `replace` (overwrite the target wholesale). The rules lint() enforces:
+        kind=file           -> merge= OPTIONAL; omitted means `replace` (Artifact.merge stays
+                               None and a consumer treats that as replace — writing a whole file
+                               IS a replace).
+        kind=file-fragment  -> merge= REQUIRED (MISSING_MERGE_FOR_FRAGMENT). A fragment with no
+                               declared merge mode is precisely the case where the harness had to
+                               guess, which is the defect being closed.
+        kind=command        -> merge= FORBIDDEN (MERGE_ON_COMMAND). A command installs no file,
+                               so there is nothing for a merge mode to describe.
+    An unrecognized value is UNREGISTERED_MERGE. This file only VALIDATES the declaration; acting
+    on it is the materializing harness's job.
 
     `base=` names the directory `path=` is relative to — without it the harness materializing
     these artifacts (verify-downstream.sh) would have to hardcode that convention itself, a
@@ -57,7 +92,34 @@ MARKER SYNTAX (see the umbrella contract, section 1, for the authoritative spec 
                                                                     @@<ns>.<path>@@ on the very
                                                                     NEXT body line
     <ns> is `config` (looked up against the caller-supplied ax.config.json dict) or `env`
-    (looked up against caller-supplied --env values). A human-readable explanation may follow a
+    (looked up against caller-supplied --env values).
+
+    CONFIG PATHS ARE CHECKED AGAINST THE SCHEMA (P2-109). A `config.*` reference — in `when=`, in
+    an `ax:if`, or in an `ax:subst` — that names a key ax.config.json has no schema for evaluates
+    to FALSE at render time and stays false forever: `ax:if config.react.typoField` deletes its
+    block on EVERY project, silently, and looks exactly like a correctly-disabled feature. That
+    is the whole defect, so lint() cross-checks every config path against
+    practices-react/eslint-plugin-ax/schemas/ax.config.schema.json and reports UNKNOWN_CONFIG_PATH
+    for one that does not resolve. The schema is passed to lint() AS AN ARGUMENT
+    (config_schema_path=) rather than located by this module — a parser that hardcodes the repo
+    layout it lives in stops working the moment it is vendored, relocated, or run from a fixture
+    tree, and the callers (guard [112], any future harness) already know where their schema is.
+    Resolution rules, walking the JSON-Schema tree one dotted segment at a time:
+        * a segment matching a key under the current node's `properties` descends into it;
+        * a segment against a node with an `additionalProperties` SCHEMA (e.g. `react.alias`,
+          whose keys are user-chosen alias prefixes) descends into that schema — the key names
+          are open by construction, so no name there can be "unknown";
+        * a node of `type: array` (e.g. `stacks`) terminates the walk as an ARRAY-MEMBERSHIP
+          test: `config.stacks.react` asks "does stacks[] contain 'react'", exactly matching
+          _lookup_condition()'s list branch. The membership segment must be the LAST one — there
+          is nothing to descend into past a scalar array element, so a longer path is a real
+          error rather than a membership test with trailing junk;
+        * anything else does not resolve -> UNKNOWN_CONFIG_PATH.
+    `env.*` references are NOT schema-checked: env values are supplied per-invocation by the
+    caller, so there is no schema that could enumerate them. Omitting config_schema_path skips
+    this one check entirely and leaves the other checks untouched.
+
+    A human-readable explanation may follow a
     directive IN A PARENTHETICAL ON THE SAME LINE — that is not flagged. Free-text conditional
     PROSE on a line that is NOT itself a directive line (e.g. "delete this block if you don't use
     TypeScript") is flagged (FREE_TEXT_CONDITIONAL): a human reading the skill cannot rely on
@@ -89,18 +151,23 @@ PUBLIC API
         and returns the final consumer-relative path. Shares the same reference resolver as
         render()'s ax:subst handling (_resolve_subst) — a missing reference or an unknown
         transformer both raise RenderError, and so does any residual '@@' surviving the pass.
-    lint(artifacts) -> list[Problem]
+    lint(artifacts, config_schema_path=None) -> list[Problem]
         Pure structural validation; never raises. See Problem for the (code, message,
         source_file, line) shape. Stable codes used here: MARKER_NO_FENCE, DUPLICATE_ID,
         UNREGISTERED_FENCE_LANG, DIRECTIVE_PREFIX_MISMATCH, UNBALANCED_AXIF, UNREGISTERED_BASE,
-        SUBST_DECL_MISMATCH, FREE_TEXT_CONDITIONAL. SUBST_DECL_MISMATCH checks substs= against
-        tokens used in BOTH the body and path= (a token in either place must be declared, and a
-        declared token must be used in at least one of the two).
+        SUBST_DECL_MISMATCH, FREE_TEXT_CONDITIONAL, MISSING_REQUIRED_ATTR, UNREGISTERED_KIND,
+        INVALID_PATH_FOR_KIND, UNKNOWN_ATTR, DUPLICATE_ATTR, MISSING_MERGE_FOR_FRAGMENT,
+        MERGE_ON_COMMAND, UNREGISTERED_MERGE, UNKNOWN_CONFIG_PATH, CONFIG_SCHEMA_UNREADABLE.
+        SUBST_DECL_MISMATCH checks substs= against tokens used in BOTH the body and path= (a
+        token in either place must be declared, and a declared token must be used in at least one
+        of the two). config_schema_path, when given, enables UNKNOWN_CONFIG_PATH (see the CONFIG
+        PATHS note above); when omitted, that single check is skipped and nothing else changes.
 
 CLI
-    python3 ax_markers.py lint <skill.md>...
+    python3 ax_markers.py lint [--schema <ax.config.schema.json>] <skill.md>...
         Prints one "<file>:<line>: <CODE>: <message>" line per problem found across every given
-        file. Exit 1 if any problem was found, else exit 0.
+        file. Exit 1 if any problem was found, else exit 0. Without --schema the config-path
+        check is skipped, and the CLI says so on stderr rather than passing quietly.
     python3 ax_markers.py render <id> --skill <skill.md>... [--skill <skill.md>...] \\
                                   --config <ax.config.json> [--env k=v ...]
         Discovers <id> across every --skill file, renders it against the given config/env, and
@@ -111,7 +178,7 @@ import argparse
 import json
 import re
 import sys
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 
 # ---------------------------------------------------------------------------------------------
@@ -131,6 +198,24 @@ FENCE_COMMENT_PREFIX = {
 # harness knows how to handle.
 REGISTERED_BASES = {"repo", "java.root", "react.root"}
 
+# P2-109: the CLOSED attribute vocabulary. ALLOWED_ATTRS is the whole set a marker may carry;
+# anything else is a typo of one of these (UNKNOWN_ATTR), never an extension point — silently
+# ignoring an unrecognized name means the constraint its author was reaching for never applied.
+# REQUIRED_ATTRS must each be present AND non-empty: discover() used to default a missing one to
+# "" and every later check treated "" as fine, which is how a marker carrying none of the three
+# was measured to lint clean.
+ALLOWED_ATTRS = {"id", "path", "kind", "when", "base", "substs", "merge"}
+REQUIRED_ATTRS = ("id", "path", "kind")
+REGISTERED_KINDS = {"file", "file-fragment", "command"}
+
+# The `path=` placeholder meaning "this artifact installs no file at all". Legal only alongside
+# kind=command; on a file/file-fragment it would name a target the harness cannot resolve.
+PATH_NONE = "-"
+
+# P2-112: how a fragment is merged into the file path= already contains. Exactly four values —
+# see the module header for what each means and which kind= requires/forbids one.
+REGISTERED_MERGES = {"json-deep", "gradle-dependencies", "append", "replace"}
+
 # A-FIX-3: path= transformers. Currently one: dotted Java package -> directory path segments,
 # needed because an install path like src/test/java/<pkg-as-dirs>/... depends on the consumer's
 # own rootPackage and the marker syntax has no other way to express "this dotted value, but as a
@@ -140,7 +225,13 @@ _PATH_TRANSFORMERS = {
     "pkgdir": lambda v: str(v).replace(".", "/"),
 }
 
-_MARKER_RE = re.compile(r'^<!--\s*ax:artifact\s+(?P<attrs>.+?)\s*-->\s*$')
+# The attrs group is `.*?`, not `.+?`, ON PURPOSE (P2-109): `<!-- ax:artifact -->` with no
+# attributes at all previously did not MATCH, so discover() skipped it entirely and lint() had
+# nothing to report — a marker that names an install artifact and declares nothing about it
+# disappeared without a word, the same silent-drop failure the required-attribute checks close
+# one step later. It now matches, yields an Artifact with empty id/path/kind, and lint() reports
+# MISSING_REQUIRED_ATTR for each. `\b` keeps that from also matching `ax:artifactfoo`.
+_MARKER_RE = re.compile(r'^<!--\s*ax:artifact\b\s*(?P<attrs>.*?)\s*-->\s*$')
 _ATTR_RE = re.compile(r'(\w+)=(\S+)')
 _FENCE_OPEN_RE = re.compile(r'^```([A-Za-z0-9_+-]*)\s*$')
 _FENCE_CLOSE_RE = re.compile(r'^```\s*$')
@@ -202,6 +293,14 @@ class Artifact:
     base: str = "repo"  # A-FIX-2. Appended with a default so existing callers keyword-construct
                         # this the same way; discover() always sets it explicitly (attrs.get
                         # default "repo" applies only when the marker omits base= outright).
+    merge: "str | None" = None  # P2-112. None = not declared; on kind=file that MEANS `replace`
+                                # (writing a whole file is a replace), on kind=file-fragment it
+                                # is MISSING_MERGE_FOR_FRAGMENT, on kind=command it is correct.
+    raw_attrs: list = field(default_factory=list)
+    # The marker's attributes as an ORDERED list of (name, value) pairs, exactly as authored.
+    # dict() collapses `id=a id=b` to one entry and drops any unrecognized name's evidence, so
+    # DUPLICATE_ATTR and UNKNOWN_ATTR are undecidable from the parsed fields alone — this keeps
+    # the pre-collapse truth around for lint() to check against.
 
 
 @dataclass
@@ -247,7 +346,8 @@ def discover(skill_paths):
                 i += 1
                 continue
             marker_line_no = i + 1
-            attrs = dict(_ATTR_RE.findall(m.group("attrs")))
+            raw_attrs = _ATTR_RE.findall(m.group("attrs"))
+            attrs = dict(raw_attrs)
             substs_raw = attrs.get("substs", "")
             substs = [s for s in substs_raw.split(",") if s] if substs_raw else []
 
@@ -288,6 +388,8 @@ def discover(skill_paths):
                 fence_start_line=fence_start_line,
                 fence_end_line=fence_end_line,
                 base=attrs.get("base", "repo"),
+                merge=attrs.get("merge"),
+                raw_attrs=raw_attrs,
             ))
             i += 1
     return artifacts
@@ -297,9 +399,75 @@ def discover(skill_paths):
 # lint()
 # ---------------------------------------------------------------------------------------------
 
-def lint(artifacts):
-    """Pure structural validation. Never raises; returns the full list of Problems found."""
+def _config_path_resolves(segments, schema):
+    """Does `config.<segments>` name something ax.config.schema.json actually declares?
+
+    See the module header's CONFIG PATHS note for the full rationale; the walk itself is four
+    rules — `properties` descent, open-keyed `additionalProperties` descent, array-membership
+    termination, and otherwise unresolved. Returns True/False; never raises on a malformed
+    schema node (a non-dict node simply does not resolve).
+    """
+    if not segments:
+        return False
+    node = schema
+    for i, seg in enumerate(segments):
+        if not isinstance(node, dict):
+            return False
+        if node.get("type") == "array" or "items" in node:
+            # config.stacks.react == "is 'react' an element of stacks[]". The element is a
+            # scalar, so this segment must be the last one — a longer path has nowhere to go.
+            return i == len(segments) - 1
+        props = node.get("properties")
+        if isinstance(props, dict) and seg in props:
+            node = props[seg]
+            continue
+        additional = node.get("additionalProperties")
+        if isinstance(additional, dict):
+            node = additional
+            continue
+        return False
+    return True
+
+
+def _check_config_ref(ref, schema, problems, source_file, line, where):
+    """Cross-check one `<ns>.<path>` reference against the schema. `env.*` is deliberately not
+    checked (no schema could enumerate caller-supplied values) and a non-config/env namespace is
+    already caught at render time, so this only ever reports UNKNOWN_CONFIG_PATH."""
+    ns, segments = _split_token(ref)
+    if ns != "config":
+        return
+    if not _config_path_resolves(segments, schema):
+        problems.append(Problem(
+            "UNKNOWN_CONFIG_PATH",
+            f"{where} references {ref!r}, which ax.config.schema.json does not declare; "
+            f"an unknown config path evaluates to FALSE forever instead of erroring",
+            source_file, line))
+
+
+def lint(artifacts, config_schema_path=None):
+    """Pure structural validation. Never raises; returns the full list of Problems found.
+
+    config_schema_path, when given, is the path to ax.config.schema.json and enables the
+    UNKNOWN_CONFIG_PATH check over every `config.*` reference in when=/ax:if/ax:subst. It is an
+    ARGUMENT rather than a constant so this parser never hardcodes the repo layout it happens to
+    live in (see the module header). Omitting it skips that one check and nothing else.
+    """
     problems = []
+
+    schema = None
+    if config_schema_path is not None:
+        try:
+            with open(config_schema_path, encoding="utf-8") as f:
+                schema = json.load(f)
+        except (OSError, ValueError) as exc:
+            # Reported, never swallowed: a schema that cannot be read means the config-path
+            # check did not run, and a caller that asked for it must not mistake silence for a
+            # clean result.
+            problems.append(Problem(
+                "CONFIG_SCHEMA_UNREADABLE",
+                f"config schema {config_schema_path!r} could not be read: {exc}",
+                config_schema_path, 0))
+            schema = None
 
     by_id = {}
     for a in artifacts:
@@ -315,6 +483,64 @@ def lint(artifacts):
                     dup.source_file, dup.marker_line))
 
     for a in artifacts:
+        # ── P2-109: attribute well-formedness, BEFORE anything downstream trusts these values ──
+        seen = set()
+        for name, _value in a.raw_attrs:
+            if name in seen:
+                problems.append(Problem(
+                    "DUPLICATE_ATTR",
+                    f"attribute {name!r} appears more than once; the later value silently wins",
+                    a.source_file, a.marker_line))
+            seen.add(name)
+            if name not in ALLOWED_ATTRS:
+                problems.append(Problem(
+                    "UNKNOWN_ATTR",
+                    f"attribute {name!r} is not registered (registered: "
+                    f"{sorted(ALLOWED_ATTRS)}); an unrecognized name is a typo whose intended "
+                    f"constraint would never apply",
+                    a.source_file, a.marker_line))
+
+        for req in REQUIRED_ATTRS:
+            if not str(getattr(a, req) or "").strip():
+                problems.append(Problem(
+                    "MISSING_REQUIRED_ATTR",
+                    f"required attribute {req}= is missing or empty",
+                    a.source_file, a.marker_line))
+
+        if a.kind and a.kind not in REGISTERED_KINDS:
+            problems.append(Problem(
+                "UNREGISTERED_KIND",
+                f"kind={a.kind!r} is not registered (registered: {sorted(REGISTERED_KINDS)})",
+                a.source_file, a.marker_line))
+        elif a.path == PATH_NONE and a.kind and a.kind != "command":
+            problems.append(Problem(
+                "INVALID_PATH_FOR_KIND",
+                f"path={PATH_NONE!r} means 'installs no file' and is legal only for "
+                f"kind=command, not kind={a.kind!r}",
+                a.source_file, a.marker_line))
+
+        # ── P2-112: the merge= placement contract ──
+        if a.merge is not None and a.merge not in REGISTERED_MERGES:
+            problems.append(Problem(
+                "UNREGISTERED_MERGE",
+                f"merge={a.merge!r} is not registered (registered: {sorted(REGISTERED_MERGES)})",
+                a.source_file, a.marker_line))
+        if a.kind == "file-fragment" and a.merge is None:
+            problems.append(Problem(
+                "MISSING_MERGE_FOR_FRAGMENT",
+                "kind=file-fragment must declare merge= (one of "
+                f"{sorted(REGISTERED_MERGES)}); without it the materializing harness has to "
+                "guess the placement rule from the target's name and the fragment's text",
+                a.source_file, a.marker_line))
+        if a.kind == "command" and a.merge is not None:
+            problems.append(Problem(
+                "MERGE_ON_COMMAND",
+                f"kind=command installs no file, so merge={a.merge!r} describes nothing",
+                a.source_file, a.marker_line))
+
+        if schema is not None and a.when:
+            _check_config_ref(a.when, schema, problems, a.source_file, a.marker_line, "when=")
+
         if a.base not in REGISTERED_BASES:
             problems.append(Problem(
                 "UNREGISTERED_BASE",
@@ -368,6 +594,12 @@ def lint(artifacts):
                     break
                 if kind == "if":
                     if_depth += 1
+                    # An ax:if is the reference shape that FAILS SILENTLY when misspelled — a
+                    # config path nothing declares is falsy forever, so the block is deleted on
+                    # every project and looks like a deliberately-disabled feature.
+                    if schema is not None and token:
+                        _check_config_ref(token, schema, problems, a.source_file, line_no,
+                                          "ax:if")
                 elif kind == "endif":
                     if if_depth == 0:
                         problems.append(Problem(
@@ -392,6 +624,15 @@ def lint(artifacts):
             problems.append(Problem(
                 "UNBALANCED_AXIF", f"{if_depth} unclosed ax:if block(s)",
                 a.source_file, a.fence_start_line))
+
+        # Every substitution reference (ax:subst directive, @@..@@ in the body, @@..@@ in path=)
+        # lands in used_tokens, so one sweep here covers all three places a config path can be
+        # spelled wrong. Anchored at the marker line: the declaration list is what a reader
+        # fixes, and the same token may appear in several body lines.
+        if schema is not None:
+            for token in sorted(used_tokens):
+                _check_config_ref(token, schema, problems, a.source_file, a.marker_line,
+                                  "ax:subst/@@..@@")
 
         declared = set(a.substs)
         for missing in sorted(used_tokens - declared):
@@ -577,11 +818,21 @@ def render_path(artifact, config, env):
 # CLI
 # ---------------------------------------------------------------------------------------------
 
-def _cli_lint(files):
-    if not files:
+def _cli_lint(argv):
+    ap = argparse.ArgumentParser(prog="ax_markers.py lint")
+    ap.add_argument("--schema", default=None,
+                    help="path to ax.config.schema.json; enables the UNKNOWN_CONFIG_PATH check")
+    ap.add_argument("files", nargs="*")
+    args = ap.parse_args(argv)
+    if not args.files:
         print("lint: at least one skill file is required", file=sys.stderr)
         return 2
-    problems = lint(discover(files))
+    if args.schema is None:
+        # Said out loud, not skipped quietly: a caller who does not know this check was off
+        # would read a clean exit 0 as "no unknown config paths", which it does not mean.
+        print("lint: note -- --schema not given, so the UNKNOWN_CONFIG_PATH check is SKIPPED",
+              file=sys.stderr)
+    problems = lint(discover(args.files), config_schema_path=args.schema)
     for p in problems:
         print(f"{p.source_file}:{p.line}: {p.code}: {p.message}")
     return 1 if problems else 0
@@ -624,7 +875,7 @@ def _cli_render(argv):
 def main(argv=None):
     argv = sys.argv[1:] if argv is None else argv
     if not argv:
-        print("usage: ax_markers.py lint <file>... | "
+        print("usage: ax_markers.py lint [--schema <ax.config.schema.json>] <file>... | "
               "render <id> --skill <file>... --config <file> [--env k=v ...]", file=sys.stderr)
         return 2
     cmd, rest = argv[0], argv[1:]

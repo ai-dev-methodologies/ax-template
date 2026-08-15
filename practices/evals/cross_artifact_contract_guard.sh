@@ -16,32 +16,70 @@
 #   F-019/#80 — a shipped practices-react/eslint-plugin-ax/rules/*.js id was absent from the
 #               catalog's INDEX.md, making it invisible to ax-practices' INDEX-only routing.
 #
+# CORRECTION (P2-110, 2026-08-15) — the first shipped version of check (a) was NOT actually
+# independent, and this repo does not hide corrections. It `grep`'d each SKILL.md's ENTIRE
+# file text for `-P<name>=` / `findProperty("...")`/`gradleProperty("...")`, not the text of
+# the specific fenced artifact the hook/build actually installs. An external adversarial
+# critic reproduced the hole: delete the real `-PaxRootPackage=` invocation from the
+# `hook-body` marker's fence body (skills/ax-install-hooks/SKILL.md's installed hook, then at
+# line 173) while leaving the self-check CHECKLIST PROSE elsewhere in the same file that
+# merely *describes* the requirement (then at line ~340, "The java block's ... call passes
+# `-PaxRootPackage=...`") — the guard still PASSed, because whole-file grep cannot tell an
+# artifact that enforces a contract from prose that only narrates it. That is exactly the
+# "grep one artifact for a string that happens to be present" tautology this guard's own
+# header warned against, just one level removed (the string it fell back to matching was
+# documentation of the fix, not the fix's own literal). Fixed by scoping BOTH sides' extraction
+# to the marker's FENCE BODY ONLY (practices/scripts/lib/ax_markers.py's discover(), the same
+# structural parser guard [112]/verify-downstream.sh already use), never the surrounding
+# Markdown prose. See CHECK (a) below for the corrected shape, and the
+# fail_prose_only_p_contract fixture for the regression test that reproduces the critic's exact
+# scenario (prior guard: PASS; corrected guard: BLOCK).
+#
 # CHECK (a) — hook <-> java-skill `-P` GRADLE PROPERTY NAME:
-#   Derives the property name from EACH side independently:
+#   Derives the property name from EACH side independently, reading ONLY the body of one
+#   specific `<!-- ax:artifact ... -->`-marked fenced block per side (never any other text in
+#   the file, including prose that merely describes the contract — see the P2-110 correction
+#   above):
 #     side 1 (java skill):  every `project.findProperty("X")` / `providers.gradleProperty("X")`
-#                            call in skills/ax-install-java-enforcement/SKILL.md.
-#     side 2 (hooks skill):  every `-PX=` flag on a line that also contains `gradlew` in
-#                            skills/ax-install-hooks/SKILL.md's hook body.
+#                            call inside the `java-gradle-testpractices` marker's fence body in
+#                            skills/ax-install-java-enforcement/SKILL.md.
+#     side 2 (hooks skill):  every `-PX=` flag on a line that also contains `gradlew`, inside
+#                            the `hook-body` marker's fence body in
+#                            skills/ax-install-hooks/SKILL.md.
 #   0 distinct names on EITHER side, or >1 distinct name on EITHER side, is itself a BLOCK —
 #   an ambiguous contract is exactly the shape that let F-024 hide (the java side declared
 #   one name, the hook side quietly used another, and nothing forced them into the same
 #   variable). Only when both sides resolve to exactly one name are they compared for
-#   equality. This is non-tautological: change ONLY one side's literal and the derived sets
-#   diverge — nothing in this guard's own source has to change to catch it.
+#   equality. This is non-tautological: change ONLY one side's literal INSIDE ITS MARKER FENCE
+#   and the derived sets diverge — nothing in this guard's own source has to change to catch
+#   it. Changing text OUTSIDE either marker's fence (prose, checklists, comments) has NO effect
+#   on either derived set, which is the specific property the P2-110 fix restores.
+#
+#   Marker-id resolution: the two marker ids ("hook-body" and "java-gradle-testpractices") ARE
+#   hardcoded literals in this guard, not discovered from `kind=`/`base=` attributes alone —
+#   both SKILL.md files carry more than one `kind=file-fragment`/`kind=file` marker (the java
+#   skill alone has two separate `kind=file-fragment base=java.root path=build.gradle.kts`
+#   markers, `java-archunit-dep` and `java-gradle-testpractices`; those attributes cannot tell
+#   them apart), so id is the only unambiguous handle. The BLOCK-not-silent-skip guarantee
+#   required for a hardcoded id lives in the extraction step itself: if
+#   `ax_markers.discover()` does not yield an artifact with the expected id in the expected
+#   source file, this guard treats that exactly like "0 distinct property names found" on that
+#   side (see the VIOLATION(a) messages below) — a renamed/removed marker cannot silently make
+#   the check pass, it degrades straight into the existing 0-count BLOCK path, with its own
+#   explicit "marker not found" message so the failure is diagnosable rather than confused with
+#   "marker present but empty".
 #
 #   Token-substitution note: skills/ax-install-hooks/SKILL.md's rendered fenced blocks may
 #   carry `ax:subst`/`@@ns.path@@` placeholder tokens (see the marker grammar this arc
-#   introduced). This guard deliberately parses the SKILL.md source AS-IS rather than
-#   rendering it first through practices/scripts/lib/ax_markers.py: the property-NAME
-#   position (`-P<name>=`) is captured by `[A-Za-z0-9_]+`, which cannot match the literal
-#   characters `@`/`.` that `@@ns.path@@` tokens are built from. A token sitting in that
-#   position would therefore simply fail to produce a match on that line (not silently
-#   match as a bogus name) and fall through to the "0 distinct names" BLOCK above — fail
-#   closed, not fail silent. Only the property VALUE position (`-P...="$VAR"` /
-#   `@@config.java.testTask@@` assigned to JAVA_TEST_TASK) uses subst tokens on disk today;
-#   this guard never reads that position, so no render step is needed in practice. If a
-#   future edit ever put a subst token in the property-NAME position, rendering first would
-#   be the correct fix — noted here so the next editor does not have to rediscover it.
+#   introduced). `ax_markers.discover()` — the extraction this guard now uses — returns the
+#   fence body EXACTLY as authored, un-rendered (rendering, via `ax_markers.render()`, is a
+#   separate, later step this guard never calls). The property-NAME position (`-P<name>=`) is
+#   captured by `[A-Za-z0-9_]+`, which cannot match the literal characters `@`/`.` that
+#   `@@ns.path@@` tokens are built from. A token sitting in that position would therefore
+#   simply fail to produce a match on that line (not silently match as a bogus name) and fall
+#   through to the "0 distinct names" BLOCK above — fail closed, not fail silent. Only the
+#   property VALUE position (`-P...="$VAR"` / `@@config.java.testTask@@` assigned to
+#   JAVA_TEST_TASK) uses subst tokens on disk today; this guard never reads that position.
 #
 # CHECK (b) — shipped ESLint rule id <-> practices-react/INDEX.md coverage:
 #   Derives rule ids from disk (practices-react/eslint-plugin-ax/rules/*.js filenames — zero
@@ -78,28 +116,36 @@
 #   that stops being true (INDEX.md regenerated stale, or a new rule shipped without ever
 #   running generate_index.sh).
 #
-# Deliberately grep/sed-based, NO `import yaml` / PyYAML dependency anywhere in this file —
-# see pyyaml_preflight_coverage_guard.sh [95]: a PyYAML-dependent guard acquires an extra
-# reachability obligation this guard has no need to take on.
+# Check (b) is deliberately grep/sed-based, NO `import yaml` / PyYAML dependency — see
+# pyyaml_preflight_coverage_guard.sh [95]: a PyYAML-dependent guard acquires an extra
+# reachability obligation this guard has no need to take on. Check (a) DOES now shell out to
+# python3 to reuse practices/scripts/lib/ax_markers.py (stdlib-only, no PyYAML — see that
+# file's own header), the same module guard [112] and verify-downstream.sh already depend on;
+# python3 itself is an unconditional R25 toolchain prerequisite (see CLAUDE.md), so this adds
+# no new reachability obligation to the R25 pipeline.
 #
 # Exit: 0 PASS (both checks agree) · 1 a cross-artifact drift found (check a or b) · 2
-# usage/setup error (a required source file is missing).
+# usage/setup error (a required source file/tool is missing).
 #
 # Usage:
 #   bash practices/evals/cross_artifact_contract_guard.sh
 #   bash practices/evals/cross_artifact_contract_guard.sh --root DIR   # fixture tree; DIR must
-#     contain skills/ax-install-{java-enforcement,hooks}/SKILL.md and
-#     practices-react/{eslint-plugin-ax/rules,rules,INDEX.md}
+#     contain skills/ax-install-{java-enforcement,hooks}/SKILL.md (each carrying its expected
+#     ax:artifact marker) and practices-react/{eslint-plugin-ax/rules,rules,INDEX.md}
+#
+# Registration: this guard IS registered as [113] in practices/evals/run-all-guards.sh (the
+# prior header line claiming otherwise was stale — corrected here, same P2-110 pass, since
+# this repo does not let a known-false statement sit uncorrected in a file it is already
+# touching).
 #
 # What this deliberately does NOT do:
 #   - Does not re-implement or duplicate [110]'s rule<->doc-FILE check; [113] assumes the doc
 #     file resolution [110] proves and asks a strictly different question (doc<->INDEX.md).
 #   - Does not validate every `-P` flag anywhere in the hooks skill, only the one(s) on a
-#     `gradlew`-invoking line, so unrelated `-P` mentions in prose do not pollute derivation.
+#     `gradlew`-invoking line inside the `hook-body` marker's fence body, so unrelated `-P`
+#     mentions in prose (including the self-check checklist) do not pollute derivation.
 #   - Does not render ax:subst tokens (see the token-substitution note in CHECK (a) above for
 #     why that is safe for the specific positions this guard reads).
-#
-# NOT YET registered in practices/evals/run-all-guards.sh — orchestrator-owned registration.
 
 set -uo pipefail
 
@@ -114,6 +160,12 @@ while [ $# -gt 0 ]; do
         *) echo "cross_artifact_contract_guard: unknown arg: $1" >&2; exit 2 ;;
     esac
 done
+
+if [ ! -d "$ROOT" ]; then
+    echo "cross_artifact_contract_guard: root not found: $ROOT" >&2
+    exit 2
+fi
+ROOT="$(cd "$ROOT" && pwd)"
 
 JAVA_SKILL="$ROOT/skills/ax-install-java-enforcement/SKILL.md"
 HOOKS_SKILL="$ROOT/skills/ax-install-hooks/SKILL.md"
@@ -136,38 +188,136 @@ if [ ! -d "$DOCS_DIR" ]; then
     exit 2
 fi
 
+command -v python3 >/dev/null 2>&1 || {
+    echo "cross_artifact_contract_guard: python3 required (to parse ax:artifact markers via ax_markers.py)" >&2
+    exit 2
+}
+
+# RELOCATED-COPY AFFORDANCE (mirrors AX_MARKERS_LIB_DIR in install_artifact_extractability_
+# guard.sh — see its own header for the fuller rationale): fixture_kill_proof_guard.sh [87]
+# proves fixture non-vacuity by running a MUTATED COPY of this file from a bare temp path, where
+# the repo-relative ax_markers.py does not exist. AX_MARKERS_LIB_DIR names it for THAT case
+# only, and the gate is explicit: the override is consulted ONLY when the committed path is
+# absent AND this root is not a git work tree — i.e. exactly the relocated sandbox. On any live
+# tree a missing ax_markers.py is a BLOCK, never an invitation to load the module from elsewhere.
+AX_MARKERS_DIR="$REPO_ROOT/practices/scripts/lib"
+if [ ! -f "$AX_MARKERS_DIR/ax_markers.py" ] \
+   && ! git -C "$REPO_ROOT" rev-parse --git-dir >/dev/null 2>&1; then
+    AX_MARKERS_DIR="${AX_MARKERS_LIB_DIR:-$AX_MARKERS_DIR}"
+fi
+if [ ! -f "$AX_MARKERS_DIR/ax_markers.py" ]; then
+    echo "cross_artifact_contract_guard: cannot find practices/scripts/lib/ax_markers.py under $REPO_ROOT" >&2
+    exit 2
+fi
+
 violations=0
 
 # ---------------------------------------------------------------------------
-# CHECK (a) — hook <-> java-skill -P property-name contract.
+# CHECK (a) — hook <-> java-skill -P property-name contract, derived from each side's
+# ax:artifact marker FENCE BODY ONLY (P2-110 fix — see header CORRECTION note).
 # ---------------------------------------------------------------------------
 
-java_props="$(grep -oE '(findProperty|gradleProperty)\("[A-Za-z0-9_]+"\)' "$JAVA_SKILL" \
-    | grep -oE '"[A-Za-z0-9_]+"' | tr -d '"' | sort -u)"
-java_prop_count="$(printf '%s\n' "$java_props" | grep -c . || true)"
+HOOK_MARKER_ID="hook-body"
+JAVA_MARKER_ID="java-gradle-testpractices"
+NOTFOUND_SENTINEL="__AX_MARKER_NOT_FOUND__"
 
-hook_props="$(grep -E 'gradlew' "$HOOKS_SKILL" | grep -oE -- '-P[A-Za-z0-9_]+=' \
-    | sed -E 's/^-P//; s/=$//' | sort -u)"
-hook_prop_count="$(printf '%s\n' "$hook_props" | grep -c . || true)"
+HOOK_BODY_OUT="$(mktemp)"
+JAVA_BODY_OUT="$(mktemp)"
+cleanup() { rm -f "$HOOK_BODY_OUT" "$JAVA_BODY_OUT"; }
+trap cleanup EXIT
 
-if [ "$java_prop_count" -eq 0 ]; then
-    echo "VIOLATION(a): no findProperty(\"...\")/gradleProperty(\"...\") call found in $JAVA_SKILL — contract undeclared" >&2
-    violations=$((violations + 1))
-elif [ "$java_prop_count" -gt 1 ]; then
-    echo "VIOLATION(a): $JAVA_SKILL declares $java_prop_count distinct gradle property names ($(printf '%s' "$java_props" | tr '\n' ' ')) — ambiguous contract" >&2
-    violations=$((violations + 1))
+python3 - "$AX_MARKERS_DIR" "$HOOKS_SKILL" "$JAVA_SKILL" "$HOOK_BODY_OUT" "$JAVA_BODY_OUT" \
+    "$HOOK_MARKER_ID" "$JAVA_MARKER_ID" "$NOTFOUND_SENTINEL" <<'PYEOF'
+import sys
+import os
+import re
+
+(ax_markers_dir, hooks_skill, java_skill, hook_out, java_out,
+ hook_marker_id, java_marker_id, sentinel) = sys.argv[1:9]
+sys.path.insert(0, ax_markers_dir)
+import ax_markers  # noqa: E402
+
+artifacts = ax_markers.discover([hooks_skill, java_skill])
+
+
+def find(artifact_id, source_file):
+    target = os.path.abspath(source_file)
+    for a in artifacts:
+        if a.id == artifact_id and os.path.abspath(a.source_file) == target:
+            return a
+    return None
+
+
+JAVA_PROP_RE = re.compile(r'(?:findProperty|gradleProperty)\("([A-Za-z0-9_]+)"\)')
+HOOK_PROP_RE = re.compile(r'-P([A-Za-z0-9_]+)=')
+
+hook_artifact = find(hook_marker_id, hooks_skill)
+with open(hook_out, "w", encoding="utf-8") as f:
+    if hook_artifact is None:
+        f.write(sentinel + "\n")
+    else:
+        names = set()
+        for line in hook_artifact.body.split("\n"):
+            if "gradlew" not in line:
+                continue
+            names.update(HOOK_PROP_RE.findall(line))
+        for n in sorted(names):
+            f.write(n + "\n")
+
+java_artifact = find(java_marker_id, java_skill)
+with open(java_out, "w", encoding="utf-8") as f:
+    if java_artifact is None:
+        f.write(sentinel + "\n")
+    else:
+        for n in sorted(set(JAVA_PROP_RE.findall(java_artifact.body))):
+            f.write(n + "\n")
+PYEOF
+py_rc=$?
+if [ "$py_rc" -ne 0 ]; then
+    echo "cross_artifact_contract_guard: ax_markers.py marker discovery failed (exit $py_rc) — cannot verify check (a)" >&2
+    exit 2
 fi
 
-if [ "$hook_prop_count" -eq 0 ]; then
-    echo "VIOLATION(a): no -P<name>= flag found on any gradlew-invoking line in $HOOKS_SKILL — this is the F-024/#86 shape (missing -P silently disables the java gate)" >&2
+java_body_raw="$(cat "$JAVA_BODY_OUT")"
+hook_body_raw="$(cat "$HOOK_BODY_OUT")"
+
+java_props=""
+java_prop_count=0
+hook_props=""
+hook_prop_count=0
+
+if [ "$java_body_raw" = "$NOTFOUND_SENTINEL" ]; then
+    echo "VIOLATION(a): ax:artifact marker id=\"$JAVA_MARKER_ID\" not found in $JAVA_SKILL — cannot independently derive the java-side gradle property name (fail-closed BLOCK, not a silent skip)" >&2
     violations=$((violations + 1))
-elif [ "$hook_prop_count" -gt 1 ]; then
-    echo "VIOLATION(a): $HOOKS_SKILL's gradlew invocation(s) pass $hook_prop_count distinct -P property names ($(printf '%s' "$hook_props" | tr '\n' ' ')) — ambiguous contract" >&2
+else
+    java_props="$java_body_raw"
+    java_prop_count="$(printf '%s\n' "$java_props" | grep -c . || true)"
+    if [ "$java_prop_count" -eq 0 ]; then
+        echo "VIOLATION(a): no findProperty(\"...\")/gradleProperty(\"...\") call found in the \"$JAVA_MARKER_ID\" marker body of $JAVA_SKILL — contract undeclared" >&2
+        violations=$((violations + 1))
+    elif [ "$java_prop_count" -gt 1 ]; then
+        echo "VIOLATION(a): the \"$JAVA_MARKER_ID\" marker body of $JAVA_SKILL declares $java_prop_count distinct gradle property names ($(printf '%s' "$java_props" | tr '\n' ' ')) — ambiguous contract" >&2
+        violations=$((violations + 1))
+    fi
+fi
+
+if [ "$hook_body_raw" = "$NOTFOUND_SENTINEL" ]; then
+    echo "VIOLATION(a): ax:artifact marker id=\"$HOOK_MARKER_ID\" not found in $HOOKS_SKILL — cannot independently derive the hook-side -P property name (fail-closed BLOCK, not a silent skip)" >&2
     violations=$((violations + 1))
+else
+    hook_props="$hook_body_raw"
+    hook_prop_count="$(printf '%s\n' "$hook_props" | grep -c . || true)"
+    if [ "$hook_prop_count" -eq 0 ]; then
+        echo "VIOLATION(a): no -P<name>= flag found on any gradlew-invoking line inside the \"$HOOK_MARKER_ID\" marker body of $HOOKS_SKILL — this is the F-024/#86/P2-110 shape (the actual installed artifact carries no -P; prose elsewhere merely describing one does not count)" >&2
+        violations=$((violations + 1))
+    elif [ "$hook_prop_count" -gt 1 ]; then
+        echo "VIOLATION(a): the \"$HOOK_MARKER_ID\" marker body of $HOOKS_SKILL's gradlew invocation(s) pass $hook_prop_count distinct -P property names ($(printf '%s' "$hook_props" | tr '\n' ' ')) — ambiguous contract" >&2
+        violations=$((violations + 1))
+    fi
 fi
 
 if [ "$java_prop_count" -eq 1 ] && [ "$hook_prop_count" -eq 1 ] && [ "$java_props" != "$hook_props" ]; then
-    echo "VIOLATION(a): -P property drift — $JAVA_SKILL declares \"$java_props\" but $HOOKS_SKILL's gradlew call passes \"$hook_props\" (F-024/#86 shape)" >&2
+    echo "VIOLATION(a): -P property drift — the \"$JAVA_MARKER_ID\" marker body of $JAVA_SKILL declares \"$java_props\" but the \"$HOOK_MARKER_ID\" marker body of $HOOKS_SKILL's gradlew call passes \"$hook_props\" (F-024/#86 shape)" >&2
     violations=$((violations + 1))
 fi
 
@@ -232,5 +382,5 @@ if [ "$violations" -gt 0 ]; then
     exit 1
 fi
 
-echo "cross_artifact_contract_guard: PASS — check (a) -P property name agrees between $HOOKS_SKILL and $JAVA_SKILL; check (b) all $checked eslint-plugin-ax rule id(s) visible in INDEX.md (direct or aliased)"
+echo "cross_artifact_contract_guard: PASS — check (a) -P property name (\"$java_props\") agrees between the \"$HOOK_MARKER_ID\" marker body of $HOOKS_SKILL and the \"$JAVA_MARKER_ID\" marker body of $JAVA_SKILL; check (b) all $checked eslint-plugin-ax rule id(s) visible in INDEX.md (direct or aliased)"
 exit 0

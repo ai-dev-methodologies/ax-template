@@ -11,7 +11,11 @@ FENCE_COMMENT_PREFIX table). The body below spells its `ax:if` directive with a
 still recognizes it as an ATTEMPTED directive (so it does not silently fall
 through as ordinary body text) and flags DIRECTIVE_PREFIX_MISMATCH.
 
-<!-- ax:artifact id=wrongprefix-artifact path=- kind=file-fragment base=repo -->
+Every OTHER attribute here is deliberately correct — a real `path=` (a fragment
+installs into a file, so `path=-` would be a second, unrelated violation) and an
+explicit `merge=` — so this fixture fails for its one named reason only.
+
+<!-- ax:artifact id=wrongprefix-artifact path=demo.config.js kind=file-fragment base=repo merge=append -->
 ```js
 export const config = {
   # ax:if config.react.typescript

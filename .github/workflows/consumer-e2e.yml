@@ -39,10 +39,10 @@ name: consumer-e2e
 #
 # WHAT THIS RUN DOES NOT COVER — also printed in the job summary on every run:
 #   - R25 as a whole (`verify-completion.sh` is never invoked here).
-#   - The husky / lefthook branch of `ax-install-hooks` (this harness's toolchain assertions
-#     below only establish git + JDK 21 + node/npm; husky and lefthook are additional npm
-#     dependencies a consumer project may or may not have, and are exercised by
-#     `verify-downstream.sh` itself, not by this workflow's premise probe).
+#   - The husky / lefthook branches of `ax-install-hooks`. This is NOT merely outside the premise
+#     probe — it is outside the harness too: `verify-downstream.sh`'s own HONEST SCOPE states
+#     "Only branch A (`core.hooksPath`) of ax-install-hooks is exercised." Nothing in this
+#     repository measures the husky or lefthook branch (BACKLOG P2-103, P2-115).
 #   - Any Gradle or Node major version other than the ones pinned below.
 #   - Windows runners (this job is `ubuntu-latest` only).
 #   - The `react.root: "."` single-package-root project shape (see ax.config.json schema) —

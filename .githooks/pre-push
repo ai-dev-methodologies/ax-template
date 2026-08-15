@@ -572,16 +572,22 @@ builtin cd "$ROOT"
 # guards, run-all-guards.sh, the runner, the anchor library, the fingerprint helper and the recency
 # guard — is now covered, on raw bytes, by ax_ratchet_toolchain_authentic, and the recency guard in
 # particular is additionally covered by the prior-release re-run below.
-pp_anchor_recency_gate() {
-    local anchor_rev="$1" local_sha="$2" tmp rel want have rc
-    # The temp base is PINNED to /tmp and does NOT honour TMPDIR: TMPDIR is attacker-settable, and
-    # a TMPDIR inside a git work tree would additionally make the extracted copy resolve a git
-    # context (P2, closed here).
-    # BACKLOG P2-67: `mktemp` was a BARE WORD here — PATH-selected, in the one function that
-    # extracts the PREVIOUS RELEASE'S implementation out of git and then RUNS it. It is now the
-    # absolute binary the hermetic bootstrap resolved and smoke-tested, and the returned directory
-    # is verified for owner==euid + no group/other write. "mktemp -d creates mode-0700" was a
-    # claim about a program this gate had not established the identity of.
+# pp_private_tmpdir <ERRCODE> <what-will-run-from-it>
+#   Creates and VERIFIES a private extraction directory under /tmp, prints it on stdout, returns
+#   non-zero (having printed the diagnosis on stderr) when it cannot be trusted. Lifted verbatim
+#   out of pp_anchor_recency_gate when P2-111(d) added a SECOND extract-and-run gate below; the
+#   alternative was a byte-copy of the same 25 lines, i.e. two places to fix the next time the
+#   verification is tightened.
+#   The temp base is PINNED to /tmp and does NOT honour TMPDIR: TMPDIR is attacker-settable, and a
+#   TMPDIR inside a git work tree would additionally make the extracted copy resolve a git context
+#   (P2, closed here).
+#   BACKLOG P2-67: `mktemp` was a BARE WORD here — PATH-selected, in the one function that extracts
+#   the PREVIOUS RELEASE'S implementation out of git and then RUNS it. It is now the absolute
+#   binary the hermetic bootstrap resolved and smoke-tested, and the returned directory is verified
+#   for owner==euid + no group/other write. "mktemp -d creates mode-0700" was a claim about a
+#   program this gate had not established the identity of.
+pp_private_tmpdir() {
+    local errcode="$1" what="$2" tmp _pp_st
     tmp="$(TMPDIR=/tmp "$AX_MKTEMP_BIN" -d /tmp/ax-ratchet.XXXXXXXX 2>/dev/null)" || tmp=""
     if [ -n "$tmp" ] && [ -d "$tmp" ] && [ ! -L "$tmp" ]; then
         _pp_st="$(stat -f '%u %Lp' "$tmp" 2>/dev/null)" || _pp_st=""
@@ -590,28 +596,36 @@ pp_anchor_recency_gate() {
             [0-9]*" "[0-7][0-7][0-7]|[0-9]*" "[0-7][0-7][0-7][0-7])
                 if [ "${_pp_st%% *}" != "${EUID:-$(id -u)}" ] \
                    || [ $(( 8#${_pp_st##* } & 8#22 )) -ne 0 ]; then
-                    echo "[practices] ✗ RATCHET_ANCHOR_COPY_UNVERIFIABLE — the extraction directory" >&2
+                    echo "[practices] ✗ $errcode — the extraction directory" >&2
                     echo "[practices]   $tmp is owned by uid ${_pp_st%% *} and/or is group/other-writable" >&2
                     echo "[practices]   (mode ${_pp_st##* }). Another process could then replace the" >&2
-                    echo "[practices]   extracted previous-release guard between extraction and run." >&2
+                    echo "[practices]   extracted copy between extraction and run." >&2
                     rm -rf "$tmp"; tmp=""
                 fi ;;
-            *)  echo "[practices] ✗ RATCHET_ANCHOR_COPY_UNVERIFIABLE — the owner/mode of $tmp could" >&2
+            *)  echo "[practices] ✗ $errcode — the owner/mode of $tmp could" >&2
                 echo "[practices]   not be read (stat said '${_pp_st:-<nothing>}'); unknown never passes." >&2
                 rm -rf "$tmp"; tmp="" ;;
         esac
     fi
     if [ -z "$tmp" ] || [ ! -d "$tmp" ] || [ -L "$tmp" ] || [ "${tmp#/}" = "$tmp" ]; then
-        echo "[practices] ✗ RATCHET_ANCHOR_COPY_UNVERIFIABLE — could not create a private extraction" >&2
-        echo "[practices]   directory under /tmp. The push gate will not run the previous release's" >&2
-        echo "[practices]   copy of the recency guard from anywhere it does not control. BLOCKED." >&2
+        echo "[practices] ✗ $errcode — could not create a private extraction" >&2
+        echo "[practices]   directory under /tmp. The push gate will not run $what from" >&2
+        echo "[practices]   anywhere it does not control. BLOCKED." >&2
         return 1
     fi
     if "$AX_GIT_BIN" --no-replace-objects -C "$tmp" rev-parse --show-toplevel >/dev/null 2>&1; then
-        echo "[practices] ✗ RATCHET_ANCHOR_COPY_UNVERIFIABLE — the extraction directory $tmp is" >&2
-        echo "[practices]   inside a git work tree, so the extracted guard would bind to THAT repo." >&2
+        echo "[practices] ✗ $errcode — the extraction directory $tmp is" >&2
+        echo "[practices]   inside a git work tree, so the extracted copy would bind to THAT repo." >&2
         rm -rf "$tmp"; return 1
     fi
+    printf '%s' "$tmp"
+    return 0
+}
+
+pp_anchor_recency_gate() {
+    local anchor_rev="$1" local_sha="$2" tmp rel want have rc
+    tmp="$(pp_private_tmpdir "RATCHET_ANCHOR_COPY_UNVERIFIABLE" \
+                             "the previous release's copy of the recency guard")" || return 1
     # The four files the extracted guard reads: itself, the runner (its schema pin), the
     # fingerprint helper (its recompute fallback) and the anchor library (kept for parity with the
     # toolchain list). Written with plain redirection — never `$(git cat-file …)`, which strips
@@ -668,6 +682,218 @@ pp_anchor_recency_gate() {
         return 1
     fi
     echo "[practices] ✓ previous release's recency guard also PASSES"
+    return 0
+}
+
+# pp_downstream_gate_rev_capable <rev>
+#   True when <rev> carries BOTH files the hermetic form of the downstream release gate needs AND
+#   a guard that understands the `--live-root` interface this hook invokes it with. A capability
+#   PROBE rather than a version comparison: what it prevents is running an older guard with an
+#   argument it never had, which exits 2 — indistinguishable from a genuine setup error, and
+#   measured to be exactly what a range ending at a pre-P2-111 sha produced.
+pp_downstream_gate_rev_capable() {
+    local rev="$1" a m
+    [ -n "$rev" ] || return 1
+    a="$("$AX_GIT_BIN" --no-replace-objects -C "$ROOT" rev-parse --verify --quiet "${rev}:practices/evals/downstream_release_recency_guard.sh" 2>/dev/null)"
+    m="$("$AX_GIT_BIN" --no-replace-objects -C "$ROOT" rev-parse --verify --quiet "${rev}:practices/scripts/lib/ax_markers.py" 2>/dev/null)"
+    [ -n "$a" ] && [ -n "$m" ] || return 1
+    "$AX_GIT_BIN" --no-replace-objects -C "$ROOT" cat-file blob "$a" 2>/dev/null | grep -q -e '--live-root'
+}
+
+# pp_downstream_release_gate <local_sha> <base-or-empty> <anchor_rev-or-empty>
+#   Guard [114], the downstream release gate, for ONE pushed ref. Returns 0 when the push may
+#   proceed, 1 when it is BLOCKED. Three P2-111 corrections live here.
+#
+# (b) IT IS CALLED EVEN WHEN THE REGRESSION BASE DID NOT RESOLVE. The previous shape `continue`d
+#     out of the ref loop on an unresolvable base and never reached this gate at all, which
+#     contradicts the PRD's "the only blocking exit": the release gate silently disappeared for
+#     exactly the pushes (root commit, shallow clone, a fork-receiver's first push) least likely to
+#     have been measured. The base is now passed through as an EMPTY STRING and the guard is asked
+#     anyway; it re-attempts resolution itself and, failing that, exits 3 with its own diagnosis
+#     and its own restricted opt-out — a decision made by the component that can describe it.
+#
+# (c) APPLICABILITY LOOKS AT BOTH SIDES OF THE RANGE, not just at head. A head that carries no
+#     .claude-plugin/plugin.json is two different situations: a tree that never had one (nothing
+#     to check) and a push that DELETES one the base had (a decommission — something happened to
+#     the release surface). Collapsing them made "delete the manifest, push, restore it later" a
+#     quiet way around the gate. Applicability is therefore `head has it OR base has it`, and the
+#     guard itself distinguishes and announces the decommission.
+#     MEASURED, and the reason the check is not simply unconditional: three guards
+#     (pre_push_decision_guard.sh, push_evidence_tree_binding_guard.sh, midrun_tree_mutation_guard.sh)
+#     behavior-test THIS hook by copying it into a SYNTHETIC minimal repo — a `git init` tree with
+#     docs/, backend/, .githooks/ and a stubbed recency guard, and no plugin manifest of any kind.
+#     With the guard-file existence check unconditional, every one of their scenarios blocked on a
+#     missing guard file: `pre_push_decision` reported s9-diff-failure-blocks as rc=1 WITHOUT the
+#     expected 'git diff failed', and the two tree-binding guards reported
+#     `clean-tree push : r25=0 push=1 landed=0 (want 0/0/1)` — a push that must SUCCEED was
+#     blocked. Those trees have no release surface on EITHER side, so they still short-circuit.
+#     UNREADABLE IS NOT ABSENT: `git ls-tree` exits 0 with EMPTY output for a path not in the tree
+#     and non-zero when the rev itself cannot be read. Only the first is "not applicable"; the
+#     second is "could not determine", and unknown never passes — for HEAD, which is the side that
+#     can make the gate fire. A base side that cannot be read is reported and treated as "no
+#     manifest there", because every outcome reachable from an absent head manifest passes anyway
+#     (decommission and not-a-plugin-tree both pass); blocking on it would be a false positive with
+#     no attack behind it.
+#
+# (d) THE GUARD AND ITS PARSER ARE NEVER RUN FROM THE WORKING CHECKOUT. Same mechanism as
+#     pp_anchor_recency_gate above: extract into a verified private /tmp directory, require each
+#     extracted file to hash to the blob id git records at the rev it was read from, then run THAT
+#     copy against the real repository via the guard's `--live-root`. Two revs are possible and the
+#     one that ran is always printed:
+#       · PREVIOUS RELEASE (strong form, preferred, and the whole point of the precedent): the
+#         copy cannot have been edited by the commit being pushed, so a commit that neuters
+#         practices/evals/downstream_release_recency_guard.sh — or
+#         practices/scripts/lib/ax_markers.py, which computes the artifact digests the gate
+#         compares — does not get to be audited by its own neutered copy.
+#       · PUSHED SHA (weak form, fallback): used when the previous release does not carry both
+#         files, or carries a guard predating the `--live-root` interface this wiring requires.
+#         It closes strictly less: only the gap between the working checkout and the pushed tree
+#         (an uncommitted local edit to the guard no longer decides a push). It does NOT close
+#         "the pushed commit neutered the guard". This fallback is not optional politeness — guard
+#         [114] and `--live-root` are both newer than the release that is the anchor at the time
+#         this is written, so demanding the strong form unconditionally would be a bootstrap
+#         deadlock: the release that first ships them could never be pushed. It ratchets by
+#         itself: once a release carrying both lands on the anchor branch, every later push takes
+#         the strong path with no further edit here.
+#     Both files are MANDATORY at whichever rev is chosen once the gate is applicable: a release
+#     surface whose gate was deleted is not an inapplicable check.
+#     RESIDUAL, stated rather than discovered later: this hook still cannot authenticate itself
+#     (see the header's HONEST RESIDUAL), and the guard's `python3` is the ambient one.
+pp_downstream_release_gate() {
+    local local_sha="$1" base="$2" anchor_rev="$3"
+    local pj_head pj_base pj_rc tmp="" rel want have rc gate_rev gate_form gate_path
+    local -a base_args live_args
+
+    pj_head="$("$AX_GIT_BIN" --no-replace-objects -C "$ROOT" ls-tree --name-only "$local_sha" -- .claude-plugin/plugin.json 2>/dev/null)"
+    pj_rc=$?
+    if [ "$pj_rc" -ne 0 ]; then
+        echo "[practices] ✗ the tree of ${local_sha:0:12} could not be read, so this gate cannot tell" >&2
+        echo "[practices]   whether the push carries .claude-plugin/plugin.json — and therefore cannot" >&2
+        echo "[practices]   tell whether the downstream release gate applies. BLOCKED (fail-closed)." >&2
+        return 1
+    fi
+
+    pj_base=""
+    if [ -n "$base" ]; then
+        pj_base="$("$AX_GIT_BIN" --no-replace-objects -C "$ROOT" ls-tree --name-only "$base" -- .claude-plugin/plugin.json 2>/dev/null)" || pj_base=""
+    fi
+
+    if [ -z "$pj_head" ] && [ -z "$pj_base" ]; then
+        if [ -z "$base" ]; then
+            echo "[practices] downstream release gate (guard [114]) does not apply to ${local_sha:0:12} — the"
+            echo "[practices]   pushed tree carries no .claude-plugin/plugin.json, and the base side could not"
+            echo "[practices]   be consulted. Both readings of that (never had one / decommission) pass, so"
+            echo "[practices]   this is stated, not blocked."
+        else
+            echo "[practices] downstream release gate (guard [114]) does not apply to ${local_sha:0:12} — neither"
+            echo "[practices]   side of this range carries .claude-plugin/plugin.json"
+        fi
+        return 0
+    fi
+
+    # Which rev supplies the program that will do the auditing — see (d) above. Three forms, in
+    # descending strength, each one PRINTED so a run never leaves it ambiguous which it took:
+    #   STRONG  — the previous release's copy. Preferred; the pushed commit cannot have edited it.
+    #   WEAK    — the pushed sha's own copy, extracted and hash-verified. Closes the gap between
+    #             the working checkout and the pushed tree, nothing more.
+    #   LEGACY  — the working checkout's copy, run in place, exactly as this gate was wired before
+    #             P2-111(d). Reached only when NEITHER rev carries a `--live-root`-capable guard.
+    # The `--live-root` capability PROBE, not a version string, decides: the failure it prevents is
+    # an older guard rejecting an argument it never had (exit 2, indistinguishable from a real
+    # setup error — measured, that is exactly what a range ending at a pre-P2-111 sha produced).
+    # The LEGACY rung exists because guard [114] and `--live-root` are both newer than the anchor
+    # at the time this is written: without it the release that first ships them could never be
+    # pushed, and a fork-receiver pushing an older commit would be blocked by an interface mismatch
+    # rather than by anything about their release. It is NOT a new hole — it is precisely the
+    # pre-P2-111(d) behaviour, and it ratchets away by itself: once a `--live-root`-capable guard
+    # is on the anchor branch, the STRONG rung is taken for every later push and neither of the
+    # weaker rungs can be re-entered by editing the pushed tree.
+    gate_rev=""
+    gate_form=""
+    if [ -n "$anchor_rev" ] && [ "$anchor_rev" != "$local_sha" ] \
+       && pp_downstream_gate_rev_capable "$anchor_rev"; then
+        gate_rev="$anchor_rev"
+        gate_form="the PREVIOUS RELEASE ${anchor_rev:0:12} (STRONG — a copy the pushed commit could not have edited)"
+    elif pp_downstream_gate_rev_capable "$local_sha"; then
+        gate_rev="$local_sha"
+        gate_form="the PUSHED SHA ${local_sha:0:12} (WEAK — closes the working-checkout gap, NOT a guard neutered by this very commit)"
+        if [ -n "$anchor_rev" ] && [ "$anchor_rev" != "$local_sha" ]; then
+            echo "[practices] downstream release gate: the previous release ${anchor_rev:0:12} does not carry a"
+            echo "[practices]   \`--live-root\`-capable guard plus ax_markers.py, so the STRONG rung is unavailable"
+            echo "[practices]   for this push. It ratchets: the first release that ships both takes it automatically."
+        fi
+    fi
+
+    if [ -z "$gate_rev" ]; then
+        # LEGACY rung — no hermetic copy is obtainable. Run the checkout's guard, say so plainly.
+        if [ ! -f "$ROOT/practices/evals/downstream_release_recency_guard.sh" ]; then
+            echo "[practices] ✗ practices/evals/downstream_release_recency_guard.sh is missing from the" >&2
+            echo "[practices]   checkout, and neither the previous release nor the pushed sha carries a" >&2
+            echo "[practices]   runnable copy — yet this range HAS a plugin release surface. That is a" >&2
+            echo "[practices]   release with its gate removed, not an inapplicable check. BLOCKED." >&2
+            return 1
+        fi
+        echo "[practices] downstream release gate: neither ${anchor_rev:0:12} nor ${local_sha:0:12} carries a"
+        echo "[practices]   \`--live-root\`-capable guard, so it runs from the WORKING CHECKOUT — the"
+        echo "[practices]   pre-P2-111(d) wiring. NOT HERMETIC: an uncommitted edit to the guard decides"
+        echo "[practices]   this push. Stated rather than silently degraded."
+        gate_form="the WORKING CHECKOUT copy (LEGACY — see this function header, item (d))"
+        gate_path="$ROOT/practices/evals/downstream_release_recency_guard.sh"
+        live_args=()
+    else
+        tmp="$(pp_private_tmpdir "DOWNSTREAM_GATE_COPY_UNVERIFIABLE" \
+                                 "the extracted copy of the downstream release gate")" || return 1
+        for rel in "practices/evals/downstream_release_recency_guard.sh" \
+                   "practices/scripts/lib/ax_markers.py"; do
+            want="$("$AX_GIT_BIN" --no-replace-objects -C "$ROOT" rev-parse --verify --quiet "${gate_rev}:${rel}" 2>/dev/null)"
+            if [ -z "$want" ]; then
+                echo "[practices] ✗ DOWNSTREAM_GATE_COPY_UNVERIFIABLE — ${rel} does not exist at" >&2
+                echo "[practices]   ${gate_rev:0:12}, but this range DOES have a plugin release surface." >&2
+                echo "[practices]   That is a release with its gate removed, not an inapplicable check. BLOCKED." >&2
+                rm -rf "$tmp"; return 1
+            fi
+            mkdir -p "$tmp/$(dirname "$rel")" || { rm -rf "$tmp"; return 1; }
+            if ! "$AX_GIT_BIN" --no-replace-objects -C "$ROOT" cat-file blob "$want" > "$tmp/$rel" 2>/dev/null; then
+                echo "[practices] ✗ DOWNSTREAM_GATE_COPY_UNVERIFIABLE — could not extract ${rel} at" >&2
+                echo "[practices]   ${gate_rev:0:12}. BLOCKED." >&2
+                rm -rf "$tmp"; return 1
+            fi
+            have="$("$AX_GIT_BIN" --no-replace-objects hash-object --no-filters -t blob -- "$tmp/$rel" 2>/dev/null)"
+            if [ "$have" != "$want" ]; then
+                echo "[practices] ✗ DOWNSTREAM_GATE_COPY_UNVERIFIABLE — the extracted ${rel} does not hash" >&2
+                echo "[practices]   to the blob it was read from (${have:-<none>} vs ${want}). BLOCKED." >&2
+                rm -rf "$tmp"; return 1
+            fi
+        done
+        gate_path="$tmp/practices/evals/downstream_release_recency_guard.sh"
+        live_args=(--live-root "$ROOT")
+    fi
+
+    base_args=()
+    [ -n "$base" ] && base_args=(--base "$base")
+    echo "[practices] R25 — downstream release recency check (guard [114]) for ${local_sha:0:12}, running"
+    echo "[practices]   $gate_form"
+    bash "$gate_path" "${live_args[@]+"${live_args[@]}"}" \
+        --head "$local_sha" "${base_args[@]+"${base_args[@]}"}"
+    rc=$?
+    [ -n "$tmp" ] && rm -rf "$tmp"
+    if [ "$rc" -ne 0 ]; then
+        echo "[practices] ✗ downstream_release_recency_guard FAILED for ${local_sha:0:12} (exit $rc) — push BLOCKED"
+        if [ "$rc" -eq 3 ]; then
+            echo "[practices]   The guard could not resolve a base commit for this range, so it cannot tell"
+            echo "[practices]   whether plugin.json's version changed, and it refuses to guess. This is the"
+            echo "[practices]   ONE case AX_SKIP_DOWNSTREAM_RELEASE_GATE=1 opts out of — and it is honored"
+            echo "[practices]   only here, not as a general off switch (P2-111(a))."
+        else
+            echo "[practices]   plugin.json's version changed in this push range, but no fresh GREEN"
+            echo "[practices]   practices/scripts/verify-downstream.sh run exists for the pushed sha."
+            echo "[practices] Run the downstream harness against the pushed commit:"
+            echo "[practices]   git checkout ${local_sha:0:12} && bash practices/scripts/verify-downstream.sh"
+            echo "[practices] then re-attempt the push."
+        fi
+        return 1
+    fi
+    echo "[practices] ✓ downstream release recency PASS for ${local_sha:0:12}"
     return 0
 }
 
@@ -754,72 +980,28 @@ while read -r _local_ref local_sha _remote_ref remote_sha; do
     # Regression scope for THIS ref: remote tip when it exists, else the
     # merge-base with the default branch (new remote branch). Unresolvable
     # base → fail-closed: run the suite rather than assume out-of-scope.
+    # P2-111(b): an unresolvable base no longer `continue`s straight past guard [114]. It sets the
+    # regression flag, leaves `base` EMPTY, and falls through — the release gate is still asked,
+    # and diagnoses the missing base itself (see pp_downstream_release_gate's header).
+    BASE_UNRESOLVED=0
     if ! base="$(pp_resolve_ref_base "$local_sha" "$remote_sha")"; then
+        base=""
+        BASE_UNRESOLVED=1
         REGRESSION_NEEDED=1
-        continue
+        echo "[practices] regression base UNRESOLVED for ${local_sha:0:12} — full regression will run,"
+        echo "[practices]   and the downstream release gate is still invoked below (it decides for itself)"
     fi
 
-    # [114] downstream_release_recency_guard.sh — fires only when this ref's push range
-    # changed .claude-plugin/plugin.json's version (the guard itself detects that; this hook
-    # unconditionally invokes it and lets it decide). Reuses the SAME local_sha/base this ref
-    # already resolved above via pp_resolve_ref_base, per guard [114]'s own header ("this is
-    # how .githooks/pre-push wires it"), instead of re-resolving a second time. A base that
-    # failed to resolve already sent this ref down the REGRESSION_NEEDED/continue path above,
-    # so this check is unreached for that ref — the same fail-open-to-full-regression posture
-    # the existing pp_resolve_ref_base fallback already uses, not a new gap this hook opens.
-    # APPLICABILITY IS DECIDED FIRST, and it is NOT the same question as "should this check be
-    # skipped". Guard [114] audits the release of THIS PLUGIN: its whole trigger is a change to
-    # the `version` VALUE inside `.claude-plugin/plugin.json`. A pushed tree that carries no such
-    # manifest has no release surface for the gate to inspect — there is NOTHING TO CHECK, which
-    # is a different statement from "there is something to check and we are not checking it". The
-    # fail-closed branch below is the second statement and stays exactly as strict.
-    # MEASURED, and the reason this block exists: three guards
-    # (pre_push_decision_guard.sh, push_evidence_tree_binding_guard.sh, midrun_tree_mutation_guard.sh)
-    # behavior-test THIS hook by copying it into a SYNTHETIC minimal repo — a `git init` tree
-    # carrying docs/, backend/, .githooks/ and a stubbed recency guard, and no plugin manifest of
-    # any kind. With the existence check unconditional, every one of their scenarios blocked on a
-    # missing guard file: `pre_push_decision` reported s9-diff-failure-blocks as rc=1 WITHOUT the
-    # expected 'git diff failed' (blocked for the wrong reason, so the scenario it asserts was no
-    # longer being exercised), and the two tree-binding guards reported
-    # `clean-tree push : r25=0 push=1 landed=0 (want 0/0/1)` — a push that must SUCCEED was
-    # blocked. That is a false positive with no attack behind it: those trees never had a release
-    # to gate.
-    # NOT A BYPASS, stated because "just delete plugin.json" is the obvious objection: deleting
-    # the manifest does not publish a release, it unpublishes the plugin — and re-adding it later
-    # fires this gate anyway, because the re-adding range's base has no version and its head does,
-    # which the guard reads as a changed value.
-    # UNREADABLE IS NOT ABSENT: `git ls-tree` exits 0 with EMPTY output for a path that is not in
-    # the tree, and non-zero when the rev itself cannot be read. Only the first is "not
-    # applicable"; the second is "could not determine", and unknown never passes.
-    pj_listing="$("$AX_GIT_BIN" --no-replace-objects -C "$ROOT" ls-tree --name-only "$local_sha" -- .claude-plugin/plugin.json 2>/dev/null)"
-    pj_rc=$?
-    if [[ "$pj_rc" -ne 0 ]]; then
-        echo "[practices] ✗ the tree of ${local_sha:0:12} could not be read, so this gate cannot tell" >&2
-        echo "[practices]   whether the push carries .claude-plugin/plugin.json — and therefore cannot" >&2
-        echo "[practices]   tell whether the downstream release gate applies. BLOCKED (fail-closed)." >&2
-        exit 1
-    fi
-    if [[ -z "$pj_listing" ]]; then
-        echo "[practices] downstream release gate (guard [114]) does not apply to ${local_sha:0:12} — the pushed tree carries no .claude-plugin/plugin.json"
-    else
-        if [ ! -f practices/evals/downstream_release_recency_guard.sh ]; then
-            echo "[practices] ✗ practices/evals/downstream_release_recency_guard.sh is missing — cannot verify the downstream release gate. BLOCKED (fail-closed)." >&2
-            echo "[practices]   The pushed tree DOES carry .claude-plugin/plugin.json, so this is a release" >&2
-            echo "[practices]   surface with its gate removed — not an inapplicable check." >&2
-            exit 1
-        fi
-        echo "[practices] R25 — downstream release recency check (guard [114]) for ${local_sha:0:12}"
-        if ! bash practices/evals/downstream_release_recency_guard.sh --head "$local_sha" --base "$base"; then
-            echo "[practices] ✗ downstream_release_recency_guard FAILED for ${local_sha:0:12} — push BLOCKED"
-            echo "[practices]   plugin.json's version changed in this push range, but no fresh GREEN"
-            echo "[practices]   practices/scripts/verify-downstream.sh run exists for the pushed sha."
-            echo "[practices] Run the downstream harness against the pushed commit:"
-            echo "[practices]   git checkout ${local_sha:0:12} && bash practices/scripts/verify-downstream.sh"
-            echo "[practices] then re-attempt the push. (Legitimate base-commit-resolution failures only:"
-            echo "[practices]   AX_SKIP_DOWNSTREAM_RELEASE_GATE=1 opts out — see the guard's own diagnostics above.)"
-            exit 1
-        fi
-        echo "[practices] ✓ downstream release recency PASS for ${local_sha:0:12}"
+    # [114] downstream_release_recency_guard.sh — the release gate for THIS ref. Applicability,
+    # extraction of the guard from the pushed sha, and the invocation all live in
+    # pp_downstream_release_gate above (P2-111 (b)/(c)/(d) are documented at its definition).
+    # The base is passed as-is: EMPTY when it did not resolve, which the guard diagnoses itself
+    # rather than being silently skipped for.
+    pp_downstream_release_gate "$local_sha" "$base" "$ANCHOR_REV" || exit 1
+
+    # An unresolved base cannot be diffed for regression scope; the flag was already set above.
+    if [[ "$BASE_UNRESOLVED" -eq 1 ]]; then
+        continue
     fi
 
     # `git diff` failure (bad range, missing objects) is fail-closed: BLOCK,

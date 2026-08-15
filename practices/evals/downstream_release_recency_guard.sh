@@ -89,17 +89,38 @@
 #     used both by `--fixtures` (which drives it once per pass_*/fail_* subdirectory) and by any
 #     manual `--root DIR` invocation against a non-git directory.
 #
-# OPT-OUT: AX_SKIP_DOWNSTREAM_RELEASE_GATE=1 skips the gate outright (loud, printed to stderr).
-#   Honored ONLY for a genuine live invocation (no --root given) — a `--root` invocation is by
-#   construction a controlled/test call (fixtures or a manual audit of another tree) and must not
-#   be silently defeated by whatever the ambient shell happens to export, or `--fixtures` itself
-#   would spuriously pass every fixture in an environment that sets the opt-out.
-#   The opt-out exists for the one case this guard refuses to guess through: base commit
-#   resolution failure (root commit / shallow clone / a fork-receiver's first push to a new
-#   remote branch). That failure is reported LOUDLY on stderr, with the opt-out's exact spelling
-#   printed inline, on a UNIQUE exit code (3) that no fixture exercises (fixtures never resolve a
-#   base this way — see FIXTURE-SHAPED mode above), because a silent skip there would be exactly
-#   the "unmeasured pass" this whole guard exists to prevent.
+# OPT-OUT: AX_SKIP_DOWNSTREAM_RELEASE_GATE=1 is honored ONLY INSIDE THE ONE DIAGNOSED CASE it was
+#   written for — a base commit that could not be resolved (root commit / shallow clone / a
+#   fork-receiver's first push to a new remote branch). BACKLOG P2-111(a), an external adversarial
+#   critic's measurement: this variable used to be consulted BEFORE applicability and BEFORE base
+#   resolution were even attempted, so exporting it turned the release gate off unconditionally —
+#   a one-line bypass of the entire gate, reachable by anyone who read the header.
+#   The rule now is:
+#     · base resolution FAILED + opt-out set  → skip, loudly, exit 0 (the diagnosed case).
+#     · base resolution FAILED + no opt-out   → exit 3, loudly, with the opt-out spelled inline.
+#     · anything else + opt-out set           → the variable is IGNORED and the gate runs in full.
+#       The fact that it was ignored is printed LOUDLY on stderr: a silently-ignored kill switch
+#       leaves an operator staring at a gate that "should have been off" with no explanation.
+#   Still honored ONLY for a live invocation (no `--root`; `--live-root` counts as live — see
+#   below). A `--root` call is by construction a controlled/test call and must not be defeatable
+#   by whatever the ambient shell exports, or `--fixtures` would spuriously pass in such an
+#   environment. In FIXTURE-SHAPED mode the diagnosed case cannot arise at all: there is no base
+#   COMMIT to resolve, only a prev_version.txt that is either there or not (and "not there" is a
+#   legitimate "no previous version", not a resolution failure). Fixture
+#   fail_optout_outside_diagnosed_case asserts exactly that — with the variable exported, a
+#   failing tree still exits 1.
+#
+# DECOMMISSION vs "not a plugin tree" (BACKLOG P2-111(c)): a push whose head carries NO
+#   .claude-plugin/plugin.json is not automatically out of scope. Two different shapes hide there
+#   and they must not be collapsed:
+#     · the manifest exists on the BASE side and is GONE at head → the push UNPUBLISHES the
+#       plugin. That is a legitimate operation and it passes — but it is announced LOUDLY on
+#       stderr, because "delete the manifest, push, restore it later" is otherwise a quiet way to
+#       move a tree past this gate. (Restoring it later fires the gate anyway: that range's base
+#       has no version and its head does, which reads as a changed value.)
+#     · the manifest is absent on BOTH sides → this is simply not a plugin tree. Nothing to
+#       check, silent pass.
+#   The gate FIRES normally whenever the manifest is present at head, whatever the base side says.
 #
 # Exit codes: 0 pass (gate satisfied OR did not fire OR explicitly skipped) · 1 violation (used
 # by every required fail_* fixture — practices/evals/fixture_kill_proof_guard.sh [87] only
@@ -109,12 +130,40 @@
 #   bash practices/evals/downstream_release_recency_guard.sh
 #       live repo, resolves head=HEAD and base=merge-base(HEAD, origin/HEAD or origin/main)
 #   bash practices/evals/downstream_release_recency_guard.sh --head SHA --base SHA
-#       live repo, caller-supplied range (this is how .githooks/pre-push wires it, using the
-#       local_sha/base it already resolved via pp_resolve_ref_base — see that function's header)
+#       live repo, caller-supplied range. .githooks/pre-push supplies the local_sha/base it already
+#       resolved via pp_resolve_ref_base (see that function's header), and passes NO --base at all
+#       when that resolution failed — P2-111(b): the gate is asked anyway and diagnoses the
+#       unresolvable base itself instead of being skipped.
 #   bash practices/evals/downstream_release_recency_guard.sh --root DIR
-#       audit DIR instead of this repo; DIR may or may not be a git repository (see above)
+#       audit DIR instead of this repo; DIR may or may not be a git repository (see above).
+#       A CONTROLLED/TEST call: the opt-out is never honored here.
+#   bash practices/evals/downstream_release_recency_guard.sh --live-root DIR --head SHA --base SHA
+#       audit git repository DIR as a GENUINE LIVE invocation. Exists for BACKLOG P2-111(d): the
+#       pre-push hook extracts THIS FILE (and practices/scripts/lib/ax_markers.py) out of git into
+#       a private /tmp directory and runs that copy, so the program doing the auditing is not
+#       whatever the working checkout happens to hold. It prefers the PREVIOUS RELEASE's copy —
+#       which the commit being pushed cannot have edited — and falls back to the pushed sha's own
+#       copy when the previous release does not carry both files; pp_downstream_release_gate's
+#       header states the full three-rung ladder and what each rung does and does not close. The
+#       extracted copy is not inside the repository, so it must be told which tree to audit — and
+#       it is still a live push gate, so the diagnosed-case opt-out must remain reachable, which
+#       `--root` deliberately forbids.
 #   bash practices/evals/downstream_release_recency_guard.sh --fixtures
 #       run every pass_*/fail_* fixture under fixtures/downstream_release_recency/
+#
+# HERMETICITY, HONESTLY BOUNDED (P2-111(d), partial by construction): with the pre-push wiring
+# above, the two files that decide this verdict — the guard and the marker parser — come out of
+# git and are blob-hash-verified after extraction. On the STRONG rung they come from the previous
+# release, so a commit that neuters the guard does not get to have the neutered guard clear it;
+# on the WEAK rung they come from the pushed sha, which closes only the working-checkout gap; the
+# LEGACY rung is the pre-P2-111(d) behaviour and closes neither. Every run prints which rung it
+# took, and the ladder ratchets upward on its own once a `--live-root`-capable guard reaches the
+# anchor branch. What is NOT closed by any rung: `.githooks/pre-push` and
+# `.githooks/pre-push-lib.sh` are executed by git from the working checkout and cannot
+# authenticate themselves (that residual is already stated in the hook's own header), and the
+# `git`/`python3` binaries this guard invokes are the ambient ones — the hook's hermetic PATH
+# bootstrap covers its own git, not this subprocess's python3. Both are backlog, not silently
+# claimed here.
 
 set -uo pipefail
 
@@ -123,6 +172,7 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
 FIXTURES_MODE=0
 ROOT_OVERRIDE=""
+LIVE_ROOT_OVERRIDE=""
 HEAD_ARG=""
 BASE_ARG=""
 
@@ -131,6 +181,8 @@ while [ $# -gt 0 ]; do
         --fixtures) FIXTURES_MODE=1; shift ;;
         --root) ROOT_OVERRIDE="$2"; shift 2 ;;
         --root=*) ROOT_OVERRIDE="${1#--root=}"; shift ;;
+        --live-root) LIVE_ROOT_OVERRIDE="$2"; shift 2 ;;
+        --live-root=*) LIVE_ROOT_OVERRIDE="${1#--live-root=}"; shift ;;
         --head) HEAD_ARG="$2"; shift 2 ;;
         --head=*) HEAD_ARG="${1#--head=}"; shift ;;
         --base) BASE_ARG="$2"; shift 2 ;;
@@ -150,9 +202,20 @@ if [ "$FIXTURES_MODE" -eq 1 ]; then
     pass=0
     fail=0
 
+    # A fixture whose basename mentions `optout` is run WITH AX_SKIP_DOWNSTREAM_RELEASE_GATE=1
+    # exported, because that variable is the thing under test for it (P2-111(a)); every other
+    # fixture is run with the variable explicitly UNSET, so an ambient export in the operator's
+    # shell can neither weaken nor strengthen any fixture's verdict.
+    fx_env() {
+        case "$(basename "$1")" in
+            *optout*) printf '%s' "1" ;;
+            *)        printf '%s' "" ;;
+        esac
+    }
+
     for sub in "$FIXTURES_DIR"/pass_*; do
         [ -d "$sub" ] || continue
-        if bash "$0" --root "$sub" >/dev/null 2>&1; then
+        if AX_SKIP_DOWNSTREAM_RELEASE_GATE="$(fx_env "$sub")" bash "$0" --root "$sub" >/dev/null 2>&1; then
             echo "PASS [downstream_release_recency/$(basename "$sub")]"
             pass=$((pass + 1))
         else
@@ -164,7 +227,7 @@ if [ "$FIXTURES_MODE" -eq 1 ]; then
     for sub in "$FIXTURES_DIR"/fail_*; do
         [ -d "$sub" ] || continue
         rc=0
-        bash "$0" --root "$sub" >/dev/null 2>&1 || rc=$?
+        AX_SKIP_DOWNSTREAM_RELEASE_GATE="$(fx_env "$sub")" bash "$0" --root "$sub" >/dev/null 2>&1 || rc=$?
         if [ "$rc" -eq 1 ]; then
             echo "PASS [downstream_release_recency/$(basename "$sub")]"
             pass=$((pass + 1))
@@ -180,8 +243,13 @@ if [ "$FIXTURES_MODE" -eq 1 ]; then
     exit 0
 fi
 
-# ── Live / --root mode ────────────────────────────────────────────────────────
-SCAN_ROOT="${ROOT_OVERRIDE:-$REPO_ROOT}"
+# ── Live / --root / --live-root mode ─────────────────────────────────────────
+if [ -n "$ROOT_OVERRIDE" ] && [ -n "$LIVE_ROOT_OVERRIDE" ]; then
+    echo "downstream_release_recency_guard: --root and --live-root are mutually exclusive (they " \
+         "make opposite statements about whether this is a controlled call)." >&2
+    exit 2
+fi
+SCAN_ROOT="${ROOT_OVERRIDE:-${LIVE_ROOT_OVERRIDE:-$REPO_ROOT}}"
 if [ ! -d "$SCAN_ROOT" ]; then
     echo "downstream_release_recency_guard: root not found: $SCAN_ROOT" >&2
     exit 2
@@ -191,11 +259,17 @@ SCAN_ROOT="$(cd "$SCAN_ROOT" && pwd)"
 IS_LIVE=1
 [ -n "$ROOT_OVERRIDE" ] && IS_LIVE=0
 
-# Opt-out: live invocations only (see header — a --root call must not be defeatable by ambient
-# env, or `--fixtures` would spuriously pass in any environment that happens to export this).
+# Opt-out: RECORDED here, ACTED ON only inside the diagnosed case (base commit unresolved), deep
+# in the python block below. P2-111(a): this used to `exit 0` right here, ahead of applicability
+# and ahead of base resolution, which made the variable an unconditional off switch for the whole
+# release gate. Live invocations only (`--root` is a controlled call — see header).
+OPTOUT=0
 if [ "$IS_LIVE" -eq 1 ] && [ "${AX_SKIP_DOWNSTREAM_RELEASE_GATE:-}" = "1" ]; then
-    echo "downstream_release_recency_guard: gate explicitly skipped via AX_SKIP_DOWNSTREAM_RELEASE_GATE=1" >&2
-    exit 0
+    OPTOUT=1
+    echo "downstream_release_recency_guard: AX_SKIP_DOWNSTREAM_RELEASE_GATE=1 is set. It is honored" >&2
+    echo "  ONLY if this run cannot resolve a base commit — the one case this gate refuses to guess" >&2
+    echo "  through. In every other situation it is IGNORED and the gate runs in full; if that is" >&2
+    echo "  what happens, the next line will say so rather than leave you wondering." >&2
 fi
 
 # RELOCATED-COPY AFFORDANCE (mirrors AX_RELEASE_ANCHOR_LIB — see
@@ -216,7 +290,7 @@ if [ ! -f "$AX_MARKERS_DIR/ax_markers.py" ]; then
     exit 2
 fi
 
-python3 - "$SCAN_ROOT" "$HEAD_ARG" "$BASE_ARG" "$AX_MARKERS_DIR" <<'PYEOF'
+python3 - "$SCAN_ROOT" "$HEAD_ARG" "$BASE_ARG" "$AX_MARKERS_DIR" "$OPTOUT" <<'PYEOF'
 import sys
 import os
 import json
@@ -226,7 +300,8 @@ import subprocess
 import tempfile
 import shutil
 
-root, head_arg, base_arg, ax_markers_dir = sys.argv[1:5]
+root, head_arg, base_arg, ax_markers_dir, optout_arg = sys.argv[1:6]
+optout = optout_arg == "1"
 sys.path.insert(0, ax_markers_dir)
 import ax_markers  # noqa: E402
 
@@ -261,6 +336,34 @@ def read_json_file(path):
             return json.load(f)
     except (OSError, ValueError):
         return None
+
+
+def applicability_or_exit(version_before, version_after, before_present, after_present):
+    """Decide whether the release gate FIRES, or exit 0 on one of the three non-firing shapes.
+
+    P2-111(c): "head carries no manifest" was previously read as one thing ("not applicable") when
+    it is two. Removing a manifest that the base side HAD is a decommission — a real operation
+    with a real release surface behind it, so it is announced rather than absorbed into silence;
+    otherwise "delete it, push, restore it" is a quiet way past this gate. A manifest absent on
+    BOTH sides is the genuinely inapplicable shape and stays silent.
+    """
+    if not after_present:
+        if before_present:
+            print("downstream_release_recency_guard: DECOMMISSION — this push REMOVES the plugin "
+                  "manifest that the base side carried.", file=sys.stderr)
+            print("  This is not a release, so the release gate has nothing to audit and does not "
+                  "block it. It is printed LOUDLY on purpose: deleting the manifest is the one "
+                  "shape that looks like 'gate does not apply' while actually changing what the "
+                  "tree publishes. Restoring it in a later push fires the gate normally — that "
+                  "range's base has no version and its head does.", file=sys.stderr)
+            sys.exit(0)
+        print("downstream_release_recency_guard: no plugin manifest on either side of this range "
+              "— not a plugin tree, gate does not apply.")
+        sys.exit(0)
+    if version_before == version_after:
+        print("downstream_release_recency_guard: plugin.json version unchanged in this "
+              "push range — gate does not fire.")
+        sys.exit(0)
 
 
 HARNESS_REL = "practices/scripts/verify-downstream.sh"
@@ -344,6 +447,16 @@ try:
             rc, out = git("merge-base", head_sha, "origin/main", cwd=root)
             base_sha = out if rc == 0 else ""
         if not base_sha:
+            # THE DIAGNOSED CASE — the only place the opt-out means anything (P2-111(a)).
+            if optout:
+                print("downstream_release_recency_guard: base commit UNRESOLVED *and* "
+                      "AX_SKIP_DOWNSTREAM_RELEASE_GATE=1 — gate skipped.", file=sys.stderr)
+                print("  This is the single situation the opt-out exists for: with no base commit "
+                      "there is no range in which to compare plugin.json's version, so the gate "
+                      "cannot decide anything either way. The skip is recorded here, at the point "
+                      "of diagnosis, rather than asserted before any of it was checked.",
+                      file=sys.stderr)
+                sys.exit(0)
             print("downstream_release_recency_guard: AX_DOWNSTREAM_BASE_UNRESOLVED — could not "
                   "resolve a base commit for this push range (root commit / shallow clone / "
                   "first push to a new remote branch are the known causes). This gate cannot "
@@ -353,25 +466,29 @@ try:
                   "AX_SKIP_DOWNSTREAM_RELEASE_GATE=1", file=sys.stderr)
             sys.exit(3)
 
+        if optout:
+            print("downstream_release_recency_guard: AX_SKIP_DOWNSTREAM_RELEASE_GATE=1 IGNORED — "
+                  f"the base commit resolved fine ({base_sha[:12]}), so the diagnosed case this "
+                  "opt-out exists for does not apply. The gate runs in full.", file=sys.stderr)
+
         rc, before_raw = git("show", f"{base_sha}:.claude-plugin/plugin.json", cwd=root)
+        before_present = rc == 0
         version_before = None
-        if rc == 0:
+        if before_present:
             try:
                 version_before = json.loads(before_raw).get("version")
             except ValueError:
                 version_before = None
         rc, after_raw = git("show", f"{head_sha}:.claude-plugin/plugin.json", cwd=root)
+        after_present = rc == 0
         version_after = None
-        if rc == 0:
+        if after_present:
             try:
                 version_after = json.loads(after_raw).get("version")
             except ValueError:
                 version_after = None
 
-        if version_before == version_after:
-            print("downstream_release_recency_guard: plugin.json version unchanged in this "
-                  "push range — gate does not fire.")
-            sys.exit(0)
+        applicability_or_exit(version_before, version_after, before_present, after_present)
 
         # Gate fires. Extract every skills/*/SKILL.md AT head_sha (never the working tree).
         rc, listing = git("ls-tree", "-r", "--name-only", head_sha, "--", "skills", cwd=root)
@@ -391,20 +508,22 @@ try:
         log_path = os.path.join(root, ".ax-downstream", "runs.jsonl")
         expected_head = head_sha
     else:
-        # FIXTURE-SHAPED mode — no git dependency at all.
-        plugin_json = read_json_file(os.path.join(root, ".claude-plugin", "plugin.json"))
+        # FIXTURE-SHAPED mode — no git dependency at all. There is no base COMMIT here, so the
+        # diagnosed case the opt-out serves cannot arise; `optout` is therefore never consulted on
+        # this path, which is what fail_optout_outside_diagnosed_case pins.
+        plugin_path = os.path.join(root, ".claude-plugin", "plugin.json")
+        after_present = os.path.isfile(plugin_path)
+        plugin_json = read_json_file(plugin_path)
         version_after = plugin_json.get("version") if isinstance(plugin_json, dict) else None
 
         prev_version_file = os.path.join(root, ".ax-downstream", "prev_version.txt")
+        before_present = os.path.isfile(prev_version_file)
         version_before = None
-        if os.path.isfile(prev_version_file):
+        if before_present:
             with open(prev_version_file, encoding="utf-8") as f:
                 version_before = f.read().strip()
 
-        if version_before == version_after:
-            print("downstream_release_recency_guard: plugin.json version unchanged in this "
-                  "push range — gate does not fire.")
-            sys.exit(0)
+        applicability_or_exit(version_before, version_after, before_present, after_present)
 
         expected_head_file = os.path.join(root, ".ax-downstream", "expected_head.txt")
         expected_head = ""

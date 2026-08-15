@@ -3843,3 +3843,16 @@ sh`로 봉합) · P2-108(guard [114]가 단언 명부를 하드코딩 검사해 
 형태로 강화). **잔여 7건은 BACKLOG P2-109~P2-115로 정직 등재**(마커 필수속성 미검사 · [113] 비독립
 도출 · [114] 잔여 우회 3종+로드경로 불일치 · "사본 0"이 본문에만 참 · react-ts-eslint-dep 마커 공허 ·
 F-032/F-033 RED-차등 부재 · 커버리지 산문 과대주장). 수렴률 98%(347/354) → **96%**(349/363).
+
+**후속 3 (2026-08-15 잔여 7건 종결).** 위 후속 2가 정직 등재한 P2-109~P2-115를 전건 봉합, 각 항목
+RED→GREEN 차등 실측 동반(상세는 BACKLOG 해당 행). 두 가지가 R112의 배치 자체에 직결된다: **(1)**
+P2-112 — "산출물 사본 0"이 본문에만 참이고 placement(JSON deep-merge / Gradle dependency 삽입 / append)는
+`verify-downstream.sh`에 하드코딩돼 있던 것을, 마커 계약(`ax_markers.py`)에 `merge=` attribute를
+신설해(closed vocabulary: `json-deep`/`gradle-dependencies`/`append`/`replace`; `kind=file-fragment`는
+필수, `kind=command`는 금지) 흡수 — 위 "결과(귀결)" 절의 "마커된 산출물은 기계 계약 아래에 놓인다"는
+주장이 이제 placement까지 포함해 참이 된다. **(2)** P2-111(d) — guard [114]와 `ax_markers.py`가 로컬
+체크아웃에서 로드되던 것을, git에서 blob-hash 검증 후 추출해 실행하는 **3-rung**(STRONG=직전 릴리스
+사본 · WEAK=pushed sha 사본 · LEGACY=체크아웃)으로 강화. **정직하게 기록해야 할 잔여 한계**: 훅
+자신과 `pre-push-lib.sh`는 여전히 체크아웃에서 실행되므로 self-attest할 수 없고, `python3`는 여전히
+ambient dependency다 — 이 두 가지는 이번 라운드로도 닫히지 않았다. `verify-downstream.sh` 단언
+11 → **13**(A9-eval · A10-tsdep 신설). 수렴률 96%(349/363) → **98%**(356/363).

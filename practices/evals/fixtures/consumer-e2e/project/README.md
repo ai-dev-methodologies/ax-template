@@ -48,6 +48,17 @@ is supposed to install, and the harness verifies they actually get installed and
 actually gate. Committing them ourselves would make the fixture "pass" for a
 reason that has nothing to do with the install skill (F-031).
 
+**`typescript-eslint` is deliberately NOT a baseline devDependency either
+(P2-113).** It used to be, and that made the skill's `react-ts-eslint-dep`
+artifact (`npm i -D typescript-eslint`, gated on `when=config.react.typescript`)
+completely unverifiable: `npm ci` ran before artifact installation and already
+put the package in `node_modules`, so skipping or breaking that marker left every
+assertion green. With it removed from `package.json` **and** from
+`package-lock.json`, the harness asserts the package is UNRESOLVABLE after
+`npm ci` and RESOLVABLE after the marker runs (assertion `A10-tsdep`), and the
+`eslint.config.mjs` import of `typescript-eslint` — hence A1/A2 — genuinely
+depends on that artifact having executed.
+
 ## Gradle wrapper substitution — measured recipe (2026-08-14)
 
 Copying `backend/gradlew` + `backend/gradle/wrapper/gradle-wrapper.jar` (which

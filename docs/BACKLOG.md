@@ -28,9 +28,9 @@ signature를 발견**(17/17)함으로써 경험적으로 반증되었다 — 발
 |---|---|---|---|
 | P0 (expiry-bound / live defects) | 30 | 30 | **100%** |
 | P1 (generic signature backlog) | 74 | 74 | **100%** |
-| P2 (verification escapes) | 117 | 104 | **89%** |
-| P3 (industry-niche deferrals) | 142 | 141 | **99%** |
-| **P0–P3 합계 (수렴 분모)** | **363** | **349** | **96%** |
+| P2 (verification escapes) | 117 | 111 | **95%** |
+| P3 (industry-niche deferrals) | 143 | 141 | **99%** |
+| **P0–P3 합계 (수렴 분모)** | **364** | **356** | **98%** |
 
 > 2026-08-15 외부 adversarial critic(codex, read-only) 라운드 — 2026-08-14 shipped `ed5ca2a7`(v0.1.7,
 > downstream-fixture E2E)에 대해 codex가 `VERDICT: ITERATE`와 함께 결함 9건을 냈다. **CRITICAL 2건은
@@ -45,7 +45,20 @@ signature를 발견**(17/17)함으로써 경험적으로 반증되었다 — 발
 > 뜻이고 그것이 정확한 부기다. 북극성(2)의 IDW18+ **동결 해제선 70%는 계속 크게 상회**하므로 동결
 > 판정에는 변화가 없다.
 
-> 2026-08-14 downstream-fixture E2E 웨이브 — **1개 downstream bench 2일이 13건(F-017~F-029 = GH #78~#84 · #86~#91)을 냈고 전부 사람이 찾았다(guard 발견 0건)**. 이번 웨이브가 닫은 것: GH #89/#90/#91(#86의 봉합이 **스스로 낳은** BLOCKING 3건 — 셋 다 스킬 §5 self-verification을 통과했다: ArchUnit 스니펫 컴파일 불가 · configuration-시점 `error(...)`가 `-P` 없는 모든 gradle 호출을 죽임 · 기본 `test`가 `PRACTICES` 태그를 함께 돌림) + 세션 발견 5건(F-030 eslint config의 하드코딩 `./ax.config.json` ↔ `cd $REACT_ROOT` 충돌 · F-031 **처방된 적 없는** `lint` 스크립트를 `--if-present`로 부르는 훅 = react 게이트 미발화 · F-032 태스크명 하드코딩 · F-033 TS 유무를 에이전트 추측에 위임 · F-034 훅의 무조건 출력 부재로 "scope-skip 통과"와 "훅 미설치"가 구분 불가) + GH #92 [META]의 **구조적** 봉합(`verify-downstream.sh` 하네스 11 단언 + 마커 **단일 파서** `ax_markers.py` + guard [112]/[113] 오프라인 R25 + guard [114] pre-push 릴리스 게이트 + 주간 advisory 워크플로; guard 111→**114**, plugin 0.1.6→**0.1.7**). closed 9건(P2-93 ~ P2-101). **정직한 부기**: 하네스가 **반증할 수 없는** 잔여를 6건 신규 등재했다(P2-102 Option E · P2-103 husky/lefthook·worktree 배선 · P2-104 config 조건 분기 · P2-105 Next 특화 룰 · P2-106 [114] 위조저항 · P3-143 버전 매트릭스) — 하네스는 **재현 도구이지 발견 도구가 아니며**, 1차 발견 메커니즘은 여전히 clean-room 인간 설치다. 분모 339→**354**, closed 338→**347** = **98%**. 수렴률이 100%→98%로 내려간 것은 봉합보다 정직 등재가 많았다는 뜻이고 그것이 정확한 부기다. 북극성(2)의 IDW18+ **동결 해제선 70%는 계속 상회**하므로 동결 판정에는 변화가 없다.
+> 2026-08-15 외부 adversarial critic(codex, read-only) 라운드 후속 종결 — 위에서 정직 등재됐던 잔여
+> 7건(P2-109~P2-115)을 전건 봉합, 각 항목 RED→GREEN 차등 실측 동반: guard **[112]**에 마커 필수속성
+> (`MISSING_REQUIRED_ATTR`/`UNREGISTERED_KIND`/`INVALID_PATH_FOR_KIND`/`UNKNOWN_ATTR`/`DUPLICATE_ATTR`)
+> + config-경로(`UNKNOWN_CONFIG_PATH`) 검사 신설(fixture 6→11) · guard **[113]**이 fence 본문에서만
+> 값을 독립 도출하도록 교정(SKILL.md 전문 grep 우연일치 제거) · guard **[114]** 잔여 우회 3종
+> 정합화 + STRONG/WEAK/LEGACY **3-rung** hermetic 실행 도입 · 마커 계약에 `merge=` attribute
+> 신설(json-deep/gradle-dependencies/append/replace)로 placement 규칙을 단일 진실원화 ·
+> `react-ts-eslint-dep` 픽스처 공허 제거 + 신규 단언 `A10-tsdep` · PRD가 약속한 2-config evaluator
+> differential을 신규 단언 `A9-eval`로 실체화 · 커버리지 산문(workflow yml·CLAUDE.md)을 하네스의 좁은
+> self-representation으로 통일. `verify-downstream.sh` 단언 11 → **13**(A9-eval·A10-tsdep 추가). 분모
+> 363 불변, closed 349 → **356** = **98%**.
+
+> 2026-08-14 downstream-fixture E2E 웨이브 — **1개 downstream bench 2일이 13건(F-017~F-029 = GH #78~#84 · #86~#91)을 냈고 전부 사람이 찾았다(guard 발견 0건)**. 이번 웨이브가 닫은 것: GH #89/#90/#91(#86의 봉합이 **스스로 낳은** BLOCKING 3건 — 셋 다 스킬 §5 self-verification을 통과했다: ArchUnit 스니펫 컴파일 불가 · configuration-시점 `error(...)`가 `-P` 없는 모든 gradle 호출을 죽임 · 기본 `test`가 `PRACTICES` 태그를 함께 돌림) + 세션 발견 5건(F-030 eslint config의 하드코딩 `./ax.config.json` ↔ `cd $REACT_ROOT` 충돌 · F-031 **처방된 적 없는** `lint` 스크립트를 `--if-present`로 부르는 훅 = react 게이트 미발화 · F-032 태스크명 하드코딩 · F-033 TS 유무를 에이전트 추측에 위임 · F-034 훅의 무조건 출력 부재로 "scope-skip 통과"와 "훅 미설치"가 구분 불가) + GH #92 [META]의 **구조적** 봉합(`verify-downstream.sh` 하네스 11 단언(2026-08-15 P2-113/P2-114 종결
+이후 **13**으로 확장) + 마커 **단일 파서** `ax_markers.py` + guard [112]/[113] 오프라인 R25 + guard [114] pre-push 릴리스 게이트 + 주간 advisory 워크플로; guard 111→**114**, plugin 0.1.6→**0.1.7**). closed 9건(P2-93 ~ P2-101). **정직한 부기**: 하네스가 **반증할 수 없는** 잔여를 6건 신규 등재했다(P2-102 Option E · P2-103 husky/lefthook·worktree 배선 · P2-104 config 조건 분기 · P2-105 Next 특화 룰 · P2-106 [114] 위조저항 · P3-143 버전 매트릭스) — 하네스는 **재현 도구이지 발견 도구가 아니며**, 1차 발견 메커니즘은 여전히 clean-room 인간 설치다. 분모 339→**354**, closed 338→**347** = **98%**. 수렴률이 100%→98%로 내려간 것은 봉합보다 정직 등재가 많았다는 뜻이고 그것이 정확한 부기다. 북극성(2)의 IDW18+ **동결 해제선 70%는 계속 상회**하므로 동결 판정에는 변화가 없다.
 
 > 2026-08-01 P1-seal 라운드 14 — reviewer P1 **2건**을 서로 다른 처방으로 봉합. **(P1-A) lexical `..`가 실재 alias를 놓친다**: 라운드 13은 심링크 타깃을 **lexical**로 해석해 `..`를 **follow 이전에** 텍스트로 접었다. 커널은 중간 symlink를 **follow 한 뒤** `..`를 pop한다. reviewer 토폴로지(커밋 내용만, 환경 통제 0): `backend/jump -> real/sub` + `backend/gradlew -> jump/../GRADLEW-REAL` over tracked `backend/real/gradlew-real` → POSIX는 `backend/real/GRADLEW-REAL`에 도달하고 case-insensitive APFS가 그것을 **추적 파일로 서비스**하므로 R25가 래퍼를 실제로 실행하고 green, lexical 후보 `backend/GRADLEW-REAL`은 **부재**라 두 구현 모두 dangling 종료로 **침묵**(측정: HEAD helper exit 0 + 클린트리 상수 `0a815065…`), case-**sensitive** 수신자는 **DANGLING gradlew**. 봉합: `_resolve_link_target`을 **component-by-component** 커널 해석으로 교체(중간 follow / 최종 컴포넌트는 lstat이므로 follow 안 함 / `..`는 follow 이후 pop / 중간 절대 타깃은 수신자 루트로 이탈 / 결측·판독불가 중간은 최종 lstat이 판정) + **예산 2종**(follow 40 = Linux MAXSYMLINKS와 macOS SYMLOOP_MAX 32 중 **큰 쪽**, component 4096) 소진 시 **침묵이 아니라** 신규 코드 `GIT_SYMLINK_RESOLUTION_UNBOUNDED`(fingerprint exit 16)로 BLOCK — 미완주 walk는 alias 질문에 **답하지 못한 것**이고 그 상태를 침묵으로 바꾸는 것이 라운드 8 이후 매 라운드가 닫아온 결함이며, 커밋된 cycle은 수신자에게 ELOOP다(측정: `loopa -> loopb/x`·`loopb -> loopa`, 커널 ELOOP, HEAD exit 0 → round-14 exit 16). 두 구현 대칭 봉합(helper + recency guard 12c). **P3-133은 SUPERSEDE — 그 행의 done-when(“발산 시 침묵”)은 이 P1을 보존한다**(reviewer 논거 인용과 함께 REJECT로 닫음), 그 행의 over-inclusive 반례를 새 resolver로 **재측정**: HEAD exit 15(부당 차단) → round-14 **exit 0 + 클린트리 상수**(첫 `..`에서 escapes). 정당한 **9형태 전부 재빌드해 exit 0**(HEAD·round-14 동일), 비공허성은 최종 컴포넌트 별칭 1건 추가 시 exit 15. 라운드 13 직접형 재확인: (AJ) 대소문자 · (AK) 정규화 **양쪽 모두 exit 15 유지**. 라이브 트리: symlink 2건 통과, digest **불변**(감사 가능 레시피 — clean `0a815065…` / dirty `8a91e493…`, HEAD 사본과 이번 사본 바이트 일치), 5회 평균 0.2738→0.2758 s/run(+0.7%, 노이즈). **(P1-B) 커밋된 런타임 경로 문자열**: R25가 체크리스트의 `command`/`working_directory`를 **verbatim** 실행(verify-completion.sh:1086 → :1561 `cd`+`bash -c`)하는데 그 문자열이 **기록된 스펠링**인지 아무도 묻지 않았다. 재현(커밋 내용만): `practices/evals/spec_policy_ref_guard.sh` → `PRACTICES/evals/…` 한 글자 케이스 변경 → APFS에서 명령 **exit 0**, `git cat-file -e HEAD:PRACTICES/…` **exit 128**, 트리 CLEAN, fingerprint **클린트리 상수**, [58] task-coverage exit 0, R25 위반 버킷 10종 전부 EMPTY = **green 증거 위조**. 처방을 **두 부분으로 분리**: **(1) 강제** — 신규 가드 [104] `checklist_command_path_spelling_guard.sh`가 체크리스트의 모든 경로형 토큰을 working_directory 기준 repo-relative로 풀어 **기록된 스펠링(추적 경로 또는 그 디렉터리 컴포넌트)** 이어야 하고, 아니면서 **공유 fold**(`tree_fingerprint.py`의 `_fold_path_key`를 import — 재구현 0)로 동치면 `CHECKLIST_PATH_ALIAS` BLOCK. **(st_dev, st_ino) 판별자를 쓰지 않는다** — 주제가 커밋된 파일 안의 **문자열**이지 검증 파일시스템 위의 경로가 아니므로 측정할 로컬 동일성이 없고 판정하는 것은 **수신자의** 파일시스템이다(그 덕에 가드와 fixture가 **파일시스템 독립**). candidate 규칙 7종을 헤더에 전수 열거하고 **라이브 체크리스트 오탐 0을 측정**: 367 토큰 → recorded 240 / unrelated 125 / skipped(flag) 2 / **alias 0**(`--show`로 표 출력). fixture 3종(pass_recorded_spellings / fail_command_case_alias = 재현 그대로 / fail_working_directory_alias). **(2) 정직한 한계** — 임의 커밋 내용의 경로 문자열 일반형은 **inspection으로 결정불가능**이므로 휴리스틱 스캐너를 출하하지 않고 **P2-72로 열어둔다**: 유일한 완전 처방은 **aliasing 하지 않는(대소문자·정규화 민감) 체크아웃에서 스위트를 실제로 돌리는 것**(이 프로젝트가 이미 구성 가능함을 증명한 `hdiutil create -fs "Case-sensitive APFS"`), 비용·채택 조건을 행에 명기. 값싼 완화책으로 `--advisory-scripts`(체크리스트가 **직접 호출하는** 셸 스크립트 1단계 literal 스캔)를 **비블로킹 ADVISORY**로 추가(라이브 3 스크립트·alias 0, 심은 alias 1건은 보고됨 = 비공허). prover 확장: (AN) jump 토폴로지 + (AN2) lexical 복원 twin + (AN3)/(AN4) 구현별 분리 twin + (AO) cycle 예산, 각각 premise 단언 동반. 신규 2건 등재(P2-72 · P3-134 = 중간 컴포넌트 별칭, 두 resolver 모두 미차단 — 측정·register-only) + P3-133 closed → 분모 308→310, 수렴 271/310 **87%**.
 
@@ -597,7 +610,8 @@ tier 배정 근거(기존 관례 대조): 이 결함 클래스는 "**검증 표�
   봉합 4층: **(1)** `practices/scripts/verify-downstream.sh` — stock-shaped 2-스택 픽스처
   (`practices/evals/fixtures/consumer-e2e/project/`: Spring Boot 4.1.0 / Gradle 9.5.1 / Initializr의
   eager `withType<Test>` 보존 / Next.js app-router / **두 root 모두 `.` 아님**)에 산출물을 SKILL.md
-  마커에서 **추출·verbatim 설치**하고 11개 단언(A-pc · A0~A8 · A7b)을 **exit code + 게이트 자신의 신호
+  마커에서 **추출·verbatim 설치**하고 11개 단언(A-pc · A0~A8 · A7b — 2026-08-15 P2-113/P2-114 종결
+  이후 A9-eval·A10-tsdep 추가로 **13개**)을 **exit code + 게이트 자신의 신호
   문자열**로 검증한다(exit code 단독은 증거가 아니라는 [85]의 규칙 — `git commit`은 게이트와 무관한
   열 가지 이유로 실패한다). 산출물 **사본 0** — 스킬을 고치면 내일 이 하네스가 그것을 돌린다.
   **(2)** `practices/scripts/lib/ax_markers.py` — 마커 / `ax:if` / `ax:subst`의 **단일 파서**(하네스와
@@ -639,8 +653,9 @@ tier 배정 근거(기존 관례 대조): 이 결함 클래스는 "**검증 표�
   "`assertions`가 비어있지 않은 dict이고, 존재하는 값이 전부 `true`"만 검사해 `{"forged-single":
   true}` 같은 로그가 통과한다(codex 재현: `accepted=True`). BACKLOG/DECISIONS(R112)의 "단언별 boolean
   **전건** true" 주장은 *기록된 키 기준*으로만 참이었다 — 무엇을 기록해야 하는지는 아무도 강제하지
-  않았다. 봉합: [114]가 단언 명부를 하드코딩하지 않고 `verify-downstream.sh`의 11개 단언 이름
-  (A-pc·A0~A8·A7b)을 **파싱 도출**해 로그의 `assertions` 키 집합과 **정확 일치**를 요구 + `verdict==
+  않았다. 봉합: [114]가 단언 명부를 하드코딩하지 않고 `verify-downstream.sh`의 단언 이름을 **파싱
+  도출**해(당시 11개 — A-pc·A0~A8·A7b; 2026-08-15 P2-113/P2-114 종결 이후 A9-eval·A10-tsdep 추가로
+  **13개**) 로그의 `assertions` 키 집합과 **정확 일치**를 요구 + `verdict==
   "pass"` + `override==[]` 단언 추가. 출처: 2026-08-14 shipped `ed5ca2a7`에 대한 외부 adversarial
   critic(codex, read-only) 감사.
 
@@ -682,77 +697,75 @@ tier 배정 근거(기존 관례 대조): 이 결함 클래스는 "**검증 표�
   fingerprint 결박을 추가하거나 (b) 이 게이트의 위협모델(릴리스 버전을 올리는 maintainer 자신)이 그
   판별자들을 요구하지 않는다는 판정을 근거와 함께 기록하고 닫는다. 출처: 2026-08-14 GH #92 설계
   자기평가(등재만).
-- [ ] P2-109 — guard **[112]**가 malformed 마커를 통과시킨다: `ax_markers.py:245-252,278-291`이
-  `id`/`path`/`kind` 속성 부재를 **빈 문자열로 기본값 처리**하는데 `lint()`가 이 필수 속성들의
-  비어있음을 검사하지 않는다(codex 재현: `discovered=1 id='' path='' kind='' lint=[]` — VIOLATION
-  0건). 또한 `ax:if`의 config 경로 오타는 **거짓으로 조용히 평가**된다(`:421-447`, 재현: `lint=[]
-  rendered=''` — 조건이 항상 false로 접혀 산출물 전체가 소거됨에도 lint가 무언). [112]는 참조를
-  `ax.config.schema.json`에 대조하지 않고 픽스처 config로 렌더만 하므로 이 계열의 오타를 원리적으로
-  못 잡는다. 추가로 `skills/ax-install-*`를 전부 지워도 PASS함이 재현됨
-  (`install_artifact_extractability_guard.sh:210-217`) = zero-census 상태에서의 공허 통과. done-when:
-  `lint()`에 필수 속성(id/path/kind) 비어있음 검사 추가 + `ax:if` config 경로를 스키마에 대조해
-  미해결 토큰을 소리내어 실패시키거나 그 한계를 명시 + zero-artifact 상태를 별도 실패 코드로 구분.
-  출처: 2026-08-14 shipped `ed5ca2a7`에 대한 외부 adversarial critic(codex, read-only) 감사.
-- [ ] P2-110 — guard **[113]**이 두 산출물에서 **독립 도출**하지 않는다: SKILL.md **전문**을
-  grep하므로(`cross_artifact_contract_guard.sh:145-150`), 실제 마커된 훅 명령 라인
-  (`ax-install-hooks/SKILL.md:173`)을 지워도 체크리스트 산문(`:340`)이 훅 측 값을 그대로 만족시킨다
-  (codex 재현: 삭제 후에도 PASS, `axRootPackage` 잔존 매치). 이는 R112의 "동어반복이 아니다"(양쪽에서
-  독립 도출해 diff) 주장을 반증한다 — grep 대상이 **마커 fence 본문이 아니라 파일 전체**라 산문
-  설명이 실질 값과 우연히 일치하는 순간 진짜 삭제를 은폐한다. 처방: `ax_markers.py`로 양쪽 마커를
-  찾아 **fence 본문에서만** 값을 도출하도록 교체 + 이 삭제 시나리오를 fixture로 추가(현재 fixture는
-  이 우연 일치 경로를 커버하지 않는다). 출처: 2026-08-14 shipped `ed5ca2a7`에 대한 외부 adversarial
+- [x] P2-109 — **closed 2026-08-15 (외부 adversarial critic 잔여 종결)**: guard **[112]**가 malformed
+  마커를 통과시키던 결함 봉합 — `ax_markers.py`에 `MISSING_REQUIRED_ATTR`(id/path/kind 필수 속성
+  부재) · `UNREGISTERED_KIND` · `INVALID_PATH_FOR_KIND` · `UNKNOWN_ATTR`(closed vocabulary 밖 속성) ·
+  `DUPLICATE_ATTR` · `UNKNOWN_CONFIG_PATH`(`ax:if`의 config 참조를 `ax.config.schema.json`에
+  교차검증) 6종 lint 코드 신설 + guard에 check 9b `NO_INSTALL_SKILLS`(zero-census 전용 실패 코드) 추가.
+  부수 발견: `_MARKER_RE`가 `.+?`(속성 1개 이상)라서 `<!-- ax:artifact -->`(속성 0개)는 애초에
+  discover조차 안 됐음 → `.*?`로 교정. Differential: critic 재현 `discovered=1 id='' path='' kind=''
+  lint=[]`(VIOLATION 0건) → 이제 `MISSING_REQUIRED_ATTR ×3, exit=1`; `ax:if config.react.typoField` →
+  이제 `UNKNOWN_CONFIG_PATH: ... an unknown config path evaluates to FALSE forever instead of
+  erroring, exit=1`. Fixture 6→11(`pass_marked` + 10개 `fail_*`). 출처: 2026-08-14 shipped `ed5ca2a7`에
+  대한 외부 adversarial critic(codex, read-only) 감사.
+- [x] P2-110 — **closed 2026-08-15 (외부 adversarial critic 잔여 종결)**: guard **[113]**이 SKILL.md
+  **전문**을 grep해 fence 밖 prose로도 만족될 수 있던 결함 봉합 — `cross_artifact_contract_guard.sh`를
+  `ax_markers.discover()`로 `hook-body`/`java-gradle-testpractices` 마커를 찾아 **fence 본문에서만**
+  값을 도출하도록 교체. Differential: 신규 fixture `fail_prose_only_p_contract`(마커 본문에는 `-P`가
+  없고 산문에만 있는 형상) — old exit 0 / new exit 1. Live non-vacuity: 실제 `hook-body` fence
+  본문에서 `-P...`를 임시 삭제하면 BLOCK, 원복하면 PASS. guard 헤더에 "독립 도출" 주장이 왜 false였는지
+  주석으로 기록. 출처: 2026-08-14 shipped `ed5ca2a7`에 대한 외부 adversarial critic(codex, read-only)
+  감사.
+- [x] P2-111 — **closed 2026-08-15 (외부 adversarial critic 잔여 종결)**: guard **[114]**의 잔여 우회
+  3종 + 로드경로 불일치 전건 봉합. **(a)** `AX_SKIP_DOWNSTREAM_RELEASE_GATE=1`을 **base 해결
+  불가로 진단된 경우에만** 유효하도록 제한(그 외에는 무시 + stderr 큰 소리로 기록) — differential: base
+  정상 + 진단 로그 부재 상황에서 old exit 0 → new exit 1. **(b)** pre-push가 base 미해결 시 [114] 평가
+  이전에 `continue`하던 것을 제거하고 게이트를 호출해 guard 스스로 진단하도록 교정 — 실측 exit 3 →
+  push BLOCKED, opt-out 시 PASS. **(c)** `.claude-plugin/plugin.json` 삭제 push를 decommission
+  경로로 분리(base엔 있고 head엔 없음 = 큰 소리로 기록 후 통과 / 양쪽 다 없음 = 조용히 통과). **(d)**
+  guard·`ax_markers.py` 실행 파일을 git에서 추출해 blob-hash 검증 후 실행하는 **3-rung** 도입
+  (STRONG=직전 릴리스 사본 · WEAK=pushed sha 사본 · LEGACY=체크아웃) — differential: 버전 bump와 guard
+  무력화를 같은 커밋에 넣었을 때 WEAK=exit 0(우회) / STRONG=exit 1(차단). **정직한 잔여 한계**: 훅
+  자신과 `pre-push-lib.sh`는 여전히 체크아웃에서 실행되어 self-attest 불가하고, `python3`는 ambient
+  dependency다 — guard 헤더에 명시. 출처: 2026-08-14 shipped `ed5ca2a7`에 대한 외부 adversarial
   critic(codex, read-only) 감사.
-- [ ] P2-111 — guard **[114]**의 잔여 우회 3종 + 로드 경로 불일치: **(a)** `AX_SKIP_DOWNSTREAM_
-  RELEASE_GATE=1`이 적용가능성(plugin.json version 변경 여부)·base 해결보다 **먼저** exit한다
-  (`downstream_release_recency_guard.sh:181-186`) — 게이트가 적용 대상인지 묻기도 전에 무조건 스킵.
-  **(b)** pre-push가 base 미해결 시 [114] 평가 **이전에** `continue`한다(`.githooks/pre-push:754-769`)
-  — base 미해결 ref는 REGRESSION_NEEDED 경로로 빠지고 [114] 자체는 그 ref에 대해 아예 평가되지 않는다.
-  **(c)** `.claude-plugin/plugin.json`을 **삭제하는** push는 [114]를 건너뛴다(`:794-804`) — 훅 자신은
-  이를 "언릴리스이지 재우회 아님" 논거로 방어한다(`ls-tree` 부재=미적용 판정, 재추가 시 재발화가
-  코드·주석으로 확인됨)지만, 매니페스트 없는 커밋 범위 자체가 게이트 사각지대인 것은 측정상 사실이다.
-  추가로 skill 본문은 pushed sha에서 읽지만 **guard·parser 실행 파일(`ax_markers.py`)은 로컬
-  체크아웃에서** 로드된다(`:196-217`) — 로컬 checkout 자체를 손댈 수 있는 위협모델에서는 pushed
-  콘텐츠 검증이 그 손댐을 못 잡는다. done-when: (a)(b)는 스킵/continue 판정과 [114] 평가 순서를
-  재검토해 fail-closed 근거를 문서화하거나 순서를 교정하고, (c)는 매니페스트-부재 push를 "적용대상
-  아님"으로 판정하는 근거를 정식 위협모델로 기록하며, 로드 경로는 checkout 무결성이 다른 계층에서
-  이미 보증되는지 명시한다. 출처: 2026-08-14 shipped `ed5ca2a7`에 대한 외부 adversarial critic(codex,
-  read-only) 감사.
-- [ ] P2-112 — "산출물 사본 0"은 **산출물 본문에만** 참이다: 하네스가 JSON deep-merge
-  (`verify-downstream.sh:437-445 merge_json`) / Gradle `dependencies {}` 블록 삽입(`:459-472`) / 그 외
-  append 규칙(`:474-478`)을 **하드코딩**한다 — 스스로 `HONEST SCOPE`에 "placement is MODELED by two
-  documented merge rules"라고 적어두었으나(`:44-50,126-128`), CLAUDE.md:540과 R112 절은 여전히 산출물
-  설치를 "verbatim"이라 서술한다. 마커 **본문**은 분명 사본 0이지만, 본문을 **어디에 어떻게 꽂는지**의
-  규칙은 하네스 코드(python)와 스킬 산문 절차 두 벌로 존재해 R111/[113]이 codify한 "두 진리원이
-  조용히 갈라지는" 형태를 재도입한다. 처방: placement/merge 규칙을 마커 계약(`ax_markers.py`)으로
-  단일화하거나, 그것이 과하면 CLAUDE.md·R112·BACKLOG 서술을 하네스의 좁은 표현("modeled" placement,
-  verbatim body)으로 통일한다. 출처: 2026-08-14 shipped `ed5ca2a7`에 대한 외부 adversarial
-  critic(codex, read-only) 감사.
-- [ ] P2-113 — `react-ts-eslint-dep` 산출물이 이 픽스처에서 **공허**하다: 픽스처 `package.json:10-16`이
-  **이미** `typescript-eslint`를 선언하고 있어(`npm ci`가 산출물 설치보다 **먼저** 도는
-  `verify-downstream.sh:350-361` 순서와 맞물려), 그 마커를 건너뛰거나 본문을 깨뜨려도 A1/A2(react
-  게이트 발화 단언)가 여전히 green — 이 마커가 실제로 무언가를 부가하는지 하네스가 **한 번도
-  측정하지 않는다**. done-when: 픽스처 베이스라인 `package.json`에서 `typescript-eslint` 의존성을
-  제거 + "설치 전 부재 / 설치 후 해결" 단언 추가 + 이 마커를 삭제하는 mutation 시나리오로 A1/A2가
-  RED로 뒤집힘을 확인. 출처: 2026-08-14 shipped `ed5ca2a7`에 대한 외부 adversarial critic(codex,
-  read-only) 감사.
-- [ ] P2-114 — F-032(`java.testTask` 커스텀명)/F-033(`react.typescript` 분기)에 **RED 차등**이 없다:
-  하네스가 스스로 이 둘은 before-state(수정 전 형상에서 실패) 테스트가 **명시적으로 없다**고 적는다
-  (`verify-downstream.sh:308-309` 부근 HONEST SCOPE 서술). 또한 skill PRD가 약속한 **2-config
-  evaluator differential**(같은 마커를 서로 다른 `ax.config.json` 두 벌로 렌더해 값이 실제로 갈라짐을
-  확인)이 실제로는 **단일 config 렌더 경로**뿐이라 하네스 코드에 부재한다(`:418-425,494-505`).
-  done-when: 대체 taskName 형상 또는 non-TS(typescript=false) 분기의 RED-before/GREEN-after 차등을
-  픽스처 변형으로 추가하기 전까지 이 두 항목을 **미완 acceptance 항목**으로 강등해 문서에서
-  "검증됨"으로 서술하지 않는다. 출처: 2026-08-14 shipped `ed5ca2a7`에 대한 외부 adversarial
-  critic(codex, read-only) 감사.
-- [ ] P2-115 — 커버리지 산문이 하네스의 실측 범위를 과대주장한다: `.github/workflows/consumer-e2e.yml:
-  42-45`는 husky/lefthook 배선까지 이 하네스로 검증된다고 적었으나, 하네스 자신은 Branch A
-  (`core.hooksPath`)만 커버한다고 스스로 적는다(`verify-downstream.sh:115-128` — P2-103이 이미 이
-  갭을 별도 등재했으나 workflow yml 문구는 아직 좁혀지지 않았다). 또 CLAUDE.md:540은 11개 단언
-  **전부**가 "exit code + 게이트 자신의 신호"라 서술하나 A6/A7b는 실제로는 premise/전제 성립 여부를
-  확인하는 단언이라 그 틀에 정확히 들어맞지 않는다(`verify-downstream.sh:628-637,823-842` 부근).
-  done-when: workflow yml·CLAUDE.md·BACKLOG·DECISIONS(R112)의 서술을 하네스가 실제로 검증하는 범위
-  (Branch A만, A6/A7b는 premise-class 단언)로 통일한다. 출처: 2026-08-14 shipped `ed5ca2a7`에 대한
-  외부 adversarial critic(codex, read-only) 감사.
+- [x] P2-112 — **closed 2026-08-15 (외부 adversarial critic 잔여 종결)**: "산출물 사본 0"이 산출물
+  본문에만 참이고 placement는 하네스 코드에 하드코딩돼 있던 결함 봉합 — 마커 계약(`ax_markers.py`)에
+  `merge=` attribute 신설(closed vocabulary: `json-deep` · `gradle-dependencies` · `append` ·
+  `replace`; `kind=file-fragment`는 `merge=` **필수**(`MISSING_MERGE_FOR_FRAGMENT`), `kind=command`는
+  **금지**(`MERGE_ON_COMMAND`)) — 실제 마커 9개 전량을 검토해 file/file-fragment 6개에 `merge=` 부여
+  (`java-archunit-dep`→`gradle-dependencies`, `react-lint-script`→`json-deep` 등), command 3개는
+  금지 확인. `verify-downstream.sh`의 basename/extension sniffing을 제거하고 `artifact.merge`만
+  따르도록 교정(미지원 값은 loud failure `UNREGISTERED_MERGE`). Differential: `react-lint-script`의
+  `merge=`를 `gradle-dependencies`로 바꾸면 rc=6으로 실패(old 코드는 조용히 JSON merge했을 것),
+  `json-shallow`는 `UNREGISTERED_MERGE`로 거부. 하네스가 `lint()`에 schema path를 넘기게 되어
+  `UNKNOWN_CONFIG_PATH`도 이제 하네스에서 적용된다. 출처: 2026-08-14 shipped `ed5ca2a7`에 대한 외부
+  adversarial critic(codex, read-only) 감사.
+- [x] P2-113 — **closed 2026-08-15 (외부 adversarial critic 잔여 종결)**: `react-ts-eslint-dep`
+  산출물이 픽스처에서 공허하던 결함 봉합 — 픽스처 `package.json`이 이미 `typescript-eslint`를
+  선언하고 있어(`npm ci`가 산출물 설치보다 먼저 도는 순서와 맞물려) 마커를 건너뛰거나 깨뜨려도 A1/A2가
+  여전히 green이던 것을, 픽스처 baseline에서 `typescript-eslint` 의존성을 제거 + lockfile 재생성 +
+  신규 단언 `A10-tsdep` 추가(설치 전 unresolvable → 설치 후 resolvable이라는 transition을 요구)로
+  봉합. Differential: `--artifact-override react-ts-eslint-dep=<no-op>` → exit 1, `FAILED: A10-tsdep,
+  A1, A2, A3, A4`, 근본원인 인용 `Cannot find package 'typescript-eslint' imported from
+  .../eslint.config.mjs`. Old 픽스처에서는 동일 override가 green이었다. 출처: 2026-08-14 shipped
+  `ed5ca2a7`에 대한 외부 adversarial critic(codex, read-only) 감사.
+- [x] P2-114 — **closed 2026-08-15 (외부 adversarial critic 잔여 종결)**: F-032(`java.testTask`
+  커스텀명)/F-033(`react.typescript` 분기)에 RED 차등이 없고 PRD가 약속한 2-config evaluator
+  differential이 하네스 코드에 부재하던 결함 봉합 — 신규 단언 `A9-eval` 추가: `hook-body`·
+  `react-eslint-config`를 픽스처 config와 대조 config(`stacks:[java]`, `typescript:false`,
+  `testTask:verifyAxPractices`)로 각각 렌더해 17개 sub-claim(조건부 블록 present/absent, 태스크명
+  차이, 양쪽 모두 0개 잔존 `ax:` 마커 / 0개 미치환 `@@` 토큰) 단언. Differential: 조건 평가를
+  무력화하면 rc 0 → 1, `3 check(s) failed`. Self-correction: 최초 형태는 "대조 config에서
+  `testPractices` 부재"를 단언했으나 훅 본문 첫머리의 무조건 기본값(`JAVA_TEST_TASK="testPractices"`)
+  때문에 실패 → **마지막(런타임에 이기는) 할당**을 비교하도록 수정. 출처: 2026-08-14 shipped
+  `ed5ca2a7`에 대한 외부 adversarial critic(codex, read-only) 감사.
+- [x] P2-115 — **closed 2026-08-15 (외부 adversarial critic 잔여 종결)**: 커버리지 산문의 과대주장
+  봉합 — `.github/workflows/consumer-e2e.yml`·CLAUDE.md 문구를 하네스의 좁은
+  self-representation(Branch A `core.hooksPath`만 커버, husky/lefthook 배선은 미검증, A6/A7b는
+  premise-class 단언)에 맞춰 통일. 이 정정은 하네스 코드 변경이 아니라 산문 통일이라 별도 diff는 이미
+  다른 트랙에서 처리됐다 — 이 항목에는 그 통일이 이뤄졌다는 사실만 기록한다. 출처: 2026-08-14 shipped
+  `ed5ca2a7`에 대한 외부 adversarial critic(codex, read-only) 감사.
 
 ## P3 — industry-niche deferrals (generic 아님 — 낮은 우선순위)
 
@@ -1036,6 +1049,16 @@ tier 배정 근거(기존 관례 대조): 이 결함 클래스는 "**검증 표�
   P2-103/P2-104(형상 축)와 달리 이 축은 조합 폭발로 비용이 발산하므로 낮은 우선순위로 분리 등재한다.
   done-when: (a) 최소 2점(8.x · 9.x) 매트릭스를 weekly advisory 워크플로에만 추가하거나 (b) 단일 점
   유지를 근거와 함께 결정하고 닫는다. 출처: 2026-08-14 하네스 자기-스코프 선언(등재만).
+- [ ] P3-144 — **R22-blanket(ContextCache maxSize=128)가 고부하에서 flake를 완전히 없애지 못했다 (2026-08-15 실측)**:
+  `9aa5eb20`의 full R25에서 `testApprovalWorkflow`가 `ApprovalFlowIT` **클래스 전건 6/6** `IllegalStateException`으로
+  FAIL(`65 tests completed, 6 failed`), 그러나 **격리 실행은 65/65 PASS**(XML 9파일 tests=65 failures=0 errors=0,
+  `ApprovalFlowIT` 포함 — 0-test 공허 green이 아님을 확인). 이 커밋은 `backend/`를 **0 파일** 변경했고 직전 R25는
+  같은 backend 코드에서 PASS했으므로 회귀가 아니다. 정황: 같은 머신에서 `fixture_kill_proof` 97항목 변이 실행이
+  동시에 돌아 per-domain 스텝이 **44분**(평소보다 김) 걸렸다. CLAUDE.md가 문서화한 `@LocalServerPort`/ContextCache
+  서명(전건 uniform 실패 + 격리 통과)과 일치하나, **R22-blanket 이후에도 재현됐다**는 것이 새 사실이다.
+  done-when: (a) 고부하 재현 조건을 결정론적으로 좁히거나, (b) `ApprovalFlowIT`에 `@DirtiesContext(BEFORE_CLASS)`
+  같은 국소 레버가 아니라 원인(포트/컨텍스트 수명)을 직접 닫는 처방을 찾는다. **덮지 않는다** — flake를 재실행으로
+  넘긴 사실 자체를 여기 기록해 다음 관측자가 표본을 누적할 수 있게 한다. 출처: 2026-08-15 R25 run E.
 
 ## P4 — trigger-bound scope_deferrals (수렴 분모 제외; by-design)
 

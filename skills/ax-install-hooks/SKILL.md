@@ -65,7 +65,7 @@ from `lefthook.yml`), always as a **top-level heredoc** — never nested inside
 `$(...)`, which is what trips the stock-bash-3.2 apostrophe-parity parser bug
 (P2-78); a top-level heredoc is immune to it regardless of comment wording.
 
-<!-- ax:artifact id=hook-body path=.githooks/pre-commit kind=file base=repo substs=config.java.testTask -->
+<!-- ax:artifact id=hook-body path=.githooks/pre-commit kind=file base=repo substs=config.java.testTask merge=replace -->
 ```bash
 #!/usr/bin/env bash
 set -euo pipefail

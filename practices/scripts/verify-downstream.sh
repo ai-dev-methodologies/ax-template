@@ -41,13 +41,13 @@
 #     (`gradlew` + `gradle-wrapper.jar` copied from backend/, with a GENERATED
 #     `gradle-wrapper.properties` pinning gradle-9.5.1-bin.zip), and `GRADLE_OPTS`
 #     -Dorg.gradle.daemon=false (so no daemon outlives the temp tree).
-#   · The one artifact class the markers cannot fully specify is `kind=file-fragment`: a marker
-#     says WHICH file a fragment belongs to, not WHERE inside it. This script applies two
-#     documented merge rules (package.json -> JSON deep-merge; a *.gradle.kts fragment consisting
-#     solely of dependency-notation calls -> inserted into the `dependencies { }` block, anything
-#     else -> appended at top level). A consumer following the skill by hand makes the same
-#     decision by reading; here it is mechanical, and it is a MODEL of that step, not a
-#     measurement of it.
+#   · Placement of a `kind=file-fragment` is now DECLARED BY THE MARKER, not inferred here
+#     (P2-112): every fragment carries `merge=` (one of json-deep / gradle-dependencies / append /
+#     replace, enforced by ax_markers.lint()), and this script only executes what it reads. An
+#     unregistered value is a loud failure, never a fallback to append. What remains unmeasured is
+#     narrower than before but real: this script executes the declared rule mechanically, whereas a
+#     consumer following the skill by hand executes it by reading — the two agree by contract, not
+#     by measurement.
 #
 # WHAT IT MEASURES (each id is logged individually to .ax-downstream/runs.jsonl):
 #   A-pc  positive control — the react gate BLOCKS a planted violation and the hook banner proves
@@ -72,9 +72,21 @@
 #         `tasks.withType<Test>` block that realizes every Test task at configuration time.
 #   A8    ./gradlew test -PaxRootPackage=... exits 0, build/test-results/test/*.xml reports
 #         tests > 0, AND LayerBoundaryArchTest is ABSENT from them (GH #91 gate isolation).
+#   A9-eval    EVALUATOR DIFFERENTIAL (P2-114) — the same markers rendered against TWO configs, so
+#         a conditional is seen to be conditional: hook-body's `ax:if config.stacks.react` region
+#         present under stacks=[react,java] and gone under stacks=[java]; its
+#         `ax:subst config.java.testTask` yielding a DIFFERENT task name in each; the java region
+#         present in both; react-eslint-config's tseslint wiring present at typescript=true and
+#         gone at false; and zero residual directives / unsubstituted @@tokens@@ in all four
+#         renders. Everything else here renders one config only, where a condition that never
+#         varies is indistinguishable from one that does.
+#   A10-tsdep  react-ts-eslint-dep is NON-VACUOUS (P2-113) — typescript-eslint is UNRESOLVABLE
+#         after `npm ci` (the fixture no longer ships it) and RESOLVABLE after the artifact runs.
+#         Only that transition attributes the package's presence to the marker; while the fixture
+#         carried it as a baseline devDependency, skipping or breaking the marker changed nothing.
 #
 # ASSERTION MANIFEST — machine-readable, single source of truth, ONE line:
-# ax:assertions A-pc A0 A1 A2 A3 A4 A5 A6 A7 A7b A8
+# ax:assertions A-pc A0 A1 A2 A3 A4 A5 A6 A7 A7b A8 A9-eval A10-tsdep
 #   guard [114] PARSES that line out of this file (at the pushed sha, via `git show`) and requires
 #   the audit log's `assertions` key set to match it EXACTLY — missing OR extra both BLOCK. Without
 #   it, [114] could only check "every assertion that happens to be RECORDED is true", which a
@@ -139,9 +151,10 @@ print_scope() {
     echo "  · Harness-injected, not consumer-shape: the Gradle wrapper (copied gradlew +"
     echo "    gradle-wrapper.jar, GENERATED gradle-wrapper.properties pinned to 9.5.1) and"
     echo "    GRADLE_OPTS=-Dorg.gradle.daemon=false."
-    echo "  · kind=file-fragment placement is MODELED by two documented merge rules"
-    echo "    (package.json -> JSON deep-merge; gradle dependency-notation -> into dependencies{},"
-    echo "    otherwise appended), because a marker names the file, not the position in it."
+    echo "  · kind=file-fragment placement is DECLARED BY THE MARKER (merge=json-deep |"
+    echo "    gradle-dependencies | append | replace) and executed here verbatim; an unregistered"
+    echo "    value fails loudly. Still unmeasured: that a HUMAN reading the skill performs the"
+    echo "    declared merge the same way this script does — they agree by contract, not measurement."
 }
 
 while [ $# -gt 0 ]; do
@@ -406,6 +419,19 @@ if [ "$NPM_CI_RC" != "0" ]; then
     finish 6 "npm-ci-failed"
 fi
 echo "  npm ci ok"
+
+# A10-tsdep, FIRST HALF — measured HERE, before any artifact is installed, because this is the only
+# moment the "before" state exists. `npm ci` has just materialized the fixture's committed
+# dependency graph; `typescript-eslint` must NOT be in it (P2-113: it used to be, which made the
+# skill's react-ts-eslint-dep artifact unverifiable — the package was already present no matter
+# what that marker did, so breaking or skipping it changed nothing observable).
+ts_resolvable() {   # 0 = resolvable from the frontend, 1 = not
+    ( cd "$FRONTEND" && node -e 'require.resolve("typescript-eslint",{paths:[process.cwd()]})' ) \
+        >/dev/null 2>&1
+}
+TSDEP_PRE=1
+ts_resolvable && TSDEP_PRE=0
+echo "  pre-install: typescript-eslint resolvable = $([ "$TSDEP_PRE" = 0 ] && echo yes || echo no)"
 echo ""
 
 # ── 3. INSTALL the artifacts — extracted from the skills, never copy-pasted here ─────────────
@@ -456,7 +482,13 @@ if not artifacts:
     die("discover() found ZERO ax:artifact markers across %d skill files — nothing to install, "
         "so this run would 'pass' having installed nothing." % len(skill_paths))
 
-problems = ax_markers.lint(artifacts)
+# Linted WITH the schema: without config_schema_path the UNKNOWN_CONFIG_PATH check is skipped
+# entirely, and a marker whose `when=`/`ax:if` names a key ax.config.json has no schema for is
+# FALSY FOREVER — its block is deleted on every project and looks exactly like a deliberately
+# disabled feature. That is the one marker defect this harness could otherwise install and then
+# measure as "green".
+problems = ax_markers.lint(artifacts, config_schema_path=os.path.join(
+    repo_root, "practices-react", "eslint-plugin-ax", "schemas", "ax.config.schema.json"))
 if problems:
     die("the marker tree does not lint; refusing to install a partially-understood set",
         *["%s:%d: %s: %s" % (p.source_file, p.line, p.code, p.message) for p in problems])
@@ -493,15 +525,35 @@ def merge_json(base, incoming):
     return base
 
 
-_DEP_PREFIXES = ("testImplementation(", "implementation(", "api(", "compileOnly(",
-                 "runtimeOnly(", "testRuntimeOnly(", "annotationProcessor(")
+def apply_merge(target, text, aid, mode):
+    """Execute the merge mode the MARKER declared (P2-112).
 
+    This function used to DECIDE the mode by sniffing — package.json basename -> JSON deep-merge,
+    a *.gradle.kts fragment whose every meaningful line started with a dependency-notation prefix
+    -> dependencies-block injection, everything else -> append. That made the placement rule a
+    property of this harness rather than of the artifact it is about: the marker could not say
+    what it meant, and a skill author changing a fragment's shape (adding a `constraints { }`
+    line to a dependency fragment, say) silently changed where it landed. `merge=` now carries the
+    rule, ax_markers.lint() enforces that every kind=file-fragment declares one, and this function
+    only OBEYS. An unregistered value dies loudly rather than falling back to append — a quiet
+    fallback would restore exactly the guess this attribute exists to delete.
+    """
+    if mode not in ax_markers.REGISTERED_MERGES:
+        die("artifact %r declares merge=%r, which this harness does not implement (registered: "
+            "%s) — refusing to guess a placement" % (aid, mode, sorted(ax_markers.REGISTERED_MERGES)))
 
-def apply_fragment(target, text, aid):
-    """Two documented merge rules — see this script's HONEST SCOPE. A marker names the FILE a
-    fragment belongs to, not the position inside it, so this placement is a model of the human
-    step, not a measurement of it."""
-    if os.path.basename(target) == "package.json":
+    if mode == "replace":
+        os.makedirs(os.path.dirname(target) or ".", exist_ok=True)
+        with open(target, "w", encoding="utf-8") as f:
+            f.write(text.rstrip("\n") + "\n")
+        return "replace"
+
+    # Every remaining mode combines with content that must already be there.
+    if not os.path.isfile(target):
+        die("artifact %r declares merge=%r but %s does not exist in the consumer project"
+            % (aid, mode, target))
+
+    if mode == "json-deep":
         with open(target, encoding="utf-8") as f:
             base = json.load(f)
         stripped = "\n".join(ln for ln in text.split("\n")
@@ -509,33 +561,36 @@ def apply_fragment(target, text, aid):
         try:
             incoming = json.loads(stripped)
         except ValueError as exc:
-            die("fragment %r is not JSON-mergeable into %s: %s" % (aid, target, exc))
+            die("fragment %r declares merge=json-deep but is not JSON-mergeable into %s: %s"
+                % (aid, target, exc))
         merge_json(base, incoming)
         with open(target, "w", encoding="utf-8") as f:
             json.dump(base, f, indent=2)
             f.write("\n")
-        return "json-merge"
+        return "json-deep"
 
     with open(target, encoding="utf-8") as f:
         existing = f.read()
-    meaningful = [ln.strip() for ln in text.split("\n")
-                  if ln.strip() and not ln.strip().startswith("//")]
-    is_dep_only = bool(meaningful) and all(
-        ln.startswith(_DEP_PREFIXES) for ln in meaningful)
-    if target.endswith(".gradle.kts") and is_dep_only:
+
+    if mode == "gradle-dependencies":
+        meaningful = [ln.strip() for ln in text.split("\n")
+                      if ln.strip() and not ln.strip().startswith("//")]
+        if not meaningful:
+            die("fragment %r declares merge=gradle-dependencies but has no dependency lines" % aid)
         lines = existing.split("\n")
         for i, ln in enumerate(lines):
             if ln.strip().startswith("dependencies") and ln.rstrip().endswith("{"):
-                inject = ["\t" + m for m in meaningful]
-                lines[i + 1:i + 1] = inject
+                lines[i + 1:i + 1] = ["\t" + m for m in meaningful]
                 with open(target, "w", encoding="utf-8") as f:
                     f.write("\n".join(lines))
-                return "into-dependencies-block"
-        die("fragment %r is dependency-notation but %s has no `dependencies {` block to put it in"
+                return "gradle-dependencies"
+        die("fragment %r declares merge=gradle-dependencies but %s has no `dependencies {` block"
             % (aid, target))
+
+    # mode == "append"
     with open(target, "w", encoding="utf-8") as f:
         f.write(existing.rstrip("\n") + "\n\n" + text.rstrip("\n") + "\n")
-    return "appended"
+    return "append"
 
 
 installed, skipped, commands = [], [], []
@@ -574,16 +629,17 @@ for a in files_phase + cmd_phase:   # commands last: hook-install-wiring needs h
     except ax_markers.RenderError as exc:
         die("path render failed for id=%r: %s" % (a.id, exc))
     target = os.path.join(root, rel)
-    if a.kind == "file":
-        os.makedirs(os.path.dirname(target), exist_ok=True)
-        with open(target, "w", encoding="utf-8") as f:
-            f.write(rendered.rstrip("\n") + "\n")
-        how = "file"
-    else:
-        if not os.path.isfile(target):
-            die("fragment %r targets %s which does not exist in the consumer project"
-                % (a.id, target))
-        how = apply_fragment(target, rendered, a.id)
+    # The marker's own declaration decides placement. `kind=file` may omit merge=; the contract
+    # (ax_markers module header) says an omitted merge on a whole file MEANS replace, and lint()
+    # already refuses a `kind=file-fragment` that declares none — so the only way to reach
+    # apply_merge with mode=None would be a contract change nobody taught this harness about.
+    mode = a.merge
+    if mode is None:
+        if a.kind != "file":
+            die("artifact %r is kind=%r and declares no merge=; this harness will not guess one"
+                % (a.id, a.kind))
+        mode = "replace"
+    how = apply_merge(target, rendered, a.id, mode)
     installed.append(a.id)
     print("  installed %-28s %-22s %s" % (a.id, how, os.path.relpath(target, proj)))
 
@@ -618,6 +674,26 @@ fi
 # Every assertion commit that follows runs the hook for real.
 pgit add -A >/dev/null 2>&1
 pgit commit -q --no-verify -m "install ax artifacts" >/dev/null 2>&1
+
+# A10-tsdep, SECOND HALF + verdict. Both halves are required: "resolvable now" alone is satisfied
+# by a fixture that shipped the package all along (the pre-P2-113 state), and "unresolvable before"
+# alone says nothing about the artifact. Only the TRANSITION attributes the package's presence to
+# react-ts-eslint-dep having actually run.
+TSDEP_POST=1
+ts_resolvable && TSDEP_POST=0
+if [ "$TSDEP_PRE" != "0" ] && [ "$TSDEP_POST" = "0" ]; then
+    echo "  A10-tsdep: typescript-eslint unresolvable before install, resolvable after"
+    note "A10-tsdep" true
+else
+    echo "    pre_resolvable=$([ "$TSDEP_PRE" = 0 ] && echo yes || echo no) post_resolvable=$([ "$TSDEP_POST" = 0 ] && echo yes || echo no)"
+    if [ "$TSDEP_PRE" = "0" ]; then
+        echo "    The fixture already carried typescript-eslint — react-ts-eslint-dep is VACUOUS"
+        echo "    in this run (P2-113 regression: check frontend/package{,-lock}.json)."
+    else
+        echo "    react-ts-eslint-dep did not put typescript-eslint on disk."
+    fi
+    note "A10-tsdep" false
+fi
 echo ""
 
 # ── 4. ASSERTIONS ────────────────────────────────────────────────────────────────────────────
@@ -673,7 +749,175 @@ print("check.py: unknown mode %r" % mode, file=sys.stderr)
 sys.exit(2)
 PYEOF
 
+cat > "$WORK/eval_diff.py" <<'PYEOF'
+"""A9-eval — the two-config EVALUATOR DIFFERENTIAL (P2-114).
+
+Everything else in this harness renders each artifact against ONE config (the fixture's), so a
+conditional that never actually varies is indistinguishable from one that does: an `ax:if` whose
+reference silently resolves to a constant, an `ax:subst` that happens to interpolate the value the
+body already had, or a directive that was dropped entirely all produce a rendered file that looks
+exactly right in the single shape this harness installs. The only way to see a CONDITION as a
+condition is to render the same marker twice and require the outputs to DIFFER in the specific way
+the directive claims.
+
+Two pairs, both pure render — no network, no npm, no gradle:
+  hook-body           fixture config (stacks=[react,java], java.testTask=testPractices)
+                   vs contrast config (stacks=[java],       java.testTask=verifyAxPractices)
+                      -> the `ax:if config.stacks.react` region present in the first, gone in the
+                         second; the `ax:subst config.java.testTask` value different in each; the
+                         gradle invocation present in BOTH (the java region is not what varies).
+  react-eslint-config react.typescript true vs false
+                      -> the typescript-eslint parser wiring present in the first, gone in the
+                         second.
+Both renders of both artifacts are additionally required to carry ZERO residual `ax:` directive
+lines and ZERO unsubstituted `@@..@@` tokens — a directive that survives verbatim into a consumer
+file is the failure mode a single-config render is least likely to expose.
+"""
+import glob
+import json
+import os
+import re
+import sys
+
+repo_root, config_path, contrast_path, overrides_path = sys.argv[1:5]
+sys.path.insert(0, os.path.join(repo_root, "practices", "scripts", "lib"))
+import ax_markers  # noqa: E402
+
+RESIDUAL_DIRECTIVE = re.compile(r'(?:#|//)\s*ax:(?:if|endif|subst)\b')
+RESIDUAL_TOKEN = re.compile(r'@@[^@\s]+@@')
+
+overrides = {}
+if overrides_path != "-":
+    with open(overrides_path, encoding="utf-8") as f:
+        for spec in json.load(f):
+            aid, sep, path = spec.partition("=")
+            if sep and os.path.isfile(path):
+                with open(path, encoding="utf-8") as fh:
+                    overrides[aid] = fh.read()
+
+with open(config_path, encoding="utf-8") as f:
+    cfg_a = json.load(f)
+with open(contrast_path, encoding="utf-8") as f:
+    cfg_b = json.load(f)
+
+env = {"axPluginPath": "/nonexistent-not-used-by-these-two-artifacts"}
+by_id = {}
+for a in ax_markers.discover(sorted(glob.glob(os.path.join(repo_root, "skills", "*", "SKILL.md")))):
+    if a.id in overrides:
+        a.body = overrides[a.id]
+    by_id[a.id] = a
+
+failures = []
+
+
+def check(label, ok, detail=""):
+    print("    %-4s %s%s" % ("ok" if ok else "FAIL", label, (" — " + detail) if detail else ""))
+    if not ok:
+        failures.append(label)
+
+
+def rendered(aid, cfg, which):
+    art = by_id.get(aid)
+    if art is None:
+        failures.append("artifact %r not found" % aid)
+        print("    FAIL artifact %r not found among %d markers" % (aid, len(by_id)))
+        return None
+    try:
+        text = ax_markers.render(art, cfg, env)
+    except ax_markers.RenderError as exc:
+        failures.append("render(%s,%s)" % (aid, which))
+        print("    FAIL render %s [%s]: %s" % (aid, which, exc))
+        return None
+    check("%s[%s] no residual ax: directive" % (aid, which),
+          not RESIDUAL_DIRECTIVE.search(text))
+    check("%s[%s] no unsubstituted @@token@@" % (aid, which),
+          not RESIDUAL_TOKEN.search(text))
+    return text
+
+
+# ── hook-body: stacks[] membership + the testTask substitution ────────────────────────────────
+hook_a = rendered("hook-body", cfg_a, "fixture")
+hook_b = rendered("hook-body", cfg_b, "contrast")
+if hook_a is not None and hook_b is not None:
+    check("hook-body: react region PRESENT when stacks contains react",
+          "REACT_TOUCHED" in hook_a)
+    check("hook-body: react region ABSENT when stacks omits react",
+          "REACT_TOUCHED" not in hook_b)
+    task_a = cfg_a.get("java", {}).get("testTask")
+    task_b = cfg_b.get("java", {}).get("testTask")
+    check("contrast config actually names a DIFFERENT testTask",
+          bool(task_a) and bool(task_b) and task_a != task_b,
+          "%r vs %r" % (task_a, task_b))
+    # The LAST literal assignment is the one that wins at hook runtime — the body opens with an
+    # unconditional `JAVA_TEST_TASK="testPractices"` documented default (F-032) that the
+    # `ax:if config.java.testTask` region then overwrites, so "testPractices does not appear" is
+    # NOT the claim; "the effective value differs between the two configs" is.
+    def effective_task(text):
+        found = re.findall(r'^JAVA_TEST_TASK="([^"]*)"', text, re.M)
+        return found[-1] if found else None
+    eff_a, eff_b = effective_task(hook_a), effective_task(hook_b)
+    check("hook-body: effective task is %r for the fixture config" % task_a, eff_a == task_a,
+          "last JAVA_TEST_TASK= assignment renders as %r" % eff_a)
+    check("hook-body: effective task is %r for the contrast config" % task_b, eff_b == task_b,
+          "last JAVA_TEST_TASK= assignment renders as %r" % eff_b)
+    check("hook-body: the two configs really do render DIFFERENT task names",
+          eff_a is not None and eff_b is not None and eff_a != eff_b)
+    check("hook-body: the gradle invocation survives in BOTH (java region is not what varies)",
+          'gradlew "$JAVA_TEST_TASK"' in hook_a and 'gradlew "$JAVA_TEST_TASK"' in hook_b)
+
+# ── react-eslint-config: react.typescript on/off ──────────────────────────────────────────────
+cfg_ts_on = json.loads(json.dumps(cfg_a))
+cfg_ts_on.setdefault("react", {})["typescript"] = True
+cfg_ts_off = json.loads(json.dumps(cfg_a))
+cfg_ts_off.setdefault("react", {})["typescript"] = False
+esl_on = rendered("react-eslint-config", cfg_ts_on, "ts=on")
+esl_off = rendered("react-eslint-config", cfg_ts_off, "ts=off")
+if esl_on is not None and esl_off is not None:
+    check("react-eslint-config: tseslint parser wired when react.typescript is true",
+          "tseslint" in esl_on)
+    check("react-eslint-config: tseslint reference GONE when react.typescript is false",
+          "tseslint" not in esl_off)
+
+print("    evaluator differential: %d check(s) failed" % len(failures))
+sys.exit(1 if failures else 0)
+PYEOF
+
+# The CONTRAST config exists only in this temp dir — it is never installed and never materialized.
+# Its whole job is to be a second point of evaluation for the same markers.
+cat > "$WORK/contrast.config.json" <<'EOF'
+{
+  "version": 1,
+  "stacks": ["java"],
+  "react": {
+    "root": "frontend",
+    "srcDir": "src",
+    "typescript": false,
+    "alias": { "@/": "src/" },
+    "layers": { "app": ["app"], "features": ["features"], "shared": ["components", "lib"] }
+  },
+  "java": {
+    "root": "backend",
+    "buildTool": "gradle",
+    "rootPackage": "com.example.backend",
+    "testTask": "verifyAxPractices"
+  }
+}
+EOF
+
 echo "── assertions ────────────────────────────────────────────"
+
+# A9-eval — see eval_diff.py's docstring. Pure render: no network, no npm, no gradle, so it runs
+# first and costs nothing.
+echo "  A9-eval: rendering hook-body / react-eslint-config against TWO configs …"
+python3 "$WORK/eval_diff.py" "$REPO_ROOT" "$PROJ/ax.config.json" "$WORK/contrast.config.json" \
+    "$OVERRIDE_FILE" > "$WORK/a9.log" 2>&1
+A9_RC=$?
+sed 's/^/  /' "$WORK/a9.log"
+if [ "$A9_RC" = "0" ]; then
+    note "A9-eval" true
+else
+    note "A9-eval" false
+fi
 
 # A7b — A7's TRIGGER PREMISE, checked against the COMMITTED fixture source (not the materialized
 # copy, which this script has since appended to): the eager `tasks.withType<Test>` block is what

@@ -34,6 +34,13 @@
 #          second, separate list is refused: P2-91 rejected an earlier #88 marker-coverage guard
 #          for exactly this reason — a manifest is a second truth that rots independently of the
 #          disk it is supposed to describe.)
+#     (9b) ZERO-CENSUS BLOCK (P2-109) — a scanned root with NO skills/ax-install-* directory at
+#          all used to print "nothing to check" and exit 0. That is the vacuity this guard exists
+#          to prevent, in its purest form: DELETING every install skill made the guard pass. A
+#          census-based guard whose census can legitimately be empty measures nothing, so an
+#          empty census is now NO_INSTALL_SKILLS and a BLOCK. (This is why the guard is not
+#          runnable against an arbitrary unrelated tree — it is scoped to ax-template and its
+#          fixtures by construction, which is the point.)
 #     (10) SHELL RENDERABILITY — for every artifact whose fence language is `bash` or `sh`
 #          specifically (never js/ts/kotlin/java — parsing those would pull a node/gradle
 #          toolchain into an otherwise offline R25 guard, which the R25 toolchain-prerequisites
@@ -59,11 +66,19 @@
 #   not a real gate). This guard only proves the marker tree is STRUCTURALLY EXTRACTABLE; it
 #   proves nothing about what happens after extraction.
 #
-# Exit: 0 PASS (every skills/ax-install-*/SKILL.md marker is well-formed, every skill has >=1
-#         marker, every bash/sh artifact renders to syntactically valid shell)
-#       1 one or more violations found (checks 1-10) — BLOCK
+#   No second copy of the config vocabulary either. Checks 1-8 now include UNKNOWN_CONFIG_PATH —
+#   every `config.*` reference in a `when=`/`ax:if`/`ax:subst` is cross-checked against the ONE
+#   committed ax.config schema (practices-react/eslint-plugin-ax/schemas/ax.config.schema.json),
+#   because a misspelled config path is falsy forever and therefore deletes its block on every
+#   consumer project while looking exactly like a deliberately-disabled feature. This guard
+#   supplies the schema PATH to ax_markers.lint(); the walking rules live in the parser, not
+#   here, for the same one-definition reason checks 1-8 are delegated at all.
+#
+# Exit: 0 PASS (at least one skills/ax-install-* exists, every SKILL.md marker is well-formed,
+#         every skill has >=1 marker, every bash/sh artifact renders to syntactically valid shell)
+#       1 one or more violations found (checks 1-10, incl. 9b) — BLOCK
 #       2 usage/setup error (bad flag, root not found, ax_markers.py missing, python3/bash
-#         missing, render config not found)
+#         missing, render config not found, ax.config schema not found)
 #
 # Usage:
 #   bash practices/evals/install_artifact_extractability_guard.sh
@@ -190,10 +205,25 @@ if [ ! -f "$RENDER_CONFIG" ]; then
     exit 2
 fi
 
-python3 - "$SCAN_ROOT" "$AX_MARKERS_DIR" "$RENDER_CONFIG" <<'PYEOF'
+# P2-109 UNKNOWN_CONFIG_PATH: the schema every `config.*` reference is cross-checked against. It
+# is the ONE committed ax.config schema, always resolved from THIS checkout (never from the
+# scanned --root: a fixture tree describes markers, not the config contract they must satisfy).
+# Same relocated-copy affordance as AX_MARKERS_LIB_DIR/DEFAULT_CONFIG above, and the same
+# posture on a live tree: a missing schema is a BLOCK, never a silently-skipped check.
+CONFIG_SCHEMA="$REPO_ROOT/practices-react/eslint-plugin-ax/schemas/ax.config.schema.json"
+if [ ! -f "$CONFIG_SCHEMA" ] \
+   && ! git -C "$REPO_ROOT" rev-parse --git-dir >/dev/null 2>&1; then
+    CONFIG_SCHEMA="${AX_CONFIG_SCHEMA:-$CONFIG_SCHEMA}"
+fi
+if [ ! -f "$CONFIG_SCHEMA" ]; then
+    echo "install_artifact_extractability_guard: ax.config schema not found: $CONFIG_SCHEMA" >&2
+    exit 2
+fi
+
+python3 - "$SCAN_ROOT" "$AX_MARKERS_DIR" "$RENDER_CONFIG" "$CONFIG_SCHEMA" <<'PYEOF'
 import sys, os, glob, json, tempfile, subprocess
 
-root, ax_markers_dir, config_path = sys.argv[1:4]
+root, ax_markers_dir, config_path, config_schema_path = sys.argv[1:5]
 sys.path.insert(0, ax_markers_dir)
 import ax_markers  # noqa: E402
 
@@ -212,11 +242,17 @@ install_dirs = sorted(
     d for d in glob.glob(os.path.join(root, "skills", "ax-install-*"))
     if os.path.isdir(d)
 )
-if not install_dirs:
-    print(f"{GUARD}: no skills/ax-install-* directories found under {root} -- nothing to check")
-    sys.exit(0)
-
 problems = []  # (code, source_file, line, message)
+
+# ── check 9b (P2-109): an EMPTY census is a BLOCK, never a quiet exit 0 ──
+# This used to print "nothing to check" and pass, which meant deleting every skills/ax-install-*
+# directory satisfied the guard — the exact vacuity the guard is built to prevent, measured on
+# itself. A census-based check whose census may legitimately be empty is not a check.
+if not install_dirs:
+    problems.append((
+        "NO_INSTALL_SKILLS", os.path.join(root, "skills"), 0,
+        "zero skills/ax-install-* directories -- there is nothing for verify-downstream.sh to "
+        "extract, and a guard that passes on an empty census measures nothing"))
 
 skill_paths = []
 for d in install_dirs:
@@ -228,7 +264,7 @@ for d in install_dirs:
 
 # ── checks 1-8: delegated verbatim to ax_markers.lint() — no re-implementation here ──
 artifacts = ax_markers.discover(skill_paths)
-for p in ax_markers.lint(artifacts):
+for p in ax_markers.lint(artifacts, config_schema_path=config_schema_path):
     problems.append((p.code, p.source_file, p.line, p.message))
 
 # ── check 9: every discovered SKILL.md must own at least one marker ──
@@ -290,7 +326,8 @@ if problems:
 
 print(f"{GUARD}: PASS -- {len(skill_paths)} skills/ax-install-*/SKILL.md file(s), "
       f"{len(artifacts)} ax:artifact marker(s), all structurally extractable "
-      f"(checks 1-8 via ax_markers.lint(), check 9 coverage, check 10 bash -n on "
+      f"(checks 1-8 via ax_markers.lint() against {os.path.basename(config_schema_path)}, "
+      f"check 9 coverage, check 9b non-empty census, check 10 bash -n on "
       f"{shell_checked} shell artifact(s))")
 sys.exit(0)
 PYEOF

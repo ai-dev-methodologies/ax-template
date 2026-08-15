@@ -33,16 +33,17 @@
 
 # min_items — the unique item count MAY NOT BE REDUCED below this number, and it is the ONLY
 # place in this file that states it (BACKLOG P3-104 — a prose restatement rotted to 57 while the
-# directive read 62). Re-measured from disk 2026-08-15 after the external-critic CRITICAL-2 closure
-# append (guard [115] fixture_tracked_completeness 1 + downstream_release_recency 3 more
-# single-audit-line fixtures the [114] registration pass had not yet covered
-# (fail_forged_single_assertion, fail_override_present, fail_missing_assertion_key) = 4 new items
-# on top of the prior 86 — a 4th downstream_release_recency fixture, fail_missing_log, was measured
-# NOT single-anchor kill-proofable and is disclosed rather than forced; see its comment block
-# above): items, distinct ids and distinct (guard, fixture) pairs are all equal to the value below.
-# fixture_kill_proof_guard.sh pins the same number as LIVE_MIN_ITEMS, so lowering the gate takes
-# two coordinated edits rather than one silent deletion.
-min_items: 90
+# directive read 62). Re-measured from disk 2026-08-15 after a second external-critic closure pass
+# (P2-109~P2-115, 7 remaining findings) appended 7 new items on top of the prior 90:
+# install_artifact_extractability fail_missing_required_attr/fail_unknown_attr/
+# fail_unknown_config_path/fail_missing_merge_for_fragment/fail_zero_install_skills (5, checks
+# 1-8 delegated + check 9b), cross_artifact_contract fail_prose_only_p_contract (1, the P2-110
+# fence-body-only derivation regression test), downstream_release_recency
+# fail_optout_outside_diagnosed_case (1, the verdict != "pass" check the opt-out must not
+# rescue). items, distinct ids and distinct (guard, fixture) pairs are all equal to the value
+# below. fixture_kill_proof_guard.sh pins the same number as LIVE_MIN_ITEMS, so lowering the
+# gate takes two coordinated edits rather than one silent deletion.
+min_items: 97
 
 items:
 
@@ -1244,12 +1245,21 @@ items:
   # its OWN anchor below and is unaffected by this neuter), not that the specific
   # MARKER_NO_FENCE/DUPLICATE_ID/FREE_TEXT_CONDITIONAL/DIRECTIVE_PREFIX_MISMATCH sub-check
   # individually fired.
-  # anchor:  the sole append inside the "for p in ax_markers.lint(artifacts):" loop.
+  # anchor:  the sole append inside the
+  #          "for p in ax_markers.lint(artifacts, config_schema_path=config_schema_path):" loop
+  #          (RE-PINNED 2026-08-15, P2-109/P2-115 closure — the loop gained a
+  #          config_schema_path= keyword arg when UNKNOWN_CONFIG_PATH landed; the anchor VALUE
+  #          below, `problems.append(...)`, is the loop body and was never affected by that
+  #          signature change, so this is a comment-accuracy fix, not a re-derivation).
   # neuter:  condition-constant False as the loop body (`False` is a syntactically valid,
   #          side-effect-free Python statement) → every lint()-derived Problem is discarded
   #          before reaching `problems`, while check 9's and check 10's own appends
   #          (different literal tuples) are untouched → exit 0 iff the fixture's failure came
-  #          from lint() alone.
+  #          from lint() alone. The same shared anchor/neuter proves four more lint()-delegated
+  #          codes added by the P2-109 attribute-vocabulary + config-path checks
+  #          (MISSING_REQUIRED_ATTR, UNKNOWN_ATTR, UNKNOWN_CONFIG_PATH,
+  #          MISSING_MERGE_FOR_FRAGMENT below) — same coarser-than-per-code proof as the four
+  #          fixtures above, for the same reason.
   - id: install_artifact_extractability/fail_missing_marker
     guard: practices/evals/install_artifact_extractability_guard.sh
     fixture: practices/evals/fixtures/install_artifact_extractability/fail_missing_marker
@@ -1276,6 +1286,51 @@ items:
     fixture: practices/evals/fixtures/install_artifact_extractability/fail_wrong_comment_prefix
     fixture_arg: '--root'
     anchor: 'problems.append((p.code, p.source_file, p.line, p.message))'
+    neuter: 'False'
+
+  - id: install_artifact_extractability/fail_missing_required_attr
+    guard: practices/evals/install_artifact_extractability_guard.sh
+    fixture: practices/evals/fixtures/install_artifact_extractability/fail_missing_required_attr
+    fixture_arg: '--root'
+    anchor: 'problems.append((p.code, p.source_file, p.line, p.message))'
+    neuter: 'False'
+
+  - id: install_artifact_extractability/fail_unknown_attr
+    guard: practices/evals/install_artifact_extractability_guard.sh
+    fixture: practices/evals/fixtures/install_artifact_extractability/fail_unknown_attr
+    fixture_arg: '--root'
+    anchor: 'problems.append((p.code, p.source_file, p.line, p.message))'
+    neuter: 'False'
+
+  - id: install_artifact_extractability/fail_unknown_config_path
+    guard: practices/evals/install_artifact_extractability_guard.sh
+    fixture: practices/evals/fixtures/install_artifact_extractability/fail_unknown_config_path
+    fixture_arg: '--root'
+    anchor: 'problems.append((p.code, p.source_file, p.line, p.message))'
+    neuter: 'False'
+
+  - id: install_artifact_extractability/fail_missing_merge_for_fragment
+    guard: practices/evals/install_artifact_extractability_guard.sh
+    fixture: practices/evals/fixtures/install_artifact_extractability/fail_missing_merge_for_fragment
+    fixture_arg: '--root'
+    anchor: 'problems.append((p.code, p.source_file, p.line, p.message))'
+    neuter: 'False'
+
+  # ── install_artifact_extractability/fail_zero_install_skills: check 9b, P2-109 zero-census
+  #    block ──────────────────────────────────────────────────────────────────────────────────
+  # fixture: a --root tree whose skills/ directory contains no ax-install-* subdirectory at all
+  #          (skills/NOTE.md only) — the exact shape that used to print "nothing to check" and
+  #          exit 0, i.e. deleting every install skill satisfied the guard.
+  # anchor:  the single boolean guarding the NO_INSTALL_SKILLS append — `install_dirs` is the
+  #          from-disk glob of skills/ax-install-*, computed before this line and untouched by
+  #          the neuter.
+  # neuter:  condition-constant False → the empty-census branch never fires regardless of how
+  #          many (zero or more) install skill directories exist → exit 0.
+  - id: install_artifact_extractability/fail_zero_install_skills
+    guard: practices/evals/install_artifact_extractability_guard.sh
+    fixture: practices/evals/fixtures/install_artifact_extractability/fail_zero_install_skills
+    fixture_arg: '--root'
+    anchor: 'not install_dirs'
     neuter: 'False'
 
   # ── install_artifact_extractability/fail_unparseable_shell: check 10, guard-owned render ──
@@ -1305,6 +1360,26 @@ items:
     fixture: practices/evals/fixtures/cross_artifact_contract/fail_p_contract_drift
     fixture_arg: '--root'
     anchor: '[ "$java_props" != "$hook_props" ]'
+    neuter: 'false'
+
+  # ── cross_artifact_contract/fail_prose_only_p_contract: check (a), P2-110 regression —
+  #    hook-side fence body carries NO -P flag, only surrounding checklist prose describes
+  #    one ──────────────────────────────────────────────────────────────────────────────────
+  # fixture: the "hook-body" marker's fence body in skills/ax-install-hooks/SKILL.md has its
+  #          real `-PaxRootPackage=...` gradlew invocation deleted, while unrelated Markdown
+  #          prose elsewhere in the same file still narrates the requirement — the exact hole
+  #          an external adversarial critic reproduced against the pre-P2-110 whole-file-grep
+  #          version of this check (see this guard's own header CORRECTION note).
+  # anchor:  the bracket test that fires when the hook-side fence-body-derived property-name
+  #          count is zero — distinct from the >1 (ambiguous) branch and the equality-mismatch
+  #          branch above, which stay live and unaffected.
+  # neuter:  the WHOLE bracket test replaced by the bare command `false` (condition-constant
+  #          shape) → a fence body with zero -P flags is silently treated as satisfied → exit 0.
+  - id: cross_artifact_contract/fail_prose_only_p_contract
+    guard: practices/evals/cross_artifact_contract_guard.sh
+    fixture: practices/evals/fixtures/cross_artifact_contract/fail_prose_only_p_contract
+    fixture_arg: '--root'
+    anchor: '[ "$hook_prop_count" -eq 0 ]'
     neuter: 'false'
 
   # ── cross_artifact_contract/fail_rule_not_in_index: check (b), rule id <-> INDEX.md ──────
@@ -1358,6 +1433,29 @@ items:
     fixture: practices/evals/fixtures/downstream_release_recency/fail_stale_head
     fixture_arg: '--root'
     anchor: 'latest.get("head_sha") != expected_head'
+    neuter: 'False'
+
+  # ── downstream_release_recency/fail_optout_outside_diagnosed_case: verdict != "pass",
+  #    the opt-out must not rescue it (BACKLOG P2-111(a)) ──────────────────────────────────
+  # fixture: pass_fresh with exactly one field changed — the latest audit line's `"verdict"`
+  #          is `"fail"` instead of `"pass"`. head_sha, tree_clean, the complete assertion
+  #          set, the empty override, and the artifact digests are all still valid, so the
+  #          ONLY possible violation is AX_DOWNSTREAM_LOG_NOT_PASS. `--fixtures` runs this one
+  #          WITH AX_SKIP_DOWNSTREAM_RELEASE_GATE=1 exported (any fixture whose basename
+  #          mentions `optout`) to prove the kill switch is inert here: FIXTURE-SHAPED mode has
+  #          no base COMMIT at all, so the one diagnosed case the opt-out exists for (base
+  #          resolution failed) cannot arise, and the variable is never consulted on this path.
+  # anchor:  the verdict-equality check — distinct from every other single-audit-line check in
+  #          this file (stale_head/partial_assertions/digest_mismatch/forged_single_assertion/
+  #          missing_assertion_key/override_present), none of which exercise a plain
+  #          verdict != "pass" tree.
+  # neuter:  condition-constant False → a "fail"-verdict (or any non-"pass") line is silently
+  #          accepted as release evidence → exit 0.
+  - id: downstream_release_recency/fail_optout_outside_diagnosed_case
+    guard: practices/evals/downstream_release_recency_guard.sh
+    fixture: practices/evals/fixtures/downstream_release_recency/fail_optout_outside_diagnosed_case
+    fixture_arg: '--root'
+    anchor: 'latest.get("verdict") != "pass"'
     neuter: 'False'
 
   # ── downstream_release_recency/fail_partial_assertions: one assertion is not true ────────
