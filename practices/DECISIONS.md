@@ -3966,3 +3966,37 @@ P2-108(같은 [114], 빈 단언 dict가 위조 로그를 통과시키던 결함)
 
 상세 실측(pre-fix→post-fix RED/GREEN 차등, mutation kill-proof, 신규 등재 4건의 tier 근거)은
 BACKLOG P2-88·P2-103~106·P2-119·P2-121~123·P3-146 행. 수렴률 97%(361/371) → **98%**(368/375).
+
+**후속 7 (2026-08-18 등록·원장 레인 — 후속 6이 정직 등재만 하고 남긴 P2-121~123을 닫는다).**
+후속 6이 신규 등재한 4건 중 P2-121(react-plugin-dep의 `base=repo`)·P2-122(F-2 preflight 산문의
+오발화 조건)·P2-123(husky shim의 shebang 유실로 `set -euo pipefail`이 dash에서 죽는 것) 세 건을
+전량 봉합했다(P3-146은 이미 후속 6에서 등재-즉시-closed). 상세 실측은 BACKLOG P2-121~123 행 —
+세 건 모두 pre-fix RED → post-fix GREEN 차등을 동반하며, `verify-downstream.sh`의 `ax:assertions`
+매니페스트가 `A21-plugindep`·`A15b-preflight`·`A13b-posix` 3건 신설로 **23 → 26개**로 확장됐다.
+같은 라운드가 신규 1건(P2-124 — 세 react 마커가 `when=config.stacks.react`를 갖지 않아 java-only
+소비자에도 프론트엔드 의존 트리를 설치하는 것, 기능 파괴는 없음)을 정직 등재했다.
+
+**이 라운드가 남긴 방법론적 교훈은 두 가지다.**
+
+**(a) 산문 조건은 실행 가능한 artifact로 만들 수 있으면 만들어라.** P2-122가 전형적 사례다 —
+F-2 preflight의 조건문("if EITHER prints a value, migrate")은 산문으로만 존재하는 한 인간
+설치자가 문자 그대로 따를 때만 재현되고, 하네스 단언은 산문이 아니라 "올바른" 조건을 이미 알고
+쓰기 때문에 그 결함을 구조적으로 못 본다(P2-122 원 등재문이 이미 이렇게 진단했다). 처방은 산문을
+다시 쓰는 것에서 멈추지 않고, 조건 자체를 `hook-worktree-preflight`라는 read-only detector
+**artifact**로 승격시켜 SKILL.md가 렌더하고 하네스가 실행할 수 있게 만드는 것이었다 — 그 결과
+`A15b-preflight`가 산문이 아니라 detector의 실제 출력을 두 방향(통상 체크아웃 / bare repo)에서
+행사할 수 있게 됐다. 산문으로 남겨둔 조건은 그 산문을 읽는 인간 없이는 검증 불가능하다; 조건이
+mechanical하게 평가 가능하다면 artifact화가 항상 우선한다.
+
+**(b) 새 검사는 pre-fix 결함 문자열에 대조해야 공허하지 않음이 확인된다.** P2-123의 `A13b-posix`
+정적 스캔이 처음 쓴 패턴 `'-o pipefail'`은 실제 결함 문자열 `set -euo pipefail`을 **매치하지
+못했다** — `-o`와 `pipefail` 사이에 문자열 리터럴로는 없는 공백 결합 형태였기 때문이다. 즉 그
+검사는 아무것도 잡지 못하는 채로 통과할 수 있었다(공허). 이것을 pre-fix body(교정 전의 실제
+훅 스크립트)에 대조 실행해서야 발견했고, 처방은 맨 단어 `'pipefail'`로 좁히는 것이었다. 이
+라운드가 자기 검사를 자기가 신뢰하지 않고 pre-fix 대조로 재검증한 것 자체가 처방이다 — 새 정적
+검사를 만들 때마다 "이 패턴이 고치기 전 코드에서 실제로 걸리는가"를 별도로 물어야 한다는 것이
+P2-106(후속 6, guard [114]의 빈 dict `{} == {}`)과 같은 형태를 다른 층(shell 정적 스캔)에서
+반복한 사례다.
+
+상세 실측(pre-fix→post-fix RED/GREEN 차등, 신규 등재 1건의 tier 근거)은 BACKLOG P2-121~124 행.
+수렴률 98%(368/375) → **99%**(371/376).

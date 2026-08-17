@@ -28,9 +28,30 @@ signature를 발견**(17/17)함으로써 경험적으로 반증되었다 — 발
 |---|---|---|---|
 | P0 (expiry-bound / live defects) | 30 | 30 | **100%** |
 | P1 (generic signature backlog) | 75 | 74 | **99%** |
-| P2 (verification escapes) | 125 | 121 | **97%** |
+| P2 (verification escapes) | 126 | 124 | **98%** |
 | P3 (industry-niche deferrals) | 145 | 143 | **99%** |
-| **P0–P3 합계 (수렴 분모)** | **375** | **368** | **98%** |
+| **P0–P3 합계 (수렴 분모)** | **376** | **371** | **99%** |
+
+> 2026-08-18 등록·원장 레인 — 직전 웨이브가 정직 등재만 하고 남겨둔 P2-121~123을 전량 봉합했다,
+> 전부 실측 차등 동반. **P2-121** — `react-plugin-dep`의 `base=repo`를 `base=react.root`로 이전:
+> 수정 전 `frontend/package-lock.json` 참조 0 + `react.root`-only `npm ci`에서 `Cannot find module`
+> (개발자 머신에서 통과하던 것은 node의 상향 탐색 덕이었을 뿐, 통상 워크스페이스 CI에는 게이트가
+> 아예 없었다는 뜻), 수정 후 선언+lockfile 참조 3+resolve 성공. **P2-122** — F-2 preflight 산문의
+> 오발화 조건("EITHER prints a value, migrate")을 신규 마커 `hook-worktree-preflight`(read-only
+> detector)로 승격, 산문을 detector 출력 조건부로 재작성. **P2-123** — husky shim이 shebang을
+> 버려 `set -euo pipefail`이 dash에서 죽던 것을, 이 본문에서 `pipefail`이 지키는 게 실제로
+> 없음을 3개 파이프라인 각각 측정으로 확인한 뒤 `set -eu`로 교체(모든 분기 동일 본문 유지). 세
+> 항목 모두 `verify-downstream.sh` 신규 단언(`A21-plugindep`·`A15b-preflight`·`A13b-posix`)이
+> pre-fix RED → post-fix GREEN으로 행사한다 — 하네스 단언 **23 → 26**.
+> 레인이 스스로 잡은 결함 2건도 정직 기록한다: A13b 정적 패턴이 POSIX 문자클래스 `[[:space:]]`를
+> 오탐한 것(제거)과, 더 중요하게는 원 패턴 `-o pipefail`이 실제 결함 문자열 `set -euo pipefail`을
+> 못 잡아 검사 자체가 공허했던 것(맨 단어 `pipefail`로 교정) — 새 검사는 pre-fix 결함 문자열에
+> 대조해야 공허하지 않음이 확인된다는 교훈으로 `practices/DECISIONS.md` R112 후속 7에 기록.
+> 신규 1건 정직 등재: **P2-124** — `react-plugin-dep`·`react-eslint-config`·`react-lint-script`
+> 세 react 마커가 `when=config.stacks.react`를 갖지 않아 `stacks=["java"]` 형상에서도
+> `<react.root>`에 프론트엔드 의존 트리를 통째로 설치한다(실측 무해 — A16/A17 PASS, 기능 파괴
+> 없음, 초과설치일 뿐). 분모 375→**376**(+1: P2-124), closed 368→**371**(+3: P2-121·122·123
+> closed) = **99%**(370.87%→99% 반올림). 북극성(2)의 IDW18+ 동결 해제선(70%)은 계속 크게 상회.
 
 > 2026-08-18 하네스 커버리지 확장 라운드 — 2026-08-14 R112가 정직 등재한 6건(P2-88·P2-103~106·
 > P3-143) 중 **6건**(P2-88, P2-103, P2-104, P2-105, P2-106) + 같은 계열의 P2-119(P2-117 종결이
@@ -1143,38 +1164,58 @@ tier 배정 근거(기존 관례 대조): 이 결함 클래스는 "**검증 표�
   **P3-144와의 관계 — closed하지 않는다**: 이 항목은 P3-144의 두 생존 후보 중 "포트 오조준"을
   구조적으로 제거했을 뿐, 원 flake(P3-144)의 트리거는 여전히 미확정이다(P3-144 행 참조). 출처:
   2026-08-17 P2-120 종결 라운드.
-- [ ] P2-121 — `react-plugin-dep` 마커의 설치 위치가 `base=repo`다: `ax-install-react-enforcement`가
-  `npm i -D file:<plugin>`을 **repo 루트**에서 실행해 ax 플러그인이 루트 `package.json`에 들어간다
-  (형제 `react-ts-eslint-dep`는 `base=react.root`). 결과: `react.root` 안에서만 `npm ci`하는 통상
-  CI에서는 플러그인이 설치되지 않고, 게이트는 node의 상향 module 탐색 덕에만 우연히 동작한다 —
-  `react.root != "."`인 다단 워크스페이스에서 그 상향 탐색이 끊기면 무증상으로 게이트가 사라질 수
-  있다. **tier 판단**: P2 — P2-102~106과 같은 클래스("검증 표면이 소비 지점을 못 본다"), 설치
-  스킬 산출물의 BLOCKING 결함은 이 원장의 관례상 P0가 아니라 P2에 배정된다(카탈로그 자체의 live
-  defect가 아니라 소비자에게 나가는 설치 산출물의 결함이므로). done-when: `base=react.root`로
-  정합화하거나(다른 산출물과 일관), 또는 repo 루트가 올바른 설치 지점이라는 의도적 설계 근거를
-  명시하고 A9-eval류 렌더 단언으로 고정. 출처: 2026-08-18 클린룸 인간 설치 재점검(등재만).
-- [ ] P2-122 — `ax-install-hooks` §A0 F-2 preflight 산문이 **통상 케이스에서 오발화한다**: "if
-  EITHER prints a value, migrate"라 적혀 있으나 `git init`은 **모든 통상 체크아웃**에
-  `core.bare = false`를 쓴다 → 문자 그대로 따르면 통상(non-worktree) 케이스에서도 마이그레이션이
-  발화하고, 그 마이그레이션이 `core.bare true`를 `config.worktree`에 써 **비-bare repo를 bare라
-  잘못 선언**한다. 하네스 단언(`A15-worktree`)은 올바른 조건(`core.bare == true` OR
-  `core.worktree` 존재)을 쓰므로 이 결함을 하네스가 잡지 못한다 — 산문을 그대로 따르는 인간
-  설치자만 재현한다. **tier 판단**: P2 — 설치 스킬 산문의 결함이고 P2-103과 같은 SKILL.md §A0
-  영역이지만, P2-103의 done-when(세 배선을 픽스처로 행사)이 잡지 못한 **별개의 산문 결함**이라
-  분리 등재한다. done-when: §A0의 preflight 조건문을 하네스가 이미 쓰는 조건으로 정정. 출처:
-  2026-08-18 클린룸 인간 설치 재점검(등재만).
-- [ ] P2-123 — husky 분기(Branch B)의 `.husky/_/h` 셰임이 **shebang을 버린다**: 훅 본문은
-  `set -euo pipefail`로 시작하는데(다른 두 분기와 동일 본문), husky의 shim이 `sh -e "$s"`로
-  실행해 shebang line을 무시한다. macOS `/bin/sh`는 `-o pipefail`을 받아들이지만(실측·매 실행
-  인쇄) POSIX `/bin/sh`(dash 등)는 `-o pipefail`을 모른다. SKILL.md는 "shebang 포함 무수정
-  붙여넣기"라 적어 이 플랫폼 의존성을 감춘다 — `verify-downstream.sh`의 `A13-husky` 자체는 이미
-  "husky's `_/h` shim ends in `sh -e \"$s\"`, so the body runs under the PLATFORM /bin/sh with
-  its shebang DISCARDED"를 실행 시점에 출력하지만, SKILL.md 산문은 아직 이 사실과 모순된다.
-  **tier 판단**: P2 — P2-103이 배선 자체(A13-husky 신설)는 검증했으나 **SKILL.md 산문의 정확성**은
-  별개 축이라 분리 등재한다(A13-husky가 런타임에 출력하는 "honest limit" 메시지가 사실 원천이고,
-  산문은 아직 그것과 어긋난다). done-when: SKILL.md의 "shebang included" 주장을 정정하고, dash
-  비호환 문법(`pipefail` 등)을 husky 분기에서 dash-호환 형태로 재작성하거나 명시적 shebang 강제
-  방법을 처방. 출처: 2026-08-18 클린룸 인간 설치 재점검(등재만).
+- [x] P2-121 — **closed 2026-08-18 (base=repo → base=react.root, 실측 차등 동반)**: `react-plugin-dep`
+  마커의 설치 위치가 `base=repo`였다: `ax-install-react-enforcement`가 `npm i -D file:<plugin>`을
+  **repo 루트**에서 실행해 ax 플러그인이 루트 `package.json`에 들어갔다(형제 `react-ts-eslint-dep`는
+  이미 `base=react.root`). **차등 실측(추론이 아니라 측정)** — 수정 전: `frontend/package.json`
+  미선언, `frontend/package-lock.json` 참조 **0**, 루트 `node_modules` 삭제 후 `frontend`에서만
+  `npm ci` → `Cannot find module '@ax/eslint-plugin-ax'`(즉 개발자 머신에서 돌던 것은 node의 상향
+  module 탐색 덕이었고, `react.root` 안에서만 `npm ci`하는 통상 CI에서는 게이트가 애초에 없었다).
+  수정 후: `frontend/package.json` 선언 + lockfile 참조 3, 루트 `package.json` 미생성, `react.root`
+  단독 `npm ci` 후 resolve 성공. `react.root: "."` 형상은 두 위치가 원래 일치해 무변경. 렌더 digest
+  불변(`75d89da761c91c9f`) — marker 속성만 이동이라 [114] digest 재계산에 영향 없음. 신규 단언
+  `A21-plugindep`이 이것을 행사한다(주입 시 `Cannot find package '@ax/eslint-plugin-ax'`로 RED).
+- [x] P2-122 — **closed 2026-08-18 (산문 조건 → 실행 가능한 detector artifact로 승격)**:
+  `ax-install-hooks` §A0 F-2 preflight 산문이 **통상 케이스에서 오발화했다**: "if EITHER prints a
+  value, migrate"라 적혀 있었으나 `git init`은 **모든 통상 체크아웃**에 `core.bare = false`를 쓴다 →
+  문자 그대로 따르면 통상(non-worktree) 케이스에서도 마이그레이션이 발화하고, 그 마이그레이션이
+  `core.bare true`를 `config.worktree`에 써 **비-bare repo를 bare라 잘못 선언**했다. 봉합은 산문
+  정정에 그치지 않았다 — 조건을 신규 마커 `hook-worktree-preflight`(read-only detector,
+  `core.bare == "true" || -n core.worktree`)로 **artifact화**했고, §A0 산문은 "detector가
+  `MIGRATION REQUIRED`를 찍은 경우에만" 마이그레이션하도록 재작성했다. 신규 단언 `A15b-preflight`가
+  **양방향 실행**으로 이것을 행사한다: 통상 체크아웃(`git init`)은 `MIGRATION NOT REQUIRED`, bare
+  repo(`git init --bare`)는 `MIGRATION REQUIRED` — 순진한 조건(`||` 대신 값 존재만 확인)을 주입하면
+  통상 체크아웃 쪽이 `MIGRATION REQUIRED`로 뒤집혀 RED.
+- [x] P2-123 — **closed 2026-08-18 (`set -euo pipefail` → `set -eu`, dash 실측 동반)**: husky
+  분기(Branch B)의 `.husky/_/h` 셰임이 **shebang을 버려**(`sh -e "$s"`) 훅 본문의
+  `set -euo pipefail`이 POSIX `/bin/sh`(dash 등)에서 `set: Illegal option -o pipefail`로 죽었다
+  (macOS `/bin/sh`는 받아들여 은폐됐다). SKILL.md의 "shebang 포함 무수정 붙여넣기" 주장이 husky
+  경로에서 거짓이었다. 선택지 (i) 채택 — `pipefail`이 이 본문에서 지키는 게 **없음을 측정**했다
+  (파이프라인 3종: `git diff | grep -q`는 `&&` 리스트의 첫 원소라 `set -e` 대상 아님 / `grep | head
+  -1 || true`는 상태 무력화 / `printf | sed -n`은 미매치에도 exit 0). `set -eu`로 바꿔 **모든
+  분기(A/B/C) 동일 본문**을 유지했다(wrapper·공시 불필요). dash 실측(이 맥의 `/bin/dash`): 수정 전
+  `set: Illegal option -o pipefail` rc=2, 수정 후 GREEN. 신규 단언 `A13b-posix`(정적 bashism 스캔 +
+  dash 동적 실행)가 이것을 행사한다. **`A13-husky` 단독으로는 이 결함을 못 본다는 것이 차등으로
+  증명됐다**(`sh=/bin/sh, supports pipefail=yes` → PASS) — `A13b`가 별도로 필요했던 이유.
+  ⚠️ **레인이 스스로 잡은 결함 2건**(정정 없이 숨기지 않는다): (1) `A13b` 정적 패턴 `'[['`가
+  `[[:space:]]`(POSIX 문자클래스 — 본문 sed fallback의 **이식성** 구문)를 오탐 → 제거. (2) 더
+  중요 — 패턴 `'-o pipefail'`이 실제 결함 문자열 `set -euo pipefail`을 **매치하지 못했다**(즉 그
+  검사가 공허했다). pre-fix body에 대조해 발견하고 맨 단어 `'pipefail'`로 교정. **새 검사를 만들
+  때 그것이 실제 결함 문자열을 잡는지 pre-fix에 대조하는 것이 유일한 확인법**이라는 교훈을 남긴다
+  (`practices/DECISIONS.md` R112 후속 7 (b)). ⚠️ 정직한 한계: dash 동적 반쪽은 dash 계열 셸이
+  있는 머신에서만 측정되며(없으면 `UNMEASURED`, 조용히 접지 않음), 실제 Debian/Ubuntu CI 종단
+  검증은 아니다 — 셸만 덮지 플랫폼을 덮지 않는다.
+- [ ] P2-124 — `react-plugin-dep`·`react-eslint-config`·`react-lint-script` 세 react 마커가
+  **`when=config.stacks.react`를 갖지 않는다**: 결과는 `stacks=["java"]` 형상(shape 2 — 순수
+  backend 소비자)에서도 이 셋이 `<react.root>`에서 그대로 돌아 프론트엔드 의존 트리(플러그인 +
+  ESLint config + lint 스크립트)를 통째로 설치한다는 것이다. 실측(약 30–60초 소요, A16/A17
+  PASS — 기능상 무해, java-only 소비자가 쓰지 않을 파일이 남을 뿐 게이트를 깨지는 않음). P2-121의
+  `base` 정정과 함께 다뤄야 하는 인접 축(둘 다 이 세 마커의 조건/설치-위치 메타데이터)이지만
+  **결함의 성질이 다르다**(P2-121=위치 오류, 이 항목=조건 부재) — 별도 항목으로 등재한다.
+  **tier 판단**: P2 — 설치 산출물이 소비자 형상을 못 보는 클래스, 기능 파괴 없음(무해 초과설치)이라
+  P0/P1 아님. done-when: 세 마커에 `when=config.stacks.react`를 부여하거나, "java-only 소비자도
+  react 마커를 받는다"가 의도된 설계라면 그 근거를 명시하고 렌더 단언으로 고정. 출처: 2026-08-18
+  클린룸 인간 설치 재점검(등재만).
 
 ## P3 — industry-niche deferrals (generic 아님 — 낮은 우선순위)
 

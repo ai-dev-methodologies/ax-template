@@ -80,7 +80,22 @@ this order, and use whichever exists (`ls` it before installing, do not assume):
   `<ax-template-clone>/practices-react/eslint-plugin-ax` (a sibling or ancestor
   checkout of ax-template — resolve its actual path, do not assume `../ax-template`)
 
-<!-- ax:artifact id=react-plugin-dep path=- kind=command base=repo substs=env.axPluginPath -->
+**Run this inside `<react.root>`, not at the repo root** (`base=react.root` on the marker below).
+`npm i -D` writes the dependency into the `package.json` **of the directory it runs in** — and the
+`package.json` that declares this workspace's dependencies is `<react.root>/package.json`, the same
+one Step 3 adds the `lint` script to and the same one `eslint.config.mjs` sits beside. Install it at
+the repo root instead and a stock CI that runs `npm ci` **inside `<react.root>`** never installs the
+plugin at all: on a developer machine the gate still appears to work, because Node resolves
+`@ax/eslint-plugin-ax` by walking UP into the repo-root `node_modules`, but that is an accident of
+one machine's layout, not a declared dependency. Measured on the consumer fixture (react.root =
+`frontend`): installed at the repo root, `frontend/package.json` and `frontend/package-lock.json`
+contain **zero** references to the plugin, and after `rm -rf node_modules && npm ci` inside
+`frontend` the import dies with `Error: Cannot find module '@ax/eslint-plugin-ax'`. Installed inside
+`<react.root>` it is declared **and locked** there, and survives the same `npm ci`. When
+`react.root` is `"."` the two locations coincide, so this is never a regression for a
+single-package repo.
+
+<!-- ax:artifact id=react-plugin-dep path=- kind=command base=react.root substs=env.axPluginPath -->
 ```bash
 # The plugin path is supplied by the install environment, not by ax.config.json: which of the two
 # locations above exists depends on how this skill is being run, not on the consuming project.
@@ -353,7 +368,7 @@ parsing error or the srcDir throw above), work through this diagnostic order
 ## Self-check before reporting "react enforcement installed"
 
 - [ ] `ax.config.json` existed (or `ax-init-config` was invoked and the run stopped there)
-- [ ] The plugin path was `ls`-verified before `npm i -D file:...`
+- [ ] The plugin path was `ls`-verified before `npm i -D file:...`, and the install ran **inside `<react.root>`** — `<react.root>/package.json` AND `<react.root>/package-lock.json` now name `@ax/eslint-plugin-ax`. A repo-root install leaves both files untouched and only works because Node walks up into the repo-root `node_modules`; a CI that runs `npm ci` inside `<react.root>` gets `Cannot find module '@ax/eslint-plugin-ax'`
 - [ ] `<react.root>/package.json` now has a real `lint` script (`eslint . --max-warnings 0`) and a `test` script — without them the pre-commit hook has nothing to run and, before F-031, `--if-present` made that absence indistinguishable from a pass
 - [ ] `eslint.config.mjs` locates `ax.config.json` by searching **upward from its own directory** (`import.meta.url`), not via `'./ax.config.json'` or a fixed `'../ax.config.json'` — the hook lints with cwd = `react.root` (F-030), and a not-found config throws rather than defaulting
 - [ ] `languageOptions` is present on the ax config block **either way** — `{ parser: tseslint.parser }` (with `typescript-eslint` installed) when `react.typescript` is true, `{ parserOptions: { ecmaFeatures: { jsx: true } } }` when it is false/absent. A block with no `languageOptions` at all is the F-035 shape: espree reads no JSX, every `.jsx` is a fatal parse error, and zero `ax/*` rules ever run

@@ -68,7 +68,19 @@ from `lefthook.yml`), always as a **top-level heredoc** — never nested inside
 <!-- ax:artifact id=hook-body path=.githooks/pre-commit kind=file base=repo substs=config.java.testTask merge=replace -->
 ```bash
 #!/usr/bin/env bash
-set -euo pipefail
+# `set -eu`, NOT `set -euo pipefail`, and that is deliberate (P2-123). Branch B (husky) runs this
+# file through husky's own `.husky/_/h` shim, whose last line is `sh -e "$s"` -- the shebang above
+# is DISCARDED there and the body executes under the PLATFORM /bin/sh. macOS's /bin/sh (bash in
+# POSIX mode) accepts `-o pipefail`; a dash /bin/sh (Debian/Ubuntu, and /bin/dash anywhere) does
+# not, and aborts at this very line with `set: Illegal option -o pipefail` BEFORE the banner --
+# i.e. the gate silently never runs on the platform where most CI lives.
+# Dropping it costs nothing here, measured rather than assumed: this body's only pipelines are
+# `git diff --cached --name-only | grep -q ...` (the FIRST element of an `&&` list, where `set -e`
+# is ignored and a failed `git` leaves the flag unset either way), one `grep ... | head -1 || true`
+# (status neutralized), and `printf | sed -n` in a command substitution (`sed -n` exits 0 whether
+# or not it matched). With and without `pipefail` those behave identically.
+# Keep this body POSIX-sh clean for the same reason: no `[[`, no arrays, no `local`, no `<<<`.
+set -eu
 # ax-installed pre-commit gate (config-driven, path-scoped) -- see
 # skills/ax-install-hooks/SKILL.md.
 CONFIG="ax.config.json"
@@ -195,19 +207,46 @@ config and silently re-points hooksPath for **every sibling worktree**. Use
 `--worktree` instead — but first run this preflight (F-2: skipping it makes
 every worktree's `git status`/`add`/`commit` die the instant `worktreeConfig`
 is enabled, `fatal: this operation must be run in a work tree` — confirmed
-live against a bare-main + worktree-farm layout):
+live against a bare-main + worktree-farm layout).
+
+Run this **detector** first. It is read-only — it prints a verdict and changes
+nothing — and it is the authority on whether the migration below applies. Do
+not eyeball `git config --get core.bare` yourself and decide from the output:
+`git init` writes `core.bare = false` into every ordinary checkout, so "it
+printed something" is not the condition (P2-122).
+
+<!-- ax:artifact id=hook-worktree-preflight path=- kind=command base=repo -->
+```bash
+# F-2 preflight DETECTOR (read-only). The migration below applies ONLY when the shared config
+# really does describe a bare main repo.
+#
+# DO NOT weaken this to "if either prints a value" -- that condition is DANGEROUS, not merely
+# imprecise: `git init` writes `core.bare = false` into EVERY ordinary checkout, so a
+# value-presence test fires on the completely normal case, and the migration it then selects
+# writes `core.bare true` into config.worktree -- declaring a NON-bare repository BARE, after
+# which git refuses ordinary work-tree operations. `false` is a value; it is not the condition.
+AX_BARE="$(git config --get core.bare || true)"
+AX_CORE_WT="$(git config --get core.worktree || true)"
+if [ "$AX_BARE" = "true" ] || [ -n "$AX_CORE_WT" ]; then
+  echo "ax-preflight: F-2 MIGRATION REQUIRED (core.bare='$AX_BARE' core.worktree='$AX_CORE_WT')"
+else
+  echo "ax-preflight: F-2 MIGRATION NOT REQUIRED (core.bare='$AX_BARE' core.worktree='$AX_CORE_WT')"
+fi
+```
+
+**Only if the detector printed `MIGRATION REQUIRED`**, migrate `core.bare` into
+`config.worktree` before enabling `worktreeConfig` (git's own documented
+procedure; `--git-common-dir` resolves correctly whether main is bare or normal):
 
 ```bash
-git config --get core.bare; git config --get core.worktree
-# If EITHER prints a value, core.bare still lives in the SHARED config --
-# migrate it into config.worktree BEFORE enabling worktreeConfig (git's own
-# documented procedure; --git-common-dir resolves correctly whether main is
-# bare or normal):
 git config --unset core.bare
 git config -f "$(git rev-parse --git-common-dir)/config.worktree" core.bare true
 git rev-parse --is-bare-repository   # must print "true" -- confirm before continuing
+```
 
-# Only now (or if neither core.bare nor core.worktree was set to begin with):
+Then — or immediately, when the detector printed `MIGRATION NOT REQUIRED`:
+
+```bash
 git config extensions.worktreeConfig true
 git config --worktree core.hooksPath .githooks
 ```
@@ -248,9 +287,23 @@ the target worktree's own new file, no sibling gained one.
 
 ### Branch B — husky
 
-Same hook body as Branch A, pasted unedited into `.husky/pre-commit` (shebang
-included, react/java blocks trimmed per stacks). husky never touches the
-shared `core.hooksPath`, so the D-8/F-2 worktree preflight does not apply here.
+Same hook body as Branch A, pasted unedited into `.husky/pre-commit` (react/java
+blocks trimmed per stacks). husky never touches the shared `core.hooksPath`, so
+the D-8/F-2 worktree preflight does not apply here.
+
+> ⚠️ **husky DISCARDS the shebang — this branch does not run under bash.** husky's
+> own shim `.husky/_/h` ends in `sh -e "$s"`, so whatever `#!` line the body
+> carries is inert here and the body executes under the **platform `/bin/sh`**.
+> Paste the shebang anyway (branches A and C do honour it, and it documents the
+> intended interpreter), but never rely on it: the body is kept POSIX-sh clean —
+> `set -eu` rather than `set -euo pipefail`, no `[[`, no arrays, no `local`, no
+> `<<<` — precisely so this branch works on a dash `/bin/sh` too. Verified by
+> execution: `/bin/dash -e <body>` prints the `ax-hook:` banner and exits 0,
+> whereas the same body carrying `set -euo pipefail` dies at line 2 with
+> `set: Illegal option -o pipefail` and rc=2, before the banner — a failure a
+> macOS-only test cannot see, because macOS's `/bin/sh` accepts `pipefail`.
+> If you edit the body, re-check it with `sh -n` **and** a real dash run; a
+> bashism added here is invisible on macOS and fatal on Debian/Ubuntu CI.
 
 ```bash
 npx husky init
@@ -336,6 +389,7 @@ example is coupled to its R25 audit log and cannot be lifted as-is.
 
 - [ ] `.githooks/` was NOT copied wholesale from ax-template; no `pre-push` hook was added by this skill
 - [ ] Exactly one of core.hooksPath / husky / lefthook was wired, matching the project; `.git` was checked (file vs directory) first, and if a file, `--worktree` + the F-2 preflight + the A2 sibling non-interference check all ran and passed
+- [ ] The F-2 migration was performed ONLY when the preflight detector printed `MIGRATION REQUIRED` (`core.bare == true`, or `core.worktree` set) — never on a mere non-empty value: `git init` writes `core.bare = false` into every ordinary checkout, and migrating there writes `core.bare true` into `config.worktree`, declaring a non-bare repository BARE
 - [ ] The hook reads `react.root`/`java.root`/`java.rootPackage` from `ax.config.json` at commit time — no hardcoded `cd backend`/`cd frontend` placeholder remains, and the react/java blocks present match exactly the `stacks` array (the other block deleted, not commented out)
 - [ ] The java block's `./gradlew "$JAVA_TEST_TASK"` call passes `-PaxRootPackage="$JAVA_ROOT_PACKAGE"` — a `-P`-less invocation lets ArchUnit fall back to the build file's generic default package and PASS silently on real violations (F-024 / #86); `JAVA_ROOT_PACKAGE` unresolved fails loud (`exit 1`), same as `JAVA_ROOT`
 - [ ] The hook prints its unconditional `ax-hook: pre-commit gate (react=… java=…)` banner on every commit, including a fully scoped-out one — without it, "hook not installed" and "hook skipped everything" are indistinguishable (F-034)
@@ -343,4 +397,5 @@ example is coupled to its R25 audit log and cannot be lifted as-is.
 - [ ] The java block invokes `"$JAVA_TEST_TASK"`, resolved from `ax.config.json`'s optional `java.testTask` with a documented `testPractices` default — the task name is not hardcoded (F-032)
 - [ ] The probe→BLOCK→clean→scope-skip check ran (both in-scope and out-of-scope `git commit`), all evidence captured, the probe removed, and `git status` shows no residue
 - [ ] If the commit succeeded instead of blocking, the 5-step diagnostic order was followed, not guessed
+- [ ] The hook body is POSIX-sh clean — `set -eu` (never `-o pipefail`), no `[[`, no arrays, no `local`, no `<<<`. Branch B's husky shim runs it as `sh -e "$s"` with the shebang DISCARDED, so a bashism here is fatal on a dash `/bin/sh` and invisible on macOS
 - [ ] The user was told, explicitly, why `.githooks/pre-push` cannot be copied (R25 recency guard requires ax-template's own audit log)

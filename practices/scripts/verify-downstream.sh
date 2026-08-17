@@ -26,14 +26,22 @@
 # what rules out "the glob matched no files and passed vacuously".
 #
 # HONEST SCOPE — printed here and RE-PRINTED at the end of every run:
-#   · It runs ONE shape: `react.root="frontend"` + `java.root="backend"`, TypeScript ON, Gradle
-#     9.5.1, Node/npm as installed on the calling machine. It does NOT sweep `react.root:"."`,
-#     `react.typescript=false`, a different `java.testTask` name, other Gradle/Node versions, or
-#     Windows. Those branches of the install skills are UNMEASURED by this run.
-#   · It installs the skills' MACHINE-EXTRACTABLE artifacts (the ax:artifact-marked blocks). The
-#     skills' PROSE steps — detection heuristics, husky/lefthook branches, the worktree
-#     `core.bare`/`worktreeConfig` preflight, the manual probe→detect→delete verification — are
-#     NOT executed here. Only branch A (`core.hooksPath`) of ax-install-hooks is exercised.
+#   (This block is the `--help` view; print_scope() below is what a RUN emits at its head and tail.
+#   They describe the same facts and must not drift — the two bullets that follow had gone stale
+#   against print_scope() by claiming ONE shape and only branch A, which P2-103/P2-104 had already
+#   made false.)
+#   · THREE shapes are materialized, installed and RUN, on Gradle 9.5.1 + whatever Node/npm the
+#     calling machine has: (1) `react.root="frontend"` + `java.root="backend"` + TypeScript ON +
+#     the default gate task; (2) `stacks=["java"]` with a RENAMED `java.testTask`; (3)
+#     `react.root="."`. UNMEASURED: `react.typescript=false` (not merely unmeasured — KNOWN BROKEN,
+#     see the P2-104 note in docs/BACKLOG.md), other Gradle/Node versions, Windows.
+#   · It installs the skills' MACHINE-EXTRACTABLE artifacts (the ax:artifact-marked blocks). What
+#     remains PROSE, and is therefore NOT executed here: the stack/layout detection heuristics, the
+#     manual probe→detect→delete verification, and the F-2 MIGRATION's three mutating git commands.
+#     The F-2 CONDITION is no longer prose — since P2-122 it is the `hook-worktree-preflight`
+#     artifact, executed in both directions by A15b-preflight. All THREE hook branches ARE
+#     exercised (A `core.hooksPath` plus its linked-worktree variant, B husky, C lefthook), each
+#     running the one rendered hook-body.
 #   · It is NOT R25. It does not run run-all-guards.sh, the per-domain gradle tasks, or
 #     ax-template's own frontend lint.
 #   · Two things the fixture does not commit are injected by THIS script at materialization time
@@ -93,6 +101,28 @@
 #         marker, not a copy) re-wired through `npx husky init`'s own core.hooksPath refuses A1's
 #         probe, with banner + rule id. Honest limit printed at run time: husky's `_/h` shim ends in
 #         `sh -e "$s"`, so the body runs under the PLATFORM /bin/sh with its shebang DISCARDED.
+#   A13b-posix A13's UNMEASURED HALF (P2-123) — A13 can only ever measure the CALLING platform's
+#         /bin/sh, and on macOS that is bash-in-POSIX-mode, which accepts `set -o pipefail`. A dash
+#         /bin/sh (Debian/Ubuntu, where most CI runs) does not: it aborts at the body's second line
+#         with `set: Illegal option -o pipefail`, BEFORE the banner, so the gate never runs and the
+#         commit sails through. Two halves: (i) STATIC, always measured — the rendered body on disk
+#         carries none of a registered bashism list (`-o pipefail`, `[[`, `local `, `<<<`, `declare`,
+#         `${x^^}`, `+=(`); (ii) DYNAMIC, measured whenever a dash-class shell exists — that exact
+#         on-disk body, executed as husky executes it (`<posix-sh> -e <body>`, shebang discarded),
+#         prints the F-034 banner and exits 0 in a throwaway repo with nothing staged. The dynamic
+#         half is skipped ONLY when no dash-class shell is installed, and that is printed as
+#         UNMEASURED rather than folded silently into the verdict.
+#   A15b-preflight THE F-2 PREFLIGHT CONDITION, EXECUTED (P2-122) — A15 measures the worktree
+#         WIRING but treats F-2 as a premise, so the prose that decides whether to migrate was
+#         never run by anything. It is now the `hook-worktree-preflight` command artifact, and this
+#         assertion renders it from SKILL.md and executes it in BOTH directions: an ordinary
+#         `git init` checkout (where `git init` itself wrote `core.bare = false`) must print
+#         MIGRATION NOT REQUIRED, and a `git init --bare` repo must print MIGRATION REQUIRED. Both
+#         directions are required, which is what makes it non-vacuous — a detector that always
+#         printed one verdict satisfies neither pair. The defect this closes: the prose said "if
+#         EITHER prints a value, migrate", and `false` IS a value, so the literal instruction fired
+#         on every normal checkout and its migration wrote `core.bare true` into config.worktree —
+#         declaring a non-bare repository BARE.
 #   A14-lefthook HOOK BRANCH C (P2-103) — same body, reached through `lefthook.yml`'s
 #         `run: bash .githooks/ax-pre-commit-checks.sh`, refuses the same probe. Also asserts the
 #         CALLING USER'S global hooks directory was not written to: `lefthook install` targets the
@@ -126,13 +156,25 @@
 #         skip the react gate while the F-034 banner still proves the hook ran. A5 makes this claim
 #         for the path-prefix branch; at react.root="." "outside the root" is not even expressible,
 #         so the extension proxy is the only thing that can express it.
+#   A21-plugindep THE PLUGIN IS INSTALLED WHERE THE WORKSPACE DECLARES ITS DEPENDENCIES (P2-121) —
+#         react-plugin-dep used to declare `base=repo`, so `npm i -D file:<plugin>` ran at the REPO
+#         ROOT and npm recorded the ax plugin in a repo-root package.json that no consumer CI ever
+#         installs. Every assertion above stayed green anyway, because Node resolves
+#         `@ax/eslint-plugin-ax` by walking UP into the repo-root node_modules — the gate worked by
+#         accident of one machine's layout. This assertion refuses that accident on three counts:
+#         (i) `<react.root>/package.json` AND `<react.root>/package-lock.json` both name the plugin;
+#         (ii) nothing outside `<react.root>` declares it (measured BEFORE the hook branches create
+#         their own repo-root package.json); (iii) after `rm -rf node_modules` at BOTH levels and
+#         `npm ci` run ONLY inside `<react.root>` — a stock workspace CI — A1's probe is still
+#         BLOCKED with banner + rule id. Pre-fix, (i) and (iii) both go RED: the lockfile has zero
+#         references and the import dies with `Cannot find module '@ax/eslint-plugin-ax'`.
 #   A10-tsdep  react-ts-eslint-dep is NON-VACUOUS (P2-113) — typescript-eslint is UNRESOLVABLE
 #         after `npm ci` (the fixture no longer ships it) and RESOLVABLE after the artifact runs.
 #         Only that transition attributes the package's presence to the marker; while the fixture
 #         carried it as a baseline devDependency, skipping or breaking the marker changed nothing.
 #
 # ASSERTION MANIFEST — machine-readable, single source of truth, ONE line:
-# ax:assertions A-pc A0 A1 A2 A3 A4 A5 A6 A7 A7b A8 A9-eval A10-tsdep A11-route A12-route A13-husky A14-lefthook A15-worktree A16-alttask A17-alttask A18-rootdot A19-rootdot A20-rootdot-skip
+# ax:assertions A-pc A0 A1 A2 A3 A4 A5 A6 A7 A7b A8 A9-eval A10-tsdep A11-route A12-route A13-husky A13b-posix A14-lefthook A15-worktree A15b-preflight A16-alttask A17-alttask A18-rootdot A19-rootdot A20-rootdot-skip A21-plugindep
 #   guard [114] PARSES that line out of this file (at the pushed sha, via `git show`) and requires
 #   the audit log's `assertions` key set to match it EXACTLY — missing OR extra both BLOCK. Without
 #   it, [114] could only check "every assertion that happens to be RECORDED is true", which a
@@ -194,15 +236,19 @@ print_scope() {
     echo "    react.typescript=false is not merely unmeasured — it is KNOWN BROKEN"
     echo "    (ESLint 9's default espree does not enable JSX, so every .jsx file in a plain-JS"
     echo "    consumer is a fatal parse error); see the P2-104 note in docs/BACKLOG.md."
-    echo "  · The install skills' PROSE steps (detection heuristics, the F-2 core.bare/core.worktree"
-    echo "    MIGRATION for a bare-main worktree farm, manual probe->detect->delete verification)"
-    echo "    are NOT executed — only the ax:artifact-marked blocks."
+    echo "  · The install skills' PROSE steps (detection heuristics, manual probe->detect->delete"
+    echo "    verification) are NOT executed — only the ax:artifact-marked blocks. The F-2"
+    echo "    preflight CONDITION is now an artifact and IS executed both ways (A15b-preflight);"
+    echo "    what stays unmeasured is the MIGRATION itself — the three mutating git commands a"
+    echo "    bare-main worktree farm would then run."
     echo "  · Hook wiring: all THREE branches are exercised (A core.hooksPath, B husky, C lefthook)"
     echo "    plus branch A's linked-worktree variant, all running the ONE rendered hook-body."
     echo "    Harness-injected for B/C (declared, not consumer-shape): a minimal repo-root"
     echo "    package.json, and lefthook.yml's 5 lines of lefthook-schema wiring. husky executes"
-    echo "    the body with 'sh -e' (shebang discarded), so branch B is measured only under THIS"
-    echo "    platform's /bin/sh — a dash /bin/sh would reject the body's 'set -o pipefail'."
+    echo "    the body with 'sh -e' (shebang discarded), so A13 itself is measured only under THIS"
+    echo "    platform's /bin/sh; A13b-posix re-runs the same on-disk body under a dash-class shell"
+    echo "    when one is installed, and says UNMEASURED when none is. Neither covers a real"
+    echo "    Debian/Ubuntu CI end-to-end — only the shell, not the platform."
     echo "  · This is NOT R25: no run-all-guards.sh, no per-domain gradle task, no ax-template lint."
     echo "  · Harness-injected, not consumer-shape: the Gradle wrapper (copied gradlew +"
     echo "    gradle-wrapper.jar, GENERATED gradle-wrapper.properties pinned to 9.5.1) and"
@@ -1164,6 +1210,103 @@ else
     note "A12-route" false
 fi
 
+# The violation A21 and the hook-wiring branches are both asked to refuse: A1's probe, re-planted.
+# Reusing it (rather than inventing another) is deliberate — branch A already refused this exact
+# file with the plugin resolvable, so a run that now lets it through differs in ONE thing: the
+# wiring, or where the plugin was installed.
+plant_upward_probe() {
+    cat > "$PROBE_TS" <<'EOF'
+// Re-planted by verify-downstream.sh: shared (lib) importing UP into the app layer.
+import { probe } from '@/app/__ax_probe_target'
+
+export const __axProbe: string = probe
+EOF
+    pgit add frontend/src/lib/__ax_probe.ts >/dev/null 2>&1
+}
+
+# A21-plugindep — P2-121. WHERE the react plugin got installed, which every assertion above is
+# structurally blind to.
+#
+# `npm i -D` writes the dependency into the package.json OF THE DIRECTORY IT RUNS IN. With
+# react-plugin-dep declaring base=repo, that was the repo root — a package.json a consumer's CI
+# never installs, since a workspace CI runs `npm ci` inside <react.root>. Every assertion above
+# still passed, because Node resolves `@ax/eslint-plugin-ax` by walking UP into the repo-root
+# node_modules that the SAME machine's install had just created. That is an accident of layout, not
+# a declared dependency, and it evaporates the moment the workspace is installed on its own.
+#
+# Three counts, and the third is the one that reproduces a stock CI:
+#   (i)   <react.root>/package.json declares the plugin, and <react.root>/package-lock.json LOCKS
+#         it — a `npm i --no-save`-shaped install satisfies neither.
+#   (ii)  nothing OUTSIDE <react.root> declares it. Measured HERE, before the hook branches create
+#         their own repo-root package.json for husky/lefthook; after that point the question is no
+#         longer answerable.
+#   (iii) node_modules wiped at BOTH levels, `npm ci` run ONLY inside <react.root>, and A1's probe
+#         still BLOCKED with banner + rule id.
+# Pre-fix this went RED on (i) (zero lockfile references) and on (iii) (`Cannot find module
+# '@ax/eslint-plugin-ax'` — the gate cannot even load, so no rule id is ever named).
+#
+# NO CASCADE — MEASURED, not assumed. Step (iii) deletes the repo-root node_modules on purpose,
+# because that directory IS the accidental resolution path being tested, and the obvious worry is
+# that a pre-fix tree would then lose the plugin for A13-husky/A14-lefthook too, smearing one
+# finding across three assertions. It does not: in the pre-fix differential those two stayed GREEN,
+# because each begins with `npm i -D husky` / `npm i -D lefthook` AT THE REPO ROOT, which
+# re-installs that package.json's whole tree — including, pre-fix, the ax plugin. So A21 fails
+# alone and names its own cause.
+AX_PLUGIN_PKG='@ax/eslint-plugin-ax'
+declares_ax_plugin() {   # 0 = the package.json at $1 declares the plugin in dev or prod deps
+    python3 -c 'import json,sys
+try:
+    d = json.load(open(sys.argv[1]))
+except (OSError, ValueError):
+    sys.exit(2)
+deps = dict(d.get("dependencies", {}))
+deps.update(d.get("devDependencies", {}))
+sys.exit(0 if sys.argv[2] in deps else 1)' "$1" "$AX_PLUGIN_PKG"
+}
+echo "  A21-plugindep: where did react-plugin-dep put $AX_PLUGIN_PKG? …"
+A21_IN_REACT_PKG=no
+declares_ax_plugin "$FRONTEND/package.json" && A21_IN_REACT_PKG=yes
+A21_IN_REACT_LOCK="$(grep -c "$AX_PLUGIN_PKG" "$FRONTEND/package-lock.json" 2>/dev/null | tr -d ' ')"
+[ -n "$A21_IN_REACT_LOCK" ] || A21_IN_REACT_LOCK=0
+A21_AT_ROOT=no
+if [ -f "$PROJ/package.json" ]; then
+    declares_ax_plugin "$PROJ/package.json" && A21_AT_ROOT=yes
+fi
+echo "    <react.root>/package.json declares it: $A21_IN_REACT_PKG"
+echo "    <react.root>/package-lock.json references: $A21_IN_REACT_LOCK"
+echo "    repo-root package.json declares it: $A21_AT_ROOT (repo-root package.json exists: $([ -f "$PROJ/package.json" ] && echo yes || echo no))"
+echo "    wiping node_modules at BOTH levels, then npm ci INSIDE <react.root> only …"
+rm -rf "$FRONTEND/node_modules" "$PROJ/node_modules"
+( cd "$FRONTEND" && npm ci ) > "$WORK/a21-npm-ci.log" 2>&1
+A21_CI_RC=$?
+A21_RESOLVES=no
+( cd "$FRONTEND" && node -e 'require.resolve("@ax/eslint-plugin-ax",{paths:[process.cwd()]})' ) \
+    >/dev/null 2>&1 && A21_RESOLVES=yes
+plant_upward_probe
+pgit commit -m "probe: upward layer import (after react.root-only npm ci)" > "$WORK/a21.log" 2>&1
+A21_RC=$?
+A21_BANNER="$(grep -ac 'ax-hook: pre-commit gate' "$WORK/a21.log")"
+A21_RULE="$(grep -ac 'ax/no-upward-layer-import' "$WORK/a21.log")"
+echo "    npm ci rc=$A21_CI_RC  plugin resolvable from <react.root>: $A21_RESOLVES"
+if [ "$A21_IN_REACT_PKG" = "yes" ] && [ "$A21_IN_REACT_LOCK" != "0" ] && [ "$A21_AT_ROOT" = "no" ] \
+   && [ "$A21_CI_RC" = "0" ] && [ "$A21_RESOLVES" = "yes" ] && [ "$A21_RC" != "0" ] \
+   && [ "$A21_BANNER" != "0" ] && [ "$A21_RULE" != "0" ]; then
+    echo "    declared+locked under <react.root>, nothing at the repo root, and the gate still"
+    echo "    BLOCKED the probe after a workspace-only npm ci (banner + rule id present)"
+    note "A21-plugindep" true
+else
+    echo "    commit rc=$A21_RC (expected non-zero) banner=$A21_BANNER rule=$A21_RULE"
+    [ "$A21_RESOLVES" = "no" ] && echo "    $AX_PLUGIN_PKG is NOT resolvable from <react.root> after its own npm ci —"
+    [ "$A21_RESOLVES" = "no" ] && echo "    the install landed outside the workspace (P2-121 shape)."
+    tail -20 "$WORK/a21-npm-ci.log" 2>/dev/null | sed 's/^/      /'
+    tail -25 "$WORK/a21.log" | sed 's/^/      /'
+    note "A21-plugindep" false
+fi
+# Return to HEAD: drain the index first (the rejected commit left the probe staged), then restore
+# the file from it. The reverse order would restore the STAGED violation back over itself.
+pgit reset -q >/dev/null 2>&1
+pgit checkout -- frontend/src/lib/__ax_probe.ts >/dev/null 2>&1
+
 # A3 — the java gate's own signal: a Service depending on a Controller, blocked BY NAME.
 mkdir -p "$BACKEND/src/main/java/com/example/backend/probe"
 cat > "$BACKEND/src/main/java/com/example/backend/probe/ProbeController.java" <<'EOF'
@@ -1353,12 +1496,13 @@ WT="$WORK/wt"
 SIB_BEFORE="$(pgit config --show-origin --get core.hooksPath 2>&1)"
 WT_BARE="$(pgit config --get core.bare 2>/dev/null)"
 WT_CORE_WT="$(pgit config --get core.worktree 2>/dev/null)"
-# MEASURED, and it corrects the skill's prose: `git init` writes `core.bare = false` into every
-# ordinary checkout's shared config, so F-2's literal test ("if EITHER prints a value, migrate")
-# fires on the completely normal case — and its migration then sets `core.bare true` in
-# config.worktree, which would declare a non-bare repo BARE. The condition that actually selects the
-# migration is `core.bare` being TRUE (or `core.worktree` being set), so that is what is checked
-# here. See the finding reported alongside this assertion.
+# MEASURED: `git init` writes `core.bare = false` into every ordinary checkout's shared config, so
+# the OLD F-2 prose ("if EITHER prints a value, migrate") fired on the completely normal case — and
+# its migration then set `core.bare true` in config.worktree, declaring a non-bare repo BARE
+# (P2-122). The condition that actually selects the migration is `core.bare` being TRUE (or
+# `core.worktree` being set), which is what is checked here AND, since P2-122, what the skill's own
+# `hook-worktree-preflight` artifact implements — A15b-preflight below executes that artifact in
+# both directions so the two can no longer drift apart silently.
 WT_MIGRATION_APPLICABLE=0
 [ "$WT_BARE" = "true" ] && WT_MIGRATION_APPLICABLE=1
 [ -n "$WT_CORE_WT" ] && WT_MIGRATION_APPLICABLE=1
@@ -1405,26 +1549,102 @@ fi
 pgit worktree remove --force "$WT" >/dev/null 2>&1
 pgit config --unset extensions.worktreeConfig >/dev/null 2>&1
 
-# The violation both branches are asked to refuse: A1's probe, re-planted. Reusing it (rather than
-# inventing a third probe) is deliberate — branch A already refused this exact file, so a branch
-# that lets it through differs in the WIRING and nothing else.
-plant_upward_probe() {
-    cat > "$PROBE_TS" <<'EOF'
-// Re-planted by verify-downstream.sh for the hook-wiring branches: shared (lib) importing UP.
-import { probe } from '@/app/__ax_probe_target'
+# A15b-preflight — P2-122. A15 above measures the worktree WIRING and treats F-2 as a premise, so
+# nothing ever executed the condition that DECIDES whether to migrate. That condition is now the
+# `hook-worktree-preflight` artifact in ax-install-hooks/SKILL.md, and this assertion renders it
+# from the skill (never a copy kept here) and runs it in BOTH directions:
+#   ordinary `git init` checkout  -> must print MIGRATION NOT REQUIRED
+#   `git init --bare` repository  -> must print MIGRATION REQUIRED
+# BOTH are required, and that is what makes the assertion non-vacuous: a detector hardwired to
+# either verdict fails one of the two. The normal-direction output is additionally required to
+# contain core.bare='false' — the exact non-empty value the old prose mis-read as "migrate" — so
+# this assertion proves the trap is PRESENT and not selected, rather than merely absent.
+# Still unmeasured, and printed as such: the migration ITSELF (three mutating git commands), which
+# only a bare-main worktree farm reaches.
+cat > "$WORK/render_one.py" <<'PYEOF'
+"""Render ONE ax:artifact body out of the skills, by id, to stdout.
 
-export const __axProbe: string = probe
-EOF
-    pgit add frontend/src/lib/__ax_probe.ts >/dev/null 2>&1
-}
+Same discover()+render() path install.py and eval_diff.py use, for the same reason: the assertion
+that consumes this must execute the SKILL FILE'S OWN text, not a second copy living in the harness.
+--artifact-override is honoured here too, so a naive-condition body can be injected to watch the
+assertion go RED.
+"""
+import glob
+import json
+import os
+import sys
+
+repo_root, aid, config_path, overrides_path = sys.argv[1:5]
+sys.path.insert(0, os.path.join(repo_root, "practices", "scripts", "lib"))
+import ax_markers  # noqa: E402
+
+overrides = {}
+if overrides_path != "-":
+    with open(overrides_path, encoding="utf-8") as f:
+        for spec in json.load(f):
+            key, sep, path = spec.partition("=")
+            if sep and os.path.isfile(path):
+                with open(path, encoding="utf-8") as fh:
+                    overrides[key] = fh.read()
+
+with open(config_path, encoding="utf-8") as f:
+    cfg = json.load(f)
+
+for art in ax_markers.discover(
+        sorted(glob.glob(os.path.join(repo_root, "skills", "*", "SKILL.md")))):
+    if art.id != aid:
+        continue
+    if art.id in overrides:
+        art.body = overrides[art.id]
+    sys.stdout.write(ax_markers.render(art, cfg, {"axPluginPath": "/nonexistent-unused-here"}))
+    sys.exit(0)
+print("render_one: no ax:artifact with id=%r" % aid, file=sys.stderr)
+sys.exit(1)
+PYEOF
+echo "  A15b-preflight: executing the skill's own F-2 preflight in BOTH directions …"
+python3 "$WORK/render_one.py" "$REPO_ROOT" hook-worktree-preflight "$PROJ/ax.config.json" \
+    "$OVERRIDE_FILE" > "$WORK/preflight.sh" 2>"$WORK/preflight-render.err"
+PF_RENDER_RC=$?
+PF_NORMAL="$WORK/pf-normal"
+PF_BARE="$WORK/pf-bare"
+mkdir -p "$PF_NORMAL"
+( cd "$PF_NORMAL" && git -c init.defaultBranch=main init -q ) >/dev/null 2>&1
+git init -q --bare "$PF_BARE" >/dev/null 2>&1
+PF_NORMAL_OUT=""
+PF_BARE_OUT=""
+if [ "$PF_RENDER_RC" = "0" ]; then
+    PF_NORMAL_OUT="$( cd "$PF_NORMAL" && bash "$WORK/preflight.sh" 2>&1 )"
+    PF_BARE_OUT="$( cd "$PF_BARE" && bash "$WORK/preflight.sh" 2>&1 )"
+fi
+PF_NORMAL_OK=0
+PF_BARE_OK=0
+PF_TRAP_PRESENT=0
+case "$PF_NORMAL_OUT" in *"MIGRATION NOT REQUIRED"*) PF_NORMAL_OK=1 ;; esac
+case "$PF_BARE_OUT"   in *"MIGRATION REQUIRED"*)     PF_BARE_OK=1 ;; esac
+case "$PF_NORMAL_OUT" in *"core.bare='false'"*)      PF_TRAP_PRESENT=1 ;; esac
+echo "    normal checkout : $PF_NORMAL_OUT"
+echo "    bare repository : $PF_BARE_OUT"
+if [ "$PF_RENDER_RC" = "0" ] && [ "$PF_NORMAL_OK" = "1" ] && [ "$PF_BARE_OK" = "1" ] \
+   && [ "$PF_TRAP_PRESENT" = "1" ]; then
+    echo "    both directions correct, and the normal checkout really does carry the non-empty"
+    echo "    core.bare='false' the pre-P2-122 prose mis-read as \"migrate\""
+    note "A15b-preflight" true
+else
+    echo "    render rc=$PF_RENDER_RC normal_ok=$PF_NORMAL_OK bare_ok=$PF_BARE_OK trap_present=$PF_TRAP_PRESENT"
+    [ "$PF_RENDER_RC" != "0" ] && sed 's/^/      /' "$WORK/preflight-render.err" 2>/dev/null
+    [ "$PF_NORMAL_OK" = "0" ] && echo "      a detector that fires on a NORMAL checkout would migrate a non-bare repo to bare"
+    note "A15b-preflight" false
+fi
+rm -rf "$PF_NORMAL" "$PF_BARE"
 
 # husky and lefthook are repo-root npm tools: neither installs without a package.json at the repo
-# root. In THIS shape one already exists and must NOT be clobbered — the react-plugin-dep artifact
-# declares `base=repo`, so its `npm i -D file:<plugin>` ran at the repo root and npm recorded the ax
-# plugin as a `file:` devDependency THERE. Overwriting that file was measured to make npm prune
-# node_modules/@ax on the next root install, after which every later react-gate invocation died
-# with ERR_MODULE_NOT_FOUND — i.e. the branch-B/C assertions failed for a reason that had nothing to
-# do with husky or lefthook. Create one only when genuinely absent.
+# root. Since P2-121 the react plugin is installed under <react.root>, so in THIS 2-stack shape the
+# repo root normally has none and the harness creates a minimal one — declared, not consumer-shape.
+# The `else` branch is kept and still matters: when a repo-root package.json DOES exist (a
+# react.root="." consumer, or a repo that already had one), overwriting it was measured to make npm
+# prune node_modules/@ax on the next root install, after which every later react-gate invocation
+# died with ERR_MODULE_NOT_FOUND — i.e. the branch-B/C assertions failed for a reason that had
+# nothing to do with husky or lefthook. Create one only when genuinely absent.
 if [ ! -f "$PROJ/package.json" ]; then
     cat > "$PROJ/package.json" <<'EOF'
 {
@@ -1476,6 +1696,80 @@ else
     echo "    husky install/init failed (rc=$A13_INSTALL_RC) — branch B UNMEASURED, recorded as a failure"
     tail -20 "$WORK/a13-install.log" | sed 's/^/      /'
     note "A13-husky" false
+fi
+
+# A13b-posix — P2-123. A13 above can only ever measure the CALLING platform's /bin/sh. On macOS
+# that is bash-in-POSIX-mode, which accepts `set -o pipefail`; on Debian/Ubuntu — where most CI
+# runs — /bin/sh is dash, which aborts at that line with `set: Illegal option -o pipefail` BEFORE
+# the banner. The gate then never executes and the commit sails through, and A13 is green either
+# way. Two halves:
+#   (i)  STATIC, always measured — the rendered body ON DISK carries none of a registered bashism
+#        list. Only NON-COMMENT lines are scanned, deliberately: the body explains in comments
+#        exactly which constructs it avoids, and naming them there must not trip the check.
+#   (ii) DYNAMIC, measured whenever a shell that genuinely REJECTS pipefail is installed — that
+#        same on-disk body executed the way husky executes it (`<sh> -e <body>`, shebang discarded)
+#        in a throwaway repo with nothing staged, which must print the F-034 banner and exit 0.
+#        The candidate shell is itself probed for rejecting pipefail: a "posix shell" that accepts
+#        it would make this half vacuous, so it is not accepted as the probe.
+# When no such shell exists the dynamic half is printed as UNMEASURED — never folded silently into
+# the verdict, and never a claim about Debian/Ubuntu as a platform (only about its shell).
+echo "  A13b-posix: the same on-disk body under a dash-class /bin/sh …"
+A13B_BASHISMS=""
+A13B_CODE="$WORK/a13b-code.sh"
+grep -v '^[[:space:]]*#' "$HOOK_BODY_SRC" > "$A13B_CODE" 2>/dev/null
+# Two pattern choices here were each measured against the PRE-FIX body rather than assumed, because
+# a bashism scanner that matches nothing is exactly as green as a clean body:
+#   · `pipefail`, bare — NOT `-o pipefail`. The defect's actual spelling is `set -euo pipefail`,
+#     whose characters are `-euo pipefail`: it contains `o pipefail` but never `-o pipefail`, so the
+#     hyphenated pattern silently missed the one string this assertion exists to catch (measured on
+#     /tmp render of the pre-fix body: zero matches). The bare word matches both spellings, and the
+#     comment-stripping above is what keeps the body's own explanation of why it avoids pipefail
+#     from tripping it.
+#   · `[[ ` carries its trailing space deliberately: the bash conditional is always `[[ <expr> ]]`,
+#     whereas `[[` with no space is how a POSIX CHARACTER CLASS opens inside a bracket expression —
+#     `[[:space:]]`, which this body uses in its sed fallback and which every POSIX sh accepts. A
+#     bare `[[` pattern reported that as a bashism (measured: `static: bashisms ... [[[]` while the
+#     dash run passed), i.e. it flagged the very portability construct the body uses to BE portable.
+for pat in 'pipefail' '[[ ' '<<<' 'local ' 'declare ' '+=('; do
+    if grep -qF -- "$pat" "$A13B_CODE"; then
+        A13B_BASHISMS="$A13B_BASHISMS [$pat]"
+    fi
+done
+A13B_SH=""
+for cand in "$(command -v dash 2>/dev/null || true)" /bin/dash /usr/bin/dash; do
+    [ -n "$cand" ] && [ -x "$cand" ] || continue
+    "$cand" -c 'set -o pipefail' >/dev/null 2>&1 && continue   # accepts it => useless as a probe
+    A13B_SH="$cand"
+    break
+done
+A13B_DYNAMIC=UNMEASURED
+A13B_RC=""
+A13B_BANNER=0
+if [ -n "$A13B_SH" ]; then
+    PXP="$WORK/posix-probe"
+    rm -rf "$PXP"
+    mkdir -p "$PXP"
+    cp "$PROJ/ax.config.json" "$PXP/ax.config.json"
+    ( cd "$PXP" && git -c init.defaultBranch=main init -q ) >/dev/null 2>&1
+    ( cd "$PXP" && "$A13B_SH" -e "$HOOK_BODY_SRC" ) > "$WORK/a13b.log" 2>&1
+    A13B_RC=$?
+    A13B_BANNER="$(grep -ac 'ax-hook: pre-commit gate' "$WORK/a13b.log")"
+    if [ "$A13B_RC" = "0" ] && [ "$A13B_BANNER" != "0" ]; then
+        A13B_DYNAMIC=pass
+    else
+        A13B_DYNAMIC=FAIL
+    fi
+    rm -rf "$PXP"
+fi
+echo "    static  : bashisms on non-comment lines:${A13B_BASHISMS:- none}"
+echo "    dynamic : posix-only shell=${A13B_SH:-none installed} => $A13B_DYNAMIC (rc=${A13B_RC:--} banner=$A13B_BANNER)"
+if [ -z "$A13B_BASHISMS" ] && [ "$A13B_DYNAMIC" != "FAIL" ]; then
+    [ "$A13B_DYNAMIC" = "UNMEASURED" ] && echo "    NOTE: no dash-class shell here — the verdict rests on the static half ALONE."
+    note "A13b-posix" true
+else
+    [ -n "$A13B_BASHISMS" ] && echo "    a bashism here is fatal under husky's 'sh -e' on a dash /bin/sh, and invisible on macOS"
+    [ "$A13B_DYNAMIC" = "FAIL" ] && tail -15 "$WORK/a13b.log" 2>/dev/null | sed 's/^/      /'
+    note "A13b-posix" false
 fi
 
 # A14-lefthook — BRANCH C. The body goes to the helper script lefthook.yml's `run:` invokes.

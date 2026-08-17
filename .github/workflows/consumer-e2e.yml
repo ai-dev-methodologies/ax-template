@@ -42,12 +42,28 @@ name: consumer-e2e
 #  shape (P2-104a), and the Next/app-router route-axis rules (P2-105) were CLOSED — the harness
 #  now materializes and exercises all three, as A13-husky/A14-lefthook, A18-rootdot/A19-rootdot/
 #  A20-rootdot-skip, and A11-route/A12-route respectively. They are removed from this list below.)
+# (2026-08-18, same day, second wave: P2-121 (react plugin installed at `base=repo`, invisible to a
+#  workspace-only `npm ci`), P2-122 (F-2 worktree preflight prose that misfired on an ordinary
+#  checkout), and P2-123 (husky's shim discarding the hook body's shebang, so `set -euo pipefail`
+#  died under a dash-class `/bin/sh`) were ALSO CLOSED. The harness now exercises all three as
+#  A21-plugindep, A15b-preflight, and A13b-posix respectively — removed from this list too. Two
+#  honest residuals from that wave stay on the list below: A13b-posix's dynamic half only proves
+#  the SHELL is dash-compatible, not that a real Debian/Ubuntu CI passes end-to-end; and A15b's
+#  detector only proves the CONDITION now evaluates correctly — the F-2 MIGRATION itself (the three
+#  mutating git commands a bare-main worktree farm would run) is still never executed by anything.)
 #   - R25 as a whole (`verify-completion.sh` is never invoked here).
 #   - `react.typescript=false` — the harness always installs with TypeScript ON. The
 #     `languageOptions` gap that broke this shape's JSX parsing was FIXED (P2-104(b), `ax:else`
 #     now supplies `languageOptions.parserOptions.ecmaFeatures.jsx` on the false branch), but this
 #     harness's fixture is TypeScript-only, so there is no standing gate exercising the fix —
 #     evidence for it is a manual consumer run, not this workflow.
+#   - The F-2 worktree MIGRATION itself — the `hook-worktree-preflight` detector's CONDITION is
+#     exercised both ways by A15b-preflight (P2-122), but the three mutating git commands a
+#     bare-main worktree farm's migration would actually run are still prose, never executed here.
+#   - A13b-posix's dash coverage is the SHELL only, not the PLATFORM: it proves the on-disk hook
+#     body survives a dash-class `/bin/sh` when one exists on the runner (this job's `ubuntu-latest`
+#     ships bash as `/bin/sh`, so even here the dash half is conditional on what's installed) — it
+#     is not a real Debian/Ubuntu CI end-to-end run of the husky branch.
 #   - Any Gradle or Node major version other than the ones pinned below.
 #   - Windows runners (this job is `ubuntu-latest` only).
 #   - The install skills' prose steps (user confirmation prompts, scope statements read aloud to
@@ -284,7 +300,14 @@ jobs:
             echo "_(2026-08-18: the husky/lefthook branches, the \`react.root: \".\"\` shape, and the"
             echo "Next/app-router route-axis rules were CLOSED — the harness now exercises all"
             echo "three (A13-husky/A14-lefthook, A18-rootdot/A19-rootdot/A20-rootdot-skip,"
-            echo "A11-route/A12-route) and they are removed from this list.)_"
+            echo "A11-route/A12-route) and they are removed from this list. Same day, second wave:"
+            echo "the react-plugin install location (P2-121), the F-2 worktree preflight condition"
+            echo "(P2-122), and husky's shebang-discarding dash incompatibility (P2-123) were ALSO"
+            echo "CLOSED — A21-plugindep/A15b-preflight/A13b-posix exercise them and they are"
+            echo "removed too. What that wave did NOT close stays below: A13b-posix proves the"
+            echo "SHELL is dash-compatible, not a real Debian/Ubuntu CI end-to-end; A15b-preflight"
+            echo "proves the CONDITION evaluates correctly both ways, not that the F-2 MIGRATION"
+            echo "(the mutating git commands themselves) ever runs.)_"
             echo ""
             echo "- **R25 as a whole** — \`verify-completion.sh\` is not invoked here."
             echo "- **\`react.typescript=false\`** — the harness always installs with TypeScript ON."
@@ -292,6 +315,13 @@ jobs:
             echo "  now supplies the missing \`languageOptions\` on the false branch), but this"
             echo "  fixture is TypeScript-only, so there is no standing gate exercising the fix —"
             echo "  evidence is a manual consumer run, not this workflow."
+            echo "- **The F-2 worktree MIGRATION itself** — A15b-preflight (P2-122) exercises the"
+            echo "  \`hook-worktree-preflight\` detector's CONDITION both ways, but the three"
+            echo "  mutating git commands a bare-main worktree farm's migration would actually run"
+            echo "  stay prose, never executed here."
+            echo "- **A13b-posix's platform coverage** — it proves the on-disk husky hook body"
+            echo "  survives a dash-class \`/bin/sh\` when one is installed (SHELL axis only); it is"
+            echo "  not a real Debian/Ubuntu CI run of the husky branch end-to-end (PLATFORM axis)."
             echo "- **Any Gradle or Node major version other than the ones pinned in this workflow**"
             echo "  (JDK 21 / node 24)."
             echo "- **Windows runners** — this job is \`ubuntu-latest\` only."
