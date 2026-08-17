@@ -1,6 +1,8 @@
 package com.ax.template.authblueprint.quorumresolution;
 
+import com.ax.template.authblueprint.common.HttpExtract;
 import io.restassured.RestAssured;
+import io.restassured.response.Response;
 
 import java.util.UUID;
 
@@ -21,19 +23,21 @@ public final class QuorumTestSupport {
             .body("{\"email\":\"" + email + "\",\"password\":\"securepassword12\",\"role\":\"" + role + "\"}")
         .when().post("/api/auth/email/signup");
 
-        return given()
+        Response httpExtractResponse = given()
             .header("Content-Type", "application/json")
             .body("{\"email\":\"" + email + "\",\"password\":\"securepassword12\"}")
         .when().post("/api/auth/email/login")
-        .then().extract().path("accessToken");
+        .then().extract().response();
+        return HttpExtract.path(httpExtractResponse, "accessToken", "POST /api/auth/email/login (obtainToken)");
     }
 
     /** Returns the userId (= JWT subject = what auth.getName() returns) for the given token. */
     public static String resolveUserId(String token) {
-        return given()
+        Response httpExtractResponse = given()
             .header("Authorization", "Bearer " + token)
         .when().get("/api/auth/me")
-        .then().extract().path("userId");
+        .then().extract().response();
+        return HttpExtract.path(httpExtractResponse, "userId", "GET /api/auth/me (resolveUserId)");
     }
 
     public static void useRandomPort(int port) {

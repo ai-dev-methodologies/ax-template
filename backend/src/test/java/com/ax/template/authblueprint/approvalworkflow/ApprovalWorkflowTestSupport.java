@@ -1,5 +1,7 @@
 package com.ax.template.authblueprint.approvalworkflow;
 
+import com.ax.template.authblueprint.common.HttpExtract;
+
 import io.restassured.RestAssured;
 import io.restassured.http.Header;
 import io.restassured.response.Response;
@@ -64,18 +66,9 @@ public final class ApprovalWorkflowTestSupport {
             .body("{\"email\":\"" + email + "\",\"password\":\"securepassword12\"}")
         .when().post("/api/auth/email/login");
 
-        if (login.getStatusCode() != 200) {
-            throw new AssertionError(
-                "obtainToken(" + email + ", " + role + "): POST /api/auth/email/login expected 200 but was "
-                    + login.getStatusCode() + ".\n" + context(signup, login));
-        }
-        String token = extractQuietly(login, "accessToken");
-        if (token == null) {
-            throw new AssertionError(
-                "obtainToken(" + email + ", " + role + "): login returned 200 but no 'accessToken' could be "
-                    + "read from the body.\n" + context(signup, login));
-        }
-        return token;
+        return HttpExtract.pathAt(login, 200, "accessToken",
+            "obtainToken(" + email + ", " + role + "): POST /api/auth/email/login (accessToken)\n"
+                + context(signup, login));
     }
 
     public static String resolveUserId(String token) {
@@ -83,20 +76,8 @@ public final class ApprovalWorkflowTestSupport {
             .header("Authorization", "Bearer " + token)
         .when().get("/api/auth/me");
 
-        if (me.getStatusCode() != 200) {
-            throw new AssertionError(
-                "resolveUserId: GET /api/auth/me expected 200 but was " + me.getStatusCode() + ".\n"
-                    + portContext() + "\n"
-                    + "  me " + describe(me));
-        }
-        String userId = extractQuietly(me, "userId");
-        if (userId == null) {
-            throw new AssertionError(
-                "resolveUserId: GET /api/auth/me returned 200 but no 'userId' could be read from the body.\n"
-                    + portContext() + "\n"
-                    + "  me " + describe(me));
-        }
-        return userId;
+        return HttpExtract.pathAt(me, 200, "userId",
+            "resolveUserId: GET /api/auth/me (userId)\n" + portContext());
     }
 
     public static void useRandomPort(int port) {
@@ -124,17 +105,6 @@ public final class ApprovalWorkflowTestSupport {
         return portContext() + "\n"
             + "  signup " + describe(signup) + "\n"
             + "  login  " + describe(login);
-    }
-
-    /** Returns the path value, or {@code null} if the body cannot be parsed. */
-    private static String extractQuietly(Response response, String path) {
-        try {
-            Object value = response.then().extract().path(path);
-            return value == null ? null : String.valueOf(value);
-        } catch (RuntimeException e) {
-            // Unparsable / missing content type — describe() carries the real evidence.
-            return null;
-        }
     }
 
     /**

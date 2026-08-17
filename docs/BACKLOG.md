@@ -28,9 +28,28 @@ signature를 발견**(17/17)함으로써 경험적으로 반증되었다 — 발
 |---|---|---|---|
 | P0 (expiry-bound / live defects) | 30 | 30 | **100%** |
 | P1 (generic signature backlog) | 75 | 74 | **99%** |
-| P2 (verification escapes) | 119 | 112 | **94%** |
+| P2 (verification escapes) | 122 | 114 | **93%** |
 | P3 (industry-niche deferrals) | 143 | 141 | **99%** |
-| **P0–P3 합계 (수렴 분모)** | **367** | **357** | **97%** |
+| **P0–P3 합계 (수렴 분모)** | **370** | **359** | **97%** |
+
+> 2026-08-17 P2-117 종결 — 전 트리 blindness 확산 종결(공용 `HttpExtract` 헬퍼 + guard [116]). P2-116이
+> `ApprovalWorkflowTestSupport` 한 곳만 봉합하고 남긴 확산 범위 — status 단언 없이 응답에서 값을 꺼내는
+> `*TestSupport.java` — **86개 전부**를 신규 `HttpExtract.path`/`pathAt`로 이전. **센서스 정정**: 최초
+> 파일-단위 센서스는 이미 status 단언을 보유한 2개 파일(`HandoffTestSupport`·`CommerceOrderTestSupport`)을
+> "blind 아님"으로 오분류했다 — 실제로는 단언이 **다른 메서드**에 있었을 뿐 추출 자체는 blind였다.
+> 파일 단위 grep은 blindness 판정에 부적합함이 실측으로 드러났다. 신규 guard
+> `test_support_response_validation_guard.sh` [116]가 두 탐지자(A: `.extract()` 뒤 체인이
+> `.response()`/terminal이 아니면 위반, B: `.path(`/`.pathAt(`/`.jsonPath(` qualifier가 `HttpExtract`가
+> 아니면 위반)로 재발을 구조적으로 차단, live exit 0(86/86), fixture `pass_via_helper`(0)/
+> `fail_blind_extract`(1). **guard fixture 정정**: 최초 `fail_blind_extract`는 탐지자 A·B 둘 다에 동시에
+> 걸려 A만 죽여도 B가 같은 줄을 잡아 exit 1이 유지되는(=A의 kill-proof 불성립) 공허 fixture였다 —
+> mutation MUT-1(A 무력화)/MUT-2(B 무력화)는 각각 나머지 탐지자가 잡아 exit 1 유지, **MUT-3(둘 다
+> 무력화)만 1→0 flip**로 재확인해 봉합. 부수 발견 **P2-118**(closed, 같은 라운드 봉합) + 잔여
+> **P2-119·P2-120**(open, 정직 등재) 상세는 해당 행. 분모 367→**370**(+3, P2-118~120), closed
+> 357→**359**(+2, P2-117·P2-118) — 합계 반올림은 **97%**로 표시상 불변이나(359/370=97.0% vs
+> 357/367=97.3%), P2 tier 자체는 **94%→93%**로 내려간다(114/122) — 발견보다 봉합이 앞섰던 이번
+> 라운드도 신규 open 2건(P2-119·P2-120)을 안고 있어 tier 수렴은 정직하게 하락한다. 북극성(2)의
+> IDW18+ 동결 해제선(70%)은 계속 크게 상회.
 
 > 2026-08-17 P3-144 근본원인 추적 — 2026-08-15 등재된 ContextCache/`@LocalServerPort` 귀속을 **반증**했다(해당
 > 5개 `@SpringBootTest`는 key-forking 어노테이션 0개 → live 컨텍스트 키 1개뿐, 상한 128 아래에서 eviction은
@@ -804,16 +823,74 @@ tier 배정 근거(기존 관례 대조): 이 결함 클래스는 "**검증 표�
   `@DirtiesContext` 추가 0 · ContextCache 상한 상향 0 · 컨텍스트 수명 무변경 — 세 금지 레버를 쓰지
   않고, 측정 가능했던 유일한 결함(정보 파괴)만 제거했다. 원 flake의 근본원인(P3-144)은 이 항목이
   닫지 않는다 — 진단 가능성만 닫는다. 출처: 2026-08-17 P3-144 근본원인 추적.
-- [ ] P2-117 — **동일 "status 단언 없이 응답 추출" blindness가 전 트리에 퍼져 있다**: 직전 항목이
-  `ApprovalWorkflowTestSupport` 한 곳만 봉합했다 — `extract().path("accessToken")` 류를 status 단언
-  없이 쓰는 테스트 파일이 **115개**(그중 86개가 `*TestSupport.java`), 프로세스 전역
-  `RestAssured.port`를 대입하는 파일이 **138개** 그대로 남아 있다. 이 중 어느 것이든 같은 유형의
-  불투명 실패(응답한 프로세스가 애플리케이션이 아닌데도 진단 정보 없이 뭉개지는 예외)를
-  재생산할 수 있다. 이번 라운드는 최소 diff 원칙(P3-144 재현에 필요한 표면 1곳)에 따라 나머지
-  114곳에는 손대지 않았다 — 확산은 별도 스코프다. done-when: P2-116의 기계적 레시피(status
-  선단언 + status/content-type/헤더/본문 발췌/포트 동봉)를 전 트리 115개 파일에 확산하거나, 공유
-  헬퍼(RestAssured response-extraction wrapper)로 추출해 신규 테스트가 기본으로 안전하게 만든다.
-  출처: 2026-08-17 P3-144 근본원인 추적 부산물(census, register-only).
+- [x] P2-117 — **closed 2026-08-17 (전 트리 blindness 확산 종결)**: 직전 항목(P2-116)이
+  `ApprovalWorkflowTestSupport` 한 곳만 봉합하고 남긴 확산 범위 — status 단언 없이 응답에서 값을
+  꺼내는 `*TestSupport.java` **86개 전부**(당초 census가 "115개, 그중 86개"라 적었던 것은 나머지
+  29개가 `*TestSupport.java`가 아닌 일반 테스트 클래스였기 때문이고, 이번 라운드의 스코프는 후자를
+  제외한 86개다) — 를 신규 공용 헬퍼 `backend/src/test/java/com/ax/template/authblueprint/common/
+  HttpExtract.java` 경유로 이전했다. 헬퍼 API: `path(response, jsonPath, context)`(2xx 강제) /
+  `pathAt(response, expectedStatus, jsonPath, context)`(비-2xx 고정 추출용, 예: 에러 바디 필드).
+  검사 순서는 status → Content-Type 존재 → JSON 계열 → 추출 → **null이면 실패**이고, 실패 시
+  `AssertionError`가 context·status·content-type·헤더 전량·본문 발췌(400자 상한, 전체 길이 동봉)·
+  `RestAssured.port`를 담는다. 성공 경로는 byte-identical(실패 중인 호출이 아니면 응답을 재소비하지
+  않는다).
+  **작업 규모**: 헬퍼 신설 + 4개 병행 레인(30/32/28 호출부, 28파일씩)으로 86개 전부 이전. 대부분
+  `path`(2xx); `pathAt`은 `ApprovalWorkflowTestSupport`(원 코드가 `!= 200`을 명시 요구)와
+  `ErrorNoStacktraceLeakTest`(의도적 400/404 추출, 아래 P2-118)에 사용.
+  **정정 1 — 센서스가 과소계수였다.** 최초 파일-단위 센서스는 `HandoffTestSupport`·
+  `CommerceOrderTestSupport` 2개 파일을 "이미 status 단언이 있으니 blind 아님"으로 분류했다. 실제로는
+  그 status 단언이 **다른 메서드**에 있었을 뿐, 값을 추출하는 그 메서드 자체는 blind였다 — 즉 86개
+  **전부**가 blind였고 전부 이전됐다. 파일 단위 grep으로 blindness를 판정하면 이렇게 놓친다는 것이
+  이 라운드의 방법론적 교훈이다(`practices/DECISIONS.md` R112 후속 4에 별도 기록).
+  **신규 guard `test_support_response_validation_guard.sh` [116]**: `*TestSupport.java`가 응답에서
+  값을 뽑을 때 반드시 `HttpExtract` 경유임을 두 탐지자로 강제 — (A) `.extract()` 뒤 체인이
+  `.response()`/terminal이 아니면 위반, (B) `.path(`/`.pathAt(`/`.jsonPath(` qualifier가
+  `HttpExtract`가 아니면 위반(A의 2-문장 우회 `var r = ...extract(); r.path("x");` 차단). 대상
+  집합은 매 실행 `find`로 디스크에서 도출(allowlist 0). live exit 0(86/86). fixture
+  `pass_via_helper`(exit 0) / `fail_blind_extract`(exit 1, `--root` 인자).
+  **정정 2 — guard fixture의 최초 설계가 공허했다.** `fail_blind_extract`가 탐지자 A·B 둘 다에
+  동시에 걸려, A만 죽여도 B가 같은 줄을 잡아 exit 1이 유지됐다(=A의 kill-proof 불성립). mutation
+  MUT-1(A 무력화)→exit 1 유지(B가 잡음) / MUT-2(B 무력화)→exit 1 유지(A가 잡음) / **MUT-3(A·B 둘 다
+  무력화)→1→0 flip**로 재확인 — 즉 두 탐지자 모두 load-bearing임을 fixture 자신이 증명하도록
+  `.extract().asString()` 형태(B가 모델하지 않는 shape)를 fixture에 추가한 뒤 재측정했다(원상복구
+  diff identical).
+  **차등 실측**: 4-shape deliberate-break 테스트(`HttpExtractDiagnosabilityTest`, JDK stub
+  `HttpServer`, Spring context 없음) — Content-Type 없음 / 200+json+빈본문 / 401+problem+json /
+  낯선 서버 응답. before(원 blind `.then().extract().path(...)`)는 shape1에서
+  `IllegalStateException: ...no content-type was present in the response...` 한 줄뿐, shape3(401)은
+  예외 없이 **null을 조용히 반환**. after(`HttpExtract.path`)는 모든 실패 shape에서
+  `AssertionError`에 caller context + `status=` + `content-type=` + 본문 + `RestAssured.port=`를
+  포함(예: shape1 `.hasMessageContaining("status=200").hasMessageContaining("content-type=<absent>")`).
+  **전 도메인 회귀**: 117 task result dir / 1935 tests / 0-test task 0건, 유일 실패는 기지의 advisory
+  `testPortability`(외부 fixture 결함, 본 문서 상단 매트릭스 참조).
+  부수 발견은 **P2-118**(closed, 같은 라운드), 잔여는 **P2-119·P2-120**(open)로 아래 별도 등재.
+  출처: 2026-08-17 P2-117 종결 라운드.
+- [x] P2-118 — **closed 2026-08-17 (P2-117과 같은 라운드에서 봉합된 부수 발견)**: `practices/`
+  도메인의 `ApiNoEntityLeakTest`·`ErrorNoStacktraceLeakTest`는 **모든 단언이 negative**
+  (`doesNotContain`)였다 — 응답 본문에 금지 마커(엔티티 필드명, `StackTrace` 등)가 없다는 것만
+  확인하고, 그 응답이 실제로 이 애플리케이션이 만든 성공/에러 페이지인지는 한 번도 확인하지 않았다.
+  즉 500 응답이든 낯선 서버의 에러 페이지든 **공허하게 통과**할 수 있었다 — P2-117과 뿌리는 같지만
+  (검증 없이 응답을 씀) 별개 결함이다(TestSupport 헬퍼가 아니라 일반 테스트 클래스). 봉합:
+  `ApiNoEntityLeakTest`는 `HttpExtract.path(r, "content", ...)`로 실제 페이지(2xx + JSON + `content`
+  배열 존재)를 먼저 확정한 뒤 negative 스캔; `ErrorNoStacktraceLeakTest`는 두 케이스
+  (`/practices/demo/bad`→400, `/practices/demo/missing`→404)를 `HttpExtract.pathAt(r, <status>,
+  "title", ...)`로 status를 먼저 고정한 뒤 negative 스캔. 출처: 2026-08-17 P2-117 종결 라운드.
+- [ ] P2-119 — **잔여(정직 등재)**: guard [116]이 강제하는 축은 `*TestSupport.java`가 응답에서
+  **직접** 값을 읽는 경로뿐이다. `HttpExtract.path`/`pathAt`는 terminal `.extract()`로 얻은
+  `ExtractableResponse`를 그 자리에서 검증·소비하지만, TestSupport가 그 `ExtractableResponse`(또는
+  `Response`)를 **호출자**(Compliance/IT 테스트)에게 그대로 반환하는 경로가 있고, 그 호출자가 그
+  값을 다시 blind로 읽으면 guard의 탐지자 A/B 어느 쪽도 보지 못한다(호출부는 `*TestSupport.java`가
+  아니므로 대상 집합 밖). done-when: 호출자 측 blind 읽기의 실측 규모(census)를 내고, 같은 레시피를
+  호출자 레이어까지 확장하거나 `HttpExtract`가 검증된 값만 반환하도록 TestSupport 반환 타입을 좁힌다.
+  출처: 2026-08-17 P2-117 종결 라운드.
+- [ ] P2-120 — **잔여(정직 등재, P3-144와 연결)**: 프로세스 전역 static `RestAssured.port`를
+  대입하는 파일이 **138개** 그대로 남아 있다 — 이 axis는 guard [116]의 스코프 밖이다(응답 검증이
+  아니라 포트 오조준 자체가 문제). P3-144(미해결 flake)의 원 진단 파괴 결함은 봉합됐지만(P2-116),
+  포트가 다른 프로세스를 가리키는 **원인**은 아직 어느 guard도 막지 않는다 — 후보 중 하나가
+  P3-144 산문이 명시한 "포트 오조준"이다. done-when: 138개 파일의 `RestAssured.port` 대입 패턴을
+  census하고, 병렬/컨텍스트-공유 테스트 실행에서 포트가 stale해지는 경로를 차단하는 구조(예: 매
+  요청 시점 포트 재조회, 또는 대입 지점을 헬퍼로 단일화)를 설계한다. 출처: 2026-08-17 P2-117 종결
+  라운드.
 
 ## P3 — industry-niche deferrals (generic 아님 — 낮은 우선순위)
 

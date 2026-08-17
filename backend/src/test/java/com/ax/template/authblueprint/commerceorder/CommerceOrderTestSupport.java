@@ -1,6 +1,8 @@
 package com.ax.template.authblueprint.commerceorder;
 
+import com.ax.template.authblueprint.common.HttpExtract;
 import io.restassured.RestAssured;
+import io.restassured.response.Response;
 
 import java.util.UUID;
 
@@ -19,11 +21,12 @@ public final class CommerceOrderTestSupport {
             .header("Content-Type", "application/json")
             .body("{\"email\":\"" + email + "\",\"password\":\"securepassword12\",\"role\":\"" + role + "\"}")
         .when().post("/api/auth/email/signup");
-        return given()
+        Response login = given()
             .header("Content-Type", "application/json")
             .body("{\"email\":\"" + email + "\",\"password\":\"securepassword12\"}")
         .when().post("/api/auth/email/login")
-        .then().extract().path("accessToken");
+        .then().extract().response();
+        return HttpExtract.path(login, "accessToken", "POST /api/auth/email/login (obtainToken)");
     }
 
     public static void useRandomPort(int port) {
@@ -32,13 +35,14 @@ public final class CommerceOrderTestSupport {
 
     /** Create a cart and return the order id. */
     public static String createCart(String token, String currency) {
-        return given()
+        Response created = given()
             .header("Authorization", "Bearer " + token)
             .header("Content-Type", "application/json")
             .body("{\"currency\":\"" + currency + "\"}")
         .when().post("/api/orders")
         .then().statusCode(201)
-        .extract().path("id");
+        .extract().response();
+        return HttpExtract.path(created, "id", "POST /api/orders (createCart)");
     }
 
     /** Add an item to the cart and return the item id. */
@@ -47,13 +51,14 @@ public final class CommerceOrderTestSupport {
         String body = String.format(
             "{\"skuId\":\"%s\",\"nameAtAdd\":\"%s\",\"unitPriceAtAdd\":%d,\"quantity\":%d}",
             skuId, name, unitPrice, quantity);
-        return given()
+        Response added = given()
             .header("Authorization", "Bearer " + token)
             .header("Content-Type", "application/json")
             .body(body)
         .when().post("/api/orders/" + orderId + "/items")
         .then().statusCode(200)
-        .extract().path("id");
+        .extract().response();
+        return HttpExtract.path(added, "id", "POST /api/orders/{id}/items (addItem)");
     }
 
     /** Submit the order. Returns the response body map. */

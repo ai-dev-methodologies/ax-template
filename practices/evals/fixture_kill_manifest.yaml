@@ -1568,3 +1568,43 @@ items:
     fixture_arg: '--root'
     anchor: 'p != MANIFEST_NAME'
     neuter: 'False'
+
+  # ── test_support_response_validation/fail_blind_extract: NOT REGISTERED — measured
+  #    non-single-anchor-coverable, disclosed rather than forced ─────────────────────────────
+  # fixture: SampleTestSupport.java (BACKLOG P2-117, guard [116]) is DELIBERATELY built with
+  #          three violations spanning BOTH of the guard's detectors, and its own javadoc says
+  #          so: obtainToken() and rawBody() trip detector (A) — `.extract().path(...)` /
+  #          `.extract().asString()`, a chained read whose follower isn't `.response()` —
+  #          while resolveUserId() trips ONLY detector (B) — the two-statement evasion
+  #          `var me = ...extract(); me.path("userId");`, which (A) cannot see because the
+  #          `.extract()` there IS terminal (the sanctioned handoff) and the value read happens
+  #          on a LATER line through a bare identifier qualifier. rawBody()'s comment states
+  #          the converse explicitly: "without it, neutering (A) changes nothing, because (B)
+  #          happens to cover the .extract().path(...) shape too" — i.e. the fixture was
+  #          authored so that (A) and (B) are BOTH independently load-bearing on this file, on
+  #          purpose, to regression-test that neither detector alone is sufficient.
+  # WHY NO SINGLE-ANCHOR KILL-PROOF ITEM EXISTS FOR THIS FIXTURE (measured, not assumed):
+  #   MUT-1 — neuter (A) alone (`if follower == 'response':` -> `if True:`, so no chained
+  #           reader after `.extract()` is ever flagged): guard still exits 1 on this fixture
+  #           (resolveUserId's (B)-only violation survives).
+  #   MUT-2 — neuter (B) alone (`if qm and qm.group(1) == 'HttpExtract':` -> `if True:`, so no
+  #           bare-qualifier `.path(`/`.pathAt(`/`.jsonPath(` call is ever flagged): guard still
+  #           exits 1 on this fixture (obtainToken's and rawBody's (A)-only violations survive).
+  #   MUT-3 — neuter BOTH simultaneously: guard exits 0, confirming the fixture and both
+  #           detectors behave exactly as designed and documented.
+  # Reproduced directly against this exact guard + fixture pair (sed-substituting each anchor
+  # line, then running `bash <mutated copy> --root .../fail_blind_extract`): MUT-1 exit=1,
+  # MUT-2 exit=1, MUT-3 exit=0 — matching the prediction above precisely. There is no SINGLE
+  # minimal, shape-legal substitution that reaches exit 0 here, because the fixture's violation
+  # set was deliberately constructed to require both detectors disabled at once — registering
+  # either `if follower == 'response':` or `if qm and qm.group(1) == 'HttpExtract':` alone as
+  # this fixture's kill-proof anchor would be a FALSE claim (the guard's own header already
+  # states these are two structurally distinct forbidden shapes, not a single check). This is
+  # the same class [114]'s `downstream_release_recency/fail_missing_log` non-registration
+  # already discloses (a fail fixture that is correctly not single-anchor-coverable because it
+  # was built to prove a MULTI-detector property) rather than a gap in anchor selection —
+  # forcing a nominal single anchor here would register a fake, silently-vacuous proof, which
+  # is exactly what [87] (this guard) exists to prevent. The guard's own `--fixtures`/`--root`
+  # self-test (registered live in run-all-guards.sh [116]) independently confirms this
+  # fixture's exit=1 behavior via direct execution, unrelated to this mutation-based registry.
+  # min_items is UNCHANGED by this disclosure: no item was added, so the floor stays 97.

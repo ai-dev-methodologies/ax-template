@@ -3856,3 +3856,32 @@ P2-112 — "산출물 사본 0"이 본문에만 참이고 placement(JSON deep-me
 자신과 `pre-push-lib.sh`는 여전히 체크아웃에서 실행되므로 self-attest할 수 없고, `python3`는 여전히
 ambient dependency다 — 이 두 가지는 이번 라운드로도 닫히지 않았다. `verify-downstream.sh` 단언
 11 → **13**(A9-eval · A10-tsdep 신설). 수렴률 96%(349/363) → **98%**(356/363).
+
+**후속 4 (2026-08-17 P2-117 종결 — 토픽은 R112 자신이 아니라 P3-144/P2-116 계열이지만, 이 결정
+로그가 세션 연속성의 running append 지점이라 여기 이어 적는다).** P2-116이 `ApprovalWorkflowTestSupport`
+한 곳만 봉합하고 남긴 확산 범위 — status 단언 없이 응답에서 값을 꺼내는 `*TestSupport.java` **86개**를
+공용 헬퍼 `backend/src/test/java/com/ax/template/authblueprint/common/HttpExtract.java`
+(`path`/`pathAt`, 검사 순서 status → Content-Type → JSON 계열 → 추출 → null 거부, 실패 시
+context·status·content-type·헤더 전량·본문 발췌(400자 상한)·`RestAssured.port`를 담은
+`AssertionError`) 경유로 전건 이전하고, 신규 guard `test_support_response_validation_guard.sh`
+**[116]**로 재발을 구조적으로 봉인했다(두 탐지자 — A: `.extract()` 뒤 체인이 `.response()`/terminal이
+아니면 위반, B: `.path(`/`.pathAt(`/`.jsonPath(` qualifier가 `HttpExtract`가 아니면 위반 — 이 서로를
+백스톱해 2-문장 우회를 닫는다). 부수 발견(`ApiNoEntityLeakTest`/`ErrorNoStacktraceLeakTest`의
+all-negative 단언이 응답을 검증 없이 스캔하던 것)도 같은 라운드에 봉합했다(BACKLOG P2-118).
+
+**이 라운드가 남긴 방법론적 교훈은 두 가지다.** (1) **파일 단위 grep으로 blindness를 판정하면
+놓친다.** 최초 census는 `HandoffTestSupport`·`CommerceOrderTestSupport` 2개 파일을 "이미 status
+단언이 있으니 blind 아님"으로 분류했지만, 그 단언은 blind하게 추출하는 메서드와는 **다른 메서드**에
+있었다 — 파일이 어딘가에서 status를 확인한다는 사실은 그 파일의 모든 추출 지점이 안전하다는 것을
+함의하지 않는다. 판정은 메서드 단위여야 하고, 그것이 정확히 guard [116]의 탐지자가 하는 일이다(파일
+전체가 아니라 `.extract()` 호출부 각각의 다음 체인을 본다). (2) **fixture 자신도 vacuous할 수
+있다.** guard [116]의 최초 `fail_blind_extract` fixture는 탐지자 A·B 둘 다에 동시에 걸리는 코드만
+담고 있어, A를 mutation으로 무력화해도 B가 같은 줄을 잡아 exit 1이 유지됐다 — A가 실제로 무언가를
+검증하고 있다는 증명이 성립하지 않았다(differential kill-proof 불성립). A·B 각각을 독립적으로 죽이는
+mutation(MUT-1/MUT-2)이 여전히 exit 1을 내는 것을 보고서야, 두 탐지자 모두가 커버하는 shape만으로
+구성된 fixture가 얼마나 쉽게 "통과하는 fail fixture"라는 자기모순을 숨기는지 드러났다 — 셋째
+mutation(MUT-1+MUT-2, 둘 다 무력화)만이 1→0 flip을 낸다는 것을 확인한 뒤에야 fixture가 두 탐지자
+모두에 대해 load-bearing임을 주장할 수 있었다. 이 저장소가 이미 R112 후속 2(P2-108, [114]의 위조
+로그 통과)와 2026-06-29 STO pilot(fixture non-vacuity를 old-guard differential로 증명)에서 되풀이
+확인한 패턴 — **green-but-hollow는 guard 자신에게도, guard의 fixture에게도 적용된다** — 이 세 번째
+독립 사례로 재확인됐다. 상세 실측(4-shape 진단성 차등, 회귀 카운트)은 BACKLOG P2-117 행.

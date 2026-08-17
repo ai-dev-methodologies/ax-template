@@ -1,6 +1,8 @@
 package com.ax.template.authblueprint.bilateralhandoff;
 
+import com.ax.template.authblueprint.common.HttpExtract;
 import io.restassured.RestAssured;
+import io.restassured.response.Response;
 
 import java.util.UUID;
 
@@ -21,11 +23,12 @@ public final class HandoffTestSupport {
             .body("{\"email\":\"" + email + "\",\"password\":\"securepassword12\",\"role\":\"" + role + "\"}")
         .when().post("/api/auth/email/signup");
 
-        return given()
+        Response login = given()
             .header("Content-Type", "application/json")
             .body("{\"email\":\"" + email + "\",\"password\":\"securepassword12\"}")
         .when().post("/api/auth/email/login")
-        .then().extract().path("accessToken");
+        .then().extract().response();
+        return HttpExtract.path(login, "accessToken", "POST /api/auth/email/login (obtainToken)");
     }
 
     public static void useRandomPort(int port) {
@@ -36,7 +39,8 @@ public final class HandoffTestSupport {
      *  subject), NOT the email — a party must be named by that same identity for BHO-BIND-001's
      *  equality check to match the real authenticated caller. */
     public static String resolveUserId(String token) {
-        return given().header("Authorization", "Bearer " + token)
-            .when().get("/api/auth/me").then().statusCode(200).extract().path("userId");
+        Response me = given().header("Authorization", "Bearer " + token)
+            .when().get("/api/auth/me").then().statusCode(200).extract().response();
+        return HttpExtract.path(me, "userId", "GET /api/auth/me (resolveUserId)");
     }
 }

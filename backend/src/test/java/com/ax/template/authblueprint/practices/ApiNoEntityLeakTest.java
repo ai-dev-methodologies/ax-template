@@ -2,6 +2,7 @@ package com.ax.template.authblueprint.practices;
 
 import static io.restassured.RestAssured.given;
 
+import com.ax.template.authblueprint.common.HttpExtract;
 import io.restassured.RestAssured;
 import io.restassured.response.Response;
 import org.assertj.core.api.Assertions;
@@ -27,6 +28,11 @@ class ApiNoEntityLeakTest {
     @Test
     void practices_API_002_responseExposesOnlyDtoFieldsNotEntityFields() {
         Response r = given().when().get("/practices/demo/v1/parents").then().extract().response();
+        // P2-117: the body assertions below are all NEGATIVE, so an error response (or a foreign
+        // server on a stale port) would satisfy them vacuously. Validate the response first —
+        // 2xx + JSON + a present `content` array — so the negative assertions can only pass on a
+        // real page rendered by this application.
+        HttpExtract.path(r, "content", "GET /practices/demo/v1/parents (PRACTICES-API-002)");
         String body = r.asString();
         // The JPA entity Parent has a `children` field (List<Child>). The DTO ParentResponse
         // collapses it to a single `childCount` integer. The entity field MUST NOT appear

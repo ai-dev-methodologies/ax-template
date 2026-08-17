@@ -65,7 +65,8 @@ class ApprovalWorkflowTestSupportDiagnosabilityTest {
                 .as("a Content-Type-less response must fail as itself, not as a parser error")
                 .isInstanceOf(AssertionError.class)
                 .isNotInstanceOf(IllegalStateException.class)
-                .hasMessageContaining("expected 200 but was 404")
+                .hasMessageContaining("expected HTTP 200")
+                .hasMessageContaining("but was 404")
                 .hasMessageContaining("RestAssured.port = " + server.getAddress().getPort())
                 .hasMessageContaining("404 Not Found");
         } finally {

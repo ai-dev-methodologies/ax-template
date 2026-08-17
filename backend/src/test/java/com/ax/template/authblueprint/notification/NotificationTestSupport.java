@@ -1,6 +1,8 @@
 package com.ax.template.authblueprint.notification;
 
+import com.ax.template.authblueprint.common.HttpExtract;
 import io.restassured.RestAssured;
+import io.restassured.response.Response;
 
 import java.util.UUID;
 
@@ -28,11 +30,12 @@ public final class NotificationTestSupport {
             .body("{\"email\":\"" + email + "\",\"password\":\"securepassword12\",\"role\":\"" + role + "\"}")
         .when().post("/api/auth/email/signup");
 
-        return given()
+        Response httpExtractResponse = given()
             .header("Content-Type", "application/json")
             .body("{\"email\":\"" + email + "\",\"password\":\"securepassword12\"}")
         .when().post("/api/auth/email/login")
-        .then().extract().path("accessToken");
+        .then().extract().response();
+        return HttpExtract.path(httpExtractResponse, "accessToken", "POST /api/auth/email/login (obtainToken)");
     }
 
     /**
@@ -41,10 +44,11 @@ public final class NotificationTestSupport {
      * {@code recipientUserId = auth.getName()}, which equals the JWT subject.
      */
     public static String resolveCallerUserId(String token) {
-        return given()
+        Response httpExtractResponse = given()
             .header("Authorization", "Bearer " + token)
         .when().get("/api/auth/me")
-        .then().extract().path("userId");
+        .then().extract().response();
+        return HttpExtract.path(httpExtractResponse, "userId", "GET /api/auth/me (resolveCallerUserId)");
     }
 
     public static void useRandomPort(int port) {

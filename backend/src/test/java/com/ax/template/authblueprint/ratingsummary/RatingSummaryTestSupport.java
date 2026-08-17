@@ -1,6 +1,8 @@
 package com.ax.template.authblueprint.ratingsummary;
 
+import com.ax.template.authblueprint.common.HttpExtract;
 import io.restassured.RestAssured;
+import io.restassured.response.Response;
 
 import java.util.UUID;
 
@@ -19,11 +21,12 @@ public final class RatingSummaryTestSupport {
             .header("Content-Type", "application/json")
             .body("{\"email\":\"" + email + "\",\"password\":\"securepassword12\",\"role\":\"" + role + "\"}")
         .when().post("/api/auth/email/signup");
-        return given()
+        Response httpExtractResponse = given()
             .header("Content-Type", "application/json")
             .body("{\"email\":\"" + email + "\",\"password\":\"securepassword12\"}")
         .when().post("/api/auth/email/login")
-        .then().extract().path("accessToken");
+        .then().extract().response();
+        return HttpExtract.path(httpExtractResponse, "accessToken", "POST /api/auth/email/login (obtainToken)");
     }
 
     public static void useRandomPort(int port) {
