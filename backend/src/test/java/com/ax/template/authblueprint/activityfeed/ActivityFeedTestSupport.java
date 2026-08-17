@@ -2,7 +2,6 @@ package com.ax.template.authblueprint.activityfeed;
 
 import com.ax.template.authblueprint.common.HttpExtract;
 
-import io.restassured.RestAssured;
 import io.restassured.response.Response;
 
 import java.util.UUID;
@@ -37,7 +36,4 @@ public final class ActivityFeedTestSupport {
         return HttpExtract.path(me, "userId", "GET /api/auth/me (userId)");
     }
 
-    public static void useRandomPort(int port) {
-        RestAssured.port = port;
-    }
 }

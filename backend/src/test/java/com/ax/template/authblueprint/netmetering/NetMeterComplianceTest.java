@@ -51,7 +51,6 @@ class NetMeterComplianceTest {
 
     @BeforeEach
     void setup() {
-        NetMeterTestSupport.useRandomPort(port);
         member = NetMeterTestSupport.obtainToken(NetMeterTestSupport.freshEmail("nm-member"), "MEMBER");
     }
 

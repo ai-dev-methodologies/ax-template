@@ -2,7 +2,6 @@ package com.ax.template.authblueprint.signedartifact;
 
 import com.ax.template.authblueprint.common.HttpExtract;
 
-import io.restassured.RestAssured;
 import io.restassured.response.Response;
 
 import javax.crypto.Mac;
@@ -36,10 +35,6 @@ public final class SignedArtifactTestSupport {
         .when().post("/api/auth/email/login");
         return HttpExtract.path(login, "accessToken",
             "POST /api/auth/email/login (accessToken for " + role + ")");
-    }
-
-    public static void useRandomPort(int port) {
-        RestAssured.port = port;
     }
 
     /** SIGNED-ALG-ALLOWLIST-001 negative — an Unsecured JWS ({@code alg:none}), empty signature. */

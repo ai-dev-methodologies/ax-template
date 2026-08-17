@@ -43,7 +43,6 @@ class DunningComplianceTest {
 
     @BeforeEach
     void setup() {
-        DunningTestSupport.useRandomPort(port);
         member = DunningTestSupport.obtainToken(DunningTestSupport.freshEmail("dun-member"), "MEMBER");
     }
 

@@ -41,7 +41,6 @@ class SaturatingBalanceComplianceTest {
 
     @BeforeEach
     void setup() {
-        SaturatingBalanceTestSupport.useRandomPort(port);
         token = SaturatingBalanceTestSupport.obtainToken(
             SaturatingBalanceTestSupport.freshEmail("satbal"), "MEMBER");
     }

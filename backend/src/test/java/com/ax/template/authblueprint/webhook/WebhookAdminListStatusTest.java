@@ -1,6 +1,5 @@
 package com.ax.template.authblueprint.webhook;
 
-import io.restassured.RestAssured;
 import io.restassured.http.ContentType;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -64,7 +63,8 @@ class WebhookAdminListStatusTest {
 
     @BeforeEach
     void setup() {
-        RestAssured.port = port;
+        // P2-120: RestAssured.port is published by com.ax.template.authblueprint.common.AxPort
+        // from the @LocalServerPort field above, before this method runs.
         adminToken = obtainAdminToken();
     }
 

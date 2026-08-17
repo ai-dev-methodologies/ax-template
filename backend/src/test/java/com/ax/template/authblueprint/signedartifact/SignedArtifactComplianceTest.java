@@ -32,7 +32,6 @@ class SignedArtifactComplianceTest {
 
     @BeforeEach
     void setup() {
-        SignedArtifactTestSupport.useRandomPort(port);
         issuer = SignedArtifactTestSupport.obtainToken(
             SignedArtifactTestSupport.freshEmail("sart-issuer"), "MEMBER");
     }

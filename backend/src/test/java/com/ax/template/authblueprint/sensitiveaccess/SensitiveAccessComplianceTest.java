@@ -35,7 +35,6 @@ class SensitiveAccessComplianceTest {
 
     @BeforeEach
     void setup() {
-        SensitiveAccessTestSupport.useRandomPort(port);
         member = SensitiveAccessTestSupport.obtainToken(SensitiveAccessTestSupport.freshEmail("sa-member"), "MEMBER");
         admin = SensitiveAccessTestSupport.obtainToken(SensitiveAccessTestSupport.freshEmail("sa-admin"), "ADMIN");
     }

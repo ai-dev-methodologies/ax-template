@@ -27,7 +27,6 @@ class SearchAuthZTest {
 
     @BeforeEach
     void setup() {
-        SearchTestSupport.useRandomPort(port);
         repository.deleteAll();
     }
 

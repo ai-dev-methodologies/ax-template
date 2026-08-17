@@ -41,7 +41,6 @@ class SettlementComplianceTest {
 
     @BeforeEach
     void setup() {
-        SettlementTestSupport.useRandomPort(port);
         member = SettlementTestSupport.obtainToken(SettlementTestSupport.freshEmail("settle-member"), "MEMBER");
     }
 

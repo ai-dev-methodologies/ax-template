@@ -39,7 +39,6 @@ class AccessGrantComplianceTest {
 
     @BeforeEach
     void setup() {
-        AccessGrantTestSupport.useRandomPort(port);
         member = AccessGrantTestSupport.obtainToken(AccessGrantTestSupport.freshEmail("ag-member"), "MEMBER");
     }
 

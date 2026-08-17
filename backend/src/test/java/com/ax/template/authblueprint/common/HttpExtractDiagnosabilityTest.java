@@ -5,7 +5,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.sun.net.httpserver.HttpServer;
-import io.restassured.RestAssured;
 import io.restassured.response.Response;
 import java.io.IOException;
 import java.io.OutputStream;
@@ -29,7 +28,6 @@ import org.junit.jupiter.api.Test;
 class HttpExtractDiagnosabilityTest {
 
     private static HttpServer server;
-    private static int previousPort;
 
     @BeforeAll
     static void startStub() throws IOException {
@@ -77,13 +75,16 @@ class HttpExtractDiagnosabilityTest {
         });
 
         server.start();
-        previousPort = RestAssured.port;
-        RestAssured.port = server.getAddress().getPort();
+        // P2-120: this stub is deliberately NOT this application, so the aim is declared through
+        // the one API that says so rather than by assigning the process-global by hand. AxPort
+        // records the override, so a failure below reports "STUB OVERRIDE" instead of leaving a
+        // reader to wonder whether the port was simply wrong.
+        AxPort.overrideForStub(server.getAddress().getPort());
     }
 
     @AfterAll
     static void stopStub() {
-        RestAssured.port = previousPort;
+        AxPort.restoreAfterStub();
         server.stop(0);
     }
 

@@ -66,7 +66,6 @@ class RealtimePolicyComplianceTest {
 
     @BeforeEach
     void setup() {
-        RestAssured.port = port;
         baseUrl = "http://localhost:" + port;
     }
 

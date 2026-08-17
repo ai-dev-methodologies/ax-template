@@ -33,7 +33,6 @@ class OrderQuantizationComplianceTest {
 
     @BeforeEach
     void setup() {
-        OrderQuantizationTestSupport.useRandomPort(port);
         member = OrderQuantizationTestSupport.obtainToken(
             OrderQuantizationTestSupport.freshEmail("oq-member"), "MEMBER");
     }

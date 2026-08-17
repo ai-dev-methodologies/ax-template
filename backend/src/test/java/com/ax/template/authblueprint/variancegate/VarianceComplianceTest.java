@@ -43,7 +43,6 @@ class VarianceComplianceTest {
 
     @BeforeEach
     void setup() {
-        VarianceTestSupport.useRandomPort(port);
         member = VarianceTestSupport.obtainToken(VarianceTestSupport.freshEmail("vg-member"), "MEMBER");
     }
 

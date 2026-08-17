@@ -2,7 +2,6 @@ package com.ax.template.authblueprint.i18n;
 
 import io.restassured.RestAssured;
 import io.restassured.response.Response;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -45,11 +44,6 @@ class I18nPolicyComplianceTest {
     @LocalServerPort int port;
 
     @Autowired MessageSource messageSource;
-
-    @BeforeEach
-    void setup() {
-        RestAssured.port = port;
-    }
 
     // ── I18N-LOCALE-NEG-001 ──────────────────────────────────────────────────
     @Test

@@ -3,7 +3,6 @@ package com.ax.template.authblueprint.ratingsummary;
 import io.restassured.http.ContentType;
 import io.restassured.response.Response;
 import org.hamcrest.Matchers;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -31,11 +30,6 @@ class RatingSummaryComplianceTest {
     @LocalServerPort int port;
 
     @Autowired ReviewRepository reviewRepository;
-
-    @BeforeEach
-    void setup() {
-        RatingSummaryTestSupport.useRandomPort(port);
-    }
 
     // ─── CONSISTENCY family ─────────────────────────────────────────────────
 

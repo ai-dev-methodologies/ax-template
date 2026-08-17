@@ -41,7 +41,6 @@ class MeceComplianceTest {
 
     @BeforeEach
     void setup() {
-        MeceTestSupport.useRandomPort(port);
         member = MeceTestSupport.obtainToken(MeceTestSupport.freshEmail("mece-member"), "MEMBER");
     }
 

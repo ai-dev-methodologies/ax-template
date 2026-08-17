@@ -1608,3 +1608,46 @@ items:
   # self-test (registered live in run-all-guards.sh [116]) independently confirms this
   # fixture's exit=1 behavior via direct execution, unrelated to this mutation-based registry.
   # min_items is UNCHANGED by this disclosure: no item was added, so the floor stays 97.
+
+  # ── restassured_port_single_writer/fail_direct_assignment: NOT REGISTERED — measured
+  #    non-single-anchor-coverable, disclosed rather than forced ─────────────────────────────
+  # fixture: SampleComplianceTest.java + SampleTestSupport.java (BACKLOG P2-120, guard [117])
+  #          deliberately span BOTH of that guard's detectors, and the files say so in their
+  #          own javadoc. SampleComplianceTest trips detector (A) three times — a bare
+  #          `RestAssured.port = port;`, a fully-qualified `io.restassured.RestAssured.port =`,
+  #          and a compound `RestAssured.port += 1` — while SampleTestSupport trips ONLY
+  #          detector (B), `import static io.restassured.RestAssured.port;`, the simple-name
+  #          evasion that (A) cannot see because after that import the write is spelled
+  #          `port = somewhereElse;` and the token `RestAssured.port` never appears. Both
+  #          detectors are therefore independently load-bearing on this fixture ON PURPOSE, so
+  #          that neutering either one alone is regression-tested as insufficient.
+  # WHY NO SINGLE-ANCHOR KILL-PROOF ITEM EXISTS FOR THIS FIXTURE (measured, not assumed):
+  #   MUT-A — neuter (A) alone (the ASSIGN pattern's `\bRestAssured\s*\.\s*port\s*` anchor
+  #           rewritten to `\bZZZNEVERMATCH\s*\.\s*port\s*`, so no qualified write is ever
+  #           flagged): guard still exits 1 on this fixture — the (B)-only static-import
+  #           violations survive. CORRECTED 2026-08-17 (fable5 adversarial review round):
+  #           this used to say "and is the sole line reported", which was true when (B) had
+  #           one case. The fixture now also carries the wildcard form
+  #           (`import static io.restassured.RestAssured.*;` + an unqualified `port = ...`),
+  #           so MUT-A now reports TWO lines — SampleTestSupport.java:3 and
+  #           SampleWildcardSupport.java:3. Re-measured: MUT-A exit=1 (2 lines), MUT-B
+  #           (both neutered) exit=0, pass-fixture-minus-registration 0->1 — the other
+  #           three claims below still hold verbatim.
+  #   MUT-B — neuter BOTH simultaneously (MUT-A plus the STATIC_IMPORT pattern's
+  #           `import\s+static\s+io\s*\.\s*restassured` anchor rewritten to
+  #           `ZZZNEVERMATCH\s+static\s+io\s*\.\s*restassured`): guard exits 0 with
+  #           "PASS — 2 scanned file(s)", confirming the fixture's exit=1 is produced by the
+  #           guard's actual detection logic and by nothing else.
+  # Reproduced directly against this exact guard + fixture pair (writing each mutated copy to a
+  # scratch path, then running `bash <mutated copy> --root .../fail_direct_assignment`):
+  # baseline exit=1, MUT-A exit=1, MUT-B exit=0 — matching the prediction above precisely.
+  # Registering the ASSIGN anchor alone as this fixture's kill-proof would be a FALSE claim, for
+  # the same reason [116]'s and [114]'s non-registrations state: the guard's own header declares
+  # these two structurally distinct forbidden shapes, and a nominal single anchor here would be
+  # a registered proof that is itself vacuous — precisely what [87] exists to prevent. A THIRD
+  # measurement, orthogonal to both detectors, additionally pins the SUBJECT-derivation claim:
+  # copying `fixtures/restassured_port_single_writer/pass_via_extension` and deleting ONLY its
+  # `backend/src/test/resources/META-INF/services/org.junit.jupiter.api.extension.Extension`
+  # flips that tree 0 -> 1 (its AxPort.java stops being the rule's subject and is scanned),
+  # proving the exclusion is derived from the registration rather than from an allowlist.
+  # min_items is UNCHANGED by this disclosure: no item was added, so the floor stays 97.

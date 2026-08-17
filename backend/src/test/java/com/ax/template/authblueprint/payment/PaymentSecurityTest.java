@@ -50,7 +50,6 @@ class PaymentSecurityTest {
 
     @BeforeEach
     void setup() {
-        RestAssured.port = port;
         // Attach test log appender to root Logback logger to capture all log output.
         rootLogger = (Logger) LoggerFactory.getLogger(Logger.ROOT_LOGGER_NAME);
         testAppender = new TestLogAppender();

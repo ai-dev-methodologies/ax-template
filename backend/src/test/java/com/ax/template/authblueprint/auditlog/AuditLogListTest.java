@@ -37,7 +37,6 @@ class AuditLogListTest {
 
     @BeforeEach
     void setup() {
-        AuditLogTestSupport.useRandomPort(port);
         token = AuditLogTestSupport.obtainToken(
             AuditLogTestSupport.freshEmail("list"), "ADMIN");
 

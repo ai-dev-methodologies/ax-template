@@ -40,7 +40,6 @@ class ProblemDetailsComplianceTest {
 
     @BeforeEach
     void setUp() {
-        RestAssured.port = port;
         String email = "problem-" + UUID.randomUUID() + "@example.com";
         given().header("Content-Type", "application/json")
             .body("{\"email\":\"" + email + "\",\"password\":\"securepassword12\",\"role\":\"MEMBER\"}")

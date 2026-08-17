@@ -42,7 +42,6 @@ class DuplicateSubmissionComplianceTest {
 
     @BeforeEach
     void setup() {
-        DuplicateSubmissionTestSupport.useRandomPort(port);
         member = DuplicateSubmissionTestSupport.obtainToken(
             DuplicateSubmissionTestSupport.freshEmail("dupkey-member"), "MEMBER");
     }

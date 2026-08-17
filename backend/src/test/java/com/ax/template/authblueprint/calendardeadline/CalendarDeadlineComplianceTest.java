@@ -40,7 +40,6 @@ class CalendarDeadlineComplianceTest {
 
     @BeforeEach
     void setup() {
-        CalendarDeadlineTestSupport.useRandomPort(port);
         member = CalendarDeadlineTestSupport.obtainToken(
             CalendarDeadlineTestSupport.freshEmail("cal-member"), "MEMBER");
     }

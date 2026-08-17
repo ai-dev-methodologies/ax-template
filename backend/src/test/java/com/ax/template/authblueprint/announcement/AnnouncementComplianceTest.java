@@ -39,7 +39,6 @@ class AnnouncementComplianceTest {
 
     @BeforeEach
     void setup() {
-        AnnouncementTestSupport.useRandomPort(port);
         admin = AnnouncementTestSupport.obtainToken(AnnouncementTestSupport.freshEmail("ann-admin"), "ADMIN");
         member = AnnouncementTestSupport.obtainToken(AnnouncementTestSupport.freshEmail("ann-member"), "MEMBER");
     }

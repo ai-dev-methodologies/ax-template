@@ -2,7 +2,6 @@ package com.ax.template.authblueprint.offereligibility;
 
 import io.restassured.http.ContentType;
 import org.hamcrest.Matchers;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -30,11 +29,6 @@ import static io.restassured.RestAssured.given;
 class OfferEligibilityComplianceTest {
 
     @LocalServerPort int port;
-
-    @BeforeEach
-    void setup() {
-        OfferEligibilityTestSupport.useRandomPort(port);
-    }
 
     // ─── QUALIFIER-MINQTY family ─────────────────────────────────────────────
 

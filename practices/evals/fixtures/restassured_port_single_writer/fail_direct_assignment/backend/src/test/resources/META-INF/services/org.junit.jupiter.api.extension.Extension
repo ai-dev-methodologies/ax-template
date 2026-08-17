@@ -1,0 +1,2 @@
+# ServiceLoader registration — this is what makes AxPort the SUBJECT of the rule.
+com.ax.template.authblueprint.common.AxPort

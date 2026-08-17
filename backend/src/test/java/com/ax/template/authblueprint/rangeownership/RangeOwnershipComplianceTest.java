@@ -42,7 +42,6 @@ class RangeOwnershipComplianceTest {
 
     @BeforeEach
     void setup() {
-        RangeOwnershipTestSupport.useRandomPort(port);
         member = RangeOwnershipTestSupport.obtainToken(RangeOwnershipTestSupport.freshEmail("rng-member"), "MEMBER");
     }
 

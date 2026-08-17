@@ -39,7 +39,6 @@ class CashInLieuComplianceTest {
 
     @BeforeEach
     void setup() {
-        CashInLieuTestSupport.useRandomPort(port);
         member = CashInLieuTestSupport.obtainToken(CashInLieuTestSupport.freshEmail("cil-member"), "MEMBER");
     }
 

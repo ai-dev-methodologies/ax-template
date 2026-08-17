@@ -8,7 +8,6 @@ import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.ss.usermodel.WorkbookFactory;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
@@ -46,11 +45,6 @@ class ReportExportComplianceTest {
     @LocalServerPort int port;
 
     @Autowired ExportWorker worker;
-
-    @BeforeEach
-    void setup() {
-        ReportExportTestSupport.useRandomPort(port);
-    }
 
     // ─── AUTHZ family ────────────────────────────────────────────────────────
 

@@ -41,7 +41,6 @@ class ThresholdTerminalComplianceTest {
 
     @BeforeEach
     void setup() {
-        ThresholdTestSupport.useRandomPort(port);
         member = ThresholdTestSupport.obtainToken(ThresholdTestSupport.freshEmail("ttd-member"), "MEMBER");
     }
 

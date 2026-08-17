@@ -44,7 +44,6 @@ class CommerceOrderComplianceTest {
 
     @BeforeEach
     void setup() {
-        CommerceOrderTestSupport.useRandomPort(port);
         memberToken = CommerceOrderTestSupport.obtainToken(
             CommerceOrderTestSupport.freshEmail("co-member"), "MEMBER");
         otherToken = CommerceOrderTestSupport.obtainToken(

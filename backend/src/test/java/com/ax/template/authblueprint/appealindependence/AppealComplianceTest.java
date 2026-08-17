@@ -4,7 +4,6 @@ import io.restassured.http.ContentType;
 import io.restassured.response.ExtractableResponse;
 import io.restassured.response.Response;
 
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -31,10 +30,6 @@ class AppealComplianceTest {
     @LocalServerPort int port;
     @Autowired JdbcTemplate jdbcTemplate;
 
-    @BeforeEach
-    void setup() {
-        AppealTestSupport.useRandomPort(port);
-    }
 
     private ExtractableResponse<Response> fileOriginal(String token, String outcome) {
         return given().header("Authorization", "Bearer " + token).contentType(ContentType.JSON)

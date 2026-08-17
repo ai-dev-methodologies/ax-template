@@ -1,7 +1,6 @@
 package com.ax.template.authblueprint.payment;
 
 import io.restassured.RestAssured;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -44,11 +43,6 @@ class PaymentReconciliationTest {
 
     @Autowired
     JdbcTemplate jdbcTemplate;
-
-    @BeforeEach
-    void setup() {
-        RestAssured.port = port;
-    }
 
     // ─── PAYMENT-RECON-001: Ledger immutability ───────────────────────────────
 

@@ -30,7 +30,6 @@ class SearchQueryTest {
 
     @BeforeEach
     void setup() {
-        SearchTestSupport.useRandomPort(port);
         repository.deleteAll();
     }
 

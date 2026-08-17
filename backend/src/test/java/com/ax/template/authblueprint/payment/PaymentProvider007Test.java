@@ -65,7 +65,6 @@ class PaymentProvider007Test {
 
     @BeforeEach
     void setup() {
-        RestAssured.port = port;
         rootLogger = (Logger) LoggerFactory.getLogger(Logger.ROOT_LOGGER_NAME);
         warnAppender = new WarnLogCapturingAppender();
         warnAppender.start();

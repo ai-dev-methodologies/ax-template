@@ -42,7 +42,6 @@ class RegisterComplianceTest {
 
     @BeforeEach
     void setup() {
-        RegisterTestSupport.useRandomPort(port);
         member = RegisterTestSupport.obtainToken(RegisterTestSupport.freshEmail("reg-member"), "MEMBER");
     }
 

@@ -44,7 +44,6 @@ class StateMutationComplianceTest {
 
     @BeforeEach
     void setup() {
-        StateMutationTestSupport.useRandomPort(port);
         member = StateMutationTestSupport.obtainToken(StateMutationTestSupport.freshEmail("sm-member"), "MEMBER");
     }
 

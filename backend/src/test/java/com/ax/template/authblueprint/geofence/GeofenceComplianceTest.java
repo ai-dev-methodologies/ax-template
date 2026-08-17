@@ -39,7 +39,6 @@ class GeofenceComplianceTest {
 
     @BeforeEach
     void setup() {
-        GeofenceTestSupport.useRandomPort(port);
         member = GeofenceTestSupport.obtainToken(GeofenceTestSupport.freshEmail("geofence-member"), "MEMBER");
     }
 

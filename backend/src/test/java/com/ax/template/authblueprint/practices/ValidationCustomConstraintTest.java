@@ -7,7 +7,6 @@ import static org.hamcrest.Matchers.hasItem;
 
 import io.restassured.RestAssured;
 import java.util.Map;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -20,11 +19,6 @@ class ValidationCustomConstraintTest {
 
     @LocalServerPort
     private int port;
-
-    @BeforeEach
-    void setUp() {
-        RestAssured.port = port;
-    }
 
     @Test
     void practices_VAL_003_invalidUsernameRejectedByCustomConstraint() {

@@ -28,7 +28,6 @@ class SearchIndexTest {
 
     @BeforeEach
     void setup() {
-        SearchTestSupport.useRandomPort(port);
         repository.deleteAll();
     }
 

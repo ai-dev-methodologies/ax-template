@@ -36,7 +36,6 @@ class DerivedStatementComplianceTest {
 
     @BeforeEach
     void setup() {
-        DerivedStatementTestSupport.useRandomPort(port);
         token = DerivedStatementTestSupport.obtainToken(
             DerivedStatementTestSupport.freshEmail("stmt"), "MEMBER");
     }

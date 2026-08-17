@@ -2,7 +2,6 @@ package com.ax.template.authblueprint.secretsmanagement;
 
 import io.micrometer.core.instrument.Meter;
 import io.micrometer.core.instrument.MeterRegistry;
-import io.restassured.RestAssured;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -39,7 +38,6 @@ class SecretsComplianceTest {
 
     @BeforeEach
     void setUp() {
-        RestAssured.port = port;
         memberName = "sec-" + UUID.randomUUID() + "@example.com";
         member = tokenFor(memberName, "MEMBER");
         other = tokenFor("sec-other-" + UUID.randomUUID() + "@example.com", "MEMBER");

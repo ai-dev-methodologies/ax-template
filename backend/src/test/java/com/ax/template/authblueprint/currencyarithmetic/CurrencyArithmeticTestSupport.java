@@ -2,7 +2,6 @@ package com.ax.template.authblueprint.currencyarithmetic;
 
 import com.ax.template.authblueprint.common.HttpExtract;
 
-import io.restassured.RestAssured;
 import io.restassured.response.Response;
 
 import java.util.UUID;
@@ -30,7 +29,4 @@ public final class CurrencyArithmeticTestSupport {
             "POST /api/auth/email/login (accessToken for " + role + ")");
     }
 
-    public static void useRandomPort(int port) {
-        RestAssured.port = port;
-    }
 }

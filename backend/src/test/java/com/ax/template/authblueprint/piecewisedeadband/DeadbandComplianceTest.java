@@ -33,7 +33,6 @@ class DeadbandComplianceTest {
 
     @BeforeEach
     void setup() {
-        DeadbandTestSupport.useRandomPort(port);
         member = DeadbandTestSupport.obtainToken(DeadbandTestSupport.freshEmail("pwdb-member"), "MEMBER");
     }
 

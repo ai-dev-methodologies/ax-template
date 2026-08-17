@@ -34,7 +34,6 @@ class QueryGuardComplianceTest {
 
     @BeforeEach
     void setup() {
-        QueryGuardTestSupport.useRandomPort(port);
         member = QueryGuardTestSupport.obtainToken(QueryGuardTestSupport.freshEmail("qg-member"), "MEMBER");
     }
 

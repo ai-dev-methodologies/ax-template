@@ -6,7 +6,6 @@ import com.ax.template.authblueprint.common.HttpExtract;
 import io.restassured.RestAssured;
 import io.restassured.response.Response;
 import org.assertj.core.api.Assertions;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -19,11 +18,6 @@ class ApiNoEntityLeakTest {
 
     @LocalServerPort
     private int port;
-
-    @BeforeEach
-    void setUp() {
-        RestAssured.port = port;
-    }
 
     @Test
     void practices_API_002_responseExposesOnlyDtoFieldsNotEntityFields() {

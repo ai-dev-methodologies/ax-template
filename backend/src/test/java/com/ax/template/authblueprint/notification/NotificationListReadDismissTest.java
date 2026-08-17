@@ -33,7 +33,6 @@ class NotificationListReadDismissTest {
 
     @BeforeEach
     void setup() {
-        NotificationTestSupport.useRandomPort(port);
         token = NotificationTestSupport.obtainToken(
             NotificationTestSupport.freshEmail("list-read"), "MEMBER");
         userId = NotificationTestSupport.resolveCallerUserId(token);

@@ -33,7 +33,6 @@ class ExceptionGateComplianceTest {
 
     @BeforeEach
     void setup() {
-        ExceptionGateTestSupport.useRandomPort(port);
         member = ExceptionGateTestSupport.obtainToken(ExceptionGateTestSupport.freshEmail("eg-member"), "MEMBER");
     }
 

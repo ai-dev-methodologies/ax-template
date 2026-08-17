@@ -2,7 +2,6 @@ package com.ax.template.authblueprint.featureflags;
 
 import io.restassured.RestAssured;
 import io.restassured.http.ContentType;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -52,11 +51,6 @@ class FeatureFlagFlowIT {
 
     @LocalServerPort
     int port;
-
-    @BeforeEach
-    void setUp() {
-        RestAssured.port = port;
-    }
 
     // ─── helpers ─────────────────────────────────────────────────────────────
 

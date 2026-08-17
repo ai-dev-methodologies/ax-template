@@ -43,7 +43,6 @@ class EventIngestComplianceTest {
 
     @BeforeEach
     void setup() {
-        EventIngestTestSupport.useRandomPort(port);
         member = EventIngestTestSupport.obtainToken(EventIngestTestSupport.freshEmail("ei-member"), "MEMBER");
     }
 

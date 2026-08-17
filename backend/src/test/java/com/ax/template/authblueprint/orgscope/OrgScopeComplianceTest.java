@@ -43,7 +43,6 @@ class OrgScopeComplianceTest {
 
     @BeforeEach
     void setup() {
-        OrgScopeTestSupport.useRandomPort(port);
         member = OrgScopeTestSupport.obtainToken(OrgScopeTestSupport.freshEmail("orgscope-member"), "MEMBER");
         memberPrincipal = given().header("Authorization", "Bearer " + member)
             .when().get("/api/auth/me").then().statusCode(200).extract().path("userId");

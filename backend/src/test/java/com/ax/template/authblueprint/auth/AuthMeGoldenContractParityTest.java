@@ -5,8 +5,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Set;
 
-import io.restassured.RestAssured;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
@@ -101,10 +99,6 @@ class AuthMeGoldenContractParityTest {
     @Autowired PasswordEncoder passwordEncoder;
     @Autowired JwtTokenService jwtTokenService;
 
-    @BeforeEach
-    void setUp() {
-        RestAssured.port = port;
-    }
 
     /** Seeds a user + one linked OAuth provider directly, mirroring the golden's fixed values. */
     private String seedUserAndLinkedProviderThenIssueToken() {

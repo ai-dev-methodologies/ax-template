@@ -34,7 +34,6 @@ class CorrectionRefireComplianceTest {
 
     @BeforeEach
     void setup() {
-        CorrectionRefireTestSupport.useRandomPort(port);
         member = CorrectionRefireTestSupport.obtainToken(
             CorrectionRefireTestSupport.freshEmail("crf-member"), "MEMBER");
     }

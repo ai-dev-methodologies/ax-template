@@ -44,7 +44,6 @@ class CommerceCatalogComplianceTest {
 
     @BeforeEach
     void setup() {
-        CatalogTestSupport.useRandomPort(port);
         member = CatalogTestSupport.obtainToken(CatalogTestSupport.freshEmail("cat-member"), "MEMBER");
     }
 

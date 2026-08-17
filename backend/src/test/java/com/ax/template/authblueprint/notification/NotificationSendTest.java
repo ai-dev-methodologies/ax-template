@@ -36,7 +36,6 @@ class NotificationSendTest {
 
     @BeforeEach
     void setup() {
-        NotificationTestSupport.useRandomPort(port);
         email.reset();
     }
 

@@ -58,7 +58,6 @@ class DatePlausibilityComplianceTest {
 
     @BeforeEach
     void setup() {
-        PlausibilityTestSupport.useRandomPort(port);
         member = PlausibilityTestSupport.obtainToken(PlausibilityTestSupport.freshEmail("date-plaus-member"), "MEMBER");
     }
 

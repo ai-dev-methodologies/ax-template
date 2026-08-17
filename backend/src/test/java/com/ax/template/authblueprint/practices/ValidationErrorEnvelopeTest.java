@@ -10,7 +10,6 @@ import static org.hamcrest.Matchers.notNullValue;
 
 import io.restassured.RestAssured;
 import java.util.Map;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -23,11 +22,6 @@ class ValidationErrorEnvelopeTest {
 
     @LocalServerPort
     private int port;
-
-    @BeforeEach
-    void setUp() {
-        RestAssured.port = port;
-    }
 
     @Test
     void practices_VAL_004_envelopeHasRfc7807FieldsPlusErrorsArray() {

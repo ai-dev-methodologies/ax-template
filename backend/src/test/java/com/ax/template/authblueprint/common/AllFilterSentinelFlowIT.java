@@ -7,7 +7,6 @@ import com.ax.template.authblueprint.emailoutbox.EmailTemplate;
 import com.ax.template.authblueprint.emailoutbox.EmailTemplateRepository;
 import com.ax.template.authblueprint.scheduledtask.ScheduledTask;
 import com.ax.template.authblueprint.scheduledtask.ScheduledTaskService;
-import io.restassured.RestAssured;
 import io.restassured.http.ContentType;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -77,7 +76,6 @@ class AllFilterSentinelFlowIT {
 
     @BeforeEach
     void setUp() {
-        RestAssured.port = port;
         adminToken = obtainAdminToken();
     }
 

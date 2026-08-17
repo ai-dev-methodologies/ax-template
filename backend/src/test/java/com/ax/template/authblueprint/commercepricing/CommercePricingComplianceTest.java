@@ -33,7 +33,6 @@ class CommercePricingComplianceTest {
 
     @BeforeEach
     void setup() {
-        PricingTestSupport.useRandomPort(port);
         memberToken = PricingTestSupport.obtainToken(
             PricingTestSupport.freshEmail("pricing-member"), "MEMBER");
     }

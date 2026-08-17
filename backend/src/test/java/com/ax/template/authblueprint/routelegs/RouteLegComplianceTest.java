@@ -48,7 +48,6 @@ class RouteLegComplianceTest {
 
     @BeforeEach
     void setup() {
-        RouteLegTestSupport.useRandomPort(port);
         member = RouteLegTestSupport.obtainToken(RouteLegTestSupport.freshEmail("route-member"), "MEMBER");
     }
 

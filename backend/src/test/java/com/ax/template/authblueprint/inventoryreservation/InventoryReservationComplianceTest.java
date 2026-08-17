@@ -43,7 +43,6 @@ class InventoryReservationComplianceTest {
 
     @BeforeEach
     void setup() {
-        InventoryReservationTestSupport.useRandomPort(port);
         member = InventoryReservationTestSupport.obtainToken(
             InventoryReservationTestSupport.freshEmail("invres-member"), "MEMBER");
     }

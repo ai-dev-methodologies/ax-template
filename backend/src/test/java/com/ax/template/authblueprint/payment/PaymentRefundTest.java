@@ -4,7 +4,6 @@ import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.restassured.RestAssured;
 import io.restassured.response.Response;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -54,11 +53,6 @@ class PaymentRefundTest {
 
     @Autowired
     MeterRegistry meterRegistry;
-
-    @BeforeEach
-    void setup() {
-        RestAssured.port = port;
-    }
 
     // ─── PAYMENT-REFUND-001 (positive: within 30-day window) ─────────────────
 

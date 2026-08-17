@@ -1,6 +1,5 @@
 package com.ax.template.authblueprint.common;
 
-import io.restassured.RestAssured;
 import io.restassured.http.ContentType;
 import java.util.UUID;
 import org.hamcrest.Matchers;
@@ -41,7 +40,6 @@ class GlobalProblemDetailAdviceTest {
 
     @BeforeEach
     void setup() {
-        RestAssured.port = port;
         String email = "common-advice-" + UUID.randomUUID() + "@example.com";
         given()
             .contentType(ContentType.JSON)

@@ -1,6 +1,5 @@
 package com.ax.template.authblueprint.auditlog;
 
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -32,10 +31,6 @@ class AuditLogRecordTest {
     @Autowired AuditTestFixture.AuditedSampleService sampleService;
     @Autowired AuditLogRepository repository;
 
-    @BeforeEach
-    void setup() {
-        AuditLogTestSupport.useRandomPort(port);
-    }
 
     @Test
     @Tag("AUDIT_LOG")

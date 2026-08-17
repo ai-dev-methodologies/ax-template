@@ -46,7 +46,6 @@ class TimedOfferComplianceTest {
 
     @BeforeEach
     void setup() {
-        TimedOfferTestSupport.useRandomPort(port);
         member = TimedOfferTestSupport.obtainToken(TimedOfferTestSupport.freshEmail("to-member"), "MEMBER");
     }
 

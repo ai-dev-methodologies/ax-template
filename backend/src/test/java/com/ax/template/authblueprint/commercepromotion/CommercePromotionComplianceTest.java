@@ -52,7 +52,6 @@ class CommercePromotionComplianceTest {
 
     @BeforeEach
     void setup() {
-        PromotionTestSupport.useRandomPort(port);
         memberToken = PromotionTestSupport.obtainToken(
             PromotionTestSupport.freshEmail("promo-member"), "MEMBER");
     }

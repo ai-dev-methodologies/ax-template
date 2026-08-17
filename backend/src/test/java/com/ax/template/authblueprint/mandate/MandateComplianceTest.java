@@ -43,7 +43,6 @@ class MandateComplianceTest {
 
     @BeforeEach
     void setup() {
-        MandateTestSupport.useRandomPort(port);
         member = MandateTestSupport.obtainToken(MandateTestSupport.freshEmail("mandate-member"), "MEMBER");
     }
 

@@ -3,7 +3,6 @@ package com.ax.template.authblueprint.facetcount;
 import io.restassured.response.ExtractableResponse;
 import io.restassured.response.Response;
 
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
@@ -29,11 +28,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 class FacetCountComplianceTest {
 
     @LocalServerPort int port;
-
-    @BeforeEach
-    void setup() {
-        FacetCountTestSupport.useRandomPort(port);
-    }
 
     private String createItem(String token, String category, String status) {
         return given().header("Authorization", "Bearer " + token).header("Content-Type", "application/json")

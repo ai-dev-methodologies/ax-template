@@ -1,6 +1,5 @@
 package com.ax.template.authblueprint.filestorage;
 
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -25,11 +24,6 @@ class FileStorageUploadTest {
 
     @Autowired StoredFileRepository repository;
     @Autowired FileStorageProperties properties;
-
-    @BeforeEach
-    void setup() {
-        FileStorageTestSupport.useRandomPort(port);
-    }
 
     @Test
     @Tag("FILE_STORAGE")

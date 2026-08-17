@@ -2,8 +2,6 @@ package com.ax.template.authblueprint.apiversioning;
 
 import io.micrometer.core.instrument.Meter;
 import io.micrometer.core.instrument.MeterRegistry;
-import io.restassured.RestAssured;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -42,10 +40,6 @@ class ApiVersioningComplianceTest {
     @Autowired
     MeterRegistry registry;
 
-    @BeforeEach
-    void setUp() {
-        RestAssured.port = port;
-    }
 
     // ── VERSION-NEGOTIATION-001 ──────────────────────────────────────────────
 

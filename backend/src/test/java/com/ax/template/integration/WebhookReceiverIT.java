@@ -1,9 +1,7 @@
 package com.ax.template.integration;
 
 import com.ax.template.authblueprint.AuthBlueprintBackendApplication;
-import io.restassured.RestAssured;
 import io.restassured.http.ContentType;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -44,11 +42,6 @@ class WebhookReceiverIT {
 
     @LocalServerPort
     private int port;
-
-    @BeforeEach
-    void setUp() {
-        RestAssured.port = port;
-    }
 
     @Test
     @DisplayName("POST without X-Hub-Signature-256 header returns 401")

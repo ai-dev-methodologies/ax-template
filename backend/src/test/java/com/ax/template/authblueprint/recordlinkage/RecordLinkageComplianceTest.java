@@ -41,7 +41,6 @@ class RecordLinkageComplianceTest {
 
     @BeforeEach
     void setup() {
-        LinkageTestSupport.useRandomPort(port);
         member = LinkageTestSupport.obtainToken(LinkageTestSupport.freshEmail("rl-member"), "MEMBER");
     }
 

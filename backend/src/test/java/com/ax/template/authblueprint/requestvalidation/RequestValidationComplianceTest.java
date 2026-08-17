@@ -2,7 +2,6 @@ package com.ax.template.authblueprint.requestvalidation;
 
 import io.micrometer.core.instrument.Meter;
 import io.micrometer.core.instrument.MeterRegistry;
-import io.restassured.RestAssured;
 import io.restassured.path.json.JsonPath;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
@@ -38,7 +37,6 @@ class RequestValidationComplianceTest {
 
     @BeforeEach
     void setUp() {
-        RestAssured.port = port;
         String email = "reqval-" + UUID.randomUUID() + "@example.com";
         given().header("Content-Type", "application/json")
             .body("{\"email\":\"" + email + "\",\"password\":\"securepassword12\",\"role\":\"MEMBER\"}")

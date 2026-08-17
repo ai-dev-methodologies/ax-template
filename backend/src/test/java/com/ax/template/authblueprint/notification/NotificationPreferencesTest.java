@@ -29,7 +29,6 @@ class NotificationPreferencesTest {
 
     @BeforeEach
     void setup() {
-        NotificationTestSupport.useRandomPort(port);
         token = NotificationTestSupport.obtainToken(
             NotificationTestSupport.freshEmail("prefs"), "MEMBER");
         userId = NotificationTestSupport.resolveCallerUserId(token);

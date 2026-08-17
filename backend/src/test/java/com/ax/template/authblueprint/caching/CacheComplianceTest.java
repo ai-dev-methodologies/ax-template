@@ -3,7 +3,6 @@ package com.ax.template.authblueprint.caching;
 import io.micrometer.core.instrument.Meter;
 import io.micrometer.core.instrument.MeterRegistry;
 import org.junit.jupiter.api.Tag;
-import io.restassured.RestAssured;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -44,7 +43,6 @@ class CacheComplianceTest {
 
     @BeforeEach
     void setUp() {
-        RestAssured.port = port;
         token = obtainToken("cache-" + UUID.randomUUID() + "@example.com");
     }
 

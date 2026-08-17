@@ -38,7 +38,6 @@ class TierLadderComplianceTest {
 
     @BeforeEach
     void setup() {
-        TierTestSupport.useRandomPort(port);
         member = TierTestSupport.obtainToken(TierTestSupport.freshEmail("tier-member"), "MEMBER");
     }
 

@@ -29,7 +29,6 @@ class TieredAuthorityComplianceTest {
 
     @BeforeEach
     void setup() {
-        TieredAuthorityTestSupport.useRandomPort(port);
         admin = TieredAuthorityTestSupport.obtainToken(TieredAuthorityTestSupport.freshEmail("ata-admin"), "ADMIN");
         member = TieredAuthorityTestSupport.obtainToken(TieredAuthorityTestSupport.freshEmail("ata-member"), "MEMBER");
     }

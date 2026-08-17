@@ -1,5 +1,6 @@
 package com.ax.template.authblueprint.approvalworkflow;
 
+import com.ax.template.authblueprint.common.AxPort;
 import com.ax.template.authblueprint.common.HttpExtract;
 
 import io.restassured.RestAssured;
@@ -41,16 +42,6 @@ public final class ApprovalWorkflowTestSupport {
     /** Bodies are truncated in failure messages so one dump cannot drown the report. */
     private static final int BODY_EXCERPT_LIMIT = 400;
 
-    /**
-     * The last port this helper published to the process-global {@link RestAssured#port}.
-     * Reported alongside {@code RestAssured.port} on failure: if the two differ, the global was
-     * mutated by something other than this class's {@code @BeforeEach} between the setup and the
-     * request — which is the one hypothesis for P3-144 that cannot be tested any other way,
-     * because {@code RestAssured.port} is process-global mutable state shared by every HTTP test
-     * in the JVM (137 test files assign it).
-     */
-    private static volatile int lastPublishedPort = -1;
-
     public static String freshEmail(String prefix) {
         return prefix + "-" + UUID.randomUUID() + "@example.com";
     }
@@ -80,25 +71,18 @@ public final class ApprovalWorkflowTestSupport {
             "resolveUserId: GET /api/auth/me (userId)\n" + portContext());
     }
 
-    public static void useRandomPort(int port) {
-        if (port <= 0) {
-            throw new AssertionError(
-                "@LocalServerPort injected a non-positive port (" + port + "). RestAssured would be "
-                    + "pointed at a server that is not this test's application, so every request in the "
-                    + "class would fail uniformly. Failing here instead, where the cause is visible.");
-        }
-        RestAssured.port = port;
-        lastPublishedPort = port;
-    }
-
     /**
-     * Names both the global RestAssured target and the port this class last published to it.
-     * A mismatch means the process-global was clobbered between {@code @BeforeEach} and the
-     * request; equality rules that hypothesis out and points at the server on that port instead.
+     * Names the global RestAssured target and the verdict of the authority that published it.
+     *
+     * <p>P2-120 moved the bookkeeping this method used to do itself onto
+     * {@link com.ax.template.authblueprint.common.AxPort}, the single writer of
+     * {@code RestAssured.port}. The question is unchanged — did the global still hold what was
+     * published for this test? — but the answer is now recorded per test by the extension rather
+     * than by whichever helper happened to publish last, so it is correct for every domain
+     * instead of only this one.
      */
     private static String portContext() {
-        return "  RestAssured.port = " + RestAssured.port
-            + " (last published by this helper: " + lastPublishedPort + ")";
+        return "  RestAssured.port = " + RestAssured.port + "\n" + AxPort.diagnose();
     }
 
     private static String context(Response signup, Response login) {

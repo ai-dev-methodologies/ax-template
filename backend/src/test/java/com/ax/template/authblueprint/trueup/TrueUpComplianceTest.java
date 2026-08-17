@@ -42,7 +42,6 @@ class TrueUpComplianceTest {
 
     @BeforeEach
     void setup() {
-        TrueUpTestSupport.useRandomPort(port);
         member = TrueUpTestSupport.obtainToken(TrueUpTestSupport.freshEmail("tu-member"), "MEMBER");
     }
 

@@ -2,7 +2,6 @@ package com.ax.template.authblueprint.reportexport;
 
 import com.ax.template.authblueprint.common.HttpExtract;
 
-import io.restassured.RestAssured;
 import io.restassured.response.Response;
 
 import java.util.UUID;
@@ -35,9 +34,5 @@ public final class ReportExportTestSupport {
         .when().post("/api/auth/email/login");
         return HttpExtract.path(login, "accessToken",
             "POST /api/auth/email/login (accessToken for " + role + ")");
-    }
-
-    public static void useRandomPort(int port) {
-        RestAssured.port = port;
     }
 }

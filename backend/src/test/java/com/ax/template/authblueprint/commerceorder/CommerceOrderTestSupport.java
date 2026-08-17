@@ -1,7 +1,6 @@
 package com.ax.template.authblueprint.commerceorder;
 
 import com.ax.template.authblueprint.common.HttpExtract;
-import io.restassured.RestAssured;
 import io.restassured.response.Response;
 
 import java.util.UUID;
@@ -29,9 +28,6 @@ public final class CommerceOrderTestSupport {
         return HttpExtract.path(login, "accessToken", "POST /api/auth/email/login (obtainToken)");
     }
 
-    public static void useRandomPort(int port) {
-        RestAssured.port = port;
-    }
 
     /** Create a cart and return the order id. */
     public static String createCart(String token, String currency) {

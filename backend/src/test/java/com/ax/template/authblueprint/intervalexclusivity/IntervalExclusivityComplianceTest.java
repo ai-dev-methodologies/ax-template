@@ -42,7 +42,6 @@ class IntervalExclusivityComplianceTest {
 
     @BeforeEach
     void setup() {
-        IntervalExclusivityTestSupport.useRandomPort(port);
         member = IntervalExclusivityTestSupport.obtainToken(
             IntervalExclusivityTestSupport.freshEmail("ivx-member"), "MEMBER");
     }

@@ -2,7 +2,6 @@ package com.ax.template.authblueprint.softdelete;
 
 import io.micrometer.core.instrument.Meter;
 import io.micrometer.core.instrument.MeterRegistry;
-import io.restassured.RestAssured;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
@@ -47,7 +46,6 @@ class SoftDeleteComplianceTest {
 
     @BeforeEach
     void setUp() {
-        RestAssured.port = port;
         token = tokenFor("sd", "MEMBER");
     }
 

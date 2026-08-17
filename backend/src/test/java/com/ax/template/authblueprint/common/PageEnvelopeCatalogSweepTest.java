@@ -1,9 +1,7 @@
 package com.ax.template.authblueprint.common;
 
-import io.restassured.RestAssured;
 import io.restassured.response.Response;
 
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -533,10 +531,6 @@ class PageEnvelopeCatalogSweepTest {
     @LocalServerPort
     int port;
 
-    @BeforeEach
-    void setUp() {
-        RestAssured.port = port;
-    }
 
     private static String freshEmail(String prefix) {
         return prefix + "-" + UUID.randomUUID() + "@example.com";

@@ -43,7 +43,6 @@ class ReconciliationComplianceTest {
 
     @BeforeEach
     void setup() {
-        ReconciliationTestSupport.useRandomPort(port);
         member = ReconciliationTestSupport.obtainToken(ReconciliationTestSupport.freshEmail("recon-member"), "MEMBER");
     }
 

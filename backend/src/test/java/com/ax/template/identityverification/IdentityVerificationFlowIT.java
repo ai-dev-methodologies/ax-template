@@ -7,7 +7,6 @@ import com.ax.template.authblueprint.identityverification.IdentityVerificationSe
 import com.ax.template.authblueprint.identityverification.VerifiedIdentity;
 import com.ax.template.authblueprint.identityverification.VerifiedIdentityRepository;
 import org.springframework.data.jpa.domain.Specification;
-import io.restassured.RestAssured;
 import io.restassured.http.ContentType;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -111,7 +110,6 @@ class IdentityVerificationFlowIT {
 
     @BeforeEach
     void setUp() {
-        RestAssured.port = port;
         // R54 — VerifiedIdentity is per-test bounded; clear so persistence
         // counts are deterministic.
         verifiedIdentityRepository.deleteAll();

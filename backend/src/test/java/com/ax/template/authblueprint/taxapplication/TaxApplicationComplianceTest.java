@@ -3,7 +3,6 @@ package com.ax.template.authblueprint.taxapplication;
 import io.restassured.http.ContentType;
 import io.restassured.response.ValidatableResponse;
 import org.hamcrest.Matchers;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -31,11 +30,6 @@ import static io.restassured.RestAssured.given;
 class TaxApplicationComplianceTest {
 
     @LocalServerPort int port;
-
-    @BeforeEach
-    void setup() {
-        TaxApplicationTestSupport.useRandomPort(port);
-    }
 
     // ─── IDEMPOTENT-RECOMPUTE family ─────────────────────────────────────────
 

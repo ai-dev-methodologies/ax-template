@@ -47,7 +47,6 @@ class QuorumComplianceTest {
 
     @BeforeEach
     void setup() {
-        QuorumTestSupport.useRandomPort(port);
         convener = QuorumTestSupport.obtainToken(QuorumTestSupport.freshEmail("qr-convener"), "MEMBER");
         voter1 = QuorumTestSupport.obtainToken(QuorumTestSupport.freshEmail("qr-v1"), "MEMBER");
         voter2 = QuorumTestSupport.obtainToken(QuorumTestSupport.freshEmail("qr-v2"), "MEMBER");

@@ -1,5 +1,7 @@
 package com.ax.template.authblueprint.approvalworkflow;
 
+import com.ax.template.authblueprint.common.AxPort;
+
 import com.sun.net.httpserver.HttpServer;
 
 import io.restassured.RestAssured;
@@ -53,13 +55,16 @@ class ApprovalWorkflowTestSupportDiagnosabilityTest {
         });
         server.start();
 
-        int previousPort = RestAssured.port;
         String previousBaseUri = RestAssured.baseURI;
+        // P2-120: this stub is deliberately NOT this application, so the aim is DECLARED through
+        // the one API that says so. It is not an exemption from the single-writer rule — it is
+        // the rule's own way of expressing "I mean a different server", and AxPort records it so
+        // the failure below reads as a stub override rather than as a mistargeted port.
+        AxPort.overrideForStub(server.getAddress().getPort());
         try {
             // Pin the host explicitly: the stub binds 127.0.0.1, and RestAssured's default
             // baseURI ("http://localhost") is resolver-dependent (may yield ::1 first).
             RestAssured.baseURI = "http://127.0.0.1";
-            ApprovalWorkflowTestSupport.useRandomPort(server.getAddress().getPort());
 
             assertThatThrownBy(() -> ApprovalWorkflowTestSupport.obtainToken("diag@example.com", "MEMBER"))
                 .as("a Content-Type-less response must fail as itself, not as a parser error")
@@ -70,25 +75,32 @@ class ApprovalWorkflowTestSupportDiagnosabilityTest {
                 .hasMessageContaining("RestAssured.port = " + server.getAddress().getPort())
                 .hasMessageContaining("404 Not Found");
         } finally {
-            RestAssured.port = previousPort;
+            AxPort.restoreAfterStub();
             RestAssured.baseURI = previousBaseUri;
             server.stop(0);
         }
     }
 
+    /**
+     * P2-120 retarget. This assertion used to exercise
+     * {@code ApprovalWorkflowTestSupport.useRandomPort}, which no longer exists: publishing the
+     * port is now the sole job of {@link AxPort}, so the DUTY of refusing a non-positive port
+     * moved there and the PROOF moved with it. Kept under this domain's tag so
+     * {@code ./gradlew testApprovalWorkflow} still fails if the refusal regresses — the failure
+     * it prevents (every request in a class silently aimed at whatever answers on rest-assured's
+     * default port) is a whole-domain outage, not a common-primitives detail.
+     */
     @Test
     @Tag("WF-DIAG-002")
     void nonPositivePort_isRejectedBeforeAnyRequestIsSent() {
         int previousPort = RestAssured.port;
-        try {
-            assertThatThrownBy(() -> ApprovalWorkflowTestSupport.useRandomPort(0))
-                .isInstanceOf(AssertionError.class)
-                .hasMessageContaining("non-positive port (0)");
-            assertThat(RestAssured.port)
-                .as("a rejected port must not be published to the process-global RestAssured.port")
-                .isEqualTo(previousPort);
-        } finally {
-            RestAssured.port = previousPort;
-        }
+
+        assertThatThrownBy(() -> AxPort.overrideForStub(0))
+            .isInstanceOf(AssertionError.class)
+            .hasMessageContaining("non-positive port (0)");
+
+        assertThat(RestAssured.port)
+            .as("a rejected port must not be published to the process-global RestAssured.port")
+            .isEqualTo(previousPort);
     }
 }

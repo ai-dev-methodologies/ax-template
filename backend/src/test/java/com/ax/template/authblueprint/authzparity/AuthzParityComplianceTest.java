@@ -47,7 +47,6 @@ class AuthzParityComplianceTest {
 
     @BeforeEach
     void setup() {
-        AuthzParityTestSupport.useRandomPort(port);
         requester = AuthzParityTestSupport.obtainToken(AuthzParityTestSupport.freshEmail("ap-req"), "MEMBER");
         approver1 = AuthzParityTestSupport.obtainToken(AuthzParityTestSupport.freshEmail("ap-a1"), "MEMBER");
         approver2 = AuthzParityTestSupport.obtainToken(AuthzParityTestSupport.freshEmail("ap-a2"), "MEMBER");

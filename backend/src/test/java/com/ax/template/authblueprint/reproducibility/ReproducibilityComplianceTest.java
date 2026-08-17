@@ -37,7 +37,6 @@ class ReproducibilityComplianceTest {
 
     @BeforeEach
     void setup() {
-        ReproducibilityTestSupport.useRandomPort(port);
         member = ReproducibilityTestSupport.obtainToken(ReproducibilityTestSupport.freshEmail("repro-member"), "MEMBER");
         admin = ReproducibilityTestSupport.obtainToken(ReproducibilityTestSupport.freshEmail("repro-admin"), "ADMIN");
     }

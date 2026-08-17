@@ -36,7 +36,6 @@ class ProvisionalAttestationComplianceTest {
 
     @BeforeEach
     void setup() {
-        ProvisionalAttestationTestSupport.useRandomPort(port);
         author = ProvisionalAttestationTestSupport.obtainToken(
             ProvisionalAttestationTestSupport.freshEmail("patt-author"), "MEMBER");
         attestor = ProvisionalAttestationTestSupport.obtainToken(

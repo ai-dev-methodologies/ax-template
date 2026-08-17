@@ -34,7 +34,6 @@ class UomConversionComplianceTest {
 
     @BeforeEach
     void setup() {
-        UomConversionTestSupport.useRandomPort(port);
         member = UomConversionTestSupport.obtainToken(UomConversionTestSupport.freshEmail("uom-member"), "MEMBER");
     }
 

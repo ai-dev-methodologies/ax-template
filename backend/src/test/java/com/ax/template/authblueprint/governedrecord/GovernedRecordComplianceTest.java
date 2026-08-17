@@ -37,7 +37,6 @@ class GovernedRecordComplianceTest {
 
     @BeforeEach
     void setup() {
-        GovernedRecordTestSupport.useRandomPort(port);
         member = GovernedRecordTestSupport.obtainToken(GovernedRecordTestSupport.freshEmail("gr-member"), "MEMBER");
     }
 

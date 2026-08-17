@@ -37,7 +37,6 @@ class AdditiveFactComplianceTest {
 
     @BeforeEach
     void setup() {
-        AdditiveFactTestSupport.useRandomPort(port);
         member = AdditiveFactTestSupport.obtainToken(AdditiveFactTestSupport.freshEmail("af-member"), "MEMBER");
     }
 

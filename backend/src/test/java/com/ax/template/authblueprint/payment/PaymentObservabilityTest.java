@@ -54,7 +54,6 @@ class PaymentObservabilityTest {
 
     @BeforeEach
     void setup() {
-        RestAssured.port = port;
         rootLogger = (Logger) LoggerFactory.getLogger(Logger.ROOT_LOGGER_NAME);
         mdcAppender = new MdcCapturingAppender();
         mdcAppender.start();

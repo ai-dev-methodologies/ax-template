@@ -4,7 +4,6 @@ import static io.restassured.RestAssured.given;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import io.restassured.RestAssured;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -17,11 +16,6 @@ class TestingRestAssuredPatternTest {
 
     @LocalServerPort
     private int port;
-
-    @BeforeEach
-    void setup() {
-        RestAssured.port = port;
-    }
 
     @Test
     void practices_TEST_001_restAssuredHitsRealHttpStack() {

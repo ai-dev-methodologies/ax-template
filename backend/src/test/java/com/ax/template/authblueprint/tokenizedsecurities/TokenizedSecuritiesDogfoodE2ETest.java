@@ -62,7 +62,6 @@ class TokenizedSecuritiesDogfoodE2ETest {
 
     @BeforeEach
     void setup() {
-        TokenizedSecuritiesTestSupport.useRandomPort(port);
         String prefix = UUID.randomUUID().toString().replace("-", "").substring(0, 6);
         issuerMember   = TokenizedSecuritiesTestSupport.obtainToken(
                 TokenizedSecuritiesTestSupport.freshEmail("e2e-iss-" + prefix), "MEMBER");

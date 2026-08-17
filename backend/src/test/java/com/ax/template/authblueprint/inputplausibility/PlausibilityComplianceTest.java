@@ -42,7 +42,6 @@ class PlausibilityComplianceTest {
 
     @BeforeEach
     void setup() {
-        PlausibilityTestSupport.useRandomPort(port);
         member = PlausibilityTestSupport.obtainToken(PlausibilityTestSupport.freshEmail("plaus-member"), "MEMBER");
     }
 

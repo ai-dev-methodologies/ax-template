@@ -1,7 +1,6 @@
 package com.ax.template.authblueprint.reconciliation;
 
 import com.ax.template.authblueprint.common.HttpExtract;
-import io.restassured.RestAssured;
 import io.restassured.response.Response;
 
 import java.util.UUID;
@@ -29,9 +28,5 @@ public final class ReconciliationTestSupport {
         .when().post("/api/auth/email/login")
         .then().extract().response();
         return HttpExtract.path(httpExtractResponse, "accessToken", "POST /api/auth/email/login (obtainToken)");
-    }
-
-    public static void useRandomPort(int port) {
-        RestAssured.port = port;
     }
 }

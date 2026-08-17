@@ -37,7 +37,6 @@ class DivisibilityComplianceTest {
 
     @BeforeEach
     void setup() {
-        DivisibilityTestSupport.useRandomPort(port);
         member = DivisibilityTestSupport.obtainToken(DivisibilityTestSupport.freshEmail("div-member"), "MEMBER");
     }
 

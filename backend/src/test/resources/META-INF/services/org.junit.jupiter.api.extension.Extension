@@ -1,0 +1,5 @@
+# BACKLOG P2-120 — ServiceLoader registration for the single writer of RestAssured.port.
+# practices/evals/restassured_port_single_writer_guard.sh reads THIS file to derive the one
+# source file it must not scan, so the writer is defined by the registration rather than by a
+# name on an allowlist. Adding a line here widens the guard's subject set by exactly that class.
+com.ax.template.authblueprint.common.AxPort

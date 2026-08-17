@@ -44,7 +44,6 @@ class CostShareComplianceTest {
 
     @BeforeEach
     void setup() {
-        CostShareTestSupport.useRandomPort(port);
         // exact-decimal JSON parsing so applied/residual/memberPaid come back as BigDecimal, not float
         RestAssured.config = RestAssuredConfig.config().jsonConfig(
             JsonConfig.jsonConfig().numberReturnType(JsonPathConfig.NumberReturnType.BIG_DECIMAL));

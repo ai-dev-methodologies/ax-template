@@ -45,7 +45,6 @@ class ObligationComplianceTest {
 
     @BeforeEach
     void setup() {
-        ObligationTestSupport.useRandomPort(port);
         member = ObligationTestSupport.obtainToken(ObligationTestSupport.freshEmail("obl-member"), "MEMBER");
         admin = ObligationTestSupport.obtainToken(ObligationTestSupport.freshEmail("obl-admin"), "ADMIN");
     }

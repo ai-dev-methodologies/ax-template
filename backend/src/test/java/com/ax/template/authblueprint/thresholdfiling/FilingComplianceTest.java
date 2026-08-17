@@ -47,7 +47,6 @@ class FilingComplianceTest {
 
     @BeforeEach
     void setup() {
-        FilingTestSupport.useRandomPort(port);
         member = FilingTestSupport.obtainToken(FilingTestSupport.freshEmail("fil-member"), "MEMBER");
         admin = FilingTestSupport.obtainToken(FilingTestSupport.freshEmail("fil-admin"), "ADMIN");
     }

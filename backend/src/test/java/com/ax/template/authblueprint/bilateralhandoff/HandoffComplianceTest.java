@@ -48,7 +48,6 @@ class HandoffComplianceTest {
 
     @BeforeEach
     void setup() {
-        HandoffTestSupport.useRandomPort(port);
         releasorToken = HandoffTestSupport.obtainToken(HandoffTestSupport.freshEmail("bho-releasor"), "MEMBER");
         releasorParty = HandoffTestSupport.resolveUserId(releasorToken);   // Authentication.getName() == userId
         receiverToken = HandoffTestSupport.obtainToken(HandoffTestSupport.freshEmail("bho-receiver"), "MEMBER");

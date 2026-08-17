@@ -48,7 +48,6 @@ class RecurringIntervalComplianceTest {
 
     @BeforeEach
     void setup() {
-        RecurringIntervalTestSupport.useRandomPort(port);
         member = RecurringIntervalTestSupport.obtainToken(RecurringIntervalTestSupport.freshEmail("cri-member"), "MEMBER");
         admin = RecurringIntervalTestSupport.obtainToken(RecurringIntervalTestSupport.freshEmail("cri-admin"), "ADMIN");
     }

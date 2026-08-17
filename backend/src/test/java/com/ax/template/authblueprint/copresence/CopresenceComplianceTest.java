@@ -39,7 +39,6 @@ class CopresenceComplianceTest {
 
     @BeforeEach
     void setup() {
-        CopresenceTestSupport.useRandomPort(port);
         admin = CopresenceTestSupport.obtainToken(CopresenceTestSupport.freshEmail("cop-admin"), "ADMIN");
         member = CopresenceTestSupport.obtainToken(CopresenceTestSupport.freshEmail("cop-member"), "MEMBER");
     }

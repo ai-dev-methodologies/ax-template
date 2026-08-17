@@ -36,7 +36,6 @@ class GeoQueryComplianceTest {
 
     @BeforeEach
     void setup() {
-        GeoQueryTestSupport.useRandomPort(port);
         member = GeoQueryTestSupport.obtainToken(GeoQueryTestSupport.freshEmail("geo-member"), "MEMBER");
     }
 

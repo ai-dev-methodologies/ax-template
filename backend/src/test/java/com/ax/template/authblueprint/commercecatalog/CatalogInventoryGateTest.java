@@ -36,7 +36,6 @@ class CatalogInventoryGateTest {
 
     @BeforeEach
     void setup() {
-        CatalogTestSupport.useRandomPort(port);
         member = CatalogTestSupport.obtainToken(
             CatalogTestSupport.freshEmail("cat-invgate"), "MEMBER");
     }

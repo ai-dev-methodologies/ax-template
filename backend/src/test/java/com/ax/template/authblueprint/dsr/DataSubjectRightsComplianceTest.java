@@ -6,7 +6,6 @@ import io.micrometer.core.instrument.Tag;
 
 import io.restassured.http.ContentType;
 
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import org.springframework.beans.factory.annotation.Autowired;
@@ -41,10 +40,6 @@ class DataSubjectRightsComplianceTest {
     @Autowired MeterRegistry meterRegistry;
     @Autowired DsrService dsrService;
 
-    @BeforeEach
-    void setup() {
-        DsrTestSupport.useRandomPort(port);
-    }
 
     // ── DSR-ACCESS-001 ────────────────────────────────────────────────────────
 

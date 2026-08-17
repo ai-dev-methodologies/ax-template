@@ -38,7 +38,6 @@ class TransformationComplianceTest {
 
     @BeforeEach
     void setup() {
-        TransformationTestSupport.useRandomPort(port);
         RestAssured.config = RestAssuredConfig.config().jsonConfig(
             JsonConfig.jsonConfig().numberReturnType(JsonPathConfig.NumberReturnType.BIG_DECIMAL));
         member = TransformationTestSupport.obtainToken(TransformationTestSupport.freshEmail("xf-member"), "MEMBER");

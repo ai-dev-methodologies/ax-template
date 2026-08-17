@@ -1,7 +1,6 @@
 package com.ax.template.authblueprint.identityclaim;
 
 import io.restassured.http.ContentType;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -25,11 +24,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 class IdentityClaimComplianceTest {
 
     @LocalServerPort int port;
-
-    @BeforeEach
-    void setup() {
-        IdentityClaimTestSupport.useRandomPort(port);
-    }
 
     // ─── CLAIM family ────────────────────────────────────────────────────────
 

@@ -40,7 +40,6 @@ class NettingComplianceTest {
 
     @BeforeEach
     void setup() {
-        NettingTestSupport.useRandomPort(port);
         member = NettingTestSupport.obtainToken(NettingTestSupport.freshEmail("net-member"), "MEMBER");
     }
 

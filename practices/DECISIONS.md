@@ -3885,3 +3885,38 @@ mutation(MUT-1+MUT-2, 둘 다 무력화)만이 1→0 flip을 낸다는 것을 �
 로그 통과)와 2026-06-29 STO pilot(fixture non-vacuity를 old-guard differential로 증명)에서 되풀이
 확인한 패턴 — **green-but-hollow는 guard 자신에게도, guard의 fixture에게도 적용된다** — 이 세 번째
 독립 사례로 재확인됐다. 상세 실측(4-shape 진단성 차등, 회귀 카운트)은 BACKLOG P2-117 행.
+
+**후속 5 (2026-08-17 P2-120 종결 — 토픽은 R112 자신이 아니라 P3-144/P2-116/P2-117 계열의 연속이지만,
+이 결정 로그가 세션 연속성의 running append 지점이라 여기 이어 적는다).** P2-117이 blindness 축을
+닫은 뒤 남긴 잔여(BACKLOG P2-120) — 프로세스 전역 mutable static `io.restassured.RestAssured.port`를
+**파일 139개**(그중 86개는 `useRandomPort` 정의 보유 — 정의 본문 자체가 대입문 1개를 담는다 —
+나머지 53개는 정의 없이 직접 대입문만 보유; 대입문 총 141건)가 각자 대입하던 것 — 을 신규 JUnit5
+확장 `AxPort`(`backend/src/test/java/com/ax/template/authblueprint/common/AxPort.java`) 단일
+writer로 흡수하고, 신규 guard `restassured_port_single_writer_guard.sh` **[117]**로 재발을
+구조적으로 봉인했다(확장은 테스트 인스턴스의 `@LocalServerPort` 필드를 리플렉션으로 찾아 세팅·기록하고,
+필드가 없는 MOCK 클래스는 건드리지 않고 기록만 한다).
+**정정(2026-08-17, fable5 적대적 검토 결함3 봉합)**: 이 항목의 원 서술("138개(실측 134개)")은
+같은 라운드에 작성된 BACKLOG P2-120 행("파일 134개 + 정의 84건")·AxPort.java 헤더("140 = 86+54")와
+서로 모순됐다 — 세 문서가 각기 다른 수를 주장하면서도 무엇을 세는지 명시하지 않았다. 기준 커밋
+`f4457530`(P2-120 직전) 대비 `git diff`로 재측정해 위 수치(정의 86 / 대입문 141 / 대입-보유 파일
+139)로 세 문서를 통일했다.
+
+**이 라운드가 남긴 처방 원칙은 하나다: 전역 mutable 상태가 서드파티 라이브러리 소유라 제거할 수 없을
+때, 처방은 "없앤다"가 아니라 "쓰기 지점을 하나로 만드는 것"이다.** `RestAssured.port`는 RestAssured
+API 자신이 노출하는 static field라 이 저장소가 그 존재 자체를 없앨 수 없다 — 할 수 있는 것은 기존
+141개 대입 지점(139개 파일)을 **읽기로 격하**하고, 신규 도입한 단일 writer(`AxPort` 확장)만 대입을
+유지하는 것뿐이었다. 이것은 이
+카탈로그가 이미 알던 immutability 원칙(코딩 스타일 규칙의 "새 객체를 만들되 기존 객체를 변형하지
+않는다")과 정확히 같은 형태를 서드파티 API가 준 제약 아래에서도 재현한 사례다 — 원본을 소유하지
+못하면 원본을 없애는 대신 **원본에 닿는 경로를 하나로 좁힌다.**
+
+**그리고 그 처방의 형태(단일 writer 확장 vs 요청별 명시 포트)는 추측이 아니라 측정이 먼저 결정했다.**
+`given()` 호출부가 저장소 전체에 몇 개인지 세기 전까지는 "매 요청에 포트를 명시적으로 넘겨라"는 더
+국소적인(그리고 프레임워크 개입이 적은) 대안도 후보였다. 실제로 센 결과는 **1561개**였고, 이 disk-truth
+하나가 그 대안을 실행 불가능으로 배제하고 단일 writer 확장을 유일하게 남은 경로로 만들었다. 순서가
+중요하다 — 처방을 먼저 고르고 규모를 나중에 확인했다면 1561개 호출부 각각을 수정하려다 도중에
+포기하거나, 부분 적용으로 새로운 불일치(일부는 명시 포트, 일부는 stale 전역)를 만들었을 것이다.
+차등 실측(확장 ON: 67/67+17/17 BUILD SUCCESSFUL / 확장 OFF: 34/67 failed,
+`RestAssured.port = -1 ... signup status=404 content-type= headers=[] body=404 Not Found`)이 이
+전역이 실제로 P3-144급 실패를 만들 수 있었음과, 단일 writer가 그것을 막는다는 것 둘 다를 증명했다.
+상세 실측(guard [117] 비공허성, 회귀 카운트, `testPayment` 환경 artifact)은 BACKLOG P2-120 행.

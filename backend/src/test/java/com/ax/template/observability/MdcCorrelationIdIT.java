@@ -1,8 +1,6 @@
 package com.ax.template.observability;
 
 import com.ax.template.authblueprint.AuthBlueprintBackendApplication;
-import io.restassured.RestAssured;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -34,11 +32,6 @@ class MdcCorrelationIdIT {
 
     @LocalServerPort
     private int port;
-
-    @BeforeEach
-    void setUp() {
-        RestAssured.port = port;
-    }
 
     @Test
     @DisplayName("GET /actuator/health without X-Correlation-Id returns a generated UUID in response header")

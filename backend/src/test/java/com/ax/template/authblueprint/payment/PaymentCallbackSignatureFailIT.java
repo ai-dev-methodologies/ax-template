@@ -3,7 +3,6 @@ package com.ax.template.authblueprint.payment;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.restassured.RestAssured;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -67,11 +66,6 @@ class PaymentCallbackSignatureFailIT {
 
     @Autowired
     PaymentEventRepository eventRepository;
-
-    @BeforeEach
-    void setup() {
-        RestAssured.port = port;
-    }
 
     /**
      * PAYMENT-CALLBACK-001 sub-case A: signature mismatch with extractable

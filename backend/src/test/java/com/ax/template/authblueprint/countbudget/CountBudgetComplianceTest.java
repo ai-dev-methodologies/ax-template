@@ -46,7 +46,6 @@ class CountBudgetComplianceTest {
 
     @BeforeEach
     void setup() {
-        CountBudgetTestSupport.useRandomPort(port);
         member = CountBudgetTestSupport.obtainToken(CountBudgetTestSupport.freshEmail("pcb-member"), "MEMBER");
     }
 

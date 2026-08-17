@@ -42,7 +42,6 @@ class DispatchExpiryComplianceTest {
 
     @BeforeEach
     void setup() {
-        DispatchTestSupport.useRandomPort(port);
         admin = DispatchTestSupport.obtainToken(DispatchTestSupport.freshEmail("dispx-admin"), "ADMIN");
         member = DispatchTestSupport.obtainToken(DispatchTestSupport.freshEmail("dispx-member"), "MEMBER");
     }

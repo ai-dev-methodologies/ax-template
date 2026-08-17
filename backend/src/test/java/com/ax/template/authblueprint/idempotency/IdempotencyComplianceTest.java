@@ -46,7 +46,6 @@ class IdempotencyComplianceTest {
 
     @BeforeEach
     void setUp() {
-        RestAssured.port = port;
         token = freshTenantToken("idem");
     }
 

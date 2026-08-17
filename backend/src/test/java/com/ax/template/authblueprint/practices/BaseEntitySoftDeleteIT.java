@@ -46,7 +46,6 @@ class BaseEntitySoftDeleteIT {
 
     @BeforeEach
     void setUp() {
-        RestAssured.port = port;
         repository.deleteAllInBatch();
     }
 

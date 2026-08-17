@@ -42,7 +42,6 @@ class ReservationComplianceTest {
 
     @BeforeEach
     void setup() {
-        ReservationTestSupport.useRandomPort(port);
         member = ReservationTestSupport.obtainToken(ReservationTestSupport.freshEmail("rsv-member"), "MEMBER");
     }
 

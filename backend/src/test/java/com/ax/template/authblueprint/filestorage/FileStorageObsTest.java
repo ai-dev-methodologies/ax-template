@@ -1,7 +1,6 @@
 package com.ax.template.authblueprint.filestorage;
 
 import io.micrometer.core.instrument.MeterRegistry;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -22,11 +21,6 @@ class FileStorageObsTest {
     @LocalServerPort int port;
 
     @Autowired MeterRegistry meterRegistry;
-
-    @BeforeEach
-    void setup() {
-        FileStorageTestSupport.useRandomPort(port);
-    }
 
     @Test
     @Tag("FILE_STORAGE")

@@ -49,7 +49,6 @@ class WithholdingSplitComplianceTest {
 
     @BeforeEach
     void setup() {
-        WithholdingSplitTestSupport.useRandomPort(port);
         member = WithholdingSplitTestSupport.obtainToken(
             WithholdingSplitTestSupport.freshEmail("wht-member"), "MEMBER");
     }

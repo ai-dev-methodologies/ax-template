@@ -1,7 +1,6 @@
 package com.ax.template.authblueprint.auditlog;
 
 import io.restassured.http.ContentType;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -28,10 +27,6 @@ class AuditLogExportTest {
 
     @LocalServerPort int port;
 
-    @BeforeEach
-    void setup() {
-        AuditLogTestSupport.useRandomPort(port);
-    }
 
     @Test
     @Tag("AUDIT_LOG")

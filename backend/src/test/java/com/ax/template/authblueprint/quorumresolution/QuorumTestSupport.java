@@ -40,10 +40,6 @@ public final class QuorumTestSupport {
         return HttpExtract.path(httpExtractResponse, "userId", "GET /api/auth/me (resolveUserId)");
     }
 
-    public static void useRandomPort(int port) {
-        RestAssured.port = port;
-    }
-
     /**
      * Build the JSON body for openMotion with a simple majority policy.
      * thresholdNumerator/thresholdDenominator = 1/2 → more than half must vote YES.

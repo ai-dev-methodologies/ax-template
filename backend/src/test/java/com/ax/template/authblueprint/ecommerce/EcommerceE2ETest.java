@@ -2,10 +2,8 @@ package com.ax.template.authblueprint.ecommerce;
 
 import com.ax.template.authblueprint.auditlog.AuditLogRepository;
 import com.ax.template.authblueprint.notification.NotificationRepository;
-import io.restassured.RestAssured;
 import io.restassured.http.ContentType;
 import io.restassured.response.Response;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -71,10 +69,6 @@ class EcommerceE2ETest {
     @Autowired
     AuditLogRepository auditLogRepository;
 
-    @BeforeEach
-    void setup() {
-        RestAssured.port = port;
-    }
 
     // ─── Helpers ────────────────────────────────────────────────────────────
 

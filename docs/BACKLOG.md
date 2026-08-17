@@ -28,9 +28,55 @@ signature를 발견**(17/17)함으로써 경험적으로 반증되었다 — 발
 |---|---|---|---|
 | P0 (expiry-bound / live defects) | 30 | 30 | **100%** |
 | P1 (generic signature backlog) | 75 | 74 | **99%** |
-| P2 (verification escapes) | 122 | 114 | **93%** |
-| P3 (industry-niche deferrals) | 143 | 141 | **99%** |
-| **P0–P3 합계 (수렴 분모)** | **370** | **359** | **97%** |
+| P2 (verification escapes) | 122 | 115 | **94%** |
+| P3 (industry-niche deferrals) | 144 | 142 | **99%** |
+| **P0–P3 합계 (수렴 분모)** | **371** | **361** | **97%** |
+
+> 2026-08-17 P2-120 종결 — 프로세스 전역 mutable static `io.restassured.RestAssured.port`를 대입하던
+> **파일 139개**(그중 86개는 `useRandomPort` 정의 보유 — 정의 본문 자체가 대입문 1개를 담는다 —
+> 나머지 53개는 정의 없이 직접 대입문만 보유; 대입문 총 **141건**. **정정(2026-08-17, fable5
+> 적대적 검토 결함3 봉합)**: 이 문단의 원 서술 "134개(원 등재 138개)"는 이 문서 P2-120 행·
+> DECISIONS.md·AxPort.java 헤더와 서로 다른 수를 주장했다 — 기준 커밋 `f4457530` 대비 `git diff`
+> 재측정으로 네 곳을 통일했다; 상세 산출은 P2-120 행)를 신규
+> JUnit5 확장 `AxPort`(`common` 패키지) **단일 writer**로 흡수했다 — RestAssured API 자체가 static
+> field라 전역을 없앨 수는 없으므로, 처방은 "제거"가 아니라 "쓰기 지점을 하나로 만드는 것"이다. 확장은
+> 각 테스트 직전 테스트 인스턴스의 `@LocalServerPort` 필드를 리플렉션으로 찾아 `RestAssured.port`를
+> 세팅하고 그 사실을 기록하며, 필드가 없는 MOCK 환경(~32개 클래스)에서는 전역을 **건드리지 않고** 그
+> 사실만 기록한다(무단 세팅 금지). 자동등록은 `junit-platform.properties` +
+> `META-INF/services/org.junit.jupiter.api.extension.Extension` + include 필터
+> `com.ax.template.*`(의미론은 추측이 아니라 `ClassNamePatternFilterUtils` 디컴파일로 확인:
+> `.`→`[.$]`, `*`→`.+`, full match). **등록 방식은 측정이 결정했다**: `testRuntimeClasspath` 178개
+> 엔트리 전수 스캔에서 auto-detectable 서드파티 확장 0개를 확인했고, 그 스캔 자체가 공허하지 않음을
+> `org.junit.*`로 넓혀 4건(archunit/jupiter/platform) 검출로 증명했다 — 그래도 미래 의존성을 구속하지
+> 못하므로 include 필터로 이름까지 핀했다. **`given()` 호출부가 1561개라는 disk-truth가 처방을
+> 결정했다** — "요청마다 명시 포트"라는 더 국소적인 대안은 이 규모 앞에서 실행 불가능이었다. 의도적
+> 예외(로컬 stub `HttpServer` 2파일 3사이트)는 allowlist가 아니라
+> `AxPort.overrideForStub(int)`/`restoreAfterStub()`로 **코드에 명시**했다. 규모: 238파일/108패키지에서
+> 수동 대입 141건 + `useRandomPort` 정의 86건 제거(3개 레인 병행).
+> 신규 guard `restassured_port_single_writer_guard.sh` **[117]**이 테스트 트리의 어떤 파일도
+> `RestAssured.port`에 **대입** 불가(읽기는 허용)를 강제한다 — 확장 자신은 주체이므로 대상 밖이며, 그
+> 제외가 allowlist가 아니라 **등록 파일에서 파생**됨을 별도로 증명했다(`pass_via_extension` fixture
+> 사본에서 `META-INF/services` 파일만 지우면 exit 0→1로 뒤집힌다). live PASS — 498 파일 스캔, writer
+> 1개.
+> **차등 실측(핵심 증거)** — 확장을 끄고 같은 migrated 클래스를 돌리면: `(a) 확장 ON`
+> `testApprovalWorkflow` 67/67 · `testFavorites` 17/17 → BUILD SUCCESSFUL. `(b) 확장 OFF` 67 tests
+> completed, **34 failed** → BUILD FAILED, `java.lang.AssertionError: ... RestAssured.port = -1 ...
+> port authority: NOTHING PUBLISHED ... signup status=404 content-type= headers=[] body=404 Not
+> Found`. 이 차등이 "제거만으로 통과한 건 전역에 남아있던 값 덕분"이라는 해석을 배제하고, (b)의
+> 실패 형태가 **P3-144의 서명과 바이트 일치함**을 보인다.
+> **전 도메인 회귀**: 117 task result dir / **3940 tests**. 실패 3건 전부 비회귀 — `testPortability`
+> (기지 advisory) · aggregate `test`(동일 원인) · `testPayment` 1건은 **환경 artifact**(테스트가
+> `ProcessBuilder("bash")`를 쓰는데 이 레인이 조립한 `PATH=/usr/bin:...`에 `/bin`이 빠져 있었다 — macOS는
+> `/bin/bash`만 있고 `/usr/bin/bash`는 없다; `/bin` 포함 재실행 시 `testPayment` 93/93 PASS). 이
+> 함정은 신규 **P3-145**로 별도 등재.
+> **P3-144 갱신(닫지 않음)** — 살아남은 두 후보 중 **"포트 오조준"이 구조적으로 제거**됐다(단일 writer +
+> guard [117]). 남은 후보는 "부하 하 Tomcat 컨테이너 레벨 응답"뿐이고, `HttpExtract` 경유 실패라면
+> 다음 발생 시 `AxPort.diagnose()`가 MATCHES/CLOBBERED/NOTHING PUBLISHED로 즉시 판별한다(P2-119가
+> 등재한 비-`HttpExtract` 잔여 경로는 이 즉시판별 밖 — 아래 P3-144 행의 적용조건 참조) — done-when을
+> 그에 맞춰 좁혔다(아래 P3-144 행 참조).
+> P2 tier 114→**115** closed(122 불변, 93%→**94%**), P3 tier에 **P3-145**(closed, 등재 즉시 문서화로
+> 해소) 추가로 143→**144**/141→**142**(99% 불변). 분모 370→**371**, closed 359→**361** = **97%**(반올림
+> 표시 불변). 북극성(2)의 IDW18+ 동결 해제선(70%)은 계속 크게 상회.
 
 > 2026-08-17 P2-117 종결 — 전 트리 blindness 확산 종결(공용 `HttpExtract` 헬퍼 + guard [116]). P2-116이
 > `ApprovalWorkflowTestSupport` 한 곳만 봉합하고 남긴 확산 범위 — status 단언 없이 응답에서 값을 꺼내는
@@ -880,17 +926,62 @@ tier 배정 근거(기존 관례 대조): 이 결함 클래스는 "**검증 표�
   `ExtractableResponse`를 그 자리에서 검증·소비하지만, TestSupport가 그 `ExtractableResponse`(또는
   `Response`)를 **호출자**(Compliance/IT 테스트)에게 그대로 반환하는 경로가 있고, 그 호출자가 그
   값을 다시 blind로 읽으면 guard의 탐지자 A/B 어느 쪽도 보지 못한다(호출부는 `*TestSupport.java`가
-  아니므로 대상 집합 밖). done-when: 호출자 측 blind 읽기의 실측 규모(census)를 내고, 같은 레시피를
+  아니므로 대상 집합 밖). **seed census (2026-08-17, fable5 적대적 검토가 지적, 값은 직접
+  재측정 — 검토자 원 수치를 그대로 베끼지 않음)**: `*TestSupport.java`도 `HttpExtract.java`(사용된
+  헬퍼 자신)도 아닌 테스트 파일에서 리터럴 체인 `.extract().path(`(주석 제외, 개행 포함 다중행
+  체인 허용)을 grep+comment-blanking 스크립트로 스캔한 결과 **209사이트 / 91파일**. 검토자가 보고한
+  "297사이트/92파일"과는 파일 수는 근접하나(92 쪽은 `HttpExtract.java` 자신의 자기서술 주석이
+  포함된 차이로 설명됨) 사이트 수는 상당히 다르다 — 검토자가 더 넓은 정의(`.jsonPath(`/`.as(`/
+  `.asString(`/`.header(` 등 guard [116] 탐지자 A/B 전체 shape, 또는 `.path(`를 RestAssured
+  qualifier로 한정하지 않은 스캔)를 썼을 가능성이 높다; 그 넓은 정의로 재현하면 1710사이트/135파일까지
+  올라가 정의가 결과를 지배함을 확인했다(스캔 스크립트는 재현 가능하도록 guard [116]의 python
+  스캐너를 그대로 재사용). 다음 라운드는 **209/91**(리터럴 `.extract().path(` 체인, 좁은 정의)을
+  출발점으로 삼고, "무엇을 세는지"(좁은 literal-chain 정의 vs guard [116] 탐지자 A/B의 넓은 정의)를
+  먼저 확정한 뒤 진행한다. done-when: 호출자 측 blind 읽기의 실측 규모(census)를 내고, 같은 레시피를
   호출자 레이어까지 확장하거나 `HttpExtract`가 검증된 값만 반환하도록 TestSupport 반환 타입을 좁힌다.
-  출처: 2026-08-17 P2-117 종결 라운드.
-- [ ] P2-120 — **잔여(정직 등재, P3-144와 연결)**: 프로세스 전역 static `RestAssured.port`를
-  대입하는 파일이 **138개** 그대로 남아 있다 — 이 axis는 guard [116]의 스코프 밖이다(응답 검증이
-  아니라 포트 오조준 자체가 문제). P3-144(미해결 flake)의 원 진단 파괴 결함은 봉합됐지만(P2-116),
-  포트가 다른 프로세스를 가리키는 **원인**은 아직 어느 guard도 막지 않는다 — 후보 중 하나가
-  P3-144 산문이 명시한 "포트 오조준"이다. done-when: 138개 파일의 `RestAssured.port` 대입 패턴을
-  census하고, 병렬/컨텍스트-공유 테스트 실행에서 포트가 stale해지는 경로를 차단하는 구조(예: 매
-  요청 시점 포트 재조회, 또는 대입 지점을 헬퍼로 단일화)를 설계한다. 출처: 2026-08-17 P2-117 종결
-  라운드.
+  출처: 2026-08-17 P2-117 종결 라운드 → 2026-08-17 fable5 적대적 검토 결함4 봉합(seed census 등재).
+- [x] P2-120 — **closed 2026-08-17 (단일 writer 흡수 + guard [117])**: 프로세스 전역 static
+  `RestAssured.port`를 대입하던 **파일 139개**(그중 86개는 `useRandomPort` **정의**를 보유 — 정의
+  본문 자체가 대입문 1개를 담는다 — 나머지 53개는 정의 없이 직접 대입문만 보유) + `useRandomPort`
+  정의 **86건**, 대입문 총 **141건**을 신규 JUnit5 확장 `AxPort`(`backend/src/test/java/com/ax/
+  template/authblueprint/common/AxPort.java`) 경유 단일 writer로 흡수했다. **재측정 정정
+  (2026-08-17, fable5 적대적 검토 결함 3 봉합)**: 원 등재("파일 134개 + 정의 84건")는 이 결정
+  로그·AxPort.java 헤더의 "140 = 86+54"와 서로 모순됐다(같은 라운드 문서 4곳이 각기 다른 수).
+  기준 커밋 `f4457530`(P2-120 직전) 대비 `git diff`를 재실행해 확정: 정의 제거
+  `grep -c '^-.*static void useRandomPort('` = **86**(정의는 파일당 1개이므로 정의 보유 파일도
+  86); `RestAssured\s*\.\s*port\s*=` 매치 제거 라인은 원시 142건이나 그중 1건은 코드가 아니라
+  진단 메시지 문자열 리터럴(`portContext()`의 `"  RestAssured.port = " + RestAssured.port`)이라
+  제외 — 실제 대입문은 **141건**, 그 대입문을 보유했던 파일은 **139개**(86개 정의-보유 파일 +
+  53개 대입-only 파일). RestAssured API 소유 static이라 전역 자체는 없앨 수 없으므로, 처방은
+  "제거"가 아니라 **"쓰기 지점을 하나로 만드는 것"**이다. 확장은 각 테스트 직전 테스트 인스턴스의
+  `@LocalServerPort` 필드를 리플렉션으로 찾아 `RestAssured.port`를 세팅하고 그 사실을 기록; 필드가
+  없는 MOCK 환경(~32개 클래스)에서는 전역을 **건드리지 않고** 그 사실만 기록한다(무단 세팅 금지).
+  자동등록: `junit-platform.properties` + `META-INF/services/org.junit.jupiter.api.extension.
+  Extension` + include 필터 `com.ax.template.*`(의미론은 `ClassNamePatternFilterUtils` 디컴파일로
+  확인 — `.`→`[.$]`, `*`→`.+`, full match).
+  **등록 방식은 측정이 결정했다**: `testRuntimeClasspath` 178개 엔트리 전수 스캔에서 auto-detectable
+  서드파티 확장 0개(스캔이 공허하지 않음은 `org.junit.*`로 넓혀 4건 검출로 증명) — 그래도 미래
+  의존성을 구속하지 못하므로 include 필터로 이름까지 핀했다. **`given()` 호출부 1561개**라는
+  disk-truth가 "요청마다 명시 포트"라는 더 국소적인 대안을 실행 불가능으로 배제하고 단일 writer
+  확장을 유일한 경로로 결정했다. 의도적 예외(로컬 stub `HttpServer` 2파일 3사이트)는 allowlist가
+  아니라 `AxPort.overrideForStub(int)`/`restoreAfterStub()`로 **코드에 명시**. 규모:
+  238파일/108패키지, 3개 레인 병행.
+  **신규 guard `restassured_port_single_writer_guard.sh` [117]**: 테스트 트리의 어떤 파일도
+  `RestAssured.port`에 **대입** 불가(읽기는 허용). 확장 자신은 주체이므로 대상 밖이며, 그 제외가
+  목록이 아니라 **등록 파일에서 파생**됨을 별도 증명 — `pass_via_extension` fixture 사본에서
+  `META-INF/services` 파일만 지우면 exit 0→1로 뒤집힌다. live PASS(498 파일 스캔, writer 1개).
+  **차등 실측**: 확장 OFF에서 같은 migrated 클래스(`testApprovalWorkflow`/`testFavorites`)를 돌리면
+  67 tests 중 **34 failed**, `AssertionError: ... RestAssured.port = -1 ... port authority: NOTHING
+  PUBLISHED ... signup status=404 content-type= headers=[] body=404 Not Found`(P3-144 run E와 서명
+  일치) → 확장 ON에서 67/67 + 17/17 BUILD SUCCESSFUL. "제거만으로 통과한 건 전역에 남아있던 값
+  덕분"이라는 해석을 배제하고 (b)의 실패 형태가 P3-144와 바이트 일치함을 보인다.
+  **전 도메인 회귀**: 117 task result dir / 3940 tests. 실패 3건 전부 비회귀 — `testPortability`(기지
+  advisory) · aggregate `test`(동일 원인) · `testPayment` 1건은 환경 artifact(`ProcessBuilder
+  ("bash")`가 이 레인의 `PATH=/usr/bin:...`에서 `/bin` 누락으로 실패 — macOS는 `/bin/bash`만 있고
+  `/usr/bin/bash`는 없다; `/bin` 포함 재실행 시 93/93 PASS, 신규 P3-145로 등재).
+  **P3-144와의 관계 — closed하지 않는다**: 이 항목은 P3-144의 두 생존 후보 중 "포트 오조준"을
+  구조적으로 제거했을 뿐, 원 flake(P3-144)의 트리거는 여전히 미확정이다(P3-144 행 참조). 출처:
+  2026-08-17 P2-120 종결 라운드.
 
 ## P3 — industry-niche deferrals (generic 아님 — 낮은 우선순위)
 
@@ -1217,8 +1308,44 @@ tier 배정 근거(기존 관례 대조): 이 결함 클래스는 "**검증 표�
   `build.gradle.kts:118`이 기록한 형제 증상 `NoHttpResponseException`과 정합), (b) 잘못 겨냥된 포트. **다음 발생 시
   새 계측이 한 번에 판별한다** — `RestAssured.port`와 헬퍼가 publish한 포트가 불일치하면 clobbering 확정, 일치하면
   그 포트의 서버 문제로 확정.
-  done-when(교정): 다음 발생에서 계측이 (a)/(b) 중 하나를 지목하고 그 원인을 닫는다. 출처: 2026-08-15 R25 run E
-  (등재) → 2026-08-17 근본원인 추적(귀속 반증 + 진단 봉합 + 미재현으로 open 유지).
+  **갱신(2026-08-17 P2-120 종결)**: 후보 (b) "잘못 겨냥된 포트"는 이제 **구조적으로 제거됐다**. **파일
+  139개**(그중 86개는 `useRandomPort` 정의 보유, 나머지 53개는 대입문만 보유 — 대입문 총 141건;
+  자세한 재측정 산출은 P2-120 행)가 각자 `RestAssured.port`에 대입하던 것을 신규 JUnit5 확장
+  `AxPort`(`common`) 단일 writer로 흡수하고, 신규 guard `restassured_port_single_writer_guard.sh`
+  [117]이 테스트 트리의 어떤 대입도 이 writer 밖에서 재발하지 못하게 막는다(P2-120 행 참조) —
+  병렬/컨텍스트-공유 실행에서 전역이 stale해질 **경로 자체**가 사라졌다. 차등 실측(확장 OFF)이 이
+  후보의 실패 형태(`RestAssured.port = -1` →
+  `signup status=404 content-type= headers=[] body=404 Not Found`)가 이 flake의 서명과 일치함을 별도로
+  확인했다 — 즉 (b)가 실재했던 위험이었다는 것과, 그 위험이 이제 닫혔다는 것 둘 다 측정됐다. 남은
+  생존 후보는 **(a) 부하 하 Tomcat 컨테이너 레벨 응답 하나뿐**이며, 다음 재현 시 `AxPort.diagnose()`가
+  `RestAssured.port`와 헬퍼가 마지막 publish한 포트를 대조해 MATCHES(=서버측 문제, (a) 확정)/
+  CLOBBERED(=writer 밖 재대입이 있었다는 뜻, guard [117]의 구멍)/NOTHING PUBLISHED(=헬퍼가 아직 포트를
+  발행하지 못한 시점의 요청)로 **즉시 판별**한다 — **단, 이 즉시판별은 실패 경로가 `HttpExtract`를
+  경유할 때만 성립한다** (2026-08-17 fable5 적대적 검토 결함4 봉합). `AxPort.diagnose()`는
+  `HttpExtract`의 `AssertionError` 메시지에 실려 나가므로, 원 P3-144 경로(`ApprovalFlowIT` →
+  `obtainToken`, `HttpExtract` 경유)에서 재현하면 이 즉시판별이 그대로 적용된다. 그러나 P2-119가
+  등재한 잔여 — `*TestSupport.java`도 `HttpExtract`도 거치지 않고 비-TestSupport 테스트 파일이 응답을
+  직접 blind로 읽는 경로(재측정 seed census: 209사이트/91파일, P2-119 행)에서 같은 flake가 재발하면,
+  그 실패는 여전히 verdict 없는 bare `IllegalStateException`(또는 동급의 미진단 예외)으로 나타나고
+  `AxPort.diagnose()`의 출력은 그 예외 메시지에 실리지 않는다.
+  done-when(교정, 좁힘): 다음 발생에서 `AxPort.diagnose()` 출력이 (a) Tomcat 컨테이너 레벨 응답임을
+  확정하고 그 원인(백로그·타임아웃·커넥터 설정)을 닫거나, 진단이 예상 밖 결과(CLOBBERED)를 내면 guard
+  [117]의 구멍을 별도 항목으로 등재해 닫는다. 출처: 2026-08-15 R25 run E (등재) → 2026-08-17 근본원인
+  추적(귀속 반증 + 진단 봉합 + 미재현으로 open 유지) → 2026-08-17 P2-120 종결(후보 (b) 구조적 제거,
+  done-when 좁힘).
+- [x] P3-145 — **closed 2026-08-17 (등재 즉시 — macOS엔 `/usr/bin/bash`가 없다)**: 같은 라운드의 회귀
+  검증 중 `testPayment` 1건이 실패했다 — 원인은 애플리케이션이 아니라 **이 라운드가 조립한 `PATH`**였다.
+  `ProcessBuilder("bash")`를 쓰는 테스트가 `PATH=/usr/bin:...`(이 백로그 레인이 지시하는
+  `export PATH="/usr/bin:/bin:$PATH"`에서 `/bin`을 빠뜨린 변형)로 실행되면, macOS에는 `/bin/bash`만
+  있고 **`/usr/bin/bash`는 존재하지 않으므로** `ProcessBuilder`가 실행 파일을 찾지 못해 실패한다.
+  실측: `/bin`을 뺀 PATH로 재실행 시 실패 재현 → `/bin` 포함 PATH로 재실행 시 `testPayment` 93/93
+  PASS. 이 함정은 코드 결함이 아니라 **환경 조립 실수**이고, 이 프로젝트의 여러 지시문(본 문서
+  최상단 임무 서두 포함)이 반복해서 요구하는 `export PATH="/usr/bin:/bin:$PATH"`를 축약해 `/bin`을
+  빠뜨리면 재현된다 — 앞으로 이 레인을 따르는 모든 에이전트가 밟을 수 있는 함정이라 여기 등재한다.
+  done-when은 문서화 자체로 충족(코드 변경 대상이 없다 — macOS의 파일시스템 사실이며, R25
+  toolchain preflight의 대상도 아니다: bash 자체는 이미 `baseline` 요구사항이고, 문제는 `bash`
+  유무가 아니라 **어느 경로의 bash를 찾을 것인가**다). 출처: 2026-08-17 P2-120 종결 라운드 회귀
+  검증.
 
 ## P4 — trigger-bound scope_deferrals (수렴 분모 제외; by-design)
 

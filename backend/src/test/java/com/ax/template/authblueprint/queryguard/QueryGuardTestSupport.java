@@ -31,7 +31,4 @@ public final class QueryGuardTestSupport {
         return HttpExtract.path(httpExtractResponse, "accessToken", "POST /api/auth/email/login (obtainToken)");
     }
 
-    public static void useRandomPort(int port) {
-        RestAssured.port = port;
-    }
 }

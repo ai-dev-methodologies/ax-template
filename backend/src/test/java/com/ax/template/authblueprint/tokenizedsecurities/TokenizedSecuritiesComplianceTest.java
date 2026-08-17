@@ -33,7 +33,6 @@ class TokenizedSecuritiesComplianceTest {
 
     @BeforeEach
     void setup() {
-        TokenizedSecuritiesTestSupport.useRandomPort(port);
         member = TokenizedSecuritiesTestSupport.obtainToken(TokenizedSecuritiesTestSupport.freshEmail("ts-member"), "MEMBER");
         admin = TokenizedSecuritiesTestSupport.obtainToken(TokenizedSecuritiesTestSupport.freshEmail("ts-admin"), "ADMIN");
         hp = UUID.randomUUID().toString().replace("-", "").substring(0, 8) + "-";

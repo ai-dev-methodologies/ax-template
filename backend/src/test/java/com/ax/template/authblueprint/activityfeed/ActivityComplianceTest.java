@@ -3,7 +3,6 @@ package com.ax.template.authblueprint.activityfeed;
 import io.restassured.http.ContentType;
 
 import org.hamcrest.Matchers;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -21,10 +20,6 @@ class ActivityComplianceTest {
 
     @LocalServerPort int port;
 
-    @BeforeEach
-    void setup() {
-        ActivityFeedTestSupport.useRandomPort(port);
-    }
 
     // ─── PUBLISH family ─────────────────────────────────────────────────────
 

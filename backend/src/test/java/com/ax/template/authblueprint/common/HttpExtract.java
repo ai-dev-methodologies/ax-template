@@ -183,10 +183,18 @@ public final class HttpExtract {
     /**
      * A {@link Response} does not expose the request it answered, so this reports the closest
      * obtainable request target: the process-global RestAssured statics every HTTP test shares.
+     *
+     * <p>P2-120 appends {@link AxPort#diagnose()}. On its own, {@code RestAssured.port=NNNN} is
+     * an observation with no claim attached — it cannot say whether NNNN is the port this test
+     * was supposed to be using. {@link AxPort} publishes that port and remembers doing so, so
+     * the two can be compared here and the P3-144 "mistargeted port" hypothesis is either
+     * convicted (CLOBBERED) or eliminated (MATCHES) by the failure message itself, rather than
+     * by a later re-run that may not reproduce.
      */
     private static String target() {
         return "  RestAssured target: baseURI=" + RestAssured.baseURI
             + " RestAssured.port=" + RestAssured.port
-            + " basePath=" + RestAssured.basePath;
+            + " basePath=" + RestAssured.basePath
+            + "\n" + AxPort.diagnose();
     }
 }

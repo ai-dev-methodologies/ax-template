@@ -51,7 +51,4 @@ public final class NotificationTestSupport {
         return HttpExtract.path(httpExtractResponse, "userId", "GET /api/auth/me (resolveCallerUserId)");
     }
 
-    public static void useRandomPort(int port) {
-        RestAssured.port = port;
-    }
 }

@@ -2,8 +2,6 @@ package com.ax.template.authblueprint.webhooksigning;
 
 import io.micrometer.core.instrument.Meter;
 import io.micrometer.core.instrument.MeterRegistry;
-import io.restassured.RestAssured;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -40,11 +38,6 @@ class WebhookSigningComplianceTest {
 
     @Autowired
     MeterRegistry registry;
-
-    @BeforeEach
-    void setUp() {
-        RestAssured.port = port;
-    }
 
     /** Provision a fresh endpoint and return its 256-bit signing secret (hex), handed out ONCE. */
     private String provision() {

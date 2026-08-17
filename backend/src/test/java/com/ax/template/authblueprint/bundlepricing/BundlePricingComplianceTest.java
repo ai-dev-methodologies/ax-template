@@ -3,7 +3,6 @@ package com.ax.template.authblueprint.bundlepricing;
 import io.restassured.http.ContentType;
 import io.restassured.response.Response;
 import org.hamcrest.Matchers;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -29,10 +28,6 @@ class BundlePricingComplianceTest {
 
     @LocalServerPort int port;
 
-    @BeforeEach
-    void setup() {
-        BundlePricingTestSupport.useRandomPort(port);
-    }
 
     // ─── ITEMSUM family ──────────────────────────────────────────────────────
 

@@ -3,7 +3,6 @@ package com.ax.template.authblueprint.approvalworkflow;
 import io.restassured.http.ContentType;
 
 import org.hamcrest.Matchers;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -55,12 +54,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 @Tag("WORKFLOW")
 class ApprovalFlowIT {
 
+    // P2-120: the field stays — com.ax.template.authblueprint.common.AxPort reads it by
+    // reflection before every test and is the single writer of RestAssured.port. The manual
+    // publish that used to live in a per-test setup method here is gone.
     @LocalServerPort int port;
-
-    @BeforeEach
-    void setup() {
-        ApprovalWorkflowTestSupport.useRandomPort(port);
-    }
 
     // ─── HAPPY — 2-step 결재선 (팀장 → 본부장) end-to-end to APPROVED ───────────
 

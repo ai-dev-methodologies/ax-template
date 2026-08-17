@@ -1,7 +1,6 @@
 package com.ax.template.authblueprint.notification;
 
 import io.restassured.http.ContentType;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -26,11 +25,6 @@ class NotificationAuthZTest {
 
     @Autowired NotificationRepository notificationRepository;
     @Autowired NotificationPreferencesRepository preferencesRepository;
-
-    @BeforeEach
-    void setup() {
-        NotificationTestSupport.useRandomPort(port);
-    }
 
     @Test
     @Tag("NOTIFICATION")

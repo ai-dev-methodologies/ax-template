@@ -46,7 +46,6 @@ class ValuationRunComplianceTest {
 
     @BeforeEach
     void setup() {
-        ValuationRunTestSupport.useRandomPort(port);
         member = ValuationRunTestSupport.obtainToken(ValuationRunTestSupport.freshEmail("val-member"), "MEMBER");
     }
 

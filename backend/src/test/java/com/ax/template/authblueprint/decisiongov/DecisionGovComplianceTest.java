@@ -43,7 +43,6 @@ class DecisionGovComplianceTest {
 
     @BeforeEach
     void setup() {
-        DecisionTestSupport.useRandomPort(port);
         member = DecisionTestSupport.obtainToken(DecisionTestSupport.freshEmail("dg-member"), "MEMBER");
     }
 
