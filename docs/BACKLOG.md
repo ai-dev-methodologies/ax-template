@@ -27,10 +27,21 @@ signature를 발견**(17/17)함으로써 경험적으로 반증되었다 — 발
 | Tier | 전체 | closed | 수렴률 |
 |---|---|---|---|
 | P0 (expiry-bound / live defects) | 30 | 30 | **100%** |
-| P1 (generic signature backlog) | 74 | 74 | **100%** |
-| P2 (verification escapes) | 117 | 111 | **95%** |
+| P1 (generic signature backlog) | 75 | 74 | **99%** |
+| P2 (verification escapes) | 119 | 112 | **94%** |
 | P3 (industry-niche deferrals) | 143 | 141 | **99%** |
-| **P0–P3 합계 (수렴 분모)** | **364** | **356** | **98%** |
+| **P0–P3 합계 (수렴 분모)** | **367** | **357** | **97%** |
+
+> 2026-08-17 P3-144 근본원인 추적 — 2026-08-15 등재된 ContextCache/`@LocalServerPort` 귀속을 **반증**했다(해당
+> 5개 `@SpringBootTest`는 key-forking 어노테이션 0개 → live 컨텍스트 키 1개뿐, 상한 128 아래에서 eviction은
+> 구조적으로 불가능). 실제 preimage는 rest-assured가 **Content-Type 없는 응답**을 받은 것 하나뿐이고, 앱은
+> 실패 경로 전부가 `application/problem+json`이라 그 응답을 만들 수 없다(응답한 것은 포트 8080의 다른
+> 프로세스이거나 부하 하 Tomcat 컨테이너 응답). 진단을 파괴하던 결함(`ApprovalWorkflowTestSupport`의 무단언
+> 응답 추출)을 봉합(**P2-116 closed**, RED 2/2→GREEN 10 XML/67 tests/0 failures), 확산 범위(**P2-117**,
+> 115개 파일 동일 blindness)와 인접 위험 경로(**P1-75**, JwtConfig 컨텍스트별 RSA 키쌍이 여는 컨텍스트 간
+> 토큰 무효화)를 정직 등재. 원 flake는 ~35회 재현 시도 전부 실패해 **P3-144는 open 유지**(트리거 미확정,
+> done-when을 "다음 발생에서 (a)/(b) 후보 중 하나를 지목"으로 교정). 분모 364→**367**(+P1-75·+P2-117), closed
+> 356→**357**(+P2-116) = **97%**. 북극성(2)의 IDW18+ 동결 해제선(70%)은 계속 크게 상회.
 
 > 2026-08-15 외부 adversarial critic(codex, read-only) 라운드 — 2026-08-14 shipped `ed5ca2a7`(v0.1.7,
 > downstream-fixture E2E)에 대해 codex가 `VERDICT: ITERATE`와 함께 결함 9건을 냈다. **CRITICAL 2건은
@@ -247,6 +258,19 @@ R25). *이름이 세션 기록에만 있던 항목을 여기로 영구화했다.
 - [x] P1-70 부분환불 idempotency 부재 — 중복 환불(실 이중 지출) 가능 — `RefundService.refund()` (backend/src/main/java/com/ax/template/authblueprint/payment/RefundService.java:46-123)는 `idempotencyKey`를 행에 저장만 하고(line 108) **조회하지 않는다**. `RefundRepository`에 `findByIdempotencyKey`가 없고, `refunds.idempotency_key`는 UNIQUE가 아닌 일반 INDEX(V003__create_payment_tables.sql:44,49-50)라 DB 백스톱도 없다. 대조: `PaymentService.createPayment`(PaymentService.java:86-96)는 `idempotencyStore.get(...)`로 replay를 정상 차단한다. 재현: capturedAmount=100 결제에 `POST /api/payments/{id}/refund {"amount":30}` + `Idempotency-Key: K` → Refund #1(30) 생성, state=PARTIAL_REFUNDED → 클라 타임아웃으로 **동일 키 재시도** → refund-of-refund 가드(line 51-54)는 state가 REFUNDED가 아니라 미발동, 합계검사도 30+30=60≤100로 통과 → **Refund #2(30) 중복 생성 = 30 이중 환불**. 전액환불 경로만 state machine의 REFUNDED 가드로 우연히 막히나 그것도 idempotent replay가 아니라 409 에러다. done-when: RefundService가 `(paymentId|userId, idempotencyKey)`로 기존 환불을 선조회해 있으면 그 행을 반환(부작용 재실행 금지) + `UNIQUE(payment_id, idempotency_key)` 제약 추가. 응답측 미스매치(P1-68) 및 요청측 100배 결함(P1-69)과 같은 돈 표면이므로 wave-3 money 정합화에서 함께 봉합. 출처: 2026-07-26 gap-hunt 리드 검증(adversarial-confirmed). closure: 2026-07-26 wave-3 money 정합화 — 결정=정수-minor wire(요청·응답 canonical, decimal-string은 요청 입력 branch로 유지). MoneyWire(shape)+MoneyDeserializer(정수→minor)+PaymentService 검증순서 재배치(currency→resolve)+PaymentBodyMapper.minorOrNull/RefundResponse long 방출+V116 UNIQUE(payment_id,idempotency_key)+RefundService 소유권로드 직후 replay 단축(200 vs 201). testPayment 80/80(@Disabled 해제), testEcommerce 11/11, testCommonPrimitives 116/116, FE 399/399, guards 209/0, seam guard 0. 뮤테이션락 4종 RED-on-revert 실증.
 - [x] P1-72 pay 레퍼런스앱이 결제 wire를 MAJOR로 오독 — 100배 표시오류 — 응답측 정합화(P1-68)로 결제 wire가 정수 MINOR로 canonical화된 뒤에도 `apps/pay`가 `formatMajor`로 렌더해 $10.99 결제가 **US$1,099.00**으로 표시됨(골든 paymentUsd amount:1099가 근거). codex 지적 목록에 없던 건으로 구현자가 자체 발견. closure: 2026-07-26 — overview(타일+최근원장)·transactions(4곳, 환불확인 다이얼로그 포함)·checkout(결과 3행) 전 렌더 지점을 minor 기준으로 교체(버튼 프리뷰는 사용자가 입력한 major 문자열이라 formatMajor 유지), lib/money.ts·paymentClient.ts 문서블록 정정(Payment.amount=minor). overview 경로만 테스트 커버, transactions/checkout은 기계적 교체+tsc 통과(@/ alias가 frontend/src를 가리켜 앱 화면은 frontend/tests에서 렌더 불가). 출처: 2026-07-26 wave-3 money 후속.
 - [x] P1-74 plugin 채널 ESLint 배선이 **조용히 전역 무력화**될 수 있었다 — `layoutFrom()`이 다중 세그먼트 `ax.srcDir`(예: `packages/web/src`)을 무검증 수용 → `classifySrcPath`가 전 파일을 `layer:null`로 분류 → 4개 레이어 경계 룰이 한 건도 발화하지 않는데 lint는 0위반 green(**거짓 green**). 스키마(`pattern ^[^/]+$`)가 이를 제약한다고 문서가 주장했으나 **lint 시점에 스키마를 실행하는 주체가 없어** 손편집·오생성 config가 그대로 통과했다. 재현: `layoutFrom({ax:{srcDir:'packages/web/src'}})` → `classifySrcPath` `{"layer":null}`. → **closed 2026-08-09**: `layoutFrom()`이 즉시 `Error` throw로 거부(ESLint CLI **exit 2** — 일반 lint 오류보다 강하며 `--max-warnings` 류로 못 거른다), 메시지가 위반 값·왜 전역 무력화인지·처방(깊은 접두는 `react.root`로 옮길 것)을 명시. **다른 필드의 crash-free 계약은 보존**(alias/layers malformed는 종전대로 무예외 — 독립 재현으로 확인). 회귀 테스트 4건 추가(stash bisection으로 비공허성 확인 — 수정 없으면 3건 FAIL), 플러그인 스위트 56/56 PASS. 동일한 거짓 주장을 담고 있던 `ax.config.schema.json` 설명문·`docs/PLUGIN-CHANNEL.md` 경로B 2단계·`docs/USAGE-GUIDE.md` §3/T-2도 함께 정정. 문서화된 D-1 P3 "crash-free defaults" 계약을 이 한 형태에 대해 의도적으로 번복 → 사유는 DECISIONS R110.
+
+**P3-144 근본원인 추적 부산물 (2026-08-17)**
+- [ ] P1-75 — **컨텍스트 간 토큰 무효화 경로 (실재, 미발생)**: `JwtConfig.java:25-27`이 **application
+  context마다 새 RSA 키쌍**을 만든다. 따라서 한 컨텍스트에서 발급받은 토큰은 다른 컨텍스트에 무효다.
+  `resolveUserId`가 부르는 `GET /api/auth/me`는 인증 경로라 Spring Security의
+  `BearerTokenAuthenticationEntryPoint`가 **`Content-Type` 없는 401**을 정당하게 반환할 수 있다 → 한
+  테스트 클래스가 (컨텍스트 캐시 회전 등으로) 두 컨텍스트에 걸치면, 클래스 전건 uniform 실패가
+  포트/외부 프로세스 오응답이 아니라 **앱 내부 경로로도** 재현 가능한 일반형 신호다. P3-144의
+  2026-08-15 사건 자체는 이 경로가 아님을 bytecode로 확정했다(`obtainToken`을 지목, `resolveUserId`
+  아님) — 그러나 경로 자체는 살아있고 다른 테스트 클래스·다른 세션에서 발현할 수 있다. done-when:
+  컨텍스트 경계를 넘는 토큰 재사용이 애초에 불가능함을 강제하거나(예: 키쌍을 컨텍스트 간 공유·고정),
+  최소한 그 401을 다른 원인들과 구분 가능하게 진단화한다. 출처: 2026-08-17 P3-144 근본원인 추적
+  부산물(register-only).
 
 ## P2 — verification escapes (검증 체계 자체의 갭)
 
@@ -766,6 +790,30 @@ tier 배정 근거(기존 관례 대조): 이 결함 클래스는 "**검증 표�
   premise-class 단언)에 맞춰 통일. 이 정정은 하네스 코드 변경이 아니라 산문 통일이라 별도 diff는 이미
   다른 트랙에서 처리됐다 — 이 항목에는 그 통일이 이뤄졌다는 사실만 기록한다. 출처: 2026-08-14 shipped
   `ed5ca2a7`에 대한 외부 adversarial critic(codex, read-only) 감사.
+- [x] P2-116 — **closed 2026-08-17 (P3-144 근본원인 추적 진단 봉합)**: `ApprovalWorkflowTestSupport`가
+  status를 단언하기 전에 응답 본문에서 `accessToken`/`userId`를 `extract().path(...)`로 꺼내던 것이
+  P3-144 재현 시도 중 정보-파괴형 결함으로 확정됐다 — 실패한 요청에 실제로 응답한 프로세스가
+  이 애플리케이션이 아니었는데도(포트 8080의 `BetterDisplay`(pid 834) 또는 부하 하 Tomcat 컨테이너
+  레벨 응답), `rest-assured`의 `IllegalStateException`이 그 사실을 지운 채 "no content-type" 한 줄로
+  뭉갰다. 봉합: status를 먼저 단언하고, 실패 시 status·content-type·응답 헤더·본문 발췌·
+  `RestAssured.port`·헬퍼가 마지막 publish한 포트를 예외 메시지에 싣는다. `useRandomPort`는
+  non-positive 포트를 publish 전에 거부. 성공 경로는 byte-identical(회귀 없음). 신규
+  `ApprovalWorkflowTestSupportDiagnosabilityTest`(`@Tag("WORKFLOW")`)가 deliberate-break로 봉합의
+  비공허성을 증명 — 수정 전 재현 로그 2/2 실패(P3-144 run E와 동일 예외) → 수정 후
+  `testApprovalWorkflow` 10 XML / 67 tests / 0 failures / exit 0. 밴드에이드가 아닌 이유: per-class
+  `@DirtiesContext` 추가 0 · ContextCache 상한 상향 0 · 컨텍스트 수명 무변경 — 세 금지 레버를 쓰지
+  않고, 측정 가능했던 유일한 결함(정보 파괴)만 제거했다. 원 flake의 근본원인(P3-144)은 이 항목이
+  닫지 않는다 — 진단 가능성만 닫는다. 출처: 2026-08-17 P3-144 근본원인 추적.
+- [ ] P2-117 — **동일 "status 단언 없이 응답 추출" blindness가 전 트리에 퍼져 있다**: 직전 항목이
+  `ApprovalWorkflowTestSupport` 한 곳만 봉합했다 — `extract().path("accessToken")` 류를 status 단언
+  없이 쓰는 테스트 파일이 **115개**(그중 86개가 `*TestSupport.java`), 프로세스 전역
+  `RestAssured.port`를 대입하는 파일이 **138개** 그대로 남아 있다. 이 중 어느 것이든 같은 유형의
+  불투명 실패(응답한 프로세스가 애플리케이션이 아닌데도 진단 정보 없이 뭉개지는 예외)를
+  재생산할 수 있다. 이번 라운드는 최소 diff 원칙(P3-144 재현에 필요한 표면 1곳)에 따라 나머지
+  114곳에는 손대지 않았다 — 확산은 별도 스코프다. done-when: P2-116의 기계적 레시피(status
+  선단언 + status/content-type/헤더/본문 발췌/포트 동봉)를 전 트리 115개 파일에 확산하거나, 공유
+  헬퍼(RestAssured response-extraction wrapper)로 추출해 신규 테스트가 기본으로 안전하게 만든다.
+  출처: 2026-08-17 P3-144 근본원인 추적 부산물(census, register-only).
 
 ## P3 — industry-niche deferrals (generic 아님 — 낮은 우선순위)
 
@@ -1055,10 +1103,45 @@ tier 배정 근거(기존 관례 대조): 이 결함 클래스는 "**검증 표�
   `ApprovalFlowIT` 포함 — 0-test 공허 green이 아님을 확인). 이 커밋은 `backend/`를 **0 파일** 변경했고 직전 R25는
   같은 backend 코드에서 PASS했으므로 회귀가 아니다. 정황: 같은 머신에서 `fixture_kill_proof` 97항목 변이 실행이
   동시에 돌아 per-domain 스텝이 **44분**(평소보다 김) 걸렸다. CLAUDE.md가 문서화한 `@LocalServerPort`/ContextCache
-  서명(전건 uniform 실패 + 격리 통과)과 일치하나, **R22-blanket 이후에도 재현됐다**는 것이 새 사실이다.
-  done-when: (a) 고부하 재현 조건을 결정론적으로 좁히거나, (b) `ApprovalFlowIT`에 `@DirtiesContext(BEFORE_CLASS)`
-  같은 국소 레버가 아니라 원인(포트/컨텍스트 수명)을 직접 닫는 처방을 찾는다. **덮지 않는다** — flake를 재실행으로
-  넘긴 사실 자체를 여기 기록해 다음 관측자가 표본을 누적할 수 있게 한다. 출처: 2026-08-15 R25 run E.
+  서명(전건 uniform 실패 + 격리 통과)과 일치하나, **R22-blanket 이후에도 재현됐다**는 것이 새 사실이다 — **이 귀속은
+  아래에서 반증됐다. 문단을 지우지 않고 그대로 보존한다: 무엇을 믿었다가 무엇으로 반증됐는지가 다음 관측자에게
+  값어치다.**
+  **반증됨(2026-08-17 근본원인 추적)**: 위 문단의 ContextCache/`@LocalServerPort` 귀속은 **틀렸다**. `@Tag("WORKFLOW")`
+  클래스 중 `@SpringBootTest`는 5개이고 **5개 전부** key-forking 어노테이션이 0개다(`properties=`·
+  `@TestPropertySource`·`@Import`·`@MockitoBean`·`@AutoConfigureMockMvc`·`@ActiveProfiles` 없음) → 그 5개가 공유하는
+  `MergedContextConfiguration` 키는 **1개** → 그 task JVM의 live 컨텍스트는 최대 **1개**, 상한은 **128**. `ContextCache`
+  eviction은 live 고유 키 수가 상한을 넘어야 발생하므로 **per-domain task JVM에서는 구조적으로 불가능**하다 — R22의
+  메커니즘은 여기 적용된 적이 없다. Gradle이 task마다 별도 JVM을 fork한다는 전제도 가정이 아니라 **측정**으로
+  확인됨(`--info` 로그에 `Gradle Test Executor 1`/`2`가 각기 다른
+  `-Dorg.gradle.internal.worker.tmpdir=.../build/tmp/<task>/work`로 뜬다).
+  **새로 증명된 것**: 실제 테스트 classpath(rest-assured 6.0.1)에 4가지 응답 형태를 넣어 측정한 결과, `IllegalStateException:
+  Cannot invoke the path method because no content-type was present in the response and no default parser has been
+  set.`의 **preimage는 정확히 하나** — **`Content-Type` 헤더가 아예 없는 응답**(200+`application/json`+빈 본문은
+  `JsonPathException`, `application/problem+json` 401은 예외 없이 `path=null`, 포트 0은
+  `IllegalArgumentException: Port must be greater than 0` — 전부 다른 결과). 앱의 `POST /api/auth/email/login`은 그
+  응답을 **만들 수 없다** — `SecurityConfig.java:316`에서 `permitAll`, 실패 경로 전부가 `application/problem+json`
+  (`AuthExceptionHandler.java:49,61` + `GlobalProblemDetailAdvice`) ⇒ **그 요청에 답한 것은 이 애플리케이션이
+  아니었다.** bytecode `LineNumberTable`로 실패 지점이 `obtainToken`(login)이며 이후 `resolveUserId`가 아님을
+  확정(line 263 → `invokestatic obtainToken`, `resolveUserId`는 265). 이 머신에서 `BetterDisplay`(pid 834)가 `*:8080`에
+  리슨하며 `HTTP/1.1 404 OK` + **Content-Type 없음** + 본문 `404 Not Found`를 반환한다 — 관측 형태와 바이트 일치.
+  rest-assured의 **기본 포트가 8080**이다. macOS ephemeral 범위(49152–65535)에는 `rapportd`(49152) 외 리스너 없음.
+  **봉합(별도 closed 행 — P2-116 참조)**: `ApprovalWorkflowTestSupport`가 **검증되지 않은 응답에서 추출하던 것**을
+  봉합 — status를 먼저 단언하고, 실패 시 status·content-type·응답 헤더·본문 발췌·`RestAssured.port`·헬퍼가 마지막으로
+  publish한 포트를 메시지에 싣는다. `useRandomPort`는 non-positive 포트를 publish 전에 거부. 성공 경로는
+  byte-identical. 신규 `ApprovalWorkflowTestSupportDiagnosabilityTest`(`@Tag("WORKFLOW")`)가 deliberate-break 증명.
+  차등: **수정 전 2/2 실패**(기록된 실제 예외가 run E의 그 예외와 동일) → **수정 후 `testApprovalWorkflow` 10 XML /
+  67 tests / 0 failures / exit 0**. 밴드에이드가 아닌 이유: per-class `@DirtiesContext` 추가 0, 상한 상향 0, 컨텍스트
+  수명 무변경 — 금지된 세 수단을 쓰지 않고, **측정 가능했던 유일한 결함(정보 파괴)**만 제거했다.
+  **닫히지 않은 것 — P3-144는 open 유지**: 원 flake를 **재현하지 못했다** — 4개 조건에서 총 ~35회 실행, 적중 0:
+  격리 task + CPU burner 24개(load ~34) 1회 / 17-task collapsed prefix + burner 3회 / **전체 115-task collapsed
+  호출(`--continue`, 실제 R25 형상) + burner 1회** / 별도 프로젝트 사본 2개에서 `--rerun` 타이트 루프 27회 / 검증
+  3회. 보관된 실패 로그 2건은 전부 내 `kill -9`(exit 137)이지 재현이 아니다. → **트리거는 열려 있다.** 살아남은
+  후보(전부 미검증): (a) 부하 하 Tomcat 컨테이너 레벨 응답(400/408/503은 `Content-Type`이 없다 —
+  `build.gradle.kts:118`이 기록한 형제 증상 `NoHttpResponseException`과 정합), (b) 잘못 겨냥된 포트. **다음 발생 시
+  새 계측이 한 번에 판별한다** — `RestAssured.port`와 헬퍼가 publish한 포트가 불일치하면 clobbering 확정, 일치하면
+  그 포트의 서버 문제로 확정.
+  done-when(교정): 다음 발생에서 계측이 (a)/(b) 중 하나를 지목하고 그 원인을 닫는다. 출처: 2026-08-15 R25 run E
+  (등재) → 2026-08-17 근본원인 추적(귀속 반증 + 진단 봉합 + 미재현으로 open 유지).
 
 ## P4 — trigger-bound scope_deferrals (수렴 분모 제외; by-design)
 

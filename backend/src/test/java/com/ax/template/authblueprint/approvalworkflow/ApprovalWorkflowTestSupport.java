@@ -1,39 +1,174 @@
 package com.ax.template.authblueprint.approvalworkflow;
 
 import io.restassured.RestAssured;
+import io.restassured.http.Header;
+import io.restassured.response.Response;
 
 import java.util.UUID;
 
 import static io.restassured.RestAssured.given;
 
+/**
+ * Shared HTTP helpers for the approval-workflow ITs.
+ *
+ * <p><b>BACKLOG P3-144 — why these helpers validate before extracting.</b> These methods used
+ * to end in {@code .then().extract().path("accessToken")} with no status assertion. Measured
+ * against the exact test runtime classpath (rest-assured 6.0.1), {@code path()} throws
+ * {@code IllegalStateException: Cannot invoke the path method because no content-type was
+ * present in the response and no default parser has been set} — <b>and it throws that for
+ * exactly one input: a response carrying NO {@code Content-Type} header at all</b> (an empty
+ * body with a JSON content type raises {@code JsonPathException} instead, and
+ * {@code application/problem+json} parses fine and yields {@code null}).
+ *
+ * <p>That is why the 2026-08-15 R25 failure was undiagnosable: the whole class died with a bare
+ * {@code IllegalStateException} that named no status, no body, and no port — even though the
+ * exception was in fact carrying the strongest possible signal, namely "whatever answered this
+ * request was not this application's login endpoint" (every application-level outcome of
+ * {@code /api/auth/email/login} is rendered by {@code AuthExceptionHandler} as
+ * {@code application/problem+json}, and a success is {@code application/json}).
+ *
+ * <p>The rule these helpers now follow: <b>never extract from an unvalidated response.</b> The
+ * status is checked first, so a wrong-endpoint / wrong-server / container-level response fails
+ * as itself (status + content-type + body + port + headers) instead of as a parser error.
+ * The success path is unchanged.
+ */
 public final class ApprovalWorkflowTestSupport {
 
     private ApprovalWorkflowTestSupport() {}
+
+    /** Bodies are truncated in failure messages so one dump cannot drown the report. */
+    private static final int BODY_EXCERPT_LIMIT = 400;
+
+    /**
+     * The last port this helper published to the process-global {@link RestAssured#port}.
+     * Reported alongside {@code RestAssured.port} on failure: if the two differ, the global was
+     * mutated by something other than this class's {@code @BeforeEach} between the setup and the
+     * request — which is the one hypothesis for P3-144 that cannot be tested any other way,
+     * because {@code RestAssured.port} is process-global mutable state shared by every HTTP test
+     * in the JVM (137 test files assign it).
+     */
+    private static volatile int lastPublishedPort = -1;
 
     public static String freshEmail(String prefix) {
         return prefix + "-" + UUID.randomUUID() + "@example.com";
     }
 
     public static String obtainToken(String email, String role) {
-        given()
+        Response signup = given()
             .header("Content-Type", "application/json")
             .body("{\"email\":\"" + email + "\",\"password\":\"securepassword12\",\"role\":\"" + role + "\"}")
         .when().post("/api/auth/email/signup");
-        return given()
+
+        Response login = given()
             .header("Content-Type", "application/json")
             .body("{\"email\":\"" + email + "\",\"password\":\"securepassword12\"}")
-        .when().post("/api/auth/email/login")
-        .then().extract().path("accessToken");
+        .when().post("/api/auth/email/login");
+
+        if (login.getStatusCode() != 200) {
+            throw new AssertionError(
+                "obtainToken(" + email + ", " + role + "): POST /api/auth/email/login expected 200 but was "
+                    + login.getStatusCode() + ".\n" + context(signup, login));
+        }
+        String token = extractQuietly(login, "accessToken");
+        if (token == null) {
+            throw new AssertionError(
+                "obtainToken(" + email + ", " + role + "): login returned 200 but no 'accessToken' could be "
+                    + "read from the body.\n" + context(signup, login));
+        }
+        return token;
     }
 
     public static String resolveUserId(String token) {
-        return given()
+        Response me = given()
             .header("Authorization", "Bearer " + token)
-        .when().get("/api/auth/me")
-        .then().extract().path("userId");
+        .when().get("/api/auth/me");
+
+        if (me.getStatusCode() != 200) {
+            throw new AssertionError(
+                "resolveUserId: GET /api/auth/me expected 200 but was " + me.getStatusCode() + ".\n"
+                    + portContext() + "\n"
+                    + "  me " + describe(me));
+        }
+        String userId = extractQuietly(me, "userId");
+        if (userId == null) {
+            throw new AssertionError(
+                "resolveUserId: GET /api/auth/me returned 200 but no 'userId' could be read from the body.\n"
+                    + portContext() + "\n"
+                    + "  me " + describe(me));
+        }
+        return userId;
     }
 
     public static void useRandomPort(int port) {
+        if (port <= 0) {
+            throw new AssertionError(
+                "@LocalServerPort injected a non-positive port (" + port + "). RestAssured would be "
+                    + "pointed at a server that is not this test's application, so every request in the "
+                    + "class would fail uniformly. Failing here instead, where the cause is visible.");
+        }
         RestAssured.port = port;
+        lastPublishedPort = port;
+    }
+
+    /**
+     * Names both the global RestAssured target and the port this class last published to it.
+     * A mismatch means the process-global was clobbered between {@code @BeforeEach} and the
+     * request; equality rules that hypothesis out and points at the server on that port instead.
+     */
+    private static String portContext() {
+        return "  RestAssured.port = " + RestAssured.port
+            + " (last published by this helper: " + lastPublishedPort + ")";
+    }
+
+    private static String context(Response signup, Response login) {
+        return portContext() + "\n"
+            + "  signup " + describe(signup) + "\n"
+            + "  login  " + describe(login);
+    }
+
+    /** Returns the path value, or {@code null} if the body cannot be parsed. */
+    private static String extractQuietly(Response response, String path) {
+        try {
+            Object value = response.then().extract().path(path);
+            return value == null ? null : String.valueOf(value);
+        } catch (RuntimeException e) {
+            // Unparsable / missing content type — describe() carries the real evidence.
+            return null;
+        }
+    }
+
+    /**
+     * Response headers are part of the dump on purpose: an absent {@code Content-Type} plus a
+     * foreign {@code Server}/{@code WWW-Authenticate} header is what distinguishes "our Tomcat
+     * denied it" from "something that is not our Tomcat answered".
+     */
+    private static String describe(Response response) {
+        String body;
+        try {
+            body = response.getBody().asString();
+        } catch (RuntimeException e) {
+            body = "<body unreadable: " + e + ">";
+        }
+        if (body == null) {
+            body = "<null>";
+        }
+        if (body.length() > BODY_EXCERPT_LIMIT) {
+            body = body.substring(0, BODY_EXCERPT_LIMIT) + "…(" + body.length() + " chars)";
+        }
+        StringBuilder headers = new StringBuilder();
+        try {
+            for (Header h : response.getHeaders()) {
+                if (headers.length() > 0) {
+                    headers.append("; ");
+                }
+                headers.append(h.getName()).append('=').append(h.getValue());
+            }
+        } catch (RuntimeException e) {
+            headers.append("<headers unreadable: ").append(e).append('>');
+        }
+        return "status=" + response.getStatusCode()
+            + " content-type=" + response.getContentType()
+            + " headers=[" + headers + "]"
+            + " body=" + body;
     }
 }
