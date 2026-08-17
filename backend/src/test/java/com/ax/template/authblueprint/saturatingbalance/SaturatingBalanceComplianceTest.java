@@ -74,7 +74,7 @@ class SaturatingBalanceComplianceTest {
         assertThat(over.jsonPath().getFloat("appliedAmount")).isEqualTo(10.0f);
 
         ExtractableResponse<Response> balance = given().header("Authorization", "Bearer " + token)
-            .when().get("/api/saturating-balances/" + id).thenReturn().then().extract();
+            .when().get("/api/saturating-balances/" + id).thenReturn().then().statusCode(200).statusCode(200).extract();
         assertThat(balance.jsonPath().getFloat("current")).isEqualTo(100.0f);
 
         // already at cap — a further accrual is a normal 200/201 clamped no-op, not an error
@@ -94,7 +94,7 @@ class SaturatingBalanceComplianceTest {
         assertThat(over.jsonPath().getFloat("appliedAmount")).isEqualTo(-10.0f);
 
         ExtractableResponse<Response> balance = given().header("Authorization", "Bearer " + token)
-            .when().get("/api/saturating-balances/" + id).thenReturn().then().extract();
+            .when().get("/api/saturating-balances/" + id).thenReturn().then().statusCode(200).statusCode(200).extract();
         assertThat(balance.jsonPath().getFloat("current")).isEqualTo(0.0f);
 
         ExtractableResponse<Response> alreadyEmpty = debit(id, new BigDecimal("5.0000"));
@@ -111,7 +111,7 @@ class SaturatingBalanceComplianceTest {
         debit(id, new BigDecimal("200.0000"));                            // clamped: requested 200, applied -100
 
         ExtractableResponse<Response> ledger = given().header("Authorization", "Bearer " + token)
-            .when().get("/api/saturating-balances/" + id + "/ledger").thenReturn().then().extract();
+            .when().get("/api/saturating-balances/" + id + "/ledger").thenReturn().then().statusCode(200).extract();
         List<Float> requested = ledger.jsonPath().getList("requestedAmount", Float.class);
         List<Float> applied = ledger.jsonPath().getList("appliedAmount", Float.class);
         assertThat(requested).containsExactly(90.0f, 20.0f, 200.0f);
@@ -119,7 +119,7 @@ class SaturatingBalanceComplianceTest {
 
         double sumApplied = applied.stream().mapToDouble(Float::doubleValue).sum();
         ExtractableResponse<Response> balance = given().header("Authorization", "Bearer " + token)
-            .when().get("/api/saturating-balances/" + id).thenReturn().then().extract();
+            .when().get("/api/saturating-balances/" + id).thenReturn().then().statusCode(200).statusCode(200).extract();
         assertThat(sumApplied).isEqualTo((double) balance.jsonPath().getFloat("current"));
     }
 

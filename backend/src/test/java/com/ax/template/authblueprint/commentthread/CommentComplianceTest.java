@@ -191,7 +191,7 @@ class CommentComplianceTest {
         String adminToken = CommentThreadTestSupport.obtainToken(
             CommentThreadTestSupport.freshEmail("az3-admin"), "ADMIN");
         String adminUserId = given().header("Authorization", "Bearer " + adminToken)
-            .when().get("/api/auth/me").then().extract().path("userId");
+            .when().get("/api/auth/me").then().statusCode(200).extract().path("userId");
 
         String id1 = createComment(authorToken, "post", "p-az3", "to be admin-deleted", null);
         String id2 = createComment(authorToken, "post", "p-az3", "to be self-deleted", null);

@@ -197,6 +197,7 @@ class WithholdingSplitComplianceTest {
     @Test @Tag("WHT-IMMUTABLE-004")
     void reversal_createsNewPosting_originalUntouched() {
         ExtractableResponse<Response> original = post("50", "0.3", freshPeriod());
+        assertThat(original.statusCode()).isEqualTo(201);
         String originalId = original.jsonPath().getString("id");
 
         ExtractableResponse<Response> reversed = reverse(originalId);

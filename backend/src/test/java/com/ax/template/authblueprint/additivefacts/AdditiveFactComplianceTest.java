@@ -97,7 +97,9 @@ class AdditiveFactComplianceTest {
         String period = createPeriod("2026-06");
         String src = "meter-" + UUID.randomUUID();
         ExtractableResponse<Response> first = addFact(period, src, "ext-dup", "12.0000", null);
+        assertThat(first.statusCode()).isEqualTo(201);
         ExtractableResponse<Response> retry = addFact(period, src, "ext-dup", "12.0000", null);
+        assertThat(retry.statusCode()).isEqualTo(201);
 
         assertThat(retry.jsonPath().getString("id")).isEqualTo(first.jsonPath().getString("id"));
         assertThat(get(period).jsonPath().getDouble("total")).isEqualTo(12.0);
@@ -112,6 +114,7 @@ class AdditiveFactComplianceTest {
         addFact(period, src, "ext-a", "40.0000", null);
 
         ExtractableResponse<Response> closed = post(period + "/close");
+        assertThat(closed.statusCode()).isEqualTo(200);
         assertThat(closed.jsonPath().getString("status")).isEqualTo("CLOSED");
         assertThat(closed.jsonPath().getDouble("frozenAggregate")).isEqualTo(40.0);
 

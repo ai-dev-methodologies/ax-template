@@ -80,13 +80,59 @@
 #         gone at false; and zero residual directives / unsubstituted @@tokens@@ in all four
 #         renders. Everything else here renders one config only, where a condition that never
 #         varies is indistinguishable from one that does.
+#   A11-route  THE NEXT/APP-ROUTER RULE AXIS (P2-105) — one planted `"use client"` route file at
+#         `<srcDir>/app/**/page.tsx` is BLOCKED at commit and the output names ALL THREE
+#         route-axis rule ids: ax/no-route-client-data-fetching, ax/no-server-state-in-local-state,
+#         ax/no-god-route. A1/A2 exercise only ax/no-upward-layer-import, whose whole input is an
+#         import string; these three additionally require route detection (`isRouteFile`) and the
+#         `"use client"` directive to be seen, so a broken layers mapping or a settings block that
+#         never reached them would leave them inert while A1/A2 stayed green.
+#   A12-route  A11's pass-after half: the same route path, violations removed, COMMITS. Without it,
+#         A11 is equally satisfied by a gate that rejects every route file it sees.
+#   A13-husky  HOOK BRANCH B (P2-103) — the SAME body already on disk (the rendered hook-body
+#         marker, not a copy) re-wired through `npx husky init`'s own core.hooksPath refuses A1's
+#         probe, with banner + rule id. Honest limit printed at run time: husky's `_/h` shim ends in
+#         `sh -e "$s"`, so the body runs under the PLATFORM /bin/sh with its shebang DISCARDED.
+#   A14-lefthook HOOK BRANCH C (P2-103) — same body, reached through `lefthook.yml`'s
+#         `run: bash .githooks/ax-pre-commit-checks.sh`, refuses the same probe. Also asserts the
+#         CALLING USER'S global hooks directory was not written to: `lefthook install` targets the
+#         EFFECTIVE core.hooksPath, and with a global one set that is outside this temp tree
+#         (reproduced — it clobbered a real global hook — hence the repo-local wiring first).
+#   A15-worktree BRANCH A's LINKED-WORKTREE VARIANT (P2-103, D-8/F-2/F-3) — `.git` is a FILE there,
+#         `extensions.worktreeConfig` + `--worktree core.hooksPath` makes git invoke the hook (F-034
+#         banner on an out-of-root commit, the only probe needing neither node_modules nor a gradle
+#         build inside the worktree), the main worktree's `--show-origin --get core.hooksPath` is
+#         byte-identical before/after, and exactly ONE new config.worktree exists. The F-2
+#         core.bare/core.worktree migration is measured as a PREMISE (both empty here = not
+#         applicable); a bare-main worktree farm stays unmeasured.
+#   A16-alttask A SECOND SHAPE, INSTALLED AND EXECUTED (P2-104) — stacks=["java"] and
+#         java.testTask="verifyAxPractices": the hook body on disk carries NO react region, the gate
+#         task is discoverable under the CONFIGURED name (and the default name is absent), and a
+#         planted java violation is refused BY THAT TASK, naming the probe class. A9-eval renders two
+#         configs; this one installs and invokes the second. It found F-035 (the gate task name was
+#         hardcoded while the hook honoured java.testTask, so any non-default name meant
+#         `Task 'x' not found` on every java commit and the gate never ran).
+#   A17-alttask A16's pass-after half plus A4's non-vacuity check under the renamed task: the repair
+#         COMMITS and build/test-results/<configured name>/*.xml reports tests > 0.
+#   A18-rootdot A THIRD SHAPE: react.root="." (P2-104a) — the fixture with its frontend relocated to
+#         the repo root. Selects two previously-dead code paths: eslint.config.mjs's findAxConfig()
+#         must resolve ax.config.json on its FIRST iteration (a sibling, not a parent — F-030), and
+#         the hook body's `[ "$REACT_ROOT" = "." ]` FILE-EXTENSION scope proxy replaces the path
+#         prefix. A planted upward import is BLOCKED, the banner shows `react=.`, the rule is named.
+#   A19-rootdot A18's pass-after half with A2's non-vacuity check (eslint results > 0 AND
+#         errorCount == 0) — at react.root="." the srcDir glob resolves from a different directory,
+#         so "matched zero files" is a live way for this shape to look clean while linting nothing.
+#   A20-rootdot-skip the OTHER half of the `"."` branch: a staged file with no react extension must
+#         skip the react gate while the F-034 banner still proves the hook ran. A5 makes this claim
+#         for the path-prefix branch; at react.root="." "outside the root" is not even expressible,
+#         so the extension proxy is the only thing that can express it.
 #   A10-tsdep  react-ts-eslint-dep is NON-VACUOUS (P2-113) — typescript-eslint is UNRESOLVABLE
 #         after `npm ci` (the fixture no longer ships it) and RESOLVABLE after the artifact runs.
 #         Only that transition attributes the package's presence to the marker; while the fixture
 #         carried it as a baseline devDependency, skipping or breaking the marker changed nothing.
 #
 # ASSERTION MANIFEST — machine-readable, single source of truth, ONE line:
-# ax:assertions A-pc A0 A1 A2 A3 A4 A5 A6 A7 A7b A8 A9-eval A10-tsdep
+# ax:assertions A-pc A0 A1 A2 A3 A4 A5 A6 A7 A7b A8 A9-eval A10-tsdep A11-route A12-route A13-husky A14-lefthook A15-worktree A16-alttask A17-alttask A18-rootdot A19-rootdot A20-rootdot-skip
 #   guard [114] PARSES that line out of this file (at the pushed sha, via `git show`) and requires
 #   the audit log's `assertions` key set to match it EXACTLY — missing OR extra both BLOCK. Without
 #   it, [114] could only check "every assertion that happens to be RECORDED is true", which a
@@ -141,12 +187,22 @@ KEEP=0
 OVERRIDE_ARGS=""      # newline-separated "id=file" (bash 3.2: no associative arrays)
 
 print_scope() {
-    echo "  · ONE consumer shape only: react.root=frontend, java.root=backend, TypeScript ON."
-    echo "    UNMEASURED: react.root=\".\", react.typescript=false, a different java.testTask"
-    echo "    name, husky/lefthook hook branches, other Gradle/Node versions, Windows."
-    echo "  · The install skills' PROSE steps (detection heuristics, worktree core.bare preflight,"
-    echo "    manual probe->detect->delete verification) are NOT executed — only the"
-    echo "    ax:artifact-marked blocks, and only hook branch A (core.hooksPath)."
+    echo "  · THREE consumer shapes are materialized, installed and RUN: (1) react.root=frontend +"
+    echo "    java.root=backend + TypeScript ON + default gate task; (2) java-only stacks with a"
+    echo "    RENAMED java.testTask; (3) react.root=\".\" with the frontend at the repo root."
+    echo "    UNMEASURED: react.typescript=false, other Gradle/Node versions, Windows."
+    echo "    react.typescript=false is not merely unmeasured — it is KNOWN BROKEN"
+    echo "    (ESLint 9's default espree does not enable JSX, so every .jsx file in a plain-JS"
+    echo "    consumer is a fatal parse error); see the P2-104 note in docs/BACKLOG.md."
+    echo "  · The install skills' PROSE steps (detection heuristics, the F-2 core.bare/core.worktree"
+    echo "    MIGRATION for a bare-main worktree farm, manual probe->detect->delete verification)"
+    echo "    are NOT executed — only the ax:artifact-marked blocks."
+    echo "  · Hook wiring: all THREE branches are exercised (A core.hooksPath, B husky, C lefthook)"
+    echo "    plus branch A's linked-worktree variant, all running the ONE rendered hook-body."
+    echo "    Harness-injected for B/C (declared, not consumer-shape): a minimal repo-root"
+    echo "    package.json, and lefthook.yml's 5 lines of lefthook-schema wiring. husky executes"
+    echo "    the body with 'sh -e' (shebang discarded), so branch B is measured only under THIS"
+    echo "    platform's /bin/sh — a dash /bin/sh would reject the body's 'set -o pipefail'."
     echo "  · This is NOT R25: no run-all-guards.sh, no per-domain gradle task, no ax-template lint."
     echo "  · Harness-injected, not consumer-shape: the Gradle wrapper (copied gradlew +"
     echo "    gradle-wrapper.jar, GENERATED gradle-wrapper.properties pinned to 9.5.1) and"
@@ -1012,6 +1068,102 @@ else
     note "A2" false
 fi
 
+# A11-route / A12-route — THE NEXT/APP-ROUTER RULE AXIS (P2-105).
+#
+# A1/A2 above prove the react gate fires, but they prove it with ONE rule —
+# ax/no-upward-layer-import — whose entire input is an import path string. Three rules in the
+# recommended set are gated on something A1's probe cannot reach: `isRouteFile()` (the file sits at
+# `<srcDir>/<layers.app[0]>/**/(page|layout).tsx`) AND `hasUseClientDirective()`. A layout mapping
+# that resolved to the wrong directory name, a `settings: { ax: axConfig.react }` block that never
+# reached these rules, or a route-detection regex broken by a non-"." react.root would leave every
+# app-router rule silently inert while A1/A2 stayed green — the rules would be installed and never
+# fire, which is exactly the vacuous-gate shape this harness exists to detect.
+#
+# ONE planted route file trips all three at once, and each rule id is checked SEPARATELY so a
+# partial failure names itself instead of hiding behind the other two:
+#   ax/no-route-client-data-fetching  (error) — useSWR(...) + raw fetch(...) in a "use client" route
+#   ax/no-server-state-in-local-state (error) — useState(useSWR(...).data)
+#   ax/no-god-route                   (error) — the file is deliberately > 100 lines
+# The `: string` annotation is load-bearing for the same reason as A1's (TS parser wiring), and the
+# padding comments are what carry the file past no-god-route's DEFAULT_MAX_LINES=100 threshold —
+# comments cannot trip any other rule, so the file's only violations are the three intended ones.
+ROUTE_PROBE_DIR="$FRONTEND/src/app/__ax_route_probe"
+ROUTE_PROBE="$ROUTE_PROBE_DIR/page.tsx"
+mkdir -p "$ROUTE_PROBE_DIR"
+{
+cat <<'EOF'
+"use client"
+
+// Planted by verify-downstream.sh (P2-105): an app-router CLIENT route file that violates all
+// three Next/route-axis rules at once. Every line below the code is padding, deliberately, so the
+// file crosses ax/no-god-route's 100-line threshold without introducing any other violation.
+
+export default function AxRouteProbePage() {
+  // ax/no-route-client-data-fetching: a client data hook called straight from the route,
+  // and ax/no-server-state-in-local-state: its .data mirrored into local state.
+  const [snapshot] = useState(useSWR('/api/__ax_probe').data)
+  // ax/no-route-client-data-fetching again: a raw fetch in a "use client" route.
+  fetch('/api/__ax_probe_side_channel')
+  const label: string = 'ax route probe'
+  return <main>{label}{String(snapshot)}</main>
+}
+EOF
+i=0
+while [ "$i" -lt 92 ]; do
+    echo "// padding line $i — carries this route file past ax/no-god-route's 100-line threshold."
+    i=$((i + 1))
+done
+} > "$ROUTE_PROBE"
+ROUTE_PROBE_LINES="$(wc -l < "$ROUTE_PROBE" | tr -d ' ')"
+pgit add frontend/src/app/__ax_route_probe/page.tsx >/dev/null 2>&1
+echo "  A11-route: committing a $ROUTE_PROBE_LINES-line \"use client\" app-router route (must be BLOCKED) …"
+pgit commit -m "probe: next app-router route violations" > "$WORK/a11.log" 2>&1
+A11_RC=$?
+A11_MISSING=""
+for rid in ax/no-route-client-data-fetching ax/no-server-state-in-local-state ax/no-god-route; do
+    if grep -qF "$rid" "$WORK/a11.log"; then
+        echo "    named in output: $rid"
+    else
+        echo "    MISSING from output: $rid"
+        A11_MISSING="$A11_MISSING $rid"
+    fi
+done
+if [ "$A11_RC" != "0" ] && [ -z "$A11_MISSING" ]; then
+    note "A11-route" true
+else
+    echo "    rc=$A11_RC (expected non-zero)  probe lines=$ROUTE_PROBE_LINES  missing rule id(s):${A11_MISSING:- none}"
+    tail -30 "$WORK/a11.log" | sed 's/^/      /'
+    note "A11-route" false
+fi
+
+# A12-route — the same route path with all three violations removed must COMMIT. Without this
+# half, A11 alone is satisfied by a gate that rejects EVERY route file (a broken glob, a crashing
+# rule) — "it blocked" and "it blocked for the reason we planted" only separate once the repaired
+# file goes through. The repair stays THIN and under the line threshold, which is the shape the
+# rules are asking for.
+cat > "$ROUTE_PROBE" <<'EOF'
+"use client"
+
+// Same route file as the A12 probe, all three violations removed: no client data hook, no raw
+// fetch, no server state mirrored into useState, and thin enough to stay under the line threshold.
+export default function AxRouteProbePage() {
+  const label: string = 'ax route probe'
+  return <main>{label}</main>
+}
+EOF
+pgit add frontend/src/app/__ax_route_probe/page.tsx >/dev/null 2>&1
+echo "  A12-route: committing the same route with the violations removed (must PASS) …"
+pgit commit -m "probe: next app-router route violations removed" > "$WORK/a12.log" 2>&1
+A12_RC=$?
+if [ "$A12_RC" = "0" ] && grep -qF 'ax-hook: pre-commit gate' "$WORK/a12.log"; then
+    echo "    commit rc=0, hook banner present"
+    note "A12-route" true
+else
+    echo "    commit rc=$A12_RC  hook banner present: $(grep -c 'ax-hook: pre-commit gate' "$WORK/a12.log")"
+    tail -30 "$WORK/a12.log" | sed 's/^/      /'
+    note "A12-route" false
+fi
+
 # A3 — the java gate's own signal: a Service depending on a Controller, blocked BY NAME.
 mkdir -p "$BACKEND/src/main/java/com/example/backend/probe"
 cat > "$BACKEND/src/main/java/com/example/backend/probe/ProbeController.java" <<'EOF'
@@ -1152,6 +1304,536 @@ else
     echo "    rc=$A8_RC  test results: $A8_XML_SUMMARY (check rc=$A8_XML_RC)"
     tail -30 "$WORK/a8.log" | sed 's/^/      /'
     note "A8" false
+fi
+
+# ── 4a. HOOK WIRING BRANCHES — B (husky), C (lefthook), and branch A's worktree variant (P2-103)
+#
+# Everything above rides ONE wiring: branch A's `core.hooksPath .githooks`, installed by the
+# hook-install-wiring command artifact. The skill prescribes three, and its own claim about the
+# other two is that they run "the same hook body, pasted unedited" — a claim no run had ever
+# executed, so a defect reachable only through husky's or lefthook's invocation path was invisible
+# here and `green` said nothing whatsoever about it.
+#
+# These assertions re-wire THE VERY BODY ALREADY ON DISK ($PROJ/.githooks/pre-commit — the rendered
+# hook-body marker, not a second copy) through each branch's own mechanism, and then ask the same
+# question A-pc/A1 ask of branch A: is a planted violation actually refused, and does the gate name
+# itself in the output. The single-source property is preserved exactly: an edited snippet in
+# SKILL.md is what all three branches run tomorrow.
+#
+# HARNESS-INJECTED, DECLARED (not consumer-shape facts): (1) a minimal repo-root package.json —
+# husky and lefthook are repo-root npm tools and neither can be installed without one, so a
+# consumer CHOOSING either branch necessarily has it, while this 2-stack fixture (whose only
+# package.json is under react.root) does not; (2) `lefthook.yml` itself, which is 5 lines of
+# lefthook's own schema authored here rather than extracted — the ax-side content that can drift is
+# the BODY, and that comes from the marker.
+#
+# SAFETY, MEASURED THE HARD WAY: `lefthook install` writes into the EFFECTIVE core.hooksPath, and
+# on a machine carrying a GLOBAL core.hooksPath that directory is OUTSIDE this temp tree — a plain
+# `git config --unset core.hooksPath` here made lefthook overwrite the calling user's own global
+# pre-commit hook (reproduced, then restored by hand). So branch C sets a REPO-LOCAL
+# `core.hooksPath .git/hooks` explicitly and never unsets, and the assertion additionally proves
+# the global hooks directory was left untouched.
+echo ""
+echo "── hook wiring branches (P2-103) ─────────────────────────"
+HOOK_BODY_SRC="$PROJ/.githooks/pre-commit"
+
+# A15-worktree — branch A's LINKED-WORKTREE variant (D-8/F-2/F-3). The three claims the skill's
+# prose makes, each measured: (1) `.git` is a FILE there, which is the detection A0 prescribes;
+# (2) with `extensions.worktreeConfig` + `--worktree core.hooksPath`, git in the worktree really
+# does invoke the hook — proven by the F-034 banner on an out-of-root commit, the one probe that
+# needs neither node_modules nor a gradle build inside the worktree; (3) SIBLING NON-INTERFERENCE:
+# the main worktree's `--show-origin --get core.hooksPath` is byte-identical before and after, and
+# exactly one new config.worktree file exists.
+#
+# The F-2 core.bare/core.worktree preflight is measured as a PREMISE, not performed: this fixture
+# is a normal checkout with neither set, which is precisely the documented case where the migration
+# steps do not apply. A bare-main worktree farm — where that migration is the whole point — is
+# still UNMEASURED and stays in the coverage print.
+WT="$WORK/wt"
+SIB_BEFORE="$(pgit config --show-origin --get core.hooksPath 2>&1)"
+WT_BARE="$(pgit config --get core.bare 2>/dev/null)"
+WT_CORE_WT="$(pgit config --get core.worktree 2>/dev/null)"
+# MEASURED, and it corrects the skill's prose: `git init` writes `core.bare = false` into every
+# ordinary checkout's shared config, so F-2's literal test ("if EITHER prints a value, migrate")
+# fires on the completely normal case — and its migration then sets `core.bare true` in
+# config.worktree, which would declare a non-bare repo BARE. The condition that actually selects the
+# migration is `core.bare` being TRUE (or `core.worktree` being set), so that is what is checked
+# here. See the finding reported alongside this assertion.
+WT_MIGRATION_APPLICABLE=0
+[ "$WT_BARE" = "true" ] && WT_MIGRATION_APPLICABLE=1
+[ -n "$WT_CORE_WT" ] && WT_MIGRATION_APPLICABLE=1
+echo "  A15-worktree: F-2 preflight — core.bare='$WT_BARE' core.worktree='$WT_CORE_WT'"
+echo "    migration applicable: $WT_MIGRATION_APPLICABLE (0 => normal checkout, the shape measured here)"
+pgit worktree add -q -b ax-wt-probe "$WT" > "$WORK/a15-add.log" 2>&1
+WT_ADD_RC=$?
+WT_DOT_GIT_IS_FILE=0
+[ -f "$WT/.git" ] && WT_DOT_GIT_IS_FILE=1
+wgit() {   # git inside the LINKED worktree, same identity discipline as pgit
+    git -c user.name="ax-downstream" -c user.email="ax-downstream@example.invalid" \
+        -c commit.gpgsign=false -C "$WT" "$@"
+}
+if [ "$WT_ADD_RC" = "0" ] && [ "$WT_DOT_GIT_IS_FILE" = "1" ] && [ "$WT_MIGRATION_APPLICABLE" = "0" ]; then
+    wgit config extensions.worktreeConfig true >/dev/null 2>&1
+    wgit config --worktree core.hooksPath .githooks >/dev/null 2>&1
+    printf '\n<!-- touched by verify-downstream A15 (linked worktree) -->\n' >> "$WT/README.md"
+    wgit add README.md >/dev/null 2>&1
+    WT_STAGED="$(wgit diff --cached --name-only | wc -l | tr -d ' ')"
+    wgit commit -m "worktree: out-of-root touch" > "$WORK/a15.log" 2>&1
+    WT_RC=$?
+    WT_BANNER="$(grep -c 'ax-hook: pre-commit gate' "$WORK/a15.log")"
+    SIB_AFTER="$(pgit config --show-origin --get core.hooksPath 2>&1)"
+    WT_CONFIGS="$(ls "$PROJ/.git/worktrees/"*/config.worktree 2>/dev/null | wc -l | tr -d ' ')"
+    if [ "$WT_RC" = "0" ] && [ "$WT_BANNER" != "0" ] && [ "$WT_STAGED" -ge 1 ] 2>/dev/null \
+       && [ "$SIB_BEFORE" = "$SIB_AFTER" ] && [ "$WT_CONFIGS" = "1" ]; then
+        echo "    .git is a FILE, hook ran in the worktree (banner), staged=$WT_STAGED"
+        echo "    sibling core.hooksPath unchanged: '$SIB_AFTER'; new config.worktree files: $WT_CONFIGS"
+        note "A15-worktree" true
+    else
+        echo "    rc=$WT_RC banner=$WT_BANNER staged=$WT_STAGED config_worktree_files=$WT_CONFIGS"
+        echo "    sibling before='$SIB_BEFORE' after='$SIB_AFTER'"
+        tail -25 "$WORK/a15.log" 2>/dev/null | sed 's/^/      /'
+        note "A15-worktree" false
+    fi
+else
+    echo "    premise FAILED: worktree add rc=$WT_ADD_RC .git-is-file=$WT_DOT_GIT_IS_FILE"
+    echo "    core.bare='$WT_BARE' core.worktree='$WT_CORE_WT' => F-2 migration path, not this shape"
+    tail -15 "$WORK/a15-add.log" 2>/dev/null | sed 's/^/      /'
+    note "A15-worktree" false
+fi
+# Leave branch A's shared-config wiring exactly as the artifact set it for the branches below, and
+# drop the worktree so nothing about B/C is entangled with worktreeConfig.
+pgit worktree remove --force "$WT" >/dev/null 2>&1
+pgit config --unset extensions.worktreeConfig >/dev/null 2>&1
+
+# The violation both branches are asked to refuse: A1's probe, re-planted. Reusing it (rather than
+# inventing a third probe) is deliberate — branch A already refused this exact file, so a branch
+# that lets it through differs in the WIRING and nothing else.
+plant_upward_probe() {
+    cat > "$PROBE_TS" <<'EOF'
+// Re-planted by verify-downstream.sh for the hook-wiring branches: shared (lib) importing UP.
+import { probe } from '@/app/__ax_probe_target'
+
+export const __axProbe: string = probe
+EOF
+    pgit add frontend/src/lib/__ax_probe.ts >/dev/null 2>&1
+}
+
+# husky and lefthook are repo-root npm tools: neither installs without a package.json at the repo
+# root. In THIS shape one already exists and must NOT be clobbered — the react-plugin-dep artifact
+# declares `base=repo`, so its `npm i -D file:<plugin>` ran at the repo root and npm recorded the ax
+# plugin as a `file:` devDependency THERE. Overwriting that file was measured to make npm prune
+# node_modules/@ax on the next root install, after which every later react-gate invocation died
+# with ERR_MODULE_NOT_FOUND — i.e. the branch-B/C assertions failed for a reason that had nothing to
+# do with husky or lefthook. Create one only when genuinely absent.
+if [ ! -f "$PROJ/package.json" ]; then
+    cat > "$PROJ/package.json" <<'EOF'
+{
+  "name": "ax-downstream-consumer-root",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Repo-root package.json — required by husky/lefthook (hook branches B/C)."
+}
+EOF
+    echo "  (repo-root package.json created by the harness — none existed)"
+else
+    echo "  (repo-root package.json already present — left untouched)"
+fi
+
+# A13-husky — BRANCH B. husky sets its own repo-local core.hooksPath (.husky/_), so it REPLACES
+# branch A's wiring rather than racing it.
+#
+# HONEST LIMIT, read out of husky's own shim rather than assumed: `.husky/_/h` ends in
+# `sh -e "$s"`, so husky executes the hook body with the PLATFORM /bin/sh and DISCARDS the body's
+# `#!/usr/bin/env bash` shebang. On this machine /bin/sh is bash-in-POSIX-mode, which accepts the
+# body's `set -euo pipefail`; on a platform whose /bin/sh is dash it would not. What this assertion
+# measures is therefore "the body runs under THIS platform's sh", and the shell is printed so the
+# verdict cannot be read as broader than that.
+echo "  A13-husky: npm i -D husky + npx husky init, then the SAME body via .husky/pre-commit …"
+HUSKY_SH="$( (command -v sh) 2>/dev/null)"
+HUSKY_PIPEFAIL=no
+sh -c 'set -o pipefail' >/dev/null 2>&1 && HUSKY_PIPEFAIL=yes
+echo "    husky runs the body with 'sh -e' (shebang discarded): sh=$HUSKY_SH, supports pipefail=$HUSKY_PIPEFAIL"
+( cd "$PROJ" && npm i -D husky --silent && npx husky init ) > "$WORK/a13-install.log" 2>&1
+A13_INSTALL_RC=$?
+A13_HOOKSPATH="$(pgit config --get core.hooksPath 2>/dev/null)"
+if [ "$A13_INSTALL_RC" = "0" ] && [ -d "$PROJ/.husky/_" ]; then
+    cp "$HOOK_BODY_SRC" "$PROJ/.husky/pre-commit"
+    chmod +x "$PROJ/.husky/pre-commit"
+    plant_upward_probe
+    pgit commit -m "probe: upward layer import (husky wiring)" > "$WORK/a13.log" 2>&1
+    A13_RC=$?
+    A13_BANNER="$(grep -ac 'ax-hook: pre-commit gate' "$WORK/a13.log")"
+    A13_RULE="$(grep -ac 'ax/no-upward-layer-import' "$WORK/a13.log")"
+    if [ "$A13_RC" != "0" ] && [ "$A13_BANNER" != "0" ] && [ "$A13_RULE" != "0" ]; then
+        echo "    core.hooksPath='$A13_HOOKSPATH' (husky's own), commit REFUSED, banner + rule id present"
+        note "A13-husky" true
+    else
+        echo "    rc=$A13_RC (expected non-zero) hooksPath='$A13_HOOKSPATH' banner=$A13_BANNER rule=$A13_RULE"
+        tail -30 "$WORK/a13.log" | sed 's/^/      /'
+        note "A13-husky" false
+    fi
+else
+    echo "    husky install/init failed (rc=$A13_INSTALL_RC) — branch B UNMEASURED, recorded as a failure"
+    tail -20 "$WORK/a13-install.log" | sed 's/^/      /'
+    note "A13-husky" false
+fi
+
+# A14-lefthook — BRANCH C. The body goes to the helper script lefthook.yml's `run:` invokes.
+# core.hooksPath is pointed at the repo's OWN .git/hooks first — see the SAFETY note above; a
+# `--unset` here was measured to make `lefthook install` clobber the calling user's global hook.
+echo "  A14-lefthook: npm i -D lefthook + lefthook.yml -> helper carrying the SAME body …"
+GLOBAL_HOOKS_DIR="$(git config --global --get core.hooksPath 2>/dev/null)"
+list_global_hooks() {   # portable: the listing text itself, no md5/md5sum split
+    [ -n "$GLOBAL_HOOKS_DIR" ] && [ -d "$GLOBAL_HOOKS_DIR" ] || return 0
+    ( cd "$GLOBAL_HOOKS_DIR" && ls -l ) 2>/dev/null
+}
+GLOBAL_HOOKS_BEFORE="$(list_global_hooks)"
+pgit config core.hooksPath .git/hooks >/dev/null 2>&1
+mkdir -p "$PROJ/.githooks"
+cp "$HOOK_BODY_SRC" "$PROJ/.githooks/ax-pre-commit-checks.sh"
+chmod +x "$PROJ/.githooks/ax-pre-commit-checks.sh"
+cat > "$PROJ/lefthook.yml" <<'EOF'
+pre-commit:
+  commands:
+    ax-gates:
+      run: bash .githooks/ax-pre-commit-checks.sh
+EOF
+( cd "$PROJ" && npm i -D lefthook --silent && npx lefthook install --force ) > "$WORK/a14-install.log" 2>&1
+A14_INSTALL_RC=$?
+GLOBAL_HOOKS_AFTER="$(list_global_hooks)"
+if [ "$A14_INSTALL_RC" = "0" ] && [ -f "$PROJ/.git/hooks/pre-commit" ]; then
+    plant_upward_probe
+    pgit commit -m "probe: upward layer import (lefthook wiring)" > "$WORK/a14.log" 2>&1
+    A14_RC=$?
+    A14_BANNER="$(grep -ac 'ax-hook: pre-commit gate' "$WORK/a14.log")"
+    A14_RULE="$(grep -ac 'ax/no-upward-layer-import' "$WORK/a14.log")"
+    if [ "$A14_RC" != "0" ] && [ "$A14_BANNER" != "0" ] && [ "$A14_RULE" != "0" ] \
+       && [ "$GLOBAL_HOOKS_BEFORE" = "$GLOBAL_HOOKS_AFTER" ]; then
+        echo "    lefthook installed into the repo's own .git/hooks, commit REFUSED, banner + rule id present"
+        echo "    global hooks dir '${GLOBAL_HOOKS_DIR:-none}' unchanged"
+        note "A14-lefthook" true
+    else
+        echo "    rc=$A14_RC (expected non-zero) banner=$A14_BANNER rule=$A14_RULE"
+        if [ "$GLOBAL_HOOKS_BEFORE" != "$GLOBAL_HOOKS_AFTER" ]; then
+            echo "    ⚠ global hooks dir '${GLOBAL_HOOKS_DIR:-none}' listing CHANGED — lefthook wrote"
+            echo "      OUTSIDE this temp tree. Restore it by hand (lefthook renames the original to"
+            echo "      <hook>.old); the repo-local core.hooksPath above exists to prevent exactly this."
+        fi
+        tail -30 "$WORK/a14.log" | sed 's/^/      /'
+        note "A14-lefthook" false
+    fi
+else
+    echo "    lefthook install failed (rc=$A14_INSTALL_RC) — branch C UNMEASURED, recorded as a failure"
+    tail -20 "$WORK/a14-install.log" | sed 's/^/      /'
+    note "A14-lefthook" false
+fi
+
+# ── 4c. A SECOND CONSUMER SHAPE — RENAMED GATE TASK, JAVA-ONLY STACK (P2-104) ────────────────
+#
+# Everything above installs and runs ONE config. A9-eval renders two, but rendering is not running:
+# a conditional that renders correctly and then breaks at install or invocation time is exactly what
+# a render-only differential cannot see. This shape is materialized, installed, and EXECUTED:
+#
+#   stacks       = ["java"]            (the react region of the hook body must be GONE on disk)
+#   java.testTask= "verifyAxPractices" (NOT the default — the gate task must carry this name)
+#
+# It found a real defect, which is why it exists: `java-gradle-testpractices` hardcoded
+# `tasks.register<Test>("testPractices")` while the hook body resolves `java.testTask` from
+# ax.config.json (F-032). A consumer who set any other name got `Task 'x' not found in root project`
+# on every java-touching commit and the gate never ran once — measurable only by actually invoking
+# it under a non-default name. Fixed as F-035 in ax-install-java-enforcement; re-inject the old body
+# with `--artifact-override java-gradle-testpractices=<pre-fix file>` to watch A16 go RED.
+#
+# Cost control: this shape needs NO `npm ci`. Its assertions stage backend files only, so the hook's
+# react block (which the stacks=["java"] config deletes anyway) is never reached and no frontend
+# dependency tree is required.
+echo ""
+echo "── second shape: java-only, renamed gate task (P2-104) ───"
+S2="$WORK/shape2"
+S2_BACKEND="$S2/backend"
+S2_TASK="verifyAxPractices"
+mkdir -p "$S2"
+# A failure here needs no special-casing: without ax.config.json the patch below and then
+# install.py both fail, and the S2_INSTALL_RC branch records both assertions as failures once.
+( cd "$FIXTURE_SRC" && tar cf - . ) | ( cd "$S2" && tar xf - ) \
+    || echo "    could not copy the fixture into $S2"
+mkdir -p "$S2_BACKEND/gradle/wrapper"
+cp "$REPO_ROOT/backend/gradlew" "$S2_BACKEND/gradlew" 2>/dev/null && chmod +x "$S2_BACKEND/gradlew"
+cp "$REPO_ROOT/backend/gradle/wrapper/gradle-wrapper.jar" "$S2_BACKEND/gradle/wrapper/gradle-wrapper.jar" 2>/dev/null
+cat > "$S2_BACKEND/gradle/wrapper/gradle-wrapper.properties" <<EOF
+distributionBase=GRADLE_USER_HOME
+distributionPath=wrapper/dists
+distributionUrl=$GRADLE_DIST_URL
+networkTimeout=10000
+validateDistributionUrl=true
+zipStoreBase=GRADLE_USER_HOME
+zipStorePath=wrapper/dists
+EOF
+# The config is PATCHED, not rewritten: every other key stays exactly what the committed fixture
+# says, so the only differences between this shape and the first are the two being measured.
+python3 - "$S2/ax.config.json" "$S2_TASK" <<'PYEOF'
+import json, sys
+path, task = sys.argv[1], sys.argv[2]
+with open(path, encoding="utf-8") as f:
+    cfg = json.load(f)
+cfg["stacks"] = ["java"]
+cfg["java"]["testTask"] = task
+cfg.setdefault("react", {})["typescript"] = False
+with open(path, "w", encoding="utf-8") as f:
+    json.dump(cfg, f, indent=2)
+    f.write("\n")
+PYEOF
+s2git() {
+    git -c user.name="ax-downstream" -c user.email="ax-downstream@example.invalid" \
+        -c commit.gpgsign=false -c init.defaultBranch=main -C "$S2" "$@"
+}
+s2git init -q >/dev/null 2>&1
+s2git add -A >/dev/null 2>&1
+s2git commit -q --no-verify -m "shape2 baseline" >/dev/null 2>&1
+python3 "$WORK/install.py" "$REPO_ROOT" "$S2" "$PLUGIN_PATH" "$OVERRIDE_FILE" \
+    "$WORK/install-shape2.json" > "$WORK/s2-install.log" 2>&1
+S2_INSTALL_RC=$?
+sed 's/^/  /' "$WORK/s2-install.log" | tail -14
+s2git add -A >/dev/null 2>&1
+s2git commit -q --no-verify -m "shape2: install ax artifacts" >/dev/null 2>&1
+
+if [ "$S2_INSTALL_RC" != "0" ]; then
+    echo "    artifact installation failed for this shape (rc=$S2_INSTALL_RC) — both assertions FAIL"
+    note "A16-alttask" false
+    note "A17-alttask" false
+else
+    # (i) the react region is GONE from the hook ON DISK, not merely from a render;
+    # (ii) the gate task is discoverable under the CONFIGURED name and the default name is absent;
+    # (iii) a planted java violation is refused, by that task, naming the probe class.
+    S2_HOOK="$S2/.githooks/pre-commit"
+    S2_REACT_REGION="$(grep -c 'REACT_TOUCHED' "$S2_HOOK" 2>/dev/null | tr -d ' ')"
+    echo "  A16-alttask: ./gradlew tasks --all (no -P) …"
+    ( cd "$S2_BACKEND" && ./gradlew tasks --all ) > "$WORK/a16-tasks.log" 2>&1
+    S2_TASKS_RC=$?
+    S2_HAS_ALT="$(grep -cE "^${S2_TASK}( |\$)" "$WORK/a16-tasks.log" | tr -d ' ')"
+    S2_HAS_DEFAULT="$(grep -cE '^testPractices( |$)' "$WORK/a16-tasks.log" | tr -d ' ')"
+    mkdir -p "$S2_BACKEND/src/main/java/com/example/backend/probe"
+    cat > "$S2_BACKEND/src/main/java/com/example/backend/probe/ProbeController.java" <<'EOF'
+package com.example.backend.probe;
+
+import org.springframework.web.bind.annotation.RestController;
+
+@RestController
+public class ProbeController {
+
+	public String describe() {
+		return "probe";
+	}
+
+}
+EOF
+    cat > "$S2_BACKEND/src/main/java/com/example/backend/probe/ProbeService.java" <<'EOF'
+package com.example.backend.probe;
+
+import org.springframework.stereotype.Service;
+
+// Planted by verify-downstream.sh (shape 2): a *Service depending on a *Controller, refused by the
+// gate task registered under the CONFIGURED name.
+@Service
+public class ProbeService {
+
+	private final ProbeController probeController;
+
+	public ProbeService(ProbeController probeController) {
+		this.probeController = probeController;
+	}
+
+	public String describe() {
+		return probeController.describe();
+	}
+
+}
+EOF
+    s2git add backend/src/main/java/com/example/backend/probe >/dev/null 2>&1
+    echo "    committing ProbeService -> ProbeController (must be BLOCKED by :$S2_TASK) …"
+    s2git commit -m "shape2 probe: service depends on controller" > "$WORK/a16.log" 2>&1
+    S2_RC=$?
+    S2_NAMES_TASK="$(grep -c "Task :${S2_TASK}" "$WORK/a16.log" | tr -d ' ')"
+    S2_NAMES_PROBE="$(grep -c 'ProbeService' "$WORK/a16.log" | tr -d ' ')"
+    echo "    hook react region on disk: $S2_REACT_REGION occurrence(s) (0 expected for stacks=[java])"
+    echo "    tasks --all: rc=$S2_TASKS_RC  '$S2_TASK' listed=$S2_HAS_ALT  'testPractices' listed=$S2_HAS_DEFAULT"
+    if [ "$S2_REACT_REGION" = "0" ] && [ "$S2_TASKS_RC" = "0" ] && [ "$S2_HAS_ALT" != "0" ] \
+       && [ "$S2_HAS_DEFAULT" = "0" ] && [ "$S2_RC" != "0" ] && [ "$S2_NAMES_TASK" != "0" ] \
+       && [ "$S2_NAMES_PROBE" != "0" ]; then
+        echo "    commit REFUSED by :$S2_TASK, probe class named in the output"
+        note "A16-alttask" true
+    else
+        echo "    commit rc=$S2_RC (expected non-zero)  ':$S2_TASK' in output=$S2_NAMES_TASK  ProbeService=$S2_NAMES_PROBE"
+        tail -30 "$WORK/a16.log" | sed 's/^/      /'
+        note "A16-alttask" false
+    fi
+
+    # A17-alttask — the pass-after half, plus the non-vacuity check A4 makes for the default name:
+    # a renamed gate that runs ZERO tests reports BUILD SUCCESSFUL just as convincingly.
+    cat > "$S2_BACKEND/src/main/java/com/example/backend/probe/ProbeService.java" <<'EOF'
+package com.example.backend.probe;
+
+import org.springframework.stereotype.Service;
+
+// Same file as the shape-2 probe, violation repaired.
+@Service
+public class ProbeService {
+
+	public String describe() {
+		return "probe";
+	}
+
+}
+EOF
+    rm -rf "$S2_BACKEND/build/test-results/$S2_TASK"
+    s2git add -A backend/src >/dev/null 2>&1
+    echo "  A17-alttask: committing the repair (must PASS, and :$S2_TASK must run > 0 tests) …"
+    s2git commit -m "shape2 probe: violation removed" > "$WORK/a17.log" 2>&1
+    S2R_RC=$?
+    S2R_XML="$(python3 "$WORK/check.py" junit-tests "$S2_BACKEND/build/test-results/$S2_TASK")"
+    S2R_XML_RC=$?
+    if [ "$S2R_RC" = "0" ] && [ "$S2R_XML_RC" = "0" ]; then
+        echo "    commit rc=0, $S2_TASK results: $S2R_XML"
+        note "A17-alttask" true
+    else
+        echo "    commit rc=$S2R_RC  $S2_TASK results: $S2R_XML (check rc=$S2R_XML_RC)"
+        tail -30 "$WORK/a17.log" | sed 's/^/      /'
+        note "A17-alttask" false
+    fi
+fi
+
+# ── 4d. A THIRD CONSUMER SHAPE — react.root="." (P2-104a) ────────────────────────────────────
+#
+# `react.root="."` is not a cosmetic variation: it selects DIFFERENT CODE in two artifacts, and
+# neither branch had ever run.
+#   1. eslint.config.mjs's findAxConfig() (F-030) walks UP from the config file's own directory. With
+#      react.root="frontend" it finds ax.config.json one level up on the SECOND iteration; with "."
+#      it must find it in the SAME directory on the FIRST — a first-iteration bug (an unconditional
+#      `path.dirname(dir)` before the first existsSync, say) is invisible in the frontend shape.
+#   2. the hook body branches on `[ "$REACT_ROOT" = "." ]` and switches from a path-prefix scope
+#      check to a FILE-EXTENSION proxy, because a `^./` prefix would match every staged file. That
+#      whole branch — including its scope-SKIP behaviour — was dead code in every previous run.
+#
+# The fixture is reused with its frontend contents RELOCATED to the repo root, which is what a
+# Next-at-root + backend-subdir consumer actually looks like. stacks=["react"] keeps gradle out of
+# this shape entirely (the java region is deleted from the hook), so the cost is one `npm ci`.
+echo ""
+echo "── third shape: react.root=\".\" (P2-104a) ─────────────────"
+S3="$WORK/shape3"
+mkdir -p "$S3"
+( cd "$FIXTURE_SRC" && tar cf - . ) | ( cd "$S3" && tar xf - ) \
+    || echo "    could not copy the fixture into $S3"
+# Relocate frontend/* to the repo root — no collisions (the fixture root holds only ax.config.json,
+# README.md, .gitignore and backend/), so this is a move, never a merge.
+if [ -d "$S3/frontend" ]; then
+    ( cd "$S3/frontend" && tar cf - . ) | ( cd "$S3" && tar xf - )
+    rm -rf "$S3/frontend"
+fi
+python3 - "$S3/ax.config.json" <<'PYEOF'
+import json, sys
+with open(sys.argv[1], encoding="utf-8") as f:
+    cfg = json.load(f)
+cfg["stacks"] = ["react"]
+cfg["react"]["root"] = "."
+with open(sys.argv[1], "w", encoding="utf-8") as f:
+    json.dump(cfg, f, indent=2)
+    f.write("\n")
+PYEOF
+s3git() {
+    git -c user.name="ax-downstream" -c user.email="ax-downstream@example.invalid" \
+        -c commit.gpgsign=false -c init.defaultBranch=main -C "$S3" "$@"
+}
+s3git init -q >/dev/null 2>&1
+s3git add -A >/dev/null 2>&1
+s3git commit -q --no-verify -m "shape3 baseline" >/dev/null 2>&1
+( cd "$S3" && npm ci ) > "$WORK/s3-npm-ci.log" 2>&1
+S3_NPM_RC=$?
+python3 "$WORK/install.py" "$REPO_ROOT" "$S3" "$PLUGIN_PATH" "$OVERRIDE_FILE" \
+    "$WORK/install-shape3.json" > "$WORK/s3-install.log" 2>&1
+S3_INSTALL_RC=$?
+sed 's/^/  /' "$WORK/s3-install.log" | tail -12
+s3git add -A >/dev/null 2>&1
+s3git commit -q --no-verify -m "shape3: install ax artifacts" >/dev/null 2>&1
+
+S3_PROBE="$S3/src/lib/__ax_probe.ts"
+if [ "$S3_NPM_RC" != "0" ] || [ "$S3_INSTALL_RC" != "0" ]; then
+    echo "    setup failed (npm ci rc=$S3_NPM_RC, install rc=$S3_INSTALL_RC) — all three FAIL"
+    tail -15 "$WORK/s3-npm-ci.log" 2>/dev/null | sed 's/^/      /'
+    tail -15 "$WORK/s3-install.log" 2>/dev/null | sed 's/^/      /'
+    note "A18-rootdot" false
+    note "A19-rootdot" false
+    note "A20-rootdot-skip" false
+else
+    cat > "$S3_PROBE" <<'EOF'
+// Planted by verify-downstream.sh (shape 3, react.root="."): shared (lib) importing UP into app.
+import { probe } from '@/app/__ax_probe_target'
+
+export const __axProbe: string = probe
+EOF
+    s3git add src/lib/__ax_probe.ts >/dev/null 2>&1
+    echo "  A18-rootdot: committing a shared -> app upward import at react.root=\".\" (must be BLOCKED) …"
+    s3git commit -m "shape3 probe: upward layer import" > "$WORK/a18.log" 2>&1
+    S3_RC=$?
+    S3_BANNER="$(grep -ac 'ax-hook: pre-commit gate (react=\. ' "$WORK/a18.log")"
+    S3_RULE="$(grep -ac 'ax/no-upward-layer-import' "$WORK/a18.log")"
+    S3_AXCFG_THROW="$(grep -ac 'ax.config.json not found' "$WORK/a18.log")"
+    if [ "$S3_RC" != "0" ] && [ "$S3_BANNER" != "0" ] && [ "$S3_RULE" != "0" ]; then
+        echo "    commit REFUSED, banner shows react=., rule id named — findAxConfig resolved on the"
+        echo "    FIRST iteration (ax.config.json is a SIBLING of eslint.config.mjs in this shape)"
+        note "A18-rootdot" true
+    else
+        echo "    rc=$S3_RC (expected non-zero) banner(react=.)=$S3_BANNER rule=$S3_RULE"
+        [ "$S3_AXCFG_THROW" != "0" ] && echo "    findAxConfig THREW 'ax.config.json not found' — the F-030 first-try path is broken"
+        tail -30 "$WORK/a18.log" | sed 's/^/      /'
+        note "A18-rootdot" false
+    fi
+
+    # A19-rootdot — pass-after, with the same non-vacuity half A2 uses (results > 0 rules out a glob
+    # that matched nothing, which at react.root="." is a live risk: srcDir is resolved relative to a
+    # different directory than in shape 1).
+    cat > "$S3_PROBE" <<'EOF'
+// Same file as the shape-3 probe, violation removed.
+export const __axProbe: string = 'ok'
+EOF
+    s3git add src/lib/__ax_probe.ts >/dev/null 2>&1
+    echo "  A19-rootdot: committing the same path with the violation removed (must PASS) …"
+    s3git commit -m "shape3 probe: upward layer import removed" > "$WORK/a19.log" 2>&1
+    S3R_RC=$?
+    ( cd "$S3" && npx eslint src --format json ) > "$WORK/a19-eslint.json" 2>"$WORK/a19-eslint.err"
+    S3R_ESLINT="$(python3 "$WORK/check.py" eslint-json "$WORK/a19-eslint.json")"
+    S3R_ESLINT_RC=$?
+    if [ "$S3R_RC" = "0" ] && [ "$S3R_ESLINT_RC" = "0" ]; then
+        echo "    commit rc=0, eslint json: $S3R_ESLINT"
+        note "A19-rootdot" true
+    else
+        echo "    commit rc=$S3R_RC  eslint json: $S3R_ESLINT (check rc=$S3R_ESLINT_RC)"
+        tail -25 "$WORK/a19.log" | sed 's/^/      /'
+        note "A19-rootdot" false
+    fi
+
+    # A20-rootdot-skip — the EXTENSION-PROXY scope skip, the other half of the `"."` branch. At
+    # react.root="." a path-prefix check is useless, so the hook falls back to matching staged file
+    # EXTENSIONS; a file with none of them must skip the react gate while the F-034 banner still
+    # proves the hook ran. This is A5's claim transplanted onto the branch that implements it
+    # differently — and unlike A5, "outside the root" is not even expressible here.
+    s3git reset -q >/dev/null 2>&1
+    printf '\n<!-- touched by verify-downstream A20 -->\n' >> "$S3/README.md"
+    s3git add README.md >/dev/null 2>&1
+    S3S_STAGED="$(s3git diff --cached --name-only | wc -l | tr -d ' ')"
+    echo "  A20-rootdot-skip: committing README.md (no react file extension) …"
+    s3git commit -m "shape3: touch a file with no react extension" > "$WORK/a20.log" 2>&1
+    S3S_RC=$?
+    S3S_BANNER="$(grep -ac 'ax-hook: pre-commit gate' "$WORK/a20.log")"
+    S3S_NPM="$(grep -ac -- '--max-warnings' "$WORK/a20.log")"
+    if [ "$S3S_RC" = "0" ] && [ "$S3S_BANNER" != "0" ] && [ "$S3S_NPM" = "0" ] \
+       && [ "$S3S_STAGED" -ge 1 ] 2>/dev/null; then
+        echo "    commit rc=0, staged=$S3S_STAGED, banner present, npm gate NOT invoked"
+        note "A20-rootdot-skip" true
+    else
+        echo "    rc=$S3S_RC staged=$S3S_STAGED banner=$S3S_BANNER npm_marker=$S3S_NPM"
+        tail -25 "$WORK/a20.log" | sed 's/^/      /'
+        note "A20-rootdot-skip" false
+    fi
 fi
 
 # ── 4b. ASSERTION MANIFEST CROSS-CHECK ───────────────────────────────────────────────────────

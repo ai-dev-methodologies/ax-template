@@ -174,6 +174,7 @@ class CostShareComplianceTest {
         createAccumulator("m2-ded", "100.00", "0.00");
         createAccumulator("m2-oop", "150.00", "0.00");   // OOP headroom 150 < uncapped member 280
         ExtractableResponse<Response> r = allocate("1000.00", "m2-ded", "m2-oop", "0.20");
+        assertThat(r.statusCode()).isEqualTo(200);
         BigDecimal member = r.path("memberPaid");
         BigDecimal insurer = r.path("insurerPaid");
         // uncapped member would be 280; OOP-max clamps to 150 (insurer absorbs the 130 coinsurance excess)
@@ -192,6 +193,7 @@ class CostShareComplianceTest {
         createAccumulator("m4-ded", "1000.00", "0.00");
         createAccumulator("m4-oop", "50.00", "0.00");    // OOP cap 50 < deductible draw
         ExtractableResponse<Response> r = allocate("1000.00", "m4-ded", "m4-oop", "0.00");
+        assertThat(r.statusCode()).isEqualTo(200);
         assertThat((BigDecimal) r.path("memberPaid")).isEqualByComparingTo("50.00");
         assertThat((BigDecimal) r.path("insurerPaid")).isEqualByComparingTo("950.00");
         assertThat((BigDecimal) r.path("deductibleApplied"))

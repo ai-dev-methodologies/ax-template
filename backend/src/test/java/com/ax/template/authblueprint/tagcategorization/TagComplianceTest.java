@@ -92,7 +92,7 @@ class TagComplianceTest {
         String originalSlug = given()
             .header("Authorization", "Bearer " + admin)
         .when().get("/api/tags/" + tagId)
-        .then().extract().path("slug");
+        .then().statusCode(200).extract().path("slug");
 
         given()
             .header("Authorization", "Bearer " + admin)

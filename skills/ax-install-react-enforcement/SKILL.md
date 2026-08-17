@@ -140,9 +140,28 @@ rule — not just ax's. A run that reports `0 problems` because every `.ts` file
 looks identical, at a glance, to a run that reports `0 problems` because the project is clean.
 Skipping the parser wiring means every ax rule silently never executes on `.ts`/`.tsx` files.
 
-When `react.typescript` is false or absent, the `typescript-eslint` install above and both
-`ax:if config.react.typescript` regions below drop out together — the default `espree` parser is
-correct for plain JS/JSX.
+**The non-TypeScript path is not "install nothing" — it needs its own `languageOptions`** (F-035).
+When `react.typescript` is false or absent, the `typescript-eslint` install above and the
+`import tseslint` line drop out, and ESLint falls back to its default parser, `espree`. **espree
+does not enable JSX unless it is told to.** A config that merely omits the TypeScript lines omits
+`languageOptions` entirely, and then every `.jsx` file in the project dies at parse time:
+
+```text
+{"ruleId":null,"fatal":true,"severity":2,"message":"Parsing error: Unexpected token <","line":2}
+```
+
+That is not a rule reporting nothing — it is the file never being read, so not one of the 15
+recommended `ax/*` rules executes on any component in the project. The `ax:else` branch in the
+config below therefore carries real content, `parserOptions: { ecmaFeatures: { jsx: true } }`,
+rather than being empty. Measured on ESLint 9.39 + espree: with it, `.jsx` parses and both
+import-path rules (`ax/no-upward-layer-import`) and JSX-AST rules (`ax/no-falsy-numeric-render`)
+fire; without it, every `.jsx` is a fatal parse error.
+
+Setting `ecmaFeatures.jsx` on the **TypeScript** branch instead of branching would be harmless but
+wrong-shaped: measured on typescript-eslint, a `.ts` file containing the angle-bracket assertion
+`<string>raw` parses identically with and without it, because that parser takes JSX from the file
+extension (`.tsx` yes, `.ts` no) and not from `ecmaFeatures`. The two branches are separate because
+they need *different parsers*, not because one of them is dangerous.
 
 <!-- ax:artifact id=react-eslint-config path=eslint.config.mjs kind=file base=react.root merge=replace -->
 ```js
@@ -193,8 +212,10 @@ if (!srcDir) {
 export default [
   {
     files: [`${srcDir}/**/*.{ts,tsx,js,jsx}`],
-    // ax:if config.react.typescript   (espree, the default parser, is correct for plain JS/JSX)
+    // ax:if config.react.typescript   (typescript-eslint reads JSX from the .tsx extension itself)
     languageOptions: { parser: tseslint.parser },
+    // ax:else   (espree parses no JSX at all unless ecmaFeatures.jsx is set -- see F-035)
+    languageOptions: { parserOptions: { ecmaFeatures: { jsx: true } } },
     // ax:endif
     plugins: { ax: axPlugin },
     settings: { ax: axConfig.react },
@@ -236,22 +257,40 @@ right" are not evidence it is actually catching anything. Prove it:
    with an import that reaches into a higher layer. The import target must use
    the project's actual `axConfig.react?.layers?.app[0]` directory name (or
    `layers?.features[0]`) — a hardcoded `app` will silently fail to trigger the
-   rule on a custom layout. **If the project has TypeScript sources (Step 4
-   above), the probe must also contain a TypeScript-only construct** — a bare
-   ESM import/export is also valid plain JavaScript, so a probe without one
-   would still parse and "pass" even if the TypeScript parser wiring is
-   completely missing, which is exactly the blind spot this probe exists to
-   catch:
+   rule on a custom layout.
 
-   ```ts
-   // <srcDir>/lib/__ax_probe.ts  (or <srcDir>/components/__ax_probe.ts)
+   **The probe must also exercise the parser this project actually configured**
+   — a bare ESM import/export is valid plain JavaScript under *every* parser, so
+   a probe built only out of one proves the plugin loaded and proves nothing at
+   all about parsing. That blind spot is not hypothetical: it is exactly how
+   F-035 shipped. The non-TypeScript probe used to be a JSX-free
+   `import`/`export const`, which parses fine under a bare `espree` with no
+   `languageOptions` — so this step reported the gate live while every real
+   `.jsx` component in the project was a fatal parse error. **A React probe that
+   contains no JSX does not test a React project.** Use the file matching this
+   project's `react.typescript`:
+
+   **TypeScript project** — `.tsx`, carrying both a type annotation and JSX:
+
+   ```tsx
+   // <srcDir>/lib/__ax_probe.tsx  (or <srcDir>/components/__ax_probe.tsx)
    import { probe } from '../<layers.app[0]>/__ax_probe_target'
-   export const __axProbe: string = probe
+   const label: string = probe
+   export const __axProbe = <span>{label}</span>
    ```
 
-   The `: string` annotation is deliberate, not incidental — it is what forces
-   a real TypeScript parser to be involved. If the project has no TypeScript
-   sources, drop the annotation and use plain `export const __axProbe = probe`.
+   **Non-TypeScript project** — `.jsx`, carrying JSX (no annotation):
+
+   ```jsx
+   // <srcDir>/lib/__ax_probe.jsx  (or <srcDir>/components/__ax_probe.jsx)
+   import { probe } from '../<layers.app[0]>/__ax_probe_target'
+   export const __axProbe = <span>{probe}</span>
+   ```
+
+   Neither construct is incidental. The `: string` annotation is what forces a
+   real TypeScript parser to be involved; the `<span>` is what forces JSX to be
+   enabled. Drop either one and the probe passes on a config that cannot read
+   the project's own source files.
 
    (The target module does not need to exist — the rule classifies the import
    path lexically, it does not resolve the module on disk.)
@@ -264,13 +303,18 @@ right" are not evidence it is actually catching anything. Prove it:
 
 3. **Confirm the rule id `ax/no-upward-layer-import` appears in the output.**
    Only then is the gate proven live. **If the output is a parsing error
-   instead** (e.g. mentioning the `: string` annotation or "Unexpected
-   token"), that is a *different* failure signature — the TypeScript parser
-   wiring from Step 4 (the `typescript-eslint` install / `languageOptions:
-   { parser: tseslint.parser }` line) is missing or broken, not the ax
-   plugin. Fix that wiring first, then re-run the probe from step 1 — the
-   4-step diagnostic below assumes the file parsed and is the wrong tool for
-   a parsing error.
+   instead**, that is a *different* failure signature — a `languageOptions`
+   defect in Step 4, not the ax plugin — and the two spellings tell you which
+   half:
+
+   | Parsing error mentions | Missing wiring |
+   |---|---|
+   | `Unexpected token <` (the `<span>`) | JSX. On a TS project, `typescript-eslint` / `languageOptions: { parser: tseslint.parser }`; on a non-TS project, `languageOptions: { parserOptions: { ecmaFeatures: { jsx: true } } }` (F-035) |
+   | `Unexpected token :` (the `: string`) | The TypeScript parser — `typescript-eslint` is not installed or `parser: tseslint.parser` is not on this config block |
+
+   Fix that wiring first, then re-run the probe from step 1 — the 4-step
+   diagnostic below assumes the file parsed and is the wrong tool for a
+   parsing error.
 
 4. **Delete the probe file** — it must not remain in the project.
 
@@ -312,8 +356,9 @@ parsing error or the srcDir throw above), work through this diagnostic order
 - [ ] The plugin path was `ls`-verified before `npm i -D file:...`
 - [ ] `<react.root>/package.json` now has a real `lint` script (`eslint . --max-warnings 0`) and a `test` script — without them the pre-commit hook has nothing to run and, before F-031, `--if-present` made that absence indistinguishable from a pass
 - [ ] `eslint.config.mjs` locates `ax.config.json` by searching **upward from its own directory** (`import.meta.url`), not via `'./ax.config.json'` or a fixed `'../ax.config.json'` — the hook lints with cwd = `react.root` (F-030), and a not-found config throws rather than defaulting
-- [ ] If the project has TypeScript sources, `typescript-eslint` was installed and `languageOptions: { parser: tseslint.parser }` is on the same config block as the ax plugin
+- [ ] `languageOptions` is present on the ax config block **either way** — `{ parser: tseslint.parser }` (with `typescript-eslint` installed) when `react.typescript` is true, `{ parserOptions: { ecmaFeatures: { jsx: true } } }` when it is false/absent. A block with no `languageOptions` at all is the F-035 shape: espree reads no JSX, every `.jsx` is a fatal parse error, and zero `ax/*` rules ever run
+- [ ] The probe file contained JSX (`<span>…</span>`), and on a TypeScript project a `: string` annotation as well — a JSX-free probe passes against a config that cannot parse a single real component, which is how F-035 shipped
 - [ ] `eslint.config.mjs`'s `files` glob is parameterized from `axConfig.react?.srcDir` — the literal string `src/**` does not appear anywhere in it, and an unresolved `react.srcDir` throws instead of silently defaulting to `'src'`
 - [ ] `settings: { ax: axConfig.react }` is present on the block that matches the project's real source files
-- [ ] The probe→detect→delete check ran, `ax/no-upward-layer-import` was observed in `npx eslint` output (not a parsing error), and the probe file was deleted afterward
+- [ ] The probe→detect→delete check ran on a **`.jsx`/`.tsx`** probe, `ax/no-upward-layer-import` was observed in `npx eslint` output (not a parsing error), and the probe file was deleted afterward
 - [ ] If detection failed, the failure signature was checked first (parsing error → Step 4 parser wiring; missing rule id → the 4-step diagnostic order below, not guessed)

@@ -110,9 +110,10 @@ class UomConversionComplianceTest {
     void conversionRecordsFullReconstructibleBasis() {
         String material = registerMaterial("MAT-BASIS");
         recordProperty(material, "VOLUME", "MASS", "0.92");
-        String conversionId =
-            convert(material, "{\"fromQuantity\":10,\"fromUnit\":\"L\",\"toUnit\":\"KG\"}")
-                .jsonPath().getString("id");
+        ExtractableResponse<Response> firstConvert =
+            convert(material, "{\"fromQuantity\":10,\"fromUnit\":\"L\",\"toUnit\":\"KG\"}");
+        assertThat(firstConvert.statusCode()).isEqualTo(200);
+        String conversionId = firstConvert.jsonPath().getString("id");
 
         ExtractableResponse<Response> rec = given().header("Authorization", "Bearer " + member)
             .when().get("/api/uom-conversion/conversions/" + conversionId)
@@ -170,12 +171,14 @@ class UomConversionComplianceTest {
         // re-deriving the v1 conversion still uses v1's factor (idempotent verbatim)
         ExtractableResponse<Response> reV1 =
             convert(material, "{\"fromQuantity\":2,\"fromUnit\":\"L\",\"toUnit\":\"KG\",\"materialVersion\":1}");
+        assertThat(reV1.statusCode()).isEqualTo(200);
         assertThat(reV1.jsonPath().getString("id")).isEqualTo(atV1.jsonPath().getString("id"));
         assertThat(new BigDecimal(reV1.jsonPath().getString("factor"))).isEqualByComparingTo("1.03");
 
         // a fresh conversion at the current version uses v2's factor: 2 L × 1.05 = 2.10 kg
         ExtractableResponse<Response> atV2 =
             convert(material, "{\"fromQuantity\":2,\"fromUnit\":\"L\",\"toUnit\":\"KG\"}");
+        assertThat(atV2.statusCode()).isEqualTo(200);
         assertThat(atV2.jsonPath().getLong("materialVersion")).isEqualTo(2L);
         assertThat(new BigDecimal(atV2.jsonPath().getString("toQuantity"))).isEqualByComparingTo("2.10");
 

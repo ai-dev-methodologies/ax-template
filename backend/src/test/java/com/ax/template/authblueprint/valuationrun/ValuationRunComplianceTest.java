@@ -105,9 +105,15 @@ class ValuationRunComplianceTest {
         String id = createSubject("PORT-ASOF");
 
         // three runs at strictly increasing as-of instants
-        String t1 = recompute(id, 0, "100.00", "basis-v1", pos("a", "100.00")).jsonPath().getString("asOf");
-        String t2 = recompute(id, 1, "200.00", "basis-v2", pos("a", "200.00")).jsonPath().getString("asOf");
-        String t3 = recompute(id, 2, "300.00", "basis-v3", pos("a", "300.00")).jsonPath().getString("asOf");
+        ExtractableResponse<Response> runV1 = recompute(id, 0, "100.00", "basis-v1", pos("a", "100.00"));
+        assertThat(runV1.statusCode()).isEqualTo(201);
+        String t1 = runV1.jsonPath().getString("asOf");
+        ExtractableResponse<Response> runV2 = recompute(id, 1, "200.00", "basis-v2", pos("a", "200.00"));
+        assertThat(runV2.statusCode()).isEqualTo(201);
+        String t2 = runV2.jsonPath().getString("asOf");
+        ExtractableResponse<Response> runV3 = recompute(id, 2, "300.00", "basis-v3", pos("a", "300.00"));
+        assertThat(runV3.statusCode()).isEqualTo(201);
+        String t3 = runV3.jsonPath().getString("asOf");
         assertThat(Instant.parse(t1)).isBefore(Instant.parse(t2));
         assertThat(Instant.parse(t2)).isBefore(Instant.parse(t3));
 
@@ -277,7 +283,9 @@ class ValuationRunComplianceTest {
 
         // now PRIMARY also gets a run — priority order means PRIMARY wins even though it's newer,
         // not "most recent across sources" (SECONDARY's run also still qualifies at this instant)
-        String tPrimary = recompute(id, 1, "100.00", "basis", pos("a", "100.00")).jsonPath().getString("asOf");
+        ExtractableResponse<Response> primaryRun = recompute(id, 1, "100.00", "basis", pos("a", "100.00"));
+        assertThat(primaryRun.statusCode()).isEqualTo(201);
+        String tPrimary = primaryRun.jsonPath().getString("asOf");
         Instant afterPrimary = Instant.parse(tPrimary).plusMillis(1);
         var fallbackToPrimary = given().header("Authorization", "Bearer " + member)
             .queryParam("at", afterPrimary.toString())

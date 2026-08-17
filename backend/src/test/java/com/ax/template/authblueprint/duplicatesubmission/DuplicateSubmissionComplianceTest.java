@@ -109,6 +109,7 @@ class DuplicateSubmissionComplianceTest {
         LocalDate lossDate = LocalDate.of(2026, 6, 1);
 
         ExtractableResponse<Response> first = submit(channelId, "subject-C", lossDate, "OUTAGE");
+        assertThat(first.statusCode()).isEqualTo(201);
         String firstId = first.jsonPath().getString("id");
 
         ExtractableResponse<Response> withdrawResp = withdraw(firstId);

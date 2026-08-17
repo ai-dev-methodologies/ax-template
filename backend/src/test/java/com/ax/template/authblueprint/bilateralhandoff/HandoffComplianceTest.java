@@ -127,6 +127,7 @@ class HandoffComplianceTest {
         assertThat(get(id, releasorToken).jsonPath().getString("status")).as("handoff unchanged").isEqualTo("PROPOSED");
 
         ExtractableResponse<Response> firstConfirm = confirm(id, releasorToken);
+        assertThat(firstConfirm.statusCode()).isEqualTo(200);
         String firstConfirmedAt = firstConfirm.jsonPath().getString("releasorConfirmedAt");
         ExtractableResponse<Response> secondConfirm = confirm(id, releasorToken); // idempotent — same party again
         assertThat(secondConfirm.statusCode()).isEqualTo(200);

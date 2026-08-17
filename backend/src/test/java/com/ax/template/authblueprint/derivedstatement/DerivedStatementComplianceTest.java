@@ -43,7 +43,7 @@ class DerivedStatementComplianceTest {
     private ExtractableResponse<Response> generate(String period, String basisJson) {
         return given().header("Authorization", "Bearer " + token).header("Content-Type", "application/json")
             .body("{\"period\":\"" + period + "\",\"basis\":" + basisJson + "}")
-        .when().post("/api/statements").thenReturn().then().extract();
+        .when().post("/api/statements").thenReturn().then().statusCode(201).extract();
     }
 
     // ── STMT-DERIVE-001 — same (subject, period, basis) resolves to the SAME statement; changed basis appends v2 ──
@@ -92,7 +92,7 @@ class DerivedStatementComplianceTest {
         assertThat(call1.jsonPath().getString("id")).isEqualTo(call2.jsonPath().getString("id"));
 
         ExtractableResponse<Response> list = given().header("Authorization", "Bearer " + token)
-            .when().get("/api/statements?period=" + period).thenReturn().then().extract();
+            .when().get("/api/statements?period=" + period).thenReturn().then().statusCode(200).statusCode(200).extract();
         assertThat(list.jsonPath().getList("id")).hasSize(1);
     }
 
@@ -105,7 +105,7 @@ class DerivedStatementComplianceTest {
         generate(period, "[{\"label\":\"A\",\"amount\":1.00},{\"label\":\"B\",\"amount\":2.00}]");
 
         ExtractableResponse<Response> refetched = given().header("Authorization", "Bearer " + token)
-            .when().get("/api/statements/" + v1.jsonPath().getString("id")).thenReturn().then().extract();
+            .when().get("/api/statements/" + v1.jsonPath().getString("id")).thenReturn().then().statusCode(200).statusCode(200).extract();
         assertThat(refetched.jsonPath().getString("basisHash")).isEqualTo(v1Hash);
         assertThat(refetched.jsonPath().getInt("versionNo")).isEqualTo(1);
     }

@@ -129,6 +129,7 @@ class IntervalExclusivityComplianceTest {
     void shrinkUnconditional_extendRevalidates_cancelFreesWindowImmediately() {
         String resource = registerResource();
         ExtractableResponse<Response> a = book(resource, 600, 720);           // A = [10:00,12:00)
+        assertThat(a.statusCode()).isEqualTo(201);
         String aId = a.jsonPath().getString("id");
         ExtractableResponse<Response> b = book(resource, 720, 780);           // B = [12:00,13:00)
         String bId = b.jsonPath().getString("id");

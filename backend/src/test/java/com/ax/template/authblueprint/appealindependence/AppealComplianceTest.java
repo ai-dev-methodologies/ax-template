@@ -34,7 +34,7 @@ class AppealComplianceTest {
     private ExtractableResponse<Response> fileOriginal(String token, String outcome) {
         return given().header("Authorization", "Bearer " + token).contentType(ContentType.JSON)
             .body("{\"outcome\":\"" + outcome + "\"}")
-        .when().post("/api/appeals").thenReturn().then().extract();
+        .when().post("/api/appeals").thenReturn().then().statusCode(201).extract();
     }
 
     private ExtractableResponse<Response> fileAppeal(String token, UUID parentId, String outcome) {

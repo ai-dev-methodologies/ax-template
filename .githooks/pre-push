@@ -885,11 +885,21 @@ pp_downstream_release_gate() {
             echo "[practices]   ONE case AX_SKIP_DOWNSTREAM_RELEASE_GATE=1 opts out of — and it is honored"
             echo "[practices]   only here, not as a general off switch (P2-111(a))."
         else
-            echo "[practices]   plugin.json's version changed in this push range, but no fresh GREEN"
-            echo "[practices]   practices/scripts/verify-downstream.sh run exists for the pushed sha."
-            echo "[practices] Run the downstream harness against the pushed commit:"
+            echo "[practices]   plugin.json's version changed in this push range, and the gate refused."
+            echo "[practices]   The guard printed the reason CODE on stderr just above — read that first."
+            echo "[practices]   The usual one is that no fresh GREEN"
+            echo "[practices]   practices/scripts/verify-downstream.sh run exists for the pushed sha:"
             echo "[practices]   git checkout ${local_sha:0:12} && bash practices/scripts/verify-downstream.sh"
-            echo "[practices] then re-attempt the push."
+            echo "[practices]   then re-attempt the push."
+            echo "[practices]   But since P2-106 the same exit 1 also carries the forgery-resistance"
+            echo "[practices]   refusals, and re-running the harness will NOT clear those:"
+            echo "[practices]     AX_DOWNSTREAM_LOG_SCHEMA_MISMATCH / _WRITER_SCHEMA_DRIFT — the audit"
+            echo "[practices]       line's field set is not the one the harness emits."
+            echo "[practices]     AX_DOWNSTREAM_DIGEST_RECOMPUTE_VACUOUS — the artifact-digest recompute"
+            echo "[practices]       found no ax:artifact markers, so it would certify nothing."
+            echo "[practices]     AX_DOWNSTREAM_REPLACE_REFS_PRESENT — \`git replace -d <ref>\` them; they"
+            echo "[practices]       let every sha comparison be answered out of a fabricated graph."
+            echo "[practices]     AX_DOWNSTREAM_ENV_UNSCRUBBABLE — start the push from a clean shell."
         fi
         return 1
     fi

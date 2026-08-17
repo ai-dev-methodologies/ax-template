@@ -5,7 +5,17 @@ plugins {
     // PIT mutation testing — backs the non-vacuity / hollow-test enforcement spine
     // (METHODOLOGY.md "Non-Vacuity / Hollow-Test Enforcement"). Scoped, parameterized
     // runs are driven by practices/evals/vacuity_class_proof_guard.sh.
-    id("info.solidsoft.pitest") version "1.15.0"
+    //
+    // BACKLOG P2-88 — 1.15.0 was the HARD BLOCKER on promoting this build to Gradle 9: it
+    // reads the `ReportingExtension.baseDir` property, which Gradle 9 removed, so the build
+    // died at plugin-APPLY time ("Could not get unknown property 'baseDir'") before any task
+    // could run. Measured on the 8.14.5 wrapper with `--warning-mode all`, that deprecation
+    // was the ONLY Gradle-9 incompatibility this whole build script had.
+    // 1.19.0 (2026-03-29) is the fix — its release notes list "Initial support for Gradle 9"
+    // and it emits ZERO deprecation warnings on 8.14.5. It is published to the Gradle Plugin
+    // Portal only (Maven Central still stops at 1.15.0), which the `plugins {}` block
+    // resolves by default.
+    id("info.solidsoft.pitest") version "1.19.0"
 }
 
 group = "com.ax.template"
@@ -83,8 +93,24 @@ dependencies {
     // PIT JUnit 5 support. Must be on the test classpath (not only PIT's tool classpath) so
     // the mutation minion can DISCOVER + RUN the Jupiter tests when measuring coverage —
     // without it pitest reports "Ran 0 tests" / NO_COVERAGE. The solidsoft plugin auto-detects
-    // it here and forwards it to PIT. Pinned to 1.2.1 (compatible with PIT 1.15.0 + JUnit Platform 1.10.x).
+    // it here and forwards it to PIT. Pinned to 1.2.1 (compatible with the PIT 1.15.2 pinned below).
     testImplementation("org.pitest:pitest-junit5-plugin:1.2.1")
+
+    // BACKLOG P2-88 — the junit-platform-launcher the PIT minion loads MUST be the same
+    // JUnit Platform generation as the Jupiter engine on the test runtime, or the minion dies
+    // instantly ("Coverage generation minion exited abnormally! (UNKNOWN_ERROR)") right after
+    // "Sent tests to minion", with no other diagnostic.
+    // gradle-pitest-plugin 1.15.0 added the launcher itself (`addJUnitPlatformLauncher`) and
+    // happened to resolve the Boot-4.1-managed 6.0.3. 1.19.0 changed that resolution to a
+    // DETACHED configuration (upstream #390) which does NOT see this project's Spring Boot BOM
+    // and resolved 1.10.2 instead — against a junit-jupiter-engine 6.0.3 runtime. That version
+    // split was measured directly by diffing PIT's own `classPathElements` between the two
+    // plugin versions: the ONLY difference in 181 entries was
+    // junit-platform-launcher 6.0.3 (1.15.0, works) vs 1.10.2 (1.19.0, minion dies).
+    // Fix: turn the plugin's auto-add OFF (see `addJUnitPlatformLauncher` in the pitest block)
+    // and declare the launcher here, where the Boot BOM version-manages it — so it can never
+    // drift from the engine again.
+    testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
 
 tasks.withType<Test> {
@@ -176,6 +202,13 @@ pitest {
     // pitest-junit5-plugin is provided via the testImplementation dependency above; the
     // solidsoft plugin auto-detects it on the test classpath and forwards it to PIT.
     pitestVersion.set("1.15.2")
+
+    // BACKLOG P2-88 — see the junit-platform-launcher testRuntimeOnly declaration above.
+    // The plugin's own launcher auto-add resolves OUTSIDE this project's Spring Boot BOM
+    // (detached configuration, upstream #390) and would inject JUnit Platform 1.10.2 against
+    // a 6.0.3 engine, killing the coverage minion. Off here; declared there instead.
+    // Do NOT re-enable without re-checking `classPathElements` for the launcher version.
+    addJUnitPlatformLauncher.set(false)
 
     // CRITICAL: PIT forks its coverage/mutation minion with the JVM that runs Gradle, which
     // may be older than the project's Java toolchain. This project compiles to Java 21

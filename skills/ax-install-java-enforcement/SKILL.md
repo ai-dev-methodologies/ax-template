@@ -84,13 +84,13 @@ Inside the project's existing `dependencies { }` block:
 testImplementation("com.tngtech.archunit:archunit-junit5:1.3.0")
 ```
 
-### 3. Register the `testPractices` task, parameterized by `rootPackage`
+### 3. Register the gate task (name from `java.testTask`, default `testPractices`), parameterized by `rootPackage`
 
 The root package must never be hardcoded into the test class — pass it through a
 Gradle `systemProperty`, sourced from a project property so it can be overridden
 per-invocation without editing the build file:
 
-<!-- ax:artifact id=java-gradle-testpractices path=build.gradle.kts kind=file-fragment base=java.root merge=append -->
+<!-- ax:artifact id=java-gradle-testpractices path=build.gradle.kts kind=file-fragment base=java.root substs=config.java.testTask merge=append -->
 ```kotlin
 // Lazy handle on -PaxRootPackage. `providers.gradleProperty(...)` returns a Provider, which is NOT
 // resolved here at CONFIGURATION time (#90). The earlier shape put `?: error(...)` directly in the
@@ -116,7 +116,21 @@ tasks.named<Test>("test") {
     useJUnitPlatform { excludeTags("PRACTICES") }
 }
 
-tasks.register<Test>("testPractices") {
+// F-035: the gate task's NAME must agree with ax.config.json's `java.testTask`, because
+// ax-install-hooks' pre-commit body invokes `./gradlew "$JAVA_TEST_TASK"` resolved from exactly that
+// key (F-032). Hardcoding "testPractices" here while the hook honoured the config meant a consumer
+// who set java.testTask to any other name got `Task 'x' not found in root project` on EVERY
+// java-touching commit: the gate never ran once, and the error named Gradle rather than the
+// mismatch that caused it. Same default-then-override shape as the hook body -- the documented
+// default first, the config value (when present) overwriting it -- so an ABSENT or default-valued
+// java.testTask renders byte-identically to the previous shape.
+var axGateTaskName = "testPractices"
+// ax:if config.java.testTask
+// ax:subst config.java.testTask
+axGateTaskName = "@@config.java.testTask@@"
+// ax:endif
+
+tasks.register<Test>(axGateTaskName) {
     // A7: a task with no `group` is structurally ABSENT from `./gradlew tasks` -- it surfaces only
     // under "Other tasks" with `--all`. A gate a consumer cannot discover is a gate they will not run.
     group = "verification"
@@ -359,6 +373,7 @@ If the probe does not turn RED: (a) step 1 already showed `tests="0"` — fix §
 
 - [ ] The scope statement (3 checks only, not "the Java catalog") was said to the user before installing anything, and `ax.config.json` existed (or `ax-init-config` was invoked and the run stopped there)
 - [ ] The `testPractices` task sets `testClassesDirs`/`classpath` from `sourceSets["test"]` — not just `useJUnitPlatform` — so it scans compiled test classes instead of running an inert empty task
+- [ ] The registered task NAME comes from `ax.config.json`'s `java.testTask` (documented default `testPractices`), not a literal — ax-install-hooks' pre-commit body invokes exactly that configured name (F-032), so a hardcoded name here makes every java-touching commit die with `Task 'x' not found in root project` while the gate never runs (F-035)
 - [ ] `testPractices` reads `ax.rootPackage` via `systemProperty`/`-P`, never a literal package string baked into the build file — an unresolved value fails the task immediately (`?: error(...)`), it does not fall back to `"com.example.app"` (ax-template #86)
 - [ ] The written ArchUnit test class(es) are new, project-specific files (no literal ax-template package name anywhere), and all three rule bodies include `.allowEmptyShould(true)`
 - [ ] The 4th check (`practicesGateActuallyScansTheProject`) is present, its non-null/empty resolution lives in a `@Test` body (never a `static` initializer), and `testLogging { exceptionFormat = FULL }` is set (ax-template #86/#87)

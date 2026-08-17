@@ -81,11 +81,11 @@ class SessionComplianceTest {
 
         given().header("Authorization", "Bearer " + token).when().delete("/api/sessions/" + id).then().statusCode(204);
         Object firstRevokedAt = given().header("Authorization", "Bearer " + token)
-            .when().get("/api/sessions/" + id).then().extract().path("revokedAt");
+            .when().get("/api/sessions/" + id).then().statusCode(200).extract().path("revokedAt");
 
         given().header("Authorization", "Bearer " + token).when().delete("/api/sessions/" + id).then().statusCode(204);
         Object secondRevokedAt = given().header("Authorization", "Bearer " + token)
-            .when().get("/api/sessions/" + id).then().extract().path("revokedAt");
+            .when().get("/api/sessions/" + id).then().statusCode(200).extract().path("revokedAt");
 
         org.assertj.core.api.Assertions.assertThat(secondRevokedAt).isEqualTo(firstRevokedAt);
     }

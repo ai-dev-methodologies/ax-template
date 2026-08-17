@@ -57,16 +57,40 @@ public final class CommerceOrderTestSupport {
         return HttpExtract.path(added, "id", "POST /api/orders/{id}/items (addItem)");
     }
 
-    /** Submit the order. Returns the response body map. */
-    public static io.restassured.response.ExtractableResponse<io.restassured.response.Response>
-        submit(String token, String orderId, long total, long subTotal, long tax) {
+    /**
+     * The submit request, built but not sent. Handing a REQUEST out of a helper is safe — it
+     * carries no undescribed response. BACKLOG P2-119: this method used to return the
+     * {@code ExtractableResponse} itself, which let every caller read the body without ever
+     * describing the response, in a file the TestSupport detectors do not scan.
+     */
+    private static io.restassured.specification.RequestSpecification submitRequest(
+            String token, String orderId, long total, long subTotal, long tax) {
         String body = String.format(
             "{\"total\":%d,\"subTotal\":%d,\"tax\":%d}", total, subTotal, tax);
         return given()
             .header("Authorization", "Bearer " + token)
             .header("Content-Type", "application/json")
-            .body(body)
+            .body(body);
+    }
+
+    /** Submit the order; the response MUST be 200. Reads nothing out of the body. */
+    public static void submit(String token, String orderId, long total, long subTotal, long tax) {
+        submitRequest(token, orderId, total, subTotal, tax)
         .when().post("/api/orders/" + orderId + "/submit")
-        .then().extract();
+        .then().statusCode(200);
+    }
+
+    /**
+     * Submit the order expecting {@code expectedStatus}, and return the named body field. Use
+     * this for the rejection cases (409 ORDER_INVALID_TRANSITION and friends), where the status
+     * is the claim and the body carries the code that names why.
+     */
+    public static String submitExpecting(String token, String orderId, long total, long subTotal,
+                                         long tax, int expectedStatus, String jsonPath) {
+        Response resp = submitRequest(token, orderId, total, subTotal, tax)
+        .when().post("/api/orders/" + orderId + "/submit")
+        .then().extract().response();
+        return HttpExtract.pathAt(resp, expectedStatus, jsonPath,
+            "POST /api/orders/{id}/submit (submitExpecting " + expectedStatus + " " + jsonPath + ")");
     }
 }

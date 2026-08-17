@@ -43,7 +43,22 @@
 # rescue). items, distinct ids and distinct (guard, fixture) pairs are all equal to the value
 # below. fixture_kill_proof_guard.sh pins the same number as LIVE_MIN_ITEMS, so lowering the
 # gate takes two coordinated edits rather than one silent deletion.
-min_items: 97
+# 2026-08-18 (BACKLOG P2-119): 97 -> 99. Two items were added for guard [116]'s two NEW
+# detectors, (C) TestSupport response export and (D) caller-side blind read. Each got its own
+# ISOLATED fail fixture precisely so a SINGLE anchor flips it — the opposite of the [116]
+# fail_blind_extract disclosure below, whose fixture deliberately spans (A) and (B) at once and
+# therefore cannot be registered. Both new items were reproduced by mutation before being
+# written here, including the negative half: neutering (C) leaves the (D) fixture at exit 1 and
+# vice versa, so neither item's proof leans on the other detector.
+# 2026-08-18 (registration/alignment lane, external-critic closure P2-88/P2-103~P2-106/P2-119
+# wave): 99 -> 105. Six items were added, each reproduced by mutation before being written here:
+# three for guard [114] downstream_release_recency's schema/vacuity/premise checks
+# (fail_forged_line_shape, fail_digest_recompute_vacuous, fail_missing_expected_head), and three
+# for guard [112] install_artifact_extractability's ax:else companion-fence detection
+# (fail_orphan_axelse, fail_duplicate_axelse, fail_else_with_reference) — the latter three share
+# the same lint()-delegation anchor as the existing eight install_artifact_extractability items
+# above, for the same reason those are coarser-than-per-code proofs.
+min_items: 105
 
 items:
 
@@ -1345,6 +1360,51 @@ items:
     anchor: 'result.returncode != 0'
     neuter: 'False'
 
+  # ── install_artifact_extractability/{fail_orphan_axelse,fail_duplicate_axelse,
+  #    fail_else_with_reference}: ax:else companion-fence checks, delegated to
+  #    ax_markers.lint() ────────────────────────────────────────────────────────────────────
+  # fail_orphan_axelse: skills/ax-install-orphanelse/SKILL.md has an `ax:else` fenced block with
+  #   no preceding `ax:if`/`ax:artifact` companion for it to attach to. fail_duplicate_axelse:
+  #   skills/ax-install-dupelse/SKILL.md declares TWO `ax:else` blocks for the same conditional
+  #   id. fail_else_with_reference: skills/ax-install-elseref/SKILL.md's `ax:else` body is
+  #   free-text prose referencing another marker instead of a fenced block, the same
+  #   FREE_TEXT_CONDITIONAL shape the fail_free_text_conditional fixture above exercises, on the
+  #   else-branch codepath instead of the if-branch one. All three codes are detected inside
+  #   ax_markers.lint() (a separate file this guard imports and delegates to, per that module's
+  #   own header), never re-implemented in install_artifact_extractability_guard.sh's own text —
+  #   so, same as the four-fixture block above, all three share the ONE anchor/neuter pair this
+  #   guard's own text controls: whether lint()'s findings ever reach `problems` at all.
+  # anchor:  the sole append inside the
+  #          "for p in ax_markers.lint(artifacts, config_schema_path=config_schema_path):" loop —
+  #          identical anchor to the fail_missing_marker/fail_duplicate_id/
+  #          fail_free_text_conditional/fail_wrong_comment_prefix/fail_missing_required_attr/
+  #          fail_unknown_attr/fail_unknown_config_path/fail_missing_merge_for_fragment items
+  #          above, appears exactly once in this guard's source.
+  # neuter:  condition-constant False as the loop body → every lint()-derived Problem is
+  #          discarded before reaching `problems` → exit 0 iff the fixture's failure came from
+  #          lint() alone (true for all three of these — none touches check 9's NO_ARTIFACT_MARKER
+  #          append or check 10's bash -n append, which use their own, unaffected anchors).
+  - id: install_artifact_extractability/fail_orphan_axelse
+    guard: practices/evals/install_artifact_extractability_guard.sh
+    fixture: practices/evals/fixtures/install_artifact_extractability/fail_orphan_axelse
+    fixture_arg: '--root'
+    anchor: 'problems.append((p.code, p.source_file, p.line, p.message))'
+    neuter: 'False'
+
+  - id: install_artifact_extractability/fail_duplicate_axelse
+    guard: practices/evals/install_artifact_extractability_guard.sh
+    fixture: practices/evals/fixtures/install_artifact_extractability/fail_duplicate_axelse
+    fixture_arg: '--root'
+    anchor: 'problems.append((p.code, p.source_file, p.line, p.message))'
+    neuter: 'False'
+
+  - id: install_artifact_extractability/fail_else_with_reference
+    guard: practices/evals/install_artifact_extractability_guard.sh
+    fixture: practices/evals/fixtures/install_artifact_extractability/fail_else_with_reference
+    fixture_arg: '--root'
+    anchor: 'problems.append((p.code, p.source_file, p.line, p.message))'
+    neuter: 'False'
+
   # ── cross_artifact_contract/fail_p_contract_drift: check (a), -P property name agreement ──
   # fixture: java skill declares one gradleProperty name, hooks skill's gradlew call passes
   #          a DIFFERENT -P name (the F-024/#86 shape).
@@ -1550,6 +1610,59 @@ items:
     anchor: 'override != []'
     neuter: 'False'
 
+  # ── downstream_release_recency/fail_forged_line_shape: (v) SCHEMA PIN, field-set comparison ─
+  # fixture: the latest audit line's JSON object has the wrong field set — a hand-authored line
+  #          shaped closely enough to pass field-level checks individually but never produced by
+  #          the harness's own writer.
+  # anchor:  the single equality comparing the line's own key set against the pinned
+  #          AUDIT_SCHEMA_KEYS — the gate this guard's header calls "a record of the wrong shape
+  #          does not deserve field-level diagnosis: it was not written by the harness."
+  # neuter:  condition-constant False → a line whose field set is not the harness's declared
+  #          shape is silently treated as schema-valid and field-level checks proceed on it →
+  #          exit 0.
+  - id: downstream_release_recency/fail_forged_line_shape
+    guard: practices/evals/downstream_release_recency_guard.sh
+    fixture: practices/evals/fixtures/downstream_release_recency/fail_forged_line_shape
+    fixture_arg: '--root'
+    anchor: 'line_keys != pinned'
+    neuter: 'False'
+
+  # ── downstream_release_recency/fail_digest_recompute_vacuous: (vi) THE RECOMPUTE MUST HAVE
+  #    MEASURED SOMETHING (P2-106) ────────────────────────────────────────────────────────────
+  # fixture: no skills/ tree (or no ax:artifact markers) at the resolved head, so recomputing
+  #          artifact digests from the pushed tree finds ZERO markers — the digest comparison
+  #          would otherwise compare an empty map to an empty map and silently report a match.
+  # anchor:  the single boolean guarding the AX_DOWNSTREAM_DIGEST_RECOMPUTE_VACUOUS failure —
+  #          this guard's header calls the digest recompute "the one check with genuinely
+  #          hard-to-forge teeth," and this is the check that those teeth were conditional on
+  #          there being anything to recompute.
+  # neuter:  condition-constant False → an empty recompute is silently accepted as a valid
+  #          (vacuously matching) digest comparison → exit 0.
+  - id: downstream_release_recency/fail_digest_recompute_vacuous
+    guard: practices/evals/downstream_release_recency_guard.sh
+    fixture: practices/evals/fixtures/downstream_release_recency/fail_digest_recompute_vacuous
+    fixture_arg: '--root'
+    anchor: 'not recomputed'
+    neuter: 'False'
+
+  # ── downstream_release_recency/fail_missing_expected_head: fixture-shaped mode has no sha to
+  #    hold the audit log against ─────────────────────────────────────────────────────────────
+  # fixture: .ax-downstream/expected_head.txt is absent, so in fixture-shaped mode this gate has
+  #          nothing to compare the recorded head_sha against — precisely the shape the 49th
+  #          guard's own precedent (fail_git_context_redirected) pins: when the gate cannot
+  #          establish WHICH head the record is about, it must refuse, not default.
+  # anchor:  the single boolean guarding the AX_DOWNSTREAM_EXPECTED_HEAD_UNRESOLVED failure,
+  #          gating on the resolved (possibly empty) `expected_head` string.
+  # neuter:  condition-constant False → an absent or empty expected_head is silently accepted,
+  #          and an empty expectation would go on to compare equal to an empty recorded
+  #          head_sha, certifying a run about nothing → exit 0.
+  - id: downstream_release_recency/fail_missing_expected_head
+    guard: practices/evals/downstream_release_recency_guard.sh
+    fixture: practices/evals/fixtures/downstream_release_recency/fail_missing_expected_head
+    fixture_arg: '--root'
+    anchor: 'not expected_head'
+    neuter: 'False'
+
   # ── fixture_tracked_completeness/fail_untracked_file: a fixture file on disk absent from
   #    the tracked-set stand-in ──────────────────────────────────────────────────────────────
   # fixture: a fixture-shaped (non-git) root — sub/ghost.txt exists on disk under the root but
@@ -1567,6 +1680,51 @@ items:
     fixture: practices/evals/fixtures/fixture_tracked_completeness/fail_untracked_file
     fixture_arg: '--root'
     anchor: 'p != MANIFEST_NAME'
+    neuter: 'False'
+
+  # ── test_support_response_validation/fail_testsupport_exports_response: detector (C) ──────
+  # fixture: SampleTestSupport.java exports an ExtractableResponse and a Response, and NOTHING
+  #          else — every `.extract()` in it is terminal (so (A) permits it), no
+  #          `.path(`/`.pathAt(`/`.jsonPath(` appears anywhere (so (B) cannot fire), and the tree
+  #          contains no non-TestSupport class at all (so (D) has nothing to scan). Isolation is
+  #          the fixture's design goal, which is what makes ONE anchor sufficient here.
+  # anchor:  EXPORT_DECL — detector (C)'s OWN compiled pattern, deliberately not shared with the
+  #          METHOD_DECL that builds the same-file helper table, so that disabling (C) does not
+  #          also empty the table detector (D) resolves through. One self-contained literal on
+  #          one line, which is what makes a sentinel-string substitution possible here.
+  # neuter:  sentinel-string — the pattern is replaced by one that matches no Java source, so
+  #          (C) enumerates nothing and appends nothing → exit 0. Everything outside the quotes
+  #          is byte-identical to the anchor (the vocabulary check enforces that).
+  # measured: baseline exit=1 (2 violations); neutered exit=0. Cross-check that the proof does
+  #          NOT lean on another detector: with (C) neutered, fail_caller_blind_read still
+  #          exits 1 and fail_blind_extract still exits 1.
+  - id: test_support_response_validation/fail_testsupport_exports_response
+    guard: practices/evals/test_support_response_validation_guard.sh
+    fixture: practices/evals/fixtures/test_support_response_validation/fail_testsupport_exports_response
+    fixture_arg: '--root'
+    anchor: "EXPORT_DECL = re.compile(r'(?:^|[;{}])[^;{}()=]*?\\b(?:(?:io\\s*\\.\\s*restassured\\s*\\.\\s*[\\w.\\s]*?)?(?:ExtractableResponse|ValidatableResponse|ResponseOptions|ResponseBody|JsonPath|Response)\\s*(?:<[^;{}=()]*>)?)\\s+([A-Za-z_]\\w*)\\s*\\(')"
+    neuter: "EXPORT_DECL = re.compile(r'NEUTER_C_EXPORT_NEVER_MATCHES')"
+
+  # ── test_support_response_validation/fail_caller_blind_read: detector (D) ─────────────────
+  # fixture: SampleBlindCallerTest.java reads three undescribed responses (an inline chain, an
+  #          undescribed local, and an undescribed same-file helper) and there is NO
+  #          `*TestSupport.java` anywhere in the tree, so (A), (B) and (C) — all three scoped to
+  #          that filename — cannot fire. Only (D) can, so ONE anchor is sufficient.
+  # anchor:  the single call that asks whether a layer-2 read site is a violation. The predicate
+  #          is phrased POSITIVELY (`is_undescribed`, not `described`) precisely so this item can
+  #          exist: the emission gate is `if not <predicate>: continue`, so the vocabulary's only
+  #          admissible constant, False, silences the detector. Phrased as `if described:
+  #          continue`, a False constant would INVERT the guard into reporting every read.
+  # neuter:  condition-constant False → `if not False: continue` skips every layer-2 site →
+  #          detector (D) appends nothing → exit 0.
+  # measured: baseline exit=1 (3 violations, one per origin); neutered exit=0. Cross-check that
+  #          the proof does NOT lean on another detector: with (D) neutered,
+  #          fail_testsupport_exports_response still exits 1 and fail_blind_extract still exits 1.
+  - id: test_support_response_validation/fail_caller_blind_read
+    guard: practices/evals/test_support_response_validation_guard.sh
+    fixture: practices/evals/fixtures/test_support_response_validation/fail_caller_blind_read
+    fixture_arg: '--root'
+    anchor: "scan.is_undescribed(dot if kind == 'A' else offset)"
     neuter: 'False'
 
   # ── test_support_response_validation/fail_blind_extract: NOT REGISTERED — measured

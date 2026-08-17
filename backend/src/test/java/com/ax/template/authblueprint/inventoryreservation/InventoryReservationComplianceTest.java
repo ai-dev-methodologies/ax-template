@@ -116,7 +116,9 @@ class InventoryReservationComplianceTest {
     @Test @Tag("INVRES-COMMIT-001")
     void commit_decrementsBothAxes_exactlyOnce() {
         String item = createItem("SKU-COMMIT", 50);
-        String resId = reserve(item, 20).jsonPath().getString("id");
+        ExtractableResponse<Response> resResp = reserve(item, 20);
+        assertThat(resResp.statusCode()).isEqualTo(201);
+        String resId = resResp.jsonPath().getString("id");
 
         // before commit: onHand 50, reserved 20, available 30
         assertThat(getItem(item).jsonPath().getLong("available")).isEqualTo(30L);
@@ -146,7 +148,9 @@ class InventoryReservationComplianceTest {
     @Test @Tag("INVRES-RELEASE-001")
     void release_freesHold_onHandUntouched_exactlyOnce() {
         String item = createItem("SKU-RELEASE", 40);
-        String resId = reserve(item, 25).jsonPath().getString("id");
+        ExtractableResponse<Response> resResp = reserve(item, 25);
+        assertThat(resResp.statusCode()).isEqualTo(201);
+        String resId = resResp.jsonPath().getString("id");
         assertThat(getItem(item).jsonPath().getLong("available")).isEqualTo(15L);
 
         ExtractableResponse<Response> released = release(resId);
@@ -170,9 +174,15 @@ class InventoryReservationComplianceTest {
     @Test @Tag("INVRES-CONSERVE-001")
     void conservation_reservedEqualsSumOfHeldQuantities_andBounded() {
         String item = createItem("SKU-CONSERVE", 100);
-        String a = reserve(item, 20).jsonPath().getString("id");
-        String b = reserve(item, 30).jsonPath().getString("id");
-        String c = reserve(item, 10).jsonPath().getString("id");
+        ExtractableResponse<Response> resA = reserve(item, 20);
+        assertThat(resA.statusCode()).isEqualTo(201);
+        String a = resA.jsonPath().getString("id");
+        ExtractableResponse<Response> resB = reserve(item, 30);
+        assertThat(resB.statusCode()).isEqualTo(201);
+        String b = resB.jsonPath().getString("id");
+        ExtractableResponse<Response> resC = reserve(item, 10);
+        assertThat(resC.statusCode()).isEqualTo(201);
+        String c = resC.jsonPath().getString("id");
 
         // three HELD holds → reserved == 60 == Σ(HELD)
         assertThat(getItem(item).jsonPath().getLong("reserved")).isEqualTo(60L);

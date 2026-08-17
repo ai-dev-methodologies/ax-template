@@ -84,7 +84,9 @@ class DispatchComplianceTest {
         String p1 = registerProvider("fsm-1");
         String p2 = registerProvider("fsm-2");
         String r = createRequest("fsm");
-        String offerId = offer(r, p1).path("id");
+        ExtractableResponse<Response> offerResp = offer(r, p1);
+        assertThat(offerResp.statusCode()).isEqualTo(201);
+        String offerId = offerResp.path("id");
         assertThat(offerId).isNotNull();
 
         // a second PENDING offer for the same request is rejected (DB partial-unique backstops it)
@@ -146,8 +148,12 @@ class DispatchComplianceTest {
         String provider = registerProvider("solo");
         String ra = createRequest("race-a");
         String rb = createRequest("race-b");
-        String offerA = offer(ra, provider).path("id");   // provider may hold a PENDING offer per request
-        String offerB = offer(rb, provider).path("id");   // (at-most-one-PENDING is per REQUEST, not per provider)
+        ExtractableResponse<Response> offerRespA = offer(ra, provider);
+        assertThat(offerRespA.statusCode()).isEqualTo(201);
+        String offerA = offerRespA.path("id");   // provider may hold a PENDING offer per request
+        ExtractableResponse<Response> offerRespB = offer(rb, provider);
+        assertThat(offerRespB.statusCode()).isEqualTo(201);
+        String offerB = offerRespB.path("id");   // (at-most-one-PENDING is per REQUEST, not per provider)
 
         ExecutorService pool = Executors.newFixedThreadPool(2);
         CountDownLatch go = new CountDownLatch(1);
@@ -196,7 +202,9 @@ class DispatchComplianceTest {
     void jobAlreadyTaken_whenRequestNoLongerOfferable() {
         String provider = registerProvider("p-job");
         String r = createRequest("job");
-        String offerId = offer(r, provider).path("id");
+        ExtractableResponse<Response> offerResp = offer(r, provider);
+        assertThat(offerResp.statusCode()).isEqualTo(201);
+        String offerId = offerResp.path("id");
 
         // request leaves OFFERED (cancelled) between offer and accept
         given().header("Authorization", "Bearer " + member)
@@ -215,7 +223,9 @@ class DispatchComplianceTest {
         String p1 = registerProvider("atomic-1");
         String p2 = registerProvider("atomic-2");
         String r = createRequest("atomic");
-        String o1 = offer(r, p1).path("id");
+        ExtractableResponse<Response> offerResp = offer(r, p1);
+        assertThat(offerResp.statusCode()).isEqualTo(201);
+        String o1 = offerResp.path("id");
 
         given().header("Authorization", "Bearer " + member)
         .when().post("/api/dispatch/offers/" + o1 + "/decline")
@@ -240,7 +250,9 @@ class DispatchComplianceTest {
         String p2 = registerProvider("casc-2");
         registerProvider("casc-3");   // a further candidate exists, but maxDepth=2 stops the cascade
         String r = createRequest("cascade");
-        String o1 = offer(r, p1).path("id");
+        ExtractableResponse<Response> offerResp = offer(r, p1);
+        assertThat(offerResp.statusCode()).isEqualTo(201);
+        String o1 = offerResp.path("id");
         assertThat(offer(r, p1).statusCode()).isEqualTo(409);   // single pending invariant
 
         given().header("Authorization", "Bearer " + member)

@@ -75,7 +75,7 @@ class AuthzParityComplianceTest {
         String body = "{\"actionType\":\"" + type + "\",\"authorizedParams\":" + jsonParams(params)
             + ",\"highValue\":" + highValue + ",\"requiredGates\":" + gj + "}";
         return given().header("Authorization", "Bearer " + token).header("Content-Type", "application/json")
-            .body(body).when().post("/api/authz-parity/actions").thenReturn().then().extract();
+            .body(body).when().post("/api/authz-parity/actions").thenReturn().then().statusCode(201).extract();
     }
 
     private ExtractableResponse<Response> signoff(String token, String actionId) {
@@ -240,7 +240,9 @@ class AuthzParityComplianceTest {
 
         // satisfy the last gate → execute now succeeds
         assertThat(satisfyGate(approver2, id, "AML_SCREEN").statusCode()).isEqualTo(201);
-        assertThat(execute(requester, id, params).jsonPath().getString("status")).isEqualTo("EXECUTED");
+        ExtractableResponse<Response> execAfterLastGate = execute(requester, id, params);
+        assertThat(execAfterLastGate.statusCode()).isEqualTo(200);
+        assertThat(execAfterLastGate.jsonPath().getString("status")).isEqualTo("EXECUTED");
     }
 
     // ── AUTHZPARITY-GATES + FOUREYES + EXEC — the full high-value path composes ──
@@ -254,11 +256,14 @@ class AuthzParityComplianceTest {
         assertThat(signoff(approver1, id).statusCode()).isEqualTo(201);
         assertThat(signoff(approver2, id).statusCode()).isEqualTo(201);
         assertThat(satisfyGate(approver1, id, "AML_SCREEN").statusCode()).isEqualTo(201);
-        assertThat(execute(requester, id, Map.of("amount", "1", "target", "ACC-BIG"))
-            .jsonPath().getString("code")).isEqualTo("PARITY_MISMATCH");
+        ExtractableResponse<Response> execWrongParam = execute(requester, id, Map.of("amount", "1", "target", "ACC-BIG"));
+        assertThat(execWrongParam.statusCode()).isEqualTo(409);
+        assertThat(execWrongParam.jsonPath().getString("code")).isEqualTo("PARITY_MISMATCH");
 
         // correct params → EXECUTED
-        assertThat(execute(requester, id, params).jsonPath().getString("status")).isEqualTo("EXECUTED");
+        ExtractableResponse<Response> execCorrectParams = execute(requester, id, params);
+        assertThat(execCorrectParams.statusCode()).isEqualTo(200);
+        assertThat(execCorrectParams.jsonPath().getString("status")).isEqualTo("EXECUTED");
     }
 
     // ── AUTHZPARITY-CONCURRENT-001 — keystone: N concurrent executes → exactly one wins ──

@@ -45,7 +45,7 @@ class ProvisionalAttestationComplianceTest {
     private ExtractableResponse<Response> author(String token, String content) {
         return given().header("Authorization", "Bearer " + token).header("Content-Type", "application/json")
             .body("{\"content\":\"" + content + "\"}")
-        .when().post("/api/provisional-attestation/records").thenReturn().then().extract();
+        .when().post("/api/provisional-attestation/records").thenReturn().then().statusCode(201).extract();
     }
 
     private ExtractableResponse<Response> edit(String token, String id, String content) {

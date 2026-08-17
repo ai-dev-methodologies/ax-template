@@ -133,7 +133,7 @@ class PaymentSecurityTest {
         String responseBody = given()
             .header("Authorization", "Bearer " + authToken)
         .when().get("/api/payments/" + paymentId)
-        .then().extract().asString();
+        .then().statusCode(200).extract().asString();
 
         assertThat(responseBody)
             .as("API response must not expose raw PAN from database (PCI-DSS 3.4)")
@@ -163,7 +163,7 @@ class PaymentSecurityTest {
             .body("{\"amount\":10000,\"currency\":\"KRW\",\"orderId\":\"order-sec001-resp\"," +
                   "\"paymentMethodToken\":\"" + PAN_FIXTURE + "\"}")
         .when().post("/api/payments")
-        .then().extract().asString();
+        .then().statusCode(201).extract().asString();
 
         assertThat(errorBody)
             .as("Error response body must not contain raw PAN fixture (PCI-DSS 3.4)")
@@ -353,7 +353,7 @@ class PaymentSecurityTest {
             .header("Content-Type", "application/json")
             .body("{\"email\":\"" + email + "\",\"password\":\"securepassword12\"}")
         .when().post("/api/auth/email/login")
-        .then().extract().path("accessToken");
+        .then().statusCode(200).extract().path("accessToken");
     }
 
     /**

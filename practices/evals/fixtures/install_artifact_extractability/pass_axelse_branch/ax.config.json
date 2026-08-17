@@ -1,0 +1,9 @@
+{
+  "version": 1,
+  "stacks": ["react"],
+  "react": {
+    "root": ".",
+    "srcDir": "src",
+    "typescript": true
+  }
+}

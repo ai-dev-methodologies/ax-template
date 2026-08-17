@@ -88,11 +88,15 @@ class RecordLinkageComplianceTest {
         // name agreement only → 0.5 = lower → REVIEW; full disagreement → NO_MATCH
         String c = createRecord("Kim Chulsoo", "1985-05-05", "ID-C");
         String d = createRecord("Kim Chulsoo", null, "ID-D");
-        assertThat(propose(c, d).jsonPath().getString("band")).isEqualTo("REVIEW");
+        ExtractableResponse<Response> reviewBandResp = propose(c, d);
+        assertThat(reviewBandResp.statusCode()).isEqualTo(201);
+        assertThat(reviewBandResp.jsonPath().getString("band")).isEqualTo("REVIEW");
 
         String e = createRecord("Lee Younghee", "1970-07-07", "ID-E");
         String f = createRecord("Park Minsoo", "1999-09-09", "ID-F");
-        assertThat(propose(e, f).jsonPath().getString("band")).isEqualTo("NO_MATCH");
+        ExtractableResponse<Response> noMatchBandResp = propose(e, f);
+        assertThat(noMatchBandResp.statusCode()).isEqualTo(201);
+        assertThat(noMatchBandResp.jsonPath().getString("band")).isEqualTo("NO_MATCH");
 
         // self-pair 422
         assertThat(propose(c, c).statusCode()).isEqualTo(422);
@@ -104,6 +108,7 @@ class RecordLinkageComplianceTest {
         String a = createRecord("Baek Hyunwoo", "1987-07-17", "MP-1");
         String b = createRecord("baek hyunwoo", "1987-07-17", "mp-1");
         ExtractableResponse<Response> merged = propose(a, b);
+        assertThat(merged.statusCode()).isEqualTo(201);
         assertThat(merged.jsonPath().getString("band")).isEqualTo("AUTO_MATCH");
         String loser = merged.jsonPath().getString("highRecordId");
 
@@ -118,7 +123,9 @@ class RecordLinkageComplianceTest {
     void reject_closesProposal_recordsUntouched() {
         String a = createRecord("Oh Sehun", "1994-04-12", "RJ-A");
         String b = createRecord("Oh Sehun", null, "RJ-B");
-        String pid = propose(a, b).jsonPath().getString("id");        // REVIEW band
+        ExtractableResponse<Response> reviewResp = propose(a, b);
+        assertThat(reviewResp.statusCode()).isEqualTo(201);
+        String pid = reviewResp.jsonPath().getString("id");        // REVIEW band
 
         ExtractableResponse<Response> rejected = given().header("Authorization", "Bearer " + member)
             .when().post("/api/linkage/proposals/" + pid + "/reject").then().statusCode(200).extract();
@@ -140,6 +147,7 @@ class RecordLinkageComplianceTest {
         String a = createRecord("Cho Insung", "1981-03-03", "ID-A1");
         String b = createRecord("Cho Insung", null, "ID-B1");
         ExtractableResponse<Response> review = propose(a, b);
+        assertThat(review.statusCode()).isEqualTo(201);
         String pid = review.jsonPath().getString("id");
         assertThat(review.jsonPath().getString("band")).isEqualTo("REVIEW");
         assertThat(review.jsonPath().getString("status")).isEqualTo("PROPOSED");
@@ -156,7 +164,9 @@ class RecordLinkageComplianceTest {
         // NO_MATCH cannot be confirmed
         String e = createRecord("Gil Sunja", "1960-06-06", "ID-E2");
         String f = createRecord("Na Mansoo", "1955-05-05", "ID-F2");
-        String nm = propose(e, f).jsonPath().getString("id");
+        ExtractableResponse<Response> noMatchResp = propose(e, f);
+        assertThat(noMatchResp.statusCode()).isEqualTo(201);
+        String nm = noMatchResp.jsonPath().getString("id");
         ExtractableResponse<Response> bad = confirm(nm);
         assertThat(bad.statusCode()).isEqualTo(422);
         assertThat(bad.jsonPath().getString("code")).isEqualTo("LINKAGE_NOT_CONFIRMABLE");
@@ -168,6 +178,7 @@ class RecordLinkageComplianceTest {
         String a = createRecord("Seo Jiwoo", "1992-02-02", null);             // survivor (low id? either)
         String b = createRecord("seo jiwoo", "1992-02-02", "ID-FILL");        // loser supplies identifier
         ExtractableResponse<Response> p = propose(a, b);
+        assertThat(p.statusCode()).isEqualTo(201);
         assertThat(p.jsonPath().getString("band")).isEqualTo("AUTO_MATCH");   // 0.5+0.3 = 0.8 ≥ upper
 
         String pid = p.jsonPath().getString("id");
@@ -195,12 +206,15 @@ class RecordLinkageComplianceTest {
     void resolve_followsChainedMerges() {
         String a = createRecord("Ha Eunseo", "1995-05-15", "CHAIN-1");
         String b = createRecord("ha eunseo", "1995-05-15", "chain-1");
-        String firstLoser = propose(a, b).jsonPath().getString("highRecordId");
+        ExtractableResponse<Response> firstMergeResp = propose(a, b);
+        assertThat(firstMergeResp.statusCode()).isEqualTo(201);
+        String firstLoser = firstMergeResp.jsonPath().getString("highRecordId");
         String survivor1 = getRecord(firstLoser).jsonPath().getString("mergedIntoId");
 
         // now merge the surviving record itself into a third — building the chain A→B→C
         String c = createRecord("HA  EUNSEO", "1995-05-15", "CHAIN-1");
         ExtractableResponse<Response> p2 = propose(survivor1, c);
+        assertThat(p2.statusCode()).isEqualTo(201);
         assertThat(p2.jsonPath().getString("band")).isEqualTo("AUTO_MATCH");
         String finalSurvivor = p2.jsonPath().getString("lowRecordId");  // LOW record survives
 
@@ -218,7 +232,9 @@ class RecordLinkageComplianceTest {
     void concurrentConfirms_exactlyOneWins() throws Exception {
         String a = createRecord("Yoon Daeho", "1988-08-08", "RACE-A");
         String b = createRecord("Yoon Daeho", null, "RACE-B");                // REVIEW band
-        UUID pid = UUID.fromString(propose(a, b).jsonPath().getString("id"));
+        ExtractableResponse<Response> proposalResp = propose(a, b);
+        assertThat(proposalResp.statusCode()).isEqualTo(201);
+        UUID pid = UUID.fromString(proposalResp.jsonPath().getString("id"));
 
         int n = 8;
         ExecutorService pool = Executors.newFixedThreadPool(n);
@@ -262,8 +278,12 @@ class RecordLinkageComplianceTest {
         ids.sort(UUID::compareTo);
         UUID x = ids.get(0), y = ids.get(1), z = ids.get(2);          // z = shared loser-to-be
 
-        UUID p1 = UUID.fromString(propose(x.toString(), z.toString()).jsonPath().getString("id"));
-        UUID p2 = UUID.fromString(propose(y.toString(), z.toString()).jsonPath().getString("id"));
+        ExtractableResponse<Response> p1Resp = propose(x.toString(), z.toString());
+        assertThat(p1Resp.statusCode()).isEqualTo(201);
+        UUID p1 = UUID.fromString(p1Resp.jsonPath().getString("id"));
+        ExtractableResponse<Response> p2Resp = propose(y.toString(), z.toString());
+        assertThat(p2Resp.statusCode()).isEqualTo(201);
+        UUID p2 = UUID.fromString(p2Resp.jsonPath().getString("id"));
 
         ExecutorService pool = Executors.newFixedThreadPool(2);
         CountDownLatch start = new CountDownLatch(1);

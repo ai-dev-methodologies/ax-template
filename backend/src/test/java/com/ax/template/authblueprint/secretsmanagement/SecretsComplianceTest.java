@@ -49,7 +49,7 @@ class SecretsComplianceTest {
             .when().post("/api/auth/email/signup");
         return given().header("Content-Type", "application/json")
             .body("{\"email\":\"" + email + "\",\"password\":\"securepassword12\"}")
-            .when().post("/api/auth/email/login").then().extract().path("accessToken");
+            .when().post("/api/auth/email/login").then().statusCode(200).extract().path("accessToken");
     }
 
     private io.restassured.specification.RequestSpecification as(String token) {

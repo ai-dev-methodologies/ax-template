@@ -116,7 +116,7 @@ class DecisionGovComplianceTest {
 
         // approver == actor (the authenticated caller's name) → 422 four-eyes
         String self = given().header("Authorization", "Bearer " + member)
-            .when().get("/api/decisions/" + s).then().extract().path("decidedBy");
+            .when().get("/api/decisions/" + s).then().statusCode(200).extract().path("decidedBy");
         ExtractableResponse<Response> selfApproved = override(s, "out-x",
             ",\"reason\":\"fraud check\"", ",\"approvedBy\":\"" + self + "\"");
         assertThat(selfApproved.statusCode()).isEqualTo(422);

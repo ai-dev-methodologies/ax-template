@@ -183,6 +183,7 @@ class PaymentRefundTest {
             given()
                 .header("Authorization", "Bearer " + token)
             .when().get("/api/payments/" + paymentId);
+        assertThat(paymentState.statusCode()).isEqualTo(200);
 
         // balance or remainingAmount should be 7000
         String balanceStr = paymentState.then().extract().path("balance") != null
@@ -812,7 +813,7 @@ class PaymentRefundTest {
         return given()
             .header("Authorization", "Bearer " + token)
         .when().get("/api/payments/" + paymentId)
-        .then().extract().path("state");
+        .then().statusCode(200).extract().path("state");
     }
 
     private long balanceOf(String token, String paymentId) {
@@ -820,7 +821,7 @@ class PaymentRefundTest {
             given()
                 .header("Authorization", "Bearer " + token)
             .when().get("/api/payments/" + paymentId)
-            .then().extract().path("balance");
+            .then().statusCode(200).extract().path("balance");
         return ((Number) balance).longValue();
     }
 
@@ -847,6 +848,7 @@ class PaymentRefundTest {
                 .header("Idempotency-Key", idempotencyKey)
                 .body("{\"amount\":" + amount + ",\"currency\":\"" + currency + "\",\"orderId\":\"" + orderId + "\"}")
             .when().post("/api/payments");
+        assertThat(createResponse.statusCode()).isEqualTo(201);
 
         String paymentId = createResponse.then().extract().path("id");
 
@@ -877,6 +879,6 @@ class PaymentRefundTest {
             .header("Content-Type", "application/json")
             .body("{\"email\":\"" + email + "\",\"password\":\"securepassword12\"}")
         .when().post("/api/auth/email/login")
-        .then().extract().path("accessToken");
+        .then().statusCode(200).extract().path("accessToken");
     }
 }

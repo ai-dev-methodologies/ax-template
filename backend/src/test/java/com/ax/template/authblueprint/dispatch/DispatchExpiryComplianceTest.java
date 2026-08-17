@@ -79,7 +79,9 @@ class DispatchExpiryComplianceTest {
     void acceptAfterDeadline_isRejected() throws InterruptedException {
         String p = registerProvider("toctou");
         String r = createRequest("toctou");
-        String offerId = offer(r, p).path("id");
+        ExtractableResponse<Response> offerResp = offer(r, p);
+        assertThat(offerResp.statusCode()).isEqualTo(201);
+        String offerId = offerResp.path("id");
 
         Thread.sleep(PAST_DEADLINE_MS);   // cross the 1s TTL — offer still nominally PENDING (sweep not run)
 
@@ -94,7 +96,9 @@ class DispatchExpiryComplianceTest {
     void sweepDoesNotClobberAcceptedOffer() throws InterruptedException {
         String p = registerProvider("sweep-a");
         String r = createRequest("sweep-a");
-        String offerId = offer(r, p).path("id");
+        ExtractableResponse<Response> offerResp = offer(r, p);
+        assertThat(offerResp.statusCode()).isEqualTo(201);
+        String offerId = offerResp.path("id");
         // accept BEFORE the deadline
         given().header("Authorization", "Bearer " + member)
         .when().post("/api/dispatch/offers/" + offerId + "/accept").then().statusCode(200);
@@ -113,7 +117,9 @@ class DispatchExpiryComplianceTest {
     void sweepExpiresDuePendingOffer() throws InterruptedException {
         String p = registerProvider("sweep-b");
         String r = createRequest("sweep-b");
-        String offerId = offer(r, p).path("id");
+        ExtractableResponse<Response> offerResp = offer(r, p);
+        assertThat(offerResp.statusCode()).isEqualTo(201);
+        String offerId = offerResp.path("id");
 
         Thread.sleep(PAST_DEADLINE_MS);   // offer past deadline AND provider now stale (no re-offer target)
         int swept = sweeper.sweepOnce();

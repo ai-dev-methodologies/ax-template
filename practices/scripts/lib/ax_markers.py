@@ -85,14 +85,36 @@ MARKER SYNTAX (see the umbrella contract, section 1, for the authoritative spec 
     receive a body that still contains literal `ax:if`/`ax:subst` text because the "directive"
     never actually matched anything.
 
-    The three directives:
+    The four directives:
         <prefix> ax:if <ns>.<path>      ... <prefix> ax:endif   — delete the lines between when
                                                                     the referenced value is falsy
+        <prefix> ax:else                                         — invert the ENCLOSING ax:if for
+                                                                    the lines up to its ax:endif
         <prefix> ax:subst <ns>.<path>                            — substitute the token
                                                                     @@<ns>.<path>@@ on the very
                                                                     NEXT body line
     <ns> is `config` (looked up against the caller-supplied ax.config.json dict) or `env`
     (looked up against caller-supplied --env values).
+
+    WHY ax:else EXISTS AND WHY NOT NEGATION (P2-104(b)). Before it, a body could only express
+    "these lines when the flag is TRUE" — the FALSE branch had nowhere to live, so an artifact
+    whose two states each need DIFFERENT content could only author one of them. That is not a
+    theoretical gap: the react eslint.config.mjs artifact gated `import tseslint` and
+    `languageOptions: { parser: tseslint.parser }` on `config.react.typescript`, and on a
+    `typescript:false` consumer BOTH dropped out together — taking `languageOptions` itself with
+    them. ESLint 9's default parser (espree) does not enable JSX without
+    `parserOptions.ecmaFeatures.jsx`, so every `.jsx` file in such a project died with
+    "Parsing error: Unexpected token <" and not one catalog rule ever executed on it. The false
+    branch needed CONTENT, and the DSL had no way to say so.
+    A negation form (`ax:if !config.react.typescript`) would also have expressed it, and was
+    rejected: it lets the two complementary regions sit arbitrarily far apart and drift
+    independently — one gets edited, the other does not, and nothing structurally ties them
+    together. The shape of the defect being closed here is precisely "the false branch was never
+    authored", so the fix attaches the false branch to the condition it complements instead of
+    creating a second, independent condition that can silently fall out of sync with the first.
+    ax:else takes NO reference (`ax:else config.x` is ELSE_WITH_REFERENCE, never a silently
+    ignored elif), and at most one may appear per ax:if (DUPLICATE_AXELSE) — a second one would
+    otherwise re-invert the branch and quietly resurrect the block its author meant to end.
 
     CONFIG PATHS ARE CHECKED AGAINST THE SCHEMA (P2-109). A `config.*` reference — in `when=`, in
     an `ax:if`, or in an `ax:subst` — that names a key ax.config.json has no schema for evaluates
@@ -140,9 +162,10 @@ PUBLIC API
         or fence_lang left as-authored) so that lint() can report it as a Problem instead of the
         whole discovery pass aborting on the first bad marker in a large skill file.
     render(artifact, config, env) -> str
-        Evaluates every ax:if/ax:endif and ax:subst in the artifact's body and returns the final
-        text a consumer project would receive. Raises RenderError — never falls back — for an
-        unregistered fence language, an unresolved ax:subst reference, an unbalanced ax:if, or
+        Evaluates every ax:if/ax:else/ax:endif and ax:subst in the artifact's body and returns
+        the final text a consumer project would receive. Raises RenderError — never falls back —
+        for an unregistered fence language, an unresolved ax:subst reference, an ax:else carrying
+        a reference or a second ax:else on one ax:if, an unbalanced ax:if/ax:else/ax:endif, or
         (as a last-resort backstop) a residual DIRECTIVE-SHAPED line or unsubstituted @@..@@
         token surviving in the rendered output. See the note above _RESIDUAL_DIRECTIVE_RE for why
         this backstop matches directive shapes only, not every occurrence of the substring "ax:".
@@ -157,7 +180,9 @@ PUBLIC API
         UNREGISTERED_FENCE_LANG, DIRECTIVE_PREFIX_MISMATCH, UNBALANCED_AXIF, UNREGISTERED_BASE,
         SUBST_DECL_MISMATCH, FREE_TEXT_CONDITIONAL, MISSING_REQUIRED_ATTR, UNREGISTERED_KIND,
         INVALID_PATH_FOR_KIND, UNKNOWN_ATTR, DUPLICATE_ATTR, MISSING_MERGE_FOR_FRAGMENT,
-        MERGE_ON_COMMAND, UNREGISTERED_MERGE, UNKNOWN_CONFIG_PATH, CONFIG_SCHEMA_UNREADABLE.
+        MERGE_ON_COMMAND, UNREGISTERED_MERGE, UNKNOWN_CONFIG_PATH, CONFIG_SCHEMA_UNREADABLE,
+        ELSE_WITH_REFERENCE, DUPLICATE_AXELSE. UNBALANCED_AXIF additionally covers an ax:else
+        outside any ax:if.
         SUBST_DECL_MISMATCH checks substs= against tokens used in BOTH the body and path= (a
         token in either place must be declared, and a declared token must be used in at least one
         of the two). config_schema_path, when given, enables UNKNOWN_CONFIG_PATH (see the CONFIG
@@ -242,8 +267,8 @@ _FENCE_CLOSE_RE = re.compile(r'^```\s*$')
 # (DIRECTIVE_PREFIX_MISMATCH) rather than silently falling through as ordinary body text — which
 # is exactly how a stray literal "ax:if" would leak into a rendered consumer file.
 _DIRECTIVE_RE_BY_PREFIX = {
-    "#": re.compile(r'^\s*#\s*ax:(if|endif|subst)(?:\s+([\w.]+))?\s*(.*)$'),
-    "//": re.compile(r'^\s*//\s*ax:(if|endif|subst)(?:\s+([\w.]+))?\s*(.*)$'),
+    "#": re.compile(r'^\s*#\s*ax:(if|else|endif|subst)(?:\s+([\w.]+))?\s*(.*)$'),
+    "//": re.compile(r'^\s*//\s*ax:(if|else|endif|subst)(?:\s+([\w.]+))?\s*(.*)$'),
 }
 
 # ax:subst tokens as they appear in BODY text — no pipe/transformer syntax there (that is
@@ -266,7 +291,7 @@ _PATH_TOKEN_RE = re.compile(r'@@([\w.]+)(?:\|(\w+))?@@')
 # registered language, see DIRECTIVE_PREFIX_MISMATCH) and therefore survived verbatim as body
 # text, plus an ax:subst token nothing replaced — both real failure shapes, neither of which
 # needs to match arbitrary "ax:" text to be caught.
-_RESIDUAL_DIRECTIVE_RE = re.compile(r'(?:#|//)\s*ax:(?:if|endif|subst)\b')
+_RESIDUAL_DIRECTIVE_RE = re.compile(r'(?:#|//)\s*ax:(?:if|else|endif|subst)\b')
 _RESIDUAL_TOKEN_RE = re.compile(r'@@[^@\s]+@@')
 
 _FREE_TEXT_PATTERNS = [
@@ -571,6 +596,11 @@ def lint(artifacts, config_schema_path=None):
         body_lines = a.body.split("\n") if a.body else [""]
         base_line = a.fence_start_line
         if_depth = 0
+        # One entry per currently-open ax:if, recording whether that if has already been given an
+        # ax:else. Parallel to if_depth rather than folded into it because "how deep am I" and
+        # "has THIS level already branched" are different facts, and a second ax:else at the same
+        # level must be reported (DUPLICATE_AXELSE) rather than re-inverting the branch silently.
+        else_seen = []
         used_tokens = set(_TOKEN_RE.findall(a.body))
         # A-FIX-3: a token referenced in path= is exactly as much a "use" as one in the body —
         # substs= is the single declaration list for both.
@@ -594,12 +624,35 @@ def lint(artifacts, config_schema_path=None):
                     break
                 if kind == "if":
                     if_depth += 1
+                    else_seen.append(False)
                     # An ax:if is the reference shape that FAILS SILENTLY when misspelled — a
                     # config path nothing declares is falsy forever, so the block is deleted on
                     # every project and looks like a deliberately-disabled feature.
                     if schema is not None and token:
                         _check_config_ref(token, schema, problems, a.source_file, line_no,
                                           "ax:if")
+                elif kind == "else":
+                    if token:
+                        # `ax:else config.x` is an author reaching for an elif the grammar does
+                        # not have. Ignoring the reference would apply the OPPOSITE branch of the
+                        # enclosing if while reading as though it tested config.x.
+                        problems.append(Problem(
+                            "ELSE_WITH_REFERENCE",
+                            f"ax:else takes no reference but was given {token!r} -- the grammar "
+                            f"has no elif; ax:else inverts its enclosing ax:if and nothing else",
+                            a.source_file, line_no))
+                    if if_depth == 0:
+                        problems.append(Problem(
+                            "UNBALANCED_AXIF", "ax:else with no matching ax:if",
+                            a.source_file, line_no))
+                    elif else_seen[-1]:
+                        problems.append(Problem(
+                            "DUPLICATE_AXELSE",
+                            "second ax:else for the same ax:if -- it would re-invert the branch "
+                            "and resurrect lines the first ax:else ended",
+                            a.source_file, line_no))
+                    else:
+                        else_seen[-1] = True
                 elif kind == "endif":
                     if if_depth == 0:
                         problems.append(Problem(
@@ -607,6 +660,7 @@ def lint(artifacts, config_schema_path=None):
                             a.source_file, line_no))
                     else:
                         if_depth -= 1
+                        else_seen.pop()
                 elif kind == "subst" and token:
                     used_tokens.add(token)
                 break
@@ -727,20 +781,43 @@ def render(artifact, config, env):
 
     lines = artifact.body.split("\n") if artifact.body else [""]
     out = []
+    # One [raw_truth, in_else] frame per open ax:if. The frame's contribution to "are these lines
+    # kept" is raw_truth XOR in_else, so ax:else is a single flag flip rather than a re-evaluation
+    # — the condition is looked up exactly once, where it is written. raw_truth is kept SEPARATE
+    # from that contribution because it is already short-circuited to False when the parent was
+    # disabled; inverting the short-circuited value would wrongly enable an else nested inside a
+    # dropped block. (It cannot actually leak: an ancestor frame contributing False makes _on_all
+    # False regardless. The separation keeps that a property of the data, not of luck.)
     cond_stack = []
     pending_subst_token = None
+
+    def _on_all():
+        return all(raw != in_else for raw, in_else in cond_stack)
 
     for line in lines:
         dm = directive_re.match(line)
         if dm:
             kind, token = dm.group(1), dm.group(2)
-            enabled_before = all(cond_stack) if cond_stack else True
+            enabled_before = _on_all()
             if kind == "if":
                 if not token:
                     raise RenderError(f"malformed ax:if directive (no reference): {line!r}")
                 truth = _lookup_condition(*_split_token(token), config, env) \
                     if enabled_before else False
-                cond_stack.append(truth)
+                cond_stack.append([truth, False])
+                continue
+            if kind == "else":
+                if token:
+                    raise RenderError(
+                        f"ax:else takes no reference but was given {token!r} in "
+                        f"id={artifact.id!r}; the grammar has no elif")
+                if not cond_stack:
+                    raise RenderError(
+                        f"ax:else with no matching ax:if in id={artifact.id!r}")
+                if cond_stack[-1][1]:
+                    raise RenderError(
+                        f"second ax:else for the same ax:if in id={artifact.id!r}")
+                cond_stack[-1][1] = True
                 continue
             if kind == "endif":
                 if not cond_stack:
@@ -756,7 +833,7 @@ def render(artifact, config, env):
                 continue
             raise RenderError(f"unknown directive kind {kind!r} in id={artifact.id!r}")
 
-        enabled = all(cond_stack) if cond_stack else True
+        enabled = _on_all()
         if not enabled:
             pending_subst_token = None
             continue

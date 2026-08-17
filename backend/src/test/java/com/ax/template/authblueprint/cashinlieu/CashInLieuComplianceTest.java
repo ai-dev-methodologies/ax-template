@@ -95,6 +95,7 @@ class CashInLieuComplianceTest {
         String event = "evt-" + UUID.randomUUID();
         // a repeating-decimal ratio — exercises a remainder that does not resolve to a tidy fraction
         ExtractableResponse<Response> alloc = allocate(subject, event, "103", "0.333333", "12.5");
+        assertThat(alloc.statusCode()).isEqualTo(201);
         // RestAssured's default JsonPath parses JSON numbers as Double — a 6-decimal figure loses
         // precision that way, so this exactness assertion needs the BIG_DECIMAL number return type
         // (same workaround ThresholdTerminalComplianceTest uses).

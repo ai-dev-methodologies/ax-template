@@ -134,12 +134,14 @@ class PlausibilityComplianceTest {
     void provenance_acceptedReadingIsUnverified_withBasis() throws Exception {
         String id = defineChannel("location-claim", "0", "180", "10");
         ExtractableResponse<Response> first = submit(id, "37");
+        assertThat(first.statusCode()).isEqualTo(201);
         assertThat(first.jsonPath().getString("verificationStatus")).isEqualTo("SELF_REPORTED_UNVERIFIED");
         assertThat(first.jsonPath().getString("checksRan")).isEqualTo("RANGE");   // no prior → range only
         assertThat(first.jsonPath().getBoolean("hadPrior")).isFalse();
 
         Thread.sleep(1100L);
         ExtractableResponse<Response> second = submit(id, "40");
+        assertThat(second.statusCode()).isEqualTo(201);
         assertThat(second.jsonPath().getString("verificationStatus")).isEqualTo("SELF_REPORTED_UNVERIFIED");
         assertThat(second.jsonPath().getString("checksRan")).isEqualTo("RANGE,RATE");
         assertThat(second.jsonPath().getBoolean("hadPrior")).isTrue();

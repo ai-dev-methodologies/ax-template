@@ -157,6 +157,7 @@ class QueryGuardComplianceTest {
 
         // the internalNotes field is never carried out in the DTO
         ExtractableResponse<Response> any = list("?size=10");
+        assertThat(any.statusCode()).isEqualTo(200);
         assertThat(any.jsonPath().getList("data.internalNotes").stream().filter(x -> x != null).count())
             .as("internalNotes is @JsonIgnore — never serialized").isEqualTo(0L);
     }
@@ -186,7 +187,9 @@ class QueryGuardComplianceTest {
         assertThat(sqli.jsonPath().getString("code")).isEqualTo("QUERY_FIELD_NOT_SORTABLE");
 
         // none of the rejections deleted/altered data — the rows are still all listable
-        assertThat(list("?size=50").jsonPath().getLong("pagination.totalElements"))
+        ExtractableResponse<Response> stillListable = list("?size=50");
+        assertThat(stillListable.statusCode()).isEqualTo(200);
+        assertThat(stillListable.jsonPath().getLong("pagination.totalElements"))
             .as("the malicious queries never executed against the table").isGreaterThanOrEqualTo(3L);
     }
 

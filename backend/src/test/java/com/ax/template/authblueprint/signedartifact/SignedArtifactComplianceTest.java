@@ -39,7 +39,7 @@ class SignedArtifactComplianceTest {
     private ExtractableResponse<Response> issue(String subjectRef, String content) {
         return given().header("Authorization", "Bearer " + issuer).header("Content-Type", "application/json")
             .body("{\"subjectRef\":\"" + subjectRef + "\",\"content\":\"" + content + "\"}")
-        .when().post("/api/signed-artifact/records").thenReturn().then().extract();
+        .when().post("/api/signed-artifact/records").thenReturn().then().statusCode(201).extract();
     }
 
     private ExtractableResponse<Response> verify(String jws, String content) {

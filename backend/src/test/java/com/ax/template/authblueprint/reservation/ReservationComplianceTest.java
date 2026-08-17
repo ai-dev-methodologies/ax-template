@@ -113,7 +113,9 @@ class ReservationComplianceTest {
     @Test @Tag("RSV-SETTLE-001")
     void settle_commitsActual_refundsRemainder_overSettle422_doubleSettle409() {
         String s = createBalance("acct-" + UUID.randomUUID(), "100");
-        String holdA = reserve(s, "50", 3600).path("id");
+        ExtractableResponse<Response> holdAResp = reserve(s, "50", 3600);
+        assertThat(holdAResp.statusCode()).isEqualTo(201);
+        String holdA = holdAResp.path("id");
 
         ExtractableResponse<Response> settled = settle(holdA, "30");
         assertThat(settled.statusCode()).isEqualTo(200);
@@ -123,7 +125,9 @@ class ReservationComplianceTest {
         assertBalance(s, "30", "0", "70");
 
         // over-settle: a 60 actual against a 50 hold → 422, balance unchanged
-        String holdB = reserve(s, "50", 3600).path("id");
+        ExtractableResponse<Response> holdBResp = reserve(s, "50", 3600);
+        assertThat(holdBResp.statusCode()).isEqualTo(201);
+        String holdB = holdBResp.path("id");
         ExtractableResponse<Response> over = settle(holdB, "60");
         assertThat(over.statusCode()).isEqualTo(422);
         assertThat(over.path("code").toString()).isEqualTo("RESERVATION_OVER_SETTLE");
@@ -138,11 +142,15 @@ class ReservationComplianceTest {
     @Test @Tag("RSV-RELEASE-001")
     void release_returnsWholeHold_settleThenRelease409() {
         String s = createBalance("acct-" + UUID.randomUUID(), "100");
-        String holdA = reserve(s, "40", 3600).path("id");
+        ExtractableResponse<Response> holdAResp = reserve(s, "40", 3600);
+        assertThat(holdAResp.statusCode()).isEqualTo(201);
+        String holdA = holdAResp.path("id");
         assertThat(release(holdA).statusCode()).isEqualTo(200);
         assertBalance(s, "0", "0", "100");   // whole hold returned, committed untouched
 
-        String holdB = reserve(s, "40", 3600).path("id");
+        ExtractableResponse<Response> holdBResp = reserve(s, "40", 3600);
+        assertThat(holdBResp.statusCode()).isEqualTo(201);
+        String holdB = holdBResp.path("id");
         assertThat(settle(holdB, "25").statusCode()).isEqualTo(200);
         // a SETTLED hold cannot be released (one terminal transition)
         ExtractableResponse<Response> rel = release(holdB);
@@ -157,7 +165,9 @@ class ReservationComplianceTest {
         String s = createBalance("acct-" + UUID.randomUUID(), "100");
 
         // (a) an abandoned (expired) hold is reclaimed: full amount returns to available
-        String stranded = reserve(s, "40", 1).path("id");
+        ExtractableResponse<Response> strandedResp = reserve(s, "40", 1);
+        assertThat(strandedResp.statusCode()).isEqualTo(201);
+        String stranded = strandedResp.path("id");
         assertBalance(s, "0", "40", "60");
         Thread.sleep(1200);                  // cross the 1s TTL
         sweeper.sweepOnce();
@@ -167,7 +177,9 @@ class ReservationComplianceTest {
         assertBalance(s, "0", "0", "100");
 
         // (b) a settled hold is NOT double-returned by a later sweep (sweep loses to the live settle)
-        String settledHold = reserve(s, "40", 1).path("id");
+        ExtractableResponse<Response> settledHoldResp = reserve(s, "40", 1);
+        assertThat(settledHoldResp.statusCode()).isEqualTo(201);
+        String settledHold = settledHoldResp.path("id");
         assertThat(settle(settledHold, "30").statusCode()).isEqualTo(200);
         assertBalance(s, "30", "0", "70");
         Thread.sleep(1200);                  // the hold is now past its TTL but already SETTLED

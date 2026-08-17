@@ -172,16 +172,24 @@ class SettlementComplianceTest {
         assertThat(verb(p, "buyin").statusCode()).isEqualTo(409);
 
         // the full ladder, exactly once each
-        assertThat(verb(p, "fail").jsonPath().getString("status")).isEqualTo("FAILED");
+        ExtractableResponse<Response> failResp = verb(p, "fail");
+        assertThat(failResp.statusCode()).isEqualTo(200);
+        assertThat(failResp.jsonPath().getString("status")).isEqualTo("FAILED");
         assertThat(verb(p, "fail").statusCode()).isEqualTo(409);            // repeat edge rejected
-        assertThat(verb(p, "retry").jsonPath().getString("status")).isEqualTo("RETRY");
+        ExtractableResponse<Response> retryResp = verb(p, "retry");
+        assertThat(retryResp.statusCode()).isEqualTo(200);
+        assertThat(retryResp.jsonPath().getString("status")).isEqualTo("RETRY");
         assertThat(verb(p, "fail").statusCode()).isEqualTo(409);            // reverse edge rejected
-        assertThat(verb(p, "buyin").jsonPath().getString("status")).isEqualTo("BUYIN");
+        ExtractableResponse<Response> buyinResp = verb(p, "buyin");
+        assertThat(buyinResp.statusCode()).isEqualTo(200);
+        assertThat(buyinResp.jsonPath().getString("status")).isEqualTo("BUYIN");
         assertThat(verb(p, "retry").statusCode()).isEqualTo(409);           // BUYIN is terminal
 
         // a FAILED instruction can still recover to finality via settle
         String q = createId("TRD-LAD-2");
-        assertThat(verb(q, "fail").jsonPath().getString("status")).isEqualTo("FAILED");
+        ExtractableResponse<Response> failQResp = verb(q, "fail");
+        assertThat(failQResp.statusCode()).isEqualTo(200);
+        assertThat(failQResp.jsonPath().getString("status")).isEqualTo("FAILED");
         ExtractableResponse<Response> recovered = verb(q, "settle");
         assertThat(recovered.statusCode()).isEqualTo(200);
         assertThat(recovered.jsonPath().getString("status")).isEqualTo("SETTLED");

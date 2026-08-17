@@ -329,6 +329,7 @@ class PaymentStateMachineTest {
                 .header("Idempotency-Key", idempotencyKey)
                 .body("{\"amount\":" + amount + ",\"currency\":\"KRW\",\"orderId\":\"" + orderId + "\"}")
             .when().post("/api/payments");
+        assertThat(createResponse.statusCode()).isEqualTo(201);
 
         String paymentId = createResponse.then().extract().path("id");
 
@@ -359,6 +360,6 @@ class PaymentStateMachineTest {
             .header("Content-Type", "application/json")
             .body("{\"email\":\"" + email + "\",\"password\":\"securepassword12\"}")
         .when().post("/api/auth/email/login")
-        .then().extract().path("accessToken");
+        .then().statusCode(200).extract().path("accessToken");
     }
 }

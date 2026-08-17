@@ -113,6 +113,10 @@ class PaymentAuthzTest {
             .as("Owner creating a payment must return 201")
             .isEqualTo(201);
 
+        // Re-POST with the SAME Idempotency-Key and body: this is a REPLAY of the create above,
+        // so the status is 200, not 201 (PaymentController#chooseStatus returns OK when
+        // outcome.replay()). Pinning it is what makes the read below safe — and it also states
+        // the replay contract the test was silently relying on.
         String paymentId =
             given()
                 .header("Authorization", "Bearer " + ownerToken)
@@ -120,7 +124,7 @@ class PaymentAuthzTest {
                 .header("Idempotency-Key", idempotencyKey)
                 .body("{\"amount\":10000,\"currency\":\"KRW\",\"orderId\":\"order-authz002\"}")
             .when().post("/api/payments")
-            .then().extract().path("id");
+            .then().statusCode(200).extract().path("id");
 
         // Step 2: Owner refunds their own payment — must succeed (not 403/404)
         int refundStatus =
@@ -163,7 +167,7 @@ class PaymentAuthzTest {
                 .header("Idempotency-Key", idempotencyKey)
                 .body("{\"amount\":10000,\"currency\":\"KRW\",\"orderId\":\"order-authz003\"}")
             .when().post("/api/payments")
-            .then().extract().path("id");
+            .then().statusCode(201).extract().path("id");
 
         // Different user attempts refund → must be 404 (not 403, IDOR-safe)
         int refundStatus =
@@ -202,7 +206,7 @@ class PaymentAuthzTest {
                 .header("Idempotency-Key", idempotencyKey)
                 .body("{\"amount\":10000,\"currency\":\"KRW\",\"orderId\":\"order-authz003b\"}")
             .when().post("/api/payments")
-            .then().extract().path("id");
+            .then().statusCode(201).extract().path("id");
 
         // Other user queries owner's payment → 404 (not 403)
         int getStatus =
@@ -242,7 +246,7 @@ class PaymentAuthzTest {
                 .header("Idempotency-Key", idempotencyKey)
                 .body("{\"amount\":10000,\"currency\":\"KRW\",\"orderId\":\"order-authz004\"}")
             .when().post("/api/payments")
-            .then().extract().path("id");
+            .then().statusCode(201).extract().path("id");
 
         // Regular member cannot use admin-force-void endpoint → 403
         int memberStatus =
@@ -278,7 +282,7 @@ class PaymentAuthzTest {
             given()
                 .header("Authorization", "Bearer " + adminToken)
             .when().get("/api/admin/payments/" + paymentId + "/events")
-            .then().extract().path("find { it.type == 'ADMIN_OVERRIDE' }.type");
+            .then().statusCode(200).extract().path("find { it.type == 'ADMIN_OVERRIDE' }.type");
 
         assertThat(eventType)
             .as("Admin override must create an ADMIN_OVERRIDE ledger event")
@@ -304,6 +308,6 @@ class PaymentAuthzTest {
             .header("Content-Type", "application/json")
             .body("{\"email\":\"" + email + "\",\"password\":\"securepassword12\"}")
         .when().post("/api/auth/email/login")
-        .then().extract().path("accessToken");
+        .then().statusCode(200).extract().path("accessToken");
     }
 }

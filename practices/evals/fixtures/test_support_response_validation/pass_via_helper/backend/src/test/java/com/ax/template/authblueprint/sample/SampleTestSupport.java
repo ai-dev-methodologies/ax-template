@@ -37,11 +37,18 @@ public final class SampleTestSupport {
         return HttpExtract.pathAt(denied, 403, "code", "GET /api/sample/denied (code)");
     }
 
-    /** A terminal {@code .extract()} reads no value — it hands the response to the caller. */
-    public static ExtractableResponse<Response> submit(String token) {
-        return given().header("Authorization", "Bearer " + token)
+    /**
+     * A terminal {@code .extract()} reads no value, so shape (A) permits it — but the
+     * ExtractableResponse it produces MUST NOT leave the helper (detector (C), BACKLOG P2-119):
+     * the caller could then read the body without ever describing the response, in a file the
+     * TestSupport detectors do not scan. Consuming it here, in the same method, is the shape
+     * that is allowed.
+     */
+    public static String submit(String token) {
+        ExtractableResponse<Response> submitted = given().header("Authorization", "Bearer " + token)
             .when().post("/api/sample/submit")
             .then().extract();
+        return HttpExtract.path(submitted.response(), "id", "POST /api/sample/submit (submit)");
     }
 
     public static void useRandomPort(int port) {

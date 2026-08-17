@@ -94,7 +94,7 @@ class EcommerceE2ETest {
         return given()
             .header("Authorization", "Bearer " + token)
         .when().get("/api/auth/me")
-            .then().extract().path("userId");
+            .then().statusCode(200).extract().path("userId");
     }
 
     private static String createProduct(String sellerToken, String name, long price, int stock) {

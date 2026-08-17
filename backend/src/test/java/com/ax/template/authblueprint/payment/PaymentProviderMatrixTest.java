@@ -94,8 +94,10 @@ class PaymentProviderMatrixTest {
                 .body("{\"amount\":10000,\"currency\":\"KRW\",\"orderId\":\"order-provider002\"}")
             .when().post("/api/payments");
 
-        // After max retries exhausted, payment lands in FAILED state
-        // Response may be 4xx/5xx or 2xx with status=FAILED depending on implementation
+        // After max retries exhausted, payment lands in FAILED state. The status is 201: the
+        // payment resource IS created, in state FAILED — PaymentController#chooseStatus only
+        // maps FAILED to 422 for declineReason=INSUFFICIENT_FUNDS, which SERVER_ERROR is not.
+        assertThat(response.statusCode()).isEqualTo(201);
         String state = response.then().extract().path("state");
         assertThat(state)
             .as("Provider 5xx after max retries must result in state=FAILED")
@@ -137,6 +139,7 @@ class PaymentProviderMatrixTest {
                 .header("X-Test-Provider-Mode", "HTTP_4XX_DECLINE")
                 .body("{\"amount\":10000,\"currency\":\"KRW\",\"orderId\":\"order-provider003\"}")
             .when().post("/api/payments");
+        assertThat(response.statusCode()).isEqualTo(422);
 
         // State must be FAILED
         String state = response.then().extract().path("state");
@@ -183,6 +186,7 @@ class PaymentProviderMatrixTest {
                 .header("X-Test-Provider-Mode", "MALFORMED_RESPONSE")
                 .body("{\"amount\":10000,\"currency\":\"KRW\",\"orderId\":\"order-provider004\"}")
             .when().post("/api/payments");
+        assertThat(response.statusCode()).isEqualTo(201);
 
         // State must be FAILED
         String state = response.then().extract().path("state");
@@ -394,6 +398,6 @@ class PaymentProviderMatrixTest {
             .header("Content-Type", "application/json")
             .body("{\"email\":\"" + email + "\",\"password\":\"securepassword12\"}")
         .when().post("/api/auth/email/login")
-        .then().extract().path("accessToken");
+        .then().statusCode(200).extract().path("accessToken");
     }
 }

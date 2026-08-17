@@ -185,7 +185,21 @@ items = doc.get('items') or []
 # with a fake anchor. Prior disk truth was 76 unique items (2 above the previous floor of 74);
 # the floor now tracks the new disk truth of 86 exactly, so none of the 10 new proofs are
 # removable without breaching the registry floor.
-LIVE_MIN_ITEMS = 97
+# 2026-08-18 (BACKLOG P2-119): 97 -> 99. Two kill-proofs were appended for guard [116]'s two
+# NEW detectors — (C) a *TestSupport.java method that hands a rest-assured RESPONSE out across a
+# method boundary, and (D) a caller-side read of a response whose status nobody described. Each
+# has its own fail fixture built to trip exactly ONE detector (the (C) fixture contains no reader
+# call and no non-TestSupport class; the (D) fixture contains no *TestSupport.java at all), which
+# is what makes a single-anchor flip possible where [116]'s original fail_blind_extract fixture
+# deliberately spans (A)+(B) and therefore stays disclosed-not-registered. Same reasoning as the
+# entries above: the floor moves to the new disk truth in the same commit as the proofs.
+# 2026-08-18 (registration/alignment lane): 99 -> 105. Six kill-proofs were appended: three for
+# guard [114] downstream_release_recency's schema/vacuity/premise checks (fail_forged_line_shape,
+# fail_digest_recompute_vacuous, fail_missing_expected_head) and three for guard [112]
+# install_artifact_extractability's ax:else companion-fence detection (fail_orphan_axelse,
+# fail_duplicate_axelse, fail_else_with_reference). Same reasoning as the entries above: the
+# floor moves to the new disk truth in the same commit as the proofs.
+LIVE_MIN_ITEMS = 105
 
 structural = []
 
@@ -298,26 +312,26 @@ while IFS=$'\t' read -r item_id guard_rel fixture_rel fixture_arg anchor neuter 
     # ── field validation ──────────────────────────────────────────────────────
     [ -f "$GUARD_PATH" ] || {
         echo "fixture_kill_proof_guard: FAIL [$item_id] guard not found: $GUARD_PATH" >&2
-        FAIL=1; continue; }
+        FAIL=$((FAIL + 1)); continue; }
 
     [ -d "$FIXTURE_PATH" ] || {
         echo "fixture_kill_proof_guard: FAIL [$item_id] fixture dir not found: $FIXTURE_PATH" >&2
-        FAIL=1; continue; }
+        FAIL=$((FAIL + 1)); continue; }
 
     [ -n "$anchor" ] || {
         echo "fixture_kill_proof_guard: FAIL [$item_id] anchor is empty" >&2
-        FAIL=1; continue; }
+        FAIL=$((FAIL + 1)); continue; }
 
     # ── optional second fixture input (fixture_arg2/fixture2) ─────────────────
     FIXTURE2_PATH=""
     if [ -n "$fixture_arg2" ]; then
         [ -n "$fixture2_rel" ] || {
             echo "fixture_kill_proof_guard: FAIL [$item_id] fixture_arg2 set but fixture2 is empty" >&2
-            FAIL=1; continue; }
+            FAIL=$((FAIL + 1)); continue; }
         FIXTURE2_PATH="$REPO_ROOT/$fixture2_rel"
         [ -e "$FIXTURE2_PATH" ] || {
             echo "fixture_kill_proof_guard: FAIL [$item_id] fixture2 not found: $FIXTURE2_PATH" >&2
-            FAIL=1; continue; }
+            FAIL=$((FAIL + 1)); continue; }
     fi
 
     # ── (0) neuter vocabulary validation (P2-14) ──────────────────────────────
@@ -410,10 +424,10 @@ PY
         PASS:*) : ;;
         REJECT:*|UNKNOWN:*)
             echo "fixture_kill_proof_guard: FAIL [$item_id] neuter vocabulary rejected — ${neuter_verdict}" >&2
-            FAIL=1; continue ;;
+            FAIL=$((FAIL + 1)); continue ;;
         *)
             echo "fixture_kill_proof_guard: FAIL [$item_id] neuter vocabulary check errored: ${neuter_verdict}" >&2
-            FAIL=1; continue ;;
+            FAIL=$((FAIL + 1)); continue ;;
     esac
 
     # ── (1) anchor uniqueness in guard source ─────────────────────────────────
@@ -428,7 +442,7 @@ PY
     if [ "$anchor_count" -ne 1 ]; then
         echo "fixture_kill_proof_guard: FAIL [$item_id] anchor appears ${anchor_count} time(s) in $guard_rel" >&2
         echo "  (expected exactly 1 — manifest is stale; update anchor to match current guard source)" >&2
-        FAIL=1; continue
+        FAIL=$((FAIL + 1)); continue
     fi
 
     # ── (2) original guard on fixture → expect exit 1 ────────────────────────
@@ -445,7 +459,7 @@ PY
     fi
     if [ "$orig_rc" -ne 1 ]; then
         echo "fixture_kill_proof_guard: FAIL [$item_id] original guard exited $orig_rc on fixture (expected 1 — fixture no longer reproduces the failure)" >&2
-        FAIL=1; continue
+        FAIL=$((FAIL + 1)); continue
     fi
 
     # ── (3) create neutered guard via anchor→neuter substitution ─────────────
@@ -464,17 +478,17 @@ PY
     if [ "$neuter_gen_rc" -ne 0 ]; then
         echo "fixture_kill_proof_guard: FAIL [$item_id] manifest error: python3 failed to generate neutered guard (exit $neuter_gen_rc)" >&2
         rm -f "$TMP_GUARD"
-        FAIL=1; continue
+        FAIL=$((FAIL + 1)); continue
     fi
     if [ ! -s "$TMP_GUARD" ]; then
         echo "fixture_kill_proof_guard: FAIL [$item_id] manifest error: neutered guard is empty" >&2
         rm -f "$TMP_GUARD"
-        FAIL=1; continue
+        FAIL=$((FAIL + 1)); continue
     fi
     if cmp -s "$GUARD_PATH" "$TMP_GUARD"; then
         echo "fixture_kill_proof_guard: FAIL [$item_id] manifest error: neutered guard is identical to original (anchor not replaced — anchor mismatch?)" >&2
         rm -f "$TMP_GUARD"
-        FAIL=1; continue
+        FAIL=$((FAIL + 1)); continue
     fi
 
     # ── (4) neutered guard on fixture → expect exit 0 (flipped) ─────────────
@@ -514,11 +528,11 @@ PY
         echo "fixture_kill_proof_guard: FAIL [$item_id] neutered guard exited 1 on fixture (expected 0)" >&2
         echo "  VACUOUS fixture: fixture exit 1 does not depend on the anchor logic — it fires regardless." >&2
         echo "  anchor: $anchor" >&2
-        FAIL=1; continue
+        FAIL=$((FAIL + 1)); continue
     elif [ "$neuter_rc" -ne 0 ]; then
         echo "fixture_kill_proof_guard: FAIL [$item_id] manifest error: neuter broke the guard (exit $neuter_rc) — anchor/neuter 치환이 bash 문법을 깼다" >&2
         echo "  anchor: $anchor" >&2
-        FAIL=1; continue
+        FAIL=$((FAIL + 1)); continue
     fi
 
     echo "fixture_kill_proof_guard: PASS [$item_id] non-vacuous (original=exit1, neutered=exit0)"

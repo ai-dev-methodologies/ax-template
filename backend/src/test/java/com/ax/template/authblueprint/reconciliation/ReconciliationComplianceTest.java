@@ -62,7 +62,7 @@ class ReconciliationComplianceTest {
             + "]}";
         return given().header("Authorization", "Bearer " + member).header("Content-Type", "application/json")
             .body(body)
-        .when().post("/api/reconciliation/runs").thenReturn().then().extract();
+        .when().post("/api/reconciliation/runs").thenReturn().then().statusCode(201).extract();
     }
 
     private ExtractableResponse<Response> items(String runId) {

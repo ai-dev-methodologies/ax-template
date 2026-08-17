@@ -90,8 +90,9 @@ class TrueUpComplianceTest {
     @Test @Tag("TUP-SUPERSEDE-001")
     void supersede_appendsNewVersion_pointsForward_andRefusesDowngrade() {
         String id = createPeriod("2026-05", 2);
-        String estimateId = record(id, 0, "100", "ESTIMATED", "METER_PROFILE")
-            .jsonPath().getString("id");
+        ExtractableResponse<Response> estimate = record(id, 0, "100", "ESTIMATED", "METER_PROFILE");
+        assertThat(estimate.statusCode()).isEqualTo(201);
+        String estimateId = estimate.jsonPath().getString("id");
 
         ExtractableResponse<Response> actual = record(id, 0, "120", "ACTUAL", null);
         assertThat(actual.statusCode()).isEqualTo(201);
@@ -144,12 +145,14 @@ class TrueUpComplianceTest {
 
         // unchanged basis → the SAME run, no phantom version
         ExtractableResponse<Response> again = recompute(id, null);
+        assertThat(again.statusCode()).isEqualTo(200);
         assertThat(again.jsonPath().getString("id")).isEqualTo(v1.jsonPath().getString("id"));
         assertThat(get(id + "/runs").jsonPath().getList("$")).hasSize(1);
 
         // a supersession changes the basis → version 2; both runs retained
         record(id, 1, "70", "ACTUAL", null);
         ExtractableResponse<Response> v2 = recompute(id, null);
+        assertThat(v2.statusCode()).isEqualTo(200);
         assertThat(v2.jsonPath().getInt("runVersion")).isEqualTo(2);
         assertThat(v2.jsonPath().getDouble("totalValue")).isEqualTo(170.0);
         assertThat(get(id + "/runs").jsonPath().getList("$")).hasSize(2);
@@ -160,16 +163,20 @@ class TrueUpComplianceTest {
     void closedPeriod_correctsForwardAsNetDelta_conservationHolds() {
         String source = completePeriod("2026-01");                 // total 150 at v1
         recompute(source, null);
-        assertThat(post(source + "/close").jsonPath().getString("status")).isEqualTo("CLOSED");
+        ExtractableResponse<Response> closeSourceResp = post(source + "/close");
+        assertThat(closeSourceResp.statusCode()).isEqualTo(200);
+        assertThat(closeSourceResp.jsonPath().getString("status")).isEqualTo("CLOSED");
         String target = createPeriod("2026-02", 1);                // the open period corrections ride
 
         // estimate 50 → actual 80: recompute v2 total 180 → posting +30
         record(source, 1, "80", "ACTUAL", null);
         ExtractableResponse<Response> v2 = recompute(source, target);
+        assertThat(v2.statusCode()).isEqualTo(200);
         assertThat(v2.jsonPath().getInt("runVersion")).isEqualTo(2);
         // actual 80 → corrected actual 60: v3 total 160 → posting = 160 − (150 + 30) = −20
         record(source, 1, "60", "ACTUAL", null);
         ExtractableResponse<Response> v3 = recompute(source, target);
+        assertThat(v3.statusCode()).isEqualTo(200);
         assertThat(v3.jsonPath().getInt("runVersion")).isEqualTo(3);
 
         java.util.List<java.util.Map<String, Object>> postings =
@@ -217,8 +224,9 @@ class TrueUpComplianceTest {
         assertThat(blocked.jsonPath().getString("detail")).contains("[2]");
 
         // explicit gap-fill appends an ESTIMATED row with its method recorded
-        java.util.List<java.util.Map<String, Object>> created =
-            post(id + "/estimate-missing").jsonPath().getList("$");
+        ExtractableResponse<Response> gapFill = post(id + "/estimate-missing");
+        assertThat(gapFill.statusCode()).isEqualTo(200);
+        java.util.List<java.util.Map<String, Object>> created = gapFill.jsonPath().getList("$");
         assertThat(created).hasSize(1);
         assertThat(created.get(0).get("slotIndex")).isEqualTo(2);
         assertThat(created.get(0).get("source")).isEqualTo("ESTIMATED");
@@ -231,7 +239,9 @@ class TrueUpComplianceTest {
 
         // the estimate is later superseded by the actual — the normal TUP-SUPERSEDE path
         record(id, 2, "25", "ACTUAL", null);
-        assertThat(recompute(id, null).jsonPath().getInt("runVersion")).isEqualTo(2);
+        ExtractableResponse<Response> rerunAfterActual = recompute(id, null);
+        assertThat(rerunAfterActual.statusCode()).isEqualTo(200);
+        assertThat(rerunAfterActual.jsonPath().getInt("runVersion")).isEqualTo(2);
     }
 
     // ── TUP-SEALED-001 — one-way lifecycle; sealed is fail-closed ──
@@ -246,9 +256,13 @@ class TrueUpComplianceTest {
         assertThat(post(id + "/seal").statusCode()).isEqualTo(409);
 
         recompute(id, null);
-        assertThat(post(id + "/close").jsonPath().getString("status")).isEqualTo("CLOSED");
+        ExtractableResponse<Response> closeResp = post(id + "/close");
+        assertThat(closeResp.statusCode()).isEqualTo(200);
+        assertThat(closeResp.jsonPath().getString("status")).isEqualTo("CLOSED");
         assertThat(post(id + "/close").statusCode()).isEqualTo(409);          // one-way
-        assertThat(post(id + "/seal").jsonPath().getString("status")).isEqualTo("SEALED");
+        ExtractableResponse<Response> sealResp = post(id + "/seal");
+        assertThat(sealResp.statusCode()).isEqualTo(200);
+        assertThat(sealResp.jsonPath().getString("status")).isEqualTo("SEALED");
 
         // sealed accepts nothing
         ExtractableResponse<Response> reading = record(id, 0, "999", "ACTUAL", null);

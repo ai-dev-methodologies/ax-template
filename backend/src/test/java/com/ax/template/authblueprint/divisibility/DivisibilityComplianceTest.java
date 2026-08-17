@@ -65,7 +65,9 @@ class DivisibilityComplianceTest {
         assertThat(whole.jsonPath().getString("verdict")).isEqualTo("ACCEPTED");
 
         // a whole quantity with trailing zeros is STILL integral → ACCEPTED
-        assertThat(check(m, "3.00").jsonPath().getString("verdict")).isEqualTo("ACCEPTED");
+        ExtractableResponse<Response> wholeTrailingZeros = check(m, "3.00");
+        assertThat(wholeTrailingZeros.statusCode()).isEqualTo(200);
+        assertThat(wholeTrailingZeros.jsonPath().getString("verdict")).isEqualTo("ACCEPTED");
 
         // a fractional quantity → 422 NON_INTEGRAL_QUANTITY naming the material, NOT rounded
         ExtractableResponse<Response> frac = check(m, "2.5");
@@ -88,7 +90,9 @@ class DivisibilityComplianceTest {
         assertThat(within.jsonPath().getString("verdict")).isEqualTo("ACCEPTED");
 
         // a whole quantity (scale 0) is within any non-negative max scale → ACCEPTED
-        assertThat(check(m, "5").jsonPath().getString("verdict")).isEqualTo("ACCEPTED");
+        ExtractableResponse<Response> wholeScaleZero = check(m, "5");
+        assertThat(wholeScaleZero.statusCode()).isEqualTo(200);
+        assertThat(wholeScaleZero.jsonPath().getString("verdict")).isEqualTo("ACCEPTED");
 
         // a quantity above max scale → 422 EXCESS_PRECISION, NOT silently truncated
         ExtractableResponse<Response> excess = check(m, "1.2345");
@@ -128,7 +132,9 @@ class DivisibilityComplianceTest {
         assertThat(history.jsonPath().getLong("[1].policyVersion")).isEqualTo(2L);
 
         // a check after the re-declaration records version 2
-        assertThat(check(m, "1.50").jsonPath().getLong("policyVersion")).isEqualTo(2L);
+        ExtractableResponse<Response> atPolicyV2 = check(m, "1.50");
+        assertThat(atPolicyV2.statusCode()).isEqualTo(200);
+        assertThat(atPolicyV2.jsonPath().getLong("policyVersion")).isEqualTo(2L);
     }
 
     // ── DIV-RECORD-001 — every check recorded immutably with verdict + policy version + verbatim qty ──
@@ -158,7 +164,9 @@ class DivisibilityComplianceTest {
         String mInt = DivisibilityTestSupport.freshMaterial("M-DET-INT");
         declare(mInt, "INTEGER_ONLY", 0);
         for (String integral : new String[]{"5", "5.0", "5.00", "5.000000"}) {
-            assertThat(check(mInt, integral).jsonPath().getString("verdict"))
+            ExtractableResponse<Response> integralCheck = check(mInt, integral);
+            assertThat(integralCheck.statusCode()).isEqualTo(200);
+            assertThat(integralCheck.jsonPath().getString("verdict"))
                 .as(integral + " is integral").isEqualTo("ACCEPTED");
         }
         assertThat(check(mInt, "5.5").statusCode()).isEqualTo(422);
@@ -166,9 +174,13 @@ class DivisibilityComplianceTest {
         String mFrac = DivisibilityTestSupport.freshMaterial("M-DET-FRAC");
         declare(mFrac, "FRACTIONAL", 2);
         // 1.250 has effective (stripped) scale 2 → ACCEPTED; 1.255 has scale 3 → EXCESS_PRECISION
-        assertThat(check(mFrac, "1.250").jsonPath().getString("verdict")).isEqualTo("ACCEPTED");
+        ExtractableResponse<Response> withinScale = check(mFrac, "1.250");
+        assertThat(withinScale.statusCode()).isEqualTo(200);
+        assertThat(withinScale.jsonPath().getString("verdict")).isEqualTo("ACCEPTED");
         assertThat(check(mFrac, "1.255").statusCode()).isEqualTo(422);
-        assertThat(check(mFrac, "1.255").jsonPath().getString("code")).isEqualTo("EXCESS_PRECISION");
+        ExtractableResponse<Response> excessScale = check(mFrac, "1.255");
+        assertThat(excessScale.statusCode()).isEqualTo(422);
+        assertThat(excessScale.jsonPath().getString("code")).isEqualTo("EXCESS_PRECISION");
     }
 
     // ── AUTHZ / IDOR — unauthenticated rejected 401; a check against an undeclared material is 404 ──

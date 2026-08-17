@@ -48,6 +48,28 @@
 #         push actually carries, recomputed fresh every time — editing a SKILL.md after
 #         verify-downstream.sh ran (even if the JSONL line is left untouched, or hand-edited to
 #         match the OLD content) is caught because the recompute reads the NEW content.
+#   (v)   the line's FIELD SET is EXACTLY what the harness's audit writer emits — no missing key,
+#         no extra key — with that pin CROSS-CHECKED (live mode) against the single `entry = {…}`
+#         literal in the harness at the pushed sha, so the pin cannot rot into a lie. P2-106: every
+#         check (i)-(iv) is a check on a field the line's own author chose to supply; none of them
+#         asked whether the record had the SHAPE a genuine run produces. Measured pre-fix, a line
+#         with only the six audited fields (no `timestamp`, no `harness`) plus one invented key
+#         passed with exit 0.
+#   (vi)  the digest recompute in (iv) actually MEASURED SOMETHING — a recompute that discovers
+#         zero ax:artifact markers BLOCKS instead of comparing {} to {} and reporting a match. The
+#         gate's strongest check must not be silently convertible into a tautology. Correspondingly
+#         a SKILL.md that ls-tree lists but show cannot read BLOCKS rather than being skipped: a
+#         silently narrower recompute is a smaller universe, not a smaller job.
+#   (vii) the repository carries NO git REPLACEMENT REFS (live mode), and every git call runs with
+#         GIT_NO_REPLACE_OBJECTS=1. `git replace` keeps shas identical and swaps the objects, and
+#         in live mode EVERY input here is a git read — both plugin.json bodies, the harness that
+#         declares the manifest, and the SKILL.md bodies behind (iv). Measured pre-fix: one
+#         `git replace` aimed the pushed sha at a version-unchanged commit and the gate reported
+#         "version unchanged — gate does not fire", exit 0, with no log consulted at all.
+#   (viii) the GIT_*/PYTHON* environment families are scrubbed (and the scrub VERIFIED) before any
+#         of the above runs. Measured pre-fix: `GIT_DIR=<empty decoy>/.git` made the gate announce
+#         "not a plugin tree, gate does not apply" and exit 0 — a one-variable bypass of the whole
+#         release gate, cheaper than the hand-authored log line this header calls the cheap forgery.
 #
 # HONEST STRENGTH DECLARATION (do not overclaim — this was a Critic-flagged risk in the design
 # discussion for this guard, referenced as "D13"):
@@ -58,19 +80,59 @@
 #   remote-ref anchor binding, and a duplicate-key-rejecting JSON parser — and its own header
 #   states plainly that even all of that does not make forgery IMPOSSIBLE, only that it closes the
 #   cheap, observed shape (a hand-appended JSONL line).
-#   THIS GUARD DOES NOT REIMPLEMENT THAT MACHINERY. It has exactly one check with comparable
-#   teeth — the digest recompute in (iv) above — and otherwise trusts what it reads: it does not
-#   re-exec under bash privileged mode, does not scrub the environment, does not authenticate the
-#   `git`/`python3` binaries it calls, does not verify mktemp's returned directory, and does not
-#   sample the tree across the run's lifetime (it takes `tree_clean`/`assertions` at face value —
-#   an operator with shell access on the pushing machine COULD hand-write a runs.jsonl line that
-#   passes (i)-(iii) outright, and could pass (iv) too if they also hand-copy the CURRENT SKILL.md
-#   bytes' real digests into that forged line). What (iv) closes is specifically the case the PRD
-#   calls out: a green run whose SKILL.md is edited AFTERWARD without re-running Layer 1 — the
-#   most likely accidental failure mode, not a deliberately hostile one. This is NOT "a second
-#   instance of a proven mechanism" — it is a smaller, weaker gate that borrows one idea from the
-#   precedent and is honest about the rest of the gap. Closing that gap further is backlog, not
-#   silently claimed here.
+#   THIS GUARD STILL DOES NOT REIMPLEMENT THAT MACHINERY, and it is a SMALLER, WEAKER gate. What
+#   P2-106 changed (2026-08-18) is the subset of it that this gate's own inputs actually needed:
+#   the schema pin + writer cross-check (v), the non-vacuity of the recompute (vi), the
+#   replacement-ref refusal (vii), and the environment scrub (viii). Each was added because a
+#   MEASURED forgery walked through the pre-fix gate, not because the precedent has one.
+#   WHAT IS STILL ABSENT, named so nobody has to rediscover it:
+#     · NO PRIVILEGED RE-EXEC. The precedent re-execs itself under `bash -p` with an `env -i`
+#       allowlist before its first ordinary command, because $BASH_ENV is sourced before a
+#       script's first line and an exported function can shadow `set`/`[`/`unset`. This gate's
+#       scrub (viii) runs as the first executable text and VERIFIES itself with keyword-only
+#       constructs, so a neutered `unset` BLOCKS — but a $BASH_ENV payload whose first line is
+#       `exit 0` still ends the shell before any of it exists.
+#     · NO TOOL-IDENTITY CHECK. The `git` and `python3` this gate runs are the ambient ones; the
+#       hook's hermetic PATH bootstrap covers its own git, not this subprocess's interpreter.
+#     · NO SECOND ARTIFACT TO CORROBORATE. The precedent's check 14 requires the run's per-step
+#       ledger to agree with its summary line. verify-downstream.sh publishes no surviving second
+#       artifact (its per-run scratch dir is torn down), so there is nothing here to demand.
+#       Making it publish one is a change to the harness, which this gate does not own.
+#     · NO KEY. An HMAC would make forgery infeasible instead of merely inconvenient, and it is
+#       deliberately not shipped for the same reason the precedent gives: a PUBLIC fork-base
+#       catalog has nowhere to keep a key, and a key committed beside the data authenticates
+#       nothing.
+#   So the residual is REAL and unchanged in kind: a party with write access to the pushing
+#   machine who is willing to run the same commands the harness runs can still fabricate a passing
+#   record. Everything recomputable is also reproducible. What this gate closes is the CHEAP,
+#   OBSERVED shapes — the hand-appended line, the shape-wrong line, the vacuous recompute, the
+#   swapped object graph, the redirected environment.
+#
+# NOT IMPLEMENTED, DELIBERATELY (P2-106 — over-implementation is a defect too; each of these is a
+# check the precedent has, or an obvious-looking one, that does NOTHING for THIS gate's subject):
+#   · VALUE-SHAPE PINS on head_sha / the digest values (40-hex, 64-hex). The precedent needs them
+#     because its tree_fingerprint was compared to nothing (`"x"` passed). Here every one of those
+#     values is already compared for EQUALITY against something this gate derives itself — the sha
+#     git resolves, the digest map recomputed from the tree — so a value of the wrong shape cannot
+#     be equal to a value of the right one. A regex would add a second, weaker statement of a check
+#     that already holds, and would grow a second place to update when the shapes change.
+#   · A `harness` VALUE check ("must say practices/scripts/verify-downstream.sh"). Self-asserting:
+#     a forger who types the field types its value. Its PRESENCE is load-bearing (v); its content
+#     authenticates nothing and pretending otherwise is exactly the theater this family refuses.
+#   · TIMESTAMP PLAUSIBILITY (parses as a date / is recent). The gate's freshness question is
+#     answered by head_sha + tree_clean + the digest recompute, all of which bind to the pushed
+#     TREE. A clock reading binds to nothing and is trivially typed; the precedent does not check
+#     its `ts` either.
+#   · SYMLINK / PERMISSION CHECKS on .ax-downstream/runs.jsonl. Whoever can point that path at
+#     another file can equally well append to the real one — the check would cost a code path and
+#     close nothing.
+#   · GIT CONTENT FILTERS (the precedent's 12b0). That refusal exists because the precedent
+#     compares WORKING-TREE BYTES to blobs, and a clean/process filter sits between them. This
+#     gate never reads a working file in live mode: plugin.json, the harness and every SKILL.md
+#     come from `git show <sha>:<path>`, which serves blob content. Nothing here is filterable.
+#   · TREE SAMPLING ACROSS THE RUN (the precedent's 7/8). That closes a measured 2,225-second
+#     window in which R25 runs its steps. This gate performs one offline audit lasting under a
+#     second and computes no verdict from anything it could re-read; there is no window to sample.
 #
 # FIXTURE / --root DESIGN: fixture trees under
 # practices/evals/fixtures/downstream_release_recency/ are NOT git repositories (no .git/) so that
@@ -125,6 +187,8 @@
 # Exit codes: 0 pass (gate satisfied OR did not fire OR explicitly skipped) · 1 violation (used
 # by every required fail_* fixture — practices/evals/fixture_kill_proof_guard.sh [87] only
 # registers exit-1 fail fixtures) · 2 usage error · 3 base commit unresolved (live only).
+# The environment refusal AX_DOWNSTREAM_ENV_UNSCRUBBABLE (viii) also exits 1: it is a BLOCK, and a
+# new exit code would only give the pre-push hook a fourth branch to explain the same "stop".
 #
 # Usage:
 #   bash practices/evals/downstream_release_recency_guard.sh
@@ -164,6 +228,46 @@
 # `git`/`python3` binaries this guard invokes are the ambient ones — the hook's hermetic PATH
 # bootstrap covers its own git, not this subprocess's python3. Both are backlog, not silently
 # claimed here.
+
+# ── (viii) RUNTIME-CONTEXT SCRUB — THE FIRST EXECUTABLE TEXT (P2-106) ────────────────
+# MEASURED, pre-fix, against the guard as committed at bd19e251 and the real clone of this
+# repository (isolated copy, so a concurrent lane could not move the log under the measurement):
+#     GIT_DIR=/tmp/decoy/.git bash <guard> --live-root <clone> --head bd19e251… --base f4457530
+#       → "no plugin manifest on either side of this range — not a plugin tree, gate does not
+#          apply."  exit 0
+# One exported variable, no repository access, and the RELEASE GATE DECLARES ITSELF INAPPLICABLE.
+# That is cheaper than the hand-authored log line this guard's header calls "the cheap forgery",
+# and it does not even need a log line: every `git -C <root>` call below — the version-before/after
+# comparison, the assertion manifest, and the digest recompute that is this gate's one check with
+# real teeth — is answered out of whatever object store the environment names.
+# GIT_DIR / GIT_WORK_TREE / GIT_OBJECT_DIRECTORY / GIT_ALTERNATE_OBJECT_DIRECTORIES /
+# GIT_CEILING_DIRECTORIES / GIT_CONFIG* are all that class, and PYTHON* is the same hole for the
+# interpreter (PYTHONPATH precedes the stdlib for a `python3 -` script, so `hashlib` itself is
+# shadowable). A denylist can only remove what somebody thought of, so this is a FAMILY sweep —
+# the same reasoning that made the precedent's GIT_* scrub a family sweep rather than a name list.
+# GIT_NO_REPLACE_OBJECTS is scrubbed with the family and RE-SET below, because it is the one
+# member of it this gate wants (see (vii)).
+# THE SCRUB IS VERIFIED, NOT ASSUMED: `unset` is an ordinary command lookup and a shell function
+# can shadow it, so after the sweep the surviving names are re-read with `${!GIT_@}`/`${!PYTHON@}`
+# — parameter expansions, not command lookups — and a non-empty remainder BLOCKS. A scrub that
+# quietly did nothing would be worse than no scrub, because the header would then claim it.
+# HONEST BOUND, stated rather than implied: this is NOT the precedent's privileged re-exec
+# (`bash -p` + `env -i` allowlist). A $BASH_ENV payload still runs before this line, and `set`/`[`
+# remain shadowable. That residual is the same one .githooks/pre-push already declares for itself
+# — an adversary with that much control over the pushing shell can simply not install the hooks —
+# and closing it here is registered as backlog, not silently claimed. See "NOT IMPLEMENTED" below.
+for _ax_v in ${!GIT_@} ${!PYTHON@}; do
+    unset "$_ax_v" 2>/dev/null
+done
+_ax_left=
+for _ax_v in ${!GIT_@} ${!PYTHON@}; do _ax_left="$_ax_left $_ax_v"; done
+case "$_ax_left" in
+    "") ;;
+    *)  _ax_null=
+        _ax_die=${_ax_null:?"downstream_release_recency_guard: AX_DOWNSTREAM_ENV_UNSCRUBBABLE — the GIT_*/PYTHON* environment families were unset and are STILL present ($_ax_left). \`unset\` is an ordinary command lookup, so a shell function shadowing it defeats the scrub silently; this gate refuses to run in a context where it cannot establish which object store and which interpreter path its own subprocesses will use. Start it from a clean shell."} ;;
+esac
+unset _ax_v _ax_left
+export GIT_NO_REPLACE_OBJECTS=1
 
 set -uo pipefail
 
@@ -370,6 +474,79 @@ HARNESS_REL = "practices/scripts/verify-downstream.sh"
 MANIFEST_RE = re.compile(r"^#\s*ax:assertions\s+(\S.*)$")
 MANIFEST_SOURCE = "(unresolved)"
 
+# ── (v) THE AUDIT LINE'S FIELD SET, PINNED (P2-106) ──────────────────────────────────
+# MEASURED, pre-fix: a line carrying ONLY the six fields this gate reads —
+#     {"head_sha":…, "tree_clean":true, "assertions":{…}, "artifact_digests":{…},
+#      "override":[], "verdict":"pass", "I_TYPED_THIS_BY_HAND":"yes"}
+# — passed with exit 0. No `timestamp`, no `harness`, plus a field no writer has ever emitted.
+# Every check this gate had was a check on a field the FORGER CHOSE TO SUPPLY; nothing asked
+# whether the record had the shape a genuine run produces. The committed fixtures proved the same
+# point from the other side: they carried a `"ts"` key the writer does not emit at all, and passed.
+# A hand-authored record is written by hand — it carries the fields its author knew about — so
+# pinning the exact set turns "I copied an old line and edited the shas" into a failure and turns
+# every field the harness gains later into a new detector.
+AUDIT_SCHEMA_KEYS = (
+    "timestamp", "head_sha", "tree_clean", "assertions", "artifact_digests",
+    "override", "verdict", "harness",
+)
+
+
+def harness_text_at_head():
+    """practices/scripts/verify-downstream.sh AS COMMITTED AT THE PUSHED SHA. Live mode only.
+
+    Read from git, never from the working tree, for the same reason the assertion manifest is:
+    the program whose output this gate audits must be the one the push actually carries.
+    """
+    rc, content = git("show", f"{head_sha}:{HARNESS_REL}", cwd=root)
+    return rc, content
+
+
+def writer_emitted_schema():
+    """The field set the COMMITTED harness's audit writer actually emits.
+
+    The pin above is only worth having if it cannot rot: if the harness gains a field and this
+    tuple does not, the pin would start rejecting every honest run (or, worse, a future editor
+    would "fix" it by deleting the pin). So the pin is corroborated against the code that writes
+    the file this gate reads. The extraction is SINGLE-AUTHORITATIVE — exactly one line-initial
+    `entry = {` literal, and the file must actually serialize `entry` — because "a dict that looks
+    like the schema" is not the schema; the schema is the shape of the write this gate reads back.
+    Zero means the harness no longer emits the record; two or more means this gate cannot say
+    which one is authoritative, and unknown never passes.
+    """
+    rc, content = harness_text_at_head()
+    if rc != 0 or not content:
+        fail("AX_DOWNSTREAM_WRITER_SCHEMA_UNRESOLVED",
+             f"could not read {HARNESS_REL} at {head_sha!r}, so the pinned audit-line shape "
+             "stands uncorroborated. A pin nobody checked against the writer is a comment.")
+    lines = content.split("\n")
+    starts = [i for i, ln in enumerate(lines) if re.match(r"^entry = \{\s*$", ln)]
+    if len(starts) != 1:
+        fail("AX_DOWNSTREAM_WRITER_SCHEMA_UNRESOLVED",
+             f"{HARNESS_REL} at {head_sha!r} contains {len(starts)} line-initial `entry = {{` "
+             "literals and this gate requires EXACTLY ONE. Zero means the harness no longer "
+             "builds the record this gate verifies; two or more means 'the first regex-shaped "
+             "hit' would silently become the authority.")
+    i = starts[0] + 1
+    body = []
+    while i < len(lines) and not re.match(r"^\}\s*$", lines[i]):
+        body.append(lines[i])
+        i += 1
+    if i >= len(lines):
+        fail("AX_DOWNSTREAM_WRITER_SCHEMA_UNRESOLVED",
+             f"the `entry = {{` literal in {HARNESS_REL} at {head_sha!r} is never closed by a "
+             "line-initial `}}`, so its field set could not be read.")
+    keys = tuple(m.group(1) for m in
+                 (re.match(r'\s*"([a-z_]+)":', ln) for ln in body) if m)
+    if not keys:
+        fail("AX_DOWNSTREAM_WRITER_SCHEMA_UNRESOLVED",
+             f"the `entry = {{` literal in {HARNESS_REL} at {head_sha!r} declares no string keys.")
+    if "json.dumps(entry" not in content:
+        fail("AX_DOWNSTREAM_WRITER_SCHEMA_UNRESOLVED",
+             f"{HARNESS_REL} at {head_sha!r} builds an `entry` dict but never serializes it. The "
+             "pin must be taken from the statement that WRITES the log this gate reads, not from "
+             "a dict that resembles it.")
+    return keys
+
 
 def declared_assertion_ids():
     """The COMPLETE set of assertion ids a full harness run must record.
@@ -430,6 +607,37 @@ if rc == 0 and toplevel:
 tmpdir = None
 try:
     if is_git:
+        # ── (vii) REPLACEMENT REFS — checked BEFORE any git answer is believed ────────────
+        # MEASURED, pre-fix, in an isolated clone at bd19e251 (the real tree, the real log):
+        #     git replace -f bd19e251… <a commit whose plugin.json still says the BASE version>
+        #     bash <guard> --live-root <clone> --head bd19e251… --base f4457530
+        #       → "plugin.json version unchanged in this push range — gate does not fire."  exit 0
+        # `git replace` keeps every sha IDENTICAL and swaps the object that show/ls-tree/merge-base
+        # read. Every input this gate has in live mode is a git read: both plugin.json bodies, the
+        # harness that declares the assertion manifest, and the SKILL.md bodies whose digests are
+        # recomputed. All of them can be answered out of a fabricated graph while the audit line
+        # records authentic shas — so the ONE check with teeth can be made to agree with a stale
+        # log instead of the pushed tree. GIT_NO_REPLACE_OBJECTS=1 is exported by the shell half,
+        # and a tree carrying such refs AT ALL is refused: "we read past them" is a claim about
+        # every call site forever, and a released catalog has no reason to carry them.
+        # FAIL-CLOSED on enumeration failure — an enumeration that did not run cannot report
+        # emptiness, and "unanswerable" is the one state an attacker can manufacture.
+        rc_rep, replace_refs = git("for-each-ref", "--format=%(refname)", "refs/replace/",
+                                   cwd=root)
+        if rc_rep != 0:
+            fail("AX_DOWNSTREAM_REPLACE_REFS_PRESENT",
+                 f"the replacement-ref enumeration itself failed (git exited {rc_rep}) in {root}, "
+                 "so this gate cannot tell whether refs/replace/* is empty. That question decides "
+                 "whether every git answer below came out of a fabricated object graph, and an "
+                 "unanswerable question fails closed.")
+        if replace_refs:
+            fail("AX_DOWNSTREAM_REPLACE_REFS_PRESENT",
+                 f"this repository carries git replacement refs "
+                 f"({replace_refs.splitlines()}). They keep every sha identical while swapping the "
+                 "OBJECT that show/ls-tree/merge-base read, so plugin.json's version, the "
+                 "assertion manifest and the recomputed artifact digests can all be answered out "
+                 "of a fabricated graph. Remove them (`git replace -d <ref>`) and re-run.")
+
         head_sha = head_arg
         if not head_sha:
             rc, out = git("rev-parse", "HEAD", cwd=root)
@@ -498,7 +706,15 @@ try:
         for idx, rel in enumerate(skill_paths_in_tree):
             rc, content = git("show", f"{head_sha}:{rel}", cwd=root)
             if rc != 0:
-                continue
+                # P2-106: this used to `continue`. A SKILL.md that ls-tree listed and show cannot
+                # read is not "one fewer file to digest" — it SILENTLY NARROWS the recompute, and
+                # a log line that omits the same ids then matches a smaller universe than the push
+                # actually ships. The set comparison below cannot see the difference, because both
+                # sides shrank. Unknown never passes.
+                fail("AX_DOWNSTREAM_SKILL_UNREADABLE",
+                     f"{rel} is listed in the tree of {head_sha!r} but its blob could not be read, "
+                     "so the artifact digests recomputed below would silently cover fewer "
+                     "artifacts than the push ships.")
             dest = os.path.join(tmpdir, f"skill_{idx}.md")
             with open(dest, "w", encoding="utf-8") as f:
                 f.write(content)
@@ -525,11 +741,23 @@ try:
 
         applicability_or_exit(version_before, version_after, before_present, after_present)
 
+        # ── (i-bis) THE SHA TO MATCH AGAINST MUST BE KNOWN — fail-open closed (P2-106) ────
+        # MEASURED, pre-fix: delete expected_head.txt from a passing fixture tree and set the log
+        # line's "head_sha" to "" → exit 0 ("PASS — audit log matches the pushed sha"). The
+        # staleness check is an EQUALITY, so when this file is absent it compares "" to "" and
+        # certifies a run about no commit at all. That is precisely the shape the precedent's
+        # fail_git_context_redirected fixture pins for the 49th guard: when the gate cannot
+        # establish WHICH head the record is supposed to be about, it must refuse, not default.
         expected_head_file = os.path.join(root, ".ax-downstream", "expected_head.txt")
         expected_head = ""
         if os.path.isfile(expected_head_file):
             with open(expected_head_file, encoding="utf-8") as f:
                 expected_head = f.read().strip()
+        if not expected_head:
+            fail("AX_DOWNSTREAM_EXPECTED_HEAD_UNRESOLVED",
+                 f"{expected_head_file} is absent or empty, so in fixture-shaped mode this gate "
+                 "has no sha to hold the audit log against. An empty expectation would compare "
+                 "equal to an empty recorded head_sha and certify a run about nothing.")
 
         import glob
         skill_paths = sorted(glob.glob(os.path.join(root, "skills", "*", "SKILL.md")))
@@ -565,6 +793,38 @@ try:
 
     if not isinstance(latest, dict):
         fail("AX_DOWNSTREAM_LOG_UNPARSEABLE", f"{log_path}'s latest line is not a JSON object.")
+
+    # ── (v) SCHEMA PIN — the shape first, the values afterwards ──────────────────────
+    # Placed here, ahead of every field-level check, because a record of the wrong shape does not
+    # deserve field-level diagnosis: it was not written by the harness. (The duplicate-key refusal
+    # above is the other half of the same idea — `object_pairs_hook` is applied to EVERY object in
+    # the line, nested ones included, so a lenient parser cannot resolve a repeated key in the
+    # writer's favour anywhere in the record.)
+    line_keys = set(latest)
+    pinned = set(AUDIT_SCHEMA_KEYS)
+    if line_keys != pinned:
+        fail("AX_DOWNSTREAM_LOG_SCHEMA_MISMATCH",
+             f"the latest audit line's field set is not the one "
+             f"{HARNESS_REL} emits (undeclared_extra={sorted(line_keys - pinned)}, "
+             f"missing={sorted(pinned - line_keys)}).",
+             ".ax-downstream/runs.jsonl is an ordinary text file, and every other check in this "
+             "gate compares values the line's own author supplied. Requiring the exact shape "
+             "means a hand-authored line has to reproduce the writer, not merely satisfy the "
+             "reader. Re-run practices/scripts/verify-downstream.sh to get a genuine line.")
+
+    # ── (v-bis) …AND THE PIN IS CORROBORATED AGAINST THE COMMITTED WRITER ────────────
+    # Live mode only: a fixture tree carries no harness, exactly as the manifest declaration is
+    # read from expected_assertions.txt there. The pin still applies to the LINE in both modes;
+    # only this cross-check stands down, and only where there is nothing to cross-check against.
+    if is_git:
+        emitted = writer_emitted_schema()
+        if tuple(AUDIT_SCHEMA_KEYS) != emitted:
+            fail("AX_DOWNSTREAM_WRITER_SCHEMA_DRIFT",
+                 f"this gate pins the audit-line shape as {list(AUDIT_SCHEMA_KEYS)} but the "
+                 f"harness at {head_sha!r} emits {list(emitted)}.",
+                 "The pin exists so a hand-authored line cannot pass as genuine; a pin that no "
+                 "longer matches the writer either rejects every honest run or accepts a shape "
+                 "nobody reviewed. Update BOTH in the same commit.")
 
     if latest.get("head_sha") != expected_head:
         fail("AX_DOWNSTREAM_LOG_STALE_HEAD",
@@ -617,6 +877,26 @@ try:
              "regression differential by construction, never release evidence. A MISSING "
              "'override' key fails here too: it means the line was not written by the current "
              "harness schema.")
+
+    # ── (vi) THE RECOMPUTE MUST HAVE MEASURED SOMETHING (P2-106) ─────────────────────
+    # MEASURED, pre-fix: remove skills/ from a passing tree and set the line's
+    # "artifact_digests" to {} → exit 0, "artifact digests match". They did: the empty map equals
+    # the empty map. This gate's own header calls the digest recompute "the one check with
+    # genuinely hard-to-forge teeth" — and its teeth were CONDITIONAL on there being artifacts to
+    # find. Anything that empties the recompute (no skills/ at head, an ls-tree that returned
+    # nothing, a marker syntax the parser stopped recognising) silently converts the strongest
+    # check in the gate into a tautology, and the caller cannot tell from the PASS line.
+    # Same rule the assertion manifest already applies to itself ("an empty manifest would make
+    # the completeness check vacuous"), applied to the other completeness claim.
+    if not recomputed:
+        fail("AX_DOWNSTREAM_DIGEST_RECOMPUTE_VACUOUS",
+             f"recomputing artifact digests from the SKILL.md files at {expected_head!r} found "
+             "ZERO ax:artifact markers, so the digest comparison below would compare an empty map "
+             "to an empty map and report a match.",
+             "That check is the only one here that measures the PUSHED TREE rather than the log's "
+             "own claims; with nothing to measure it certifies nothing. Either this tree ships no "
+             "install artifacts (in which case it has no release surface for this gate to "
+             "protect) or the marker discovery broke — both block.")
 
     logged_digests = latest.get("artifact_digests")
     if not isinstance(logged_digests, dict):

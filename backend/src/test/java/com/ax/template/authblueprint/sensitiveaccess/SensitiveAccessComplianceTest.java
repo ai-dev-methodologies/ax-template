@@ -72,17 +72,31 @@ class SensitiveAccessComplianceTest {
         assertThat(first.jsonPath().getString("rawValue")).isEqualTo("1234567890123456");
 
         // the access was recorded: who (caller), what (recordRef + fieldName), why (purpose)
-        List<Object> log = accessLogAs(admin, id).jsonPath().getList("$");
+        ExtractableResponse<Response> logForCount = accessLogAs(admin, id);
+        assertThat(logForCount.statusCode()).isEqualTo(200);
+        List<Object> log = logForCount.jsonPath().getList("$");
         assertThat(log).hasSize(1);
-        assertThat(accessLogAs(admin, id).jsonPath().getString("[0].fieldName")).isEqualTo("accountNumber");
-        assertThat(accessLogAs(admin, id).jsonPath().getString("[0].recordRef")).isEqualTo("ACCT-READ");
-        assertThat(accessLogAs(admin, id).jsonPath().getString("[0].purpose")).isEqualTo("support call verification");
-        assertThat(accessLogAs(admin, id).jsonPath().getString("[0].accessor")).as("WHO is recorded").isNotBlank();
-        assertThat(accessLogAs(admin, id).jsonPath().getString("[0].occurredAt")).as("WHEN is recorded").isNotBlank();
+        ExtractableResponse<Response> logForFieldName = accessLogAs(admin, id);
+        assertThat(logForFieldName.statusCode()).isEqualTo(200);
+        assertThat(logForFieldName.jsonPath().getString("[0].fieldName")).isEqualTo("accountNumber");
+        ExtractableResponse<Response> logForRecordRef = accessLogAs(admin, id);
+        assertThat(logForRecordRef.statusCode()).isEqualTo(200);
+        assertThat(logForRecordRef.jsonPath().getString("[0].recordRef")).isEqualTo("ACCT-READ");
+        ExtractableResponse<Response> logForPurpose = accessLogAs(admin, id);
+        assertThat(logForPurpose.statusCode()).isEqualTo(200);
+        assertThat(logForPurpose.jsonPath().getString("[0].purpose")).isEqualTo("support call verification");
+        ExtractableResponse<Response> logForAccessor = accessLogAs(admin, id);
+        assertThat(logForAccessor.statusCode()).isEqualTo(200);
+        assertThat(logForAccessor.jsonPath().getString("[0].accessor")).as("WHO is recorded").isNotBlank();
+        ExtractableResponse<Response> logForOccurredAt = accessLogAs(admin, id);
+        assertThat(logForOccurredAt.statusCode()).isEqualTo(200);
+        assertThat(logForOccurredAt.jsonPath().getString("[0].occurredAt")).as("WHEN is recorded").isNotBlank();
 
         // a second reveal appends a second row — append-only
         assertThat(reveal(id, "second access").statusCode()).isEqualTo(200);
-        assertThat(accessLogAs(admin, id).jsonPath().getList("$")).hasSize(2);
+        ExtractableResponse<Response> logAfterSecond = accessLogAs(admin, id);
+        assertThat(logAfterSecond.statusCode()).isEqualTo(200);
+        assertThat(logAfterSecond.jsonPath().getList("$")).hasSize(2);
 
         // the reveal response is not cached (raw value must not land in a browser/proxy cache)
         assertThat(reveal(id, "cache check").header("Cache-Control")).contains("no-store");
@@ -102,7 +116,9 @@ class SensitiveAccessComplianceTest {
         // a masked GET (even repeated) writes NO access-log row — a mask read is not a sensitive read
         getMasked(id);
         getMasked(id);
-        assertThat(accessLogAs(admin, id).jsonPath().getList("$")).as("no audit row for masked reads").isEmpty();
+        ExtractableResponse<Response> logAfterMasked = accessLogAs(admin, id);
+        assertThat(logAfterMasked.statusCode()).isEqualTo(200);
+        assertThat(logAfterMasked.jsonPath().getList("$")).as("no audit row for masked reads").isEmpty();
     }
 
     // ── SENSITIVE-PURPOSE-001 — a blank purpose is 422, no row written, no value returned ──
@@ -123,12 +139,16 @@ class SensitiveAccessComplianceTest {
         assertThat(absent.statusCode()).isEqualTo(400);
 
         // nothing was recorded and no value returned
-        assertThat(accessLogAs(admin, id).jsonPath().getList("$")).isEmpty();
+        ExtractableResponse<Response> logAfterBlank = accessLogAs(admin, id);
+        assertThat(logAfterBlank.statusCode()).isEqualTo(200);
+        assertThat(logAfterBlank.jsonPath().getList("$")).isEmpty();
 
         // a stated purpose succeeds and records the WHY
         ExtractableResponse<Response> ok = reveal(id, "fraud investigation");
         assertThat(ok.statusCode()).isEqualTo(200);
-        assertThat(accessLogAs(admin, id).jsonPath().getString("[0].purpose")).isEqualTo("fraud investigation");
+        ExtractableResponse<Response> logAfterPurpose = accessLogAs(admin, id);
+        assertThat(logAfterPurpose.statusCode()).isEqualTo(200);
+        assertThat(logAfterPurpose.jsonPath().getString("[0].purpose")).isEqualTo("fraud investigation");
     }
 
     // ── SENSITIVE-PURPOSE-001 — a service-level blank (bypassing @NotBlank) is the domain 422 ──

@@ -93,7 +93,7 @@ class HttpExtractDiagnosabilityTest {
         Response r = given().when().get("/no-content-type");
 
         // Baseline: a blind extract dies with a parser error that names nothing.
-        assertThatThrownBy(() -> r.then().extract().path("token"))
+        assertThatThrownBy(() -> r.then().statusCode(200).statusCode(200).extract().path("token"))
             .isInstanceOf(IllegalStateException.class)
             .hasMessageContaining("no content-type was present");
 
@@ -124,7 +124,7 @@ class HttpExtractDiagnosabilityTest {
         Response r = given().when().get("/problem-401");
 
         // The shape that raises nothing at all: a blind extract just hands back null.
-        assertThat((Object) r.then().extract().path("accessToken")).isNull();
+        assertThat((Object) r.then().statusCode(401).statusCode(401).extract().path("accessToken")).isNull();
 
         assertThatThrownBy(() -> HttpExtract.path(r, "accessToken", "POST /login (stub)"))
             .isInstanceOf(AssertionError.class)

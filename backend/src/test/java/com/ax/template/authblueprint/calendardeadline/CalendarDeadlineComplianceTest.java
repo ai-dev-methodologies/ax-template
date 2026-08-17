@@ -48,7 +48,7 @@ class CalendarDeadlineComplianceTest {
     private ExtractableResponse<Response> createCalendar(String name, String holidaysJsonArray) {
         return given().header("Authorization", "Bearer " + member).header("Content-Type", "application/json")
             .body("{\"calendarName\":\"" + name + "\",\"holidays\":" + holidaysJsonArray + "}")
-        .when().post("/api/calendar-deadline/calendars").thenReturn().then().extract();
+        .when().post("/api/calendar-deadline/calendars").thenReturn().then().statusCode(201).extract();
     }
 
     private ExtractableResponse<Response> editCalendar(String id, String holidaysJsonArray) {
@@ -63,7 +63,7 @@ class CalendarDeadlineComplianceTest {
             .body("{\"obligationRef\":\"" + ref + "\",\"startDate\":\"" + startDate + "\","
                 + "\"periodCount\":" + n + ",\"mode\":\"" + mode + "\","
                 + "\"holidayCalendarId\":\"" + calendarId + "\",\"rollConvention\":\"" + roll + "\"}")
-        .when().post("/api/calendar-deadline/deadlines").thenReturn().then().extract();
+        .when().post("/api/calendar-deadline/deadlines").thenReturn().then().statusCode(201).extract();
     }
 
     private ExtractableResponse<Response> getDeadline(String id) {

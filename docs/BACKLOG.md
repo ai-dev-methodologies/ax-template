@@ -28,9 +28,47 @@ signature를 발견**(17/17)함으로써 경험적으로 반증되었다 — 발
 |---|---|---|---|
 | P0 (expiry-bound / live defects) | 30 | 30 | **100%** |
 | P1 (generic signature backlog) | 75 | 74 | **99%** |
-| P2 (verification escapes) | 122 | 115 | **94%** |
-| P3 (industry-niche deferrals) | 144 | 142 | **99%** |
-| **P0–P3 합계 (수렴 분모)** | **371** | **361** | **97%** |
+| P2 (verification escapes) | 125 | 121 | **97%** |
+| P3 (industry-niche deferrals) | 145 | 143 | **99%** |
+| **P0–P3 합계 (수렴 분모)** | **375** | **368** | **98%** |
+
+> 2026-08-18 하네스 커버리지 확장 라운드 — 2026-08-14 R112가 정직 등재한 6건(P2-88·P2-103~106·
+> P3-143) 중 **6건**(P2-88, P2-103, P2-104, P2-105, P2-106) + 같은 계열의 P2-119(P2-117 종결이
+> 남긴 호출자 측 blind read 잔여)를 전량 봉합했다(P2-102와 P3-143은 이번 웨이브 범위 밖 — 미착수,
+> open 유지). 전부 실측 차등(pre-fix RED → post-fix GREEN 또는 mutation kill-proof) 동반. 요지:
+> **(1) P2-88** — `info.solidsoft.pitest` 1.15.0 ↔ Gradle 9 비호환을 **1.19.0**(Gradle Plugin
+> Portal `latest`, Maven Central은 여전히 1.15.0)로 승격해 해소, 업그레이드 자신이 낳은 launcher
+> 버전 충돌(`junit-platform-launcher` 1.10.2 vs 6.0.3)까지 같은 라운드에서 봉합 —
+> `addJUnitPlatformLauncher.set(false)` + BOM 관리 `testRuntimeOnly`. Gradle wrapper 9.7.0 승격,
+> 116 task **BUILD SUCCESSFUL**, XML 1939 tests/0 failures, guard [84] PASS. **(2)~(4) P2-103~105**
+> — 하네스가 "반증할 수 없다"고 정직 등재했던 config/배선 분기(husky·lefthook·linked-worktree /
+> `react.root:"."`·`typescript=false`·`java.testTask` 대체 이름 / Next 특화 3룰 동시 발화)를 전부
+> 픽스처화. `verify-downstream.sh` 단언이 **A9-eval·A10-tsdep**(2026-08-15, 13개)에 이어
+> **A11-route~A20-rootdot-skip 10건**을 신설해 **13 → 23개**로 확장(`ax:assertions` 매니페스트
+> 라인이 그 정확한 집합을 단일 진실원으로 선언 — guard [114]가 이 라인을 파싱해 audit 로그의
+> `assertions` 키 집합과 대조한다). 이 과정에서 실결함 2건을 신규 발견·즉시 봉합: **F-035**(java
+> 게이트 태스크명이 `java.testTask`와 다르면 모든 java 커밋이 `Task 'x' not found`로 죽고 게이트가
+> 한 번도 안 도는 것 — 훅은 config를 읽었는데 마커는 이름을 하드코딩했다) · `react.typescript=false`
+> 분기가 `languageOptions`를 통째로 비워 ESLint 9 espree가 **모든 `.jsx`를 파싱조차 못 하던 것**
+> (마커 DSL에 **`ax:else`** 신설로 봉합 — 부정 `ax:if !x` 대신 else를 택한 이유는 "false 분기를
+> 아무도 저술하지 않았다"는 결함 형상 자체를 문법으로 봉쇄하기 위해서다). **(5) P2-106** — guard
+> [114]의 위조저항을 49th guard 대조로 감사해 갭 5+1건(스키마 핀 부재 · **빈 마커 집합이 `{}=={}`로
+> "digest 일치"를 참으로 만들던 것**(이 게이트의 유일한 이빨이 공허해질 수 있었다) · `git show`
+> 실패의 조용한 스킵 · `git replace` 우회 · `GIT_DIR` decoy 우회 · fixture 모드 빈 문자열 등호
+> 통과)를 봉합, 각각 pre-fix 통과→post-fix BLOCK 실측. 강화하지 않은 축(값 형태 핀·`harness`
+> 자기주장·timestamp·심링크/권한·content filter·전 구간 tree sampling)과 남는 강도 차이(privileged
+> re-exec 없음, 훅 자신의 자기인증 불가, `git`/`python3` ambient)는 근거와 함께 정직 기록. **(6)
+> P2-119** — 호출자 측 blind read를 5가지 정의로 재측정해 정의가 결과를 지배함을 실증(좁은 리터럴
+> **209/91** → guard [116] 전체 shape **1710/135** → 문장 단위 **1413** → 응답객체 단위 **561** →
+> **origin-resolved 333, dedup 후 278**), 278건 전건을 status-우선 단언으로 봉합하고 guard [116]에
+> 탐지자 **(C)(D)**를 추가(C가 D의 soundness 전제 — TestSupport의 응답 export를 금지하면 "서술됐는가"가
+> 파일 내 결정 가능해진다). 신규 4건 정직 등재(P2-121~123 · P3-146 — 상세는 각 행). **방법론 교훈
+> 3개는 `practices/DECISIONS.md` R112 후속 6에 기록**: (a) 조건 분기는 저술 수준 검증만으로 충분하지
+> 않다 — 실행 수준에서 돌려야 한다(P2-104b가 정확히 이 형태로 출하됐었다), (b) census는 정의가
+> 결과를 지배한다(P2-119의 209→1710→1413→561→278), (c) guard의 유일한 이빨이 공허해질 수 있는지
+> 물어야 한다(P2-106 G2). 분모 371→**375**(+4: P2-121·122·123·P3-146), closed 361→**368**(+7:
+> P2-88·103·104·105·106·119 종결 + P3-146 등재-즉시-closed) = **98%**(367.87%→98% 반올림). 북극성(2)의
+> IDW18+ 동결 해제선(70%)은 계속 크게 상회.
 
 > 2026-08-17 P2-120 종결 — 프로세스 전역 mutable static `io.restassured.RestAssured.port`를 대입하던
 > **파일 139개**(그중 86개는 `useRandomPort` 정의 보유 — 정의 본문 자체가 대입문 1개를 담는다 —
@@ -132,6 +170,9 @@ signature를 발견**(17/17)함으로써 경험적으로 반증되었다 — 발
 > differential을 신규 단언 `A9-eval`로 실체화 · 커버리지 산문(workflow yml·CLAUDE.md)을 하네스의 좁은
 > self-representation으로 통일. `verify-downstream.sh` 단언 11 → **13**(A9-eval·A10-tsdep 추가). 분모
 > 363 불변, closed 349 → **356** = **98%**.
+> **[2026-08-18 시점 주석 — 값 보존, 정정 아님]** 이 13은 2026-08-15 시점 값이다. 2026-08-18
+> P2-103~106 종결 라운드가 `A11-route`~`A20-rootdot-skip` 10건을 추가해 **13 → 23개**로
+> 확장했다(아래 최상단 2026-08-18 요약 및 P2-103~106 행 참조).
 
 > 2026-08-14 downstream-fixture E2E 웨이브 — **1개 downstream bench 2일이 13건(F-017~F-029 = GH #78~#84 · #86~#91)을 냈고 전부 사람이 찾았다(guard 발견 0건)**. 이번 웨이브가 닫은 것: GH #89/#90/#91(#86의 봉합이 **스스로 낳은** BLOCKING 3건 — 셋 다 스킬 §5 self-verification을 통과했다: ArchUnit 스니펫 컴파일 불가 · configuration-시점 `error(...)`가 `-P` 없는 모든 gradle 호출을 죽임 · 기본 `test`가 `PRACTICES` 태그를 함께 돌림) + 세션 발견 5건(F-030 eslint config의 하드코딩 `./ax.config.json` ↔ `cd $REACT_ROOT` 충돌 · F-031 **처방된 적 없는** `lint` 스크립트를 `--if-present`로 부르는 훅 = react 게이트 미발화 · F-032 태스크명 하드코딩 · F-033 TS 유무를 에이전트 추측에 위임 · F-034 훅의 무조건 출력 부재로 "scope-skip 통과"와 "훅 미설치"가 구분 불가) + GH #92 [META]의 **구조적** 봉합(`verify-downstream.sh` 하네스 11 단언(2026-08-15 P2-113/P2-114 종결
 이후 **13**으로 확장) + 마커 **단일 파서** `ax_markers.py` + guard [112]/[113] 오프라인 R25 + guard [114] pre-push 릴리스 게이트 + 주간 advisory 워크플로; guard 111→**114**, plugin 0.1.6→**0.1.7**). closed 9건(P2-93 ~ P2-101). **정직한 부기**: 하네스가 **반증할 수 없는** 잔여를 6건 신규 등재했다(P2-102 Option E · P2-103 husky/lefthook·worktree 배선 · P2-104 config 조건 분기 · P2-105 Next 특화 룰 · P2-106 [114] 위조저항 · P3-143 버전 매트릭스) — 하네스는 **재현 도구이지 발견 도구가 아니며**, 1차 발견 메커니즘은 여전히 clean-room 인간 설치다. 분모 339→**354**, closed 338→**347** = **98%**. 수렴률이 100%→98%로 내려간 것은 봉합보다 정직 등재가 많았다는 뜻이고 그것이 정확한 부기다. 북극성(2)의 IDW18+ **동결 해제선 70%는 계속 상회**하므로 동결 판정에는 변화가 없다.
@@ -557,7 +598,7 @@ R25). *이름이 세션 기록에만 있던 항목을 여기로 영구화했다.
   `tests="7"`; 같은 worktree에서 `assertTestTasksWired` 117/117 통과로 **표본→전수 승격**.
   (d) 8.14.5 회귀 0(testCrud 7=7, testAsvs 52=52). 일탈 정직 기록: probe에서만 pitest를 비활성화했다
   (측정 대상과 직교 — 그 비호환 자체는 P2-88로 분리 등재).
-- [ ] P2-88 — Gradle 9 승격의 **선행 차단자**: `info.solidsoft.pitest` **1.15.0**이 Gradle 9와
+- [x] P2-88 — Gradle 9 승격의 **선행 차단자**: `info.solidsoft.pitest` **1.15.0**이 Gradle 9와
   비호환이라 **플러그인 적용 단계에서** 빌드가 죽는다(어떤 태스크도 실행 전). 실측 원문:
   `An exception occurred applying plugin request [id: 'info.solidsoft.pitest', version: '1.15.0']
   > Failed to apply plugin 'info.solidsoft.pitest'. > Could not get unknown property 'baseDir'
@@ -569,6 +610,22 @@ R25). *이름이 세션 기록에만 있던 항목을 여기로 영구화했다.
   플러그인 업그레이드/교체 또는 Gradle Report API 마이그레이션 후 Gradle 9에서 PIT 게이트
   ([84][85] vacuity_class_proof 계열)가 동일 판정을 내는 것 확인. 출처: P2-86 봉합 중
   probe 실측(2026-08-13).
+  → **closed 2026-08-18**: `info.solidsoft.pitest`를 **1.19.0**(2026-03-29 릴리스, "Initial
+  support for Gradle 9")으로 승격 + wrapper **9.7.0**. 조사: Maven Central의 `latest`는 여전히
+  1.15.0이지만 **Gradle Plugin Portal**의 `latest`는 1.19.0 — `plugins {}` DSL은 포털을 기본
+  해석원으로 삼으므로 저장소 변경이 불필요했다. **업그레이드가 새 결함을 낳았고 같은 라운드에서
+  봉합**: 1.19.0의 detached configuration(플러그인 issue #390)이 launcher를 프로젝트의 Spring
+  Boot BOM **밖에서** 해석해 `junit-platform-launcher-1.10.2`가 `junit-jupiter-engine-6.0.3`
+  런타임에 물려 PIT minion이 `UNKNOWN_ERROR`로 즉사했다(181개 classpath 엔트리 전수 diff에서
+  **유일한 차이**로 특정). 처방: `addJUnitPlatformLauncher.set(false)` + BOM 관리
+  `testRuntimeOnly("org.junit.platform:junit-platform-launcher")`. 실측: Gradle 9.7.0에서
+  116 per-domain task `BUILD SUCCESSFUL in 31m 24s`, XML **1939 tests / 0 failures / 0 errors**,
+  `assertTestTasksWired: OK — 117 Test task(s)`, guard [84] `PASS — 2 declared gate(s)
+  kill-proofed`. **PIT 실효성을 변이 차등으로 증명**: 단언을 hollow하게 만들면 Gradle 9에서도
+  `FAIL — … is HOLLOW: SURVIVED` exit 1, 복원 시 exit 0. P2-86의 done-when(b) "Gradle 9 스모크
+  tests>0"도 초과 충족(115/116 task가 tests>0, 나머지 1개는 8.14.5에서도 동일한 advisory
+  `testPortability`). **잔여(정직 기록)**: aggregate `./gradlew test`(advisory
+  `PortabilityCyclic` 포함)는 Gradle 9에서 미실행 — R25 스텝이 아니라서.
 
 **plugin-channel dogfood 2차 (GH #86~#88) — 2026-08-14 전건 봉합**
 
@@ -700,7 +757,9 @@ tier 배정 근거(기존 관례 대조): 이 결함 클래스는 "**검증 표�
   (`practices/evals/fixtures/consumer-e2e/project/`: Spring Boot 4.1.0 / Gradle 9.5.1 / Initializr의
   eager `withType<Test>` 보존 / Next.js app-router / **두 root 모두 `.` 아님**)에 산출물을 SKILL.md
   마커에서 **추출·verbatim 설치**하고 11개 단언(A-pc · A0~A8 · A7b — 2026-08-15 P2-113/P2-114 종결
-  이후 A9-eval·A10-tsdep 추가로 **13개**)을 **exit code + 게이트 자신의 신호
+  이후 A9-eval·A10-tsdep 추가로 **13개**; **[2026-08-18 시점 주석 — 값 보존, 정정 아님]** P2-103~106
+  종결이 A11-route~A20-rootdot-skip 10건을 더해 **23개**로 확장 — 아래 최상단 요약 참조)을
+  **exit code + 게이트 자신의 신호
   문자열**로 검증한다(exit code 단독은 증거가 아니라는 [85]의 규칙 — `git commit`은 게이트와 무관한
   열 가지 이유로 실패한다). 산출물 **사본 0** — 스킬을 고치면 내일 이 하네스가 그것을 돌린다.
   **(2)** `practices/scripts/lib/ax_markers.py` — 마커 / `ax:if` / `ax:subst`의 **단일 파서**(하네스와
@@ -744,7 +803,10 @@ tier 배정 근거(기존 관례 대조): 이 결함 클래스는 "**검증 표�
   **전건** true" 주장은 *기록된 키 기준*으로만 참이었다 — 무엇을 기록해야 하는지는 아무도 강제하지
   않았다. 봉합: [114]가 단언 명부를 하드코딩하지 않고 `verify-downstream.sh`의 단언 이름을 **파싱
   도출**해(당시 11개 — A-pc·A0~A8·A7b; 2026-08-15 P2-113/P2-114 종결 이후 A9-eval·A10-tsdep 추가로
-  **13개**) 로그의 `assertions` 키 집합과 **정확 일치**를 요구 + `verdict==
+  **13개**; **[2026-08-18 시점 주석 — 값 보존, 정정 아님]** P2-103~106 종결이 A11-route~
+  A20-rootdot-skip 10건을 더해 **23개**로 확장했고, [114]는 이 정확일치를 하드코딩이 아니라
+  파싱 도출로 재는 설계라 그 확장을 자동으로 흡수한다 — 아래 최상단 2026-08-18 요약 참조) 로그의
+  `assertions` 키 집합과 **정확 일치**를 요구 + `verdict==
   "pass"` + `override==[]` 단언 추가. 출처: 2026-08-14 shipped `ed5ca2a7`에 대한 외부 adversarial
   critic(codex, read-only) 감사.
 
@@ -757,27 +819,84 @@ tier 배정 근거(기존 관례 대조): 이 결함 클래스는 "**검증 표�
   비용이 이번 웨이브 범위를 넘는다. 마커 기반 추출(B)과 **배타적이지 않다**: 추출 경로는 그대로 두고
   fence의 **생성원**만 바뀐다. done-when: java 산출물이 컴파일되는 소스에서 생성되고 fence↔소스
   drift가 guard로 차단되며, #89 형상이 오프라인에서 RED. 출처: 2026-08-14 GH #92 설계 검토(등재만).
-- [ ] P2-103 — 훅 **배선 분기**를 하네스가 반증할 수 없다: `ax-install-hooks`는 `core.hooksPath`
+- [x] P2-103 — 훅 **배선 분기**를 하네스가 반증할 수 없다: `ax-install-hooks`는 `core.hooksPath`
   (Branch A) · husky · lefthook 세 배선을 처방하는데 하네스는 A만 돈다. 같은 계열로 D-8이 도입한
   worktree preflight(`.git`이 파일인 경우의 `--worktree` 변형, 공유 config의 `core.bare`/`core.worktree`
   사전점검, 형제 불간섭 확인)도 **산문 절차**라 실행되지 않는다. 즉 이 분기들에 가한 수정은 하네스가
   **반증할 수 없고**, green은 그 분기에 대해 아무 말도 하지 않는다 — 침묵을 성공으로 읽지 않기 위해
   분리 등재한다. done-when: husky/lefthook 각 1형상 + linked-worktree 1형상을 픽스처로 추가하고 각
   형상에서 A-pc(positive control)가 성립. 출처: 2026-08-14 하네스 자기-스코프 선언(등재만).
-- [ ] P2-104 — **config 조건 분기**를 하네스가 반증할 수 없다: 이번 웨이브가 도입·수정한 세 분기가
+  → **closed 2026-08-18**: 세 배선 분기 **전부**를 검증했다. 선택지 (i) 전 분기 검증을 택한 근거는
+  비용이 사실상 0이었다는 것이다 — `npx husky`/`npx lefthook`은 하네스가 이미 갖는 의존 클래스와
+  동일하고, 세 분기 모두 디스크에 이미 있는 훅 **본문을 재배선**할 뿐이라 마커·스키마 변경이 0이다.
+  신규 단언 `A13-husky`(**같은 몸체**를 `npx husky init`의 `core.hooksPath`로 재배선해 A1의 probe를
+  거부, 배너+룰id 확인) · `A14-lefthook`(같은 몸체를 `lefthook.yml`의
+  `run: bash .githooks/ax-pre-commit-checks.sh`로 재배선해 같은 probe를 거부; **호출자의 전역
+  hooks 디렉터리가 안 건드려졌음**도 단언 — `lefthook install`이 유효 `core.hooksPath`를
+  targeting함을 실측했으므로 repo-local 배선을 먼저 설정) · `A15-worktree`(linked-worktree
+  변종 — `.git`이 파일, `extensions.worktreeConfig`+`--worktree core.hooksPath`로 훅 발화,
+  F-034 배너가 out-of-root 커밋에서도 관측, 메인 워크트리의 `--show-origin --get
+  core.hooksPath`가 전후 byte-identical, `config.worktree` 정확히 1개 신설; F-2
+  core.bare/core.worktree 마이그레이션은 **전제 단언**으로 측정 — 둘 다 비어 있으면 해당 없음).
+  차등: 세 훅 본문 전부를 no-op 스텁으로 변이 → `rc=0 (expected non-zero) hooksPath='.husky/_'
+  banner=0 rule=0`, 복원 후 원상태. **작업 중 발생한 사고와 그 흡수**는 신규 P3-146에 별도 등재.
+- [x] P2-104 — **config 조건 분기**를 하네스가 반증할 수 없다: 이번 웨이브가 도입·수정한 세 분기가
   전부 미측정이다 — (a) F-030 수정의 `react.root:"."` 경로(상향 탐색이 첫 시도에서 성립하는 형상),
   (b) `react.typescript=false`(espree 기본 파서 배선), (c) `java.testTask`가 기본값과 **다른** 이름인
   경우. 하네스는 `root=frontend/backend` + `typescript=true` + 기본 태스크명이라는 **한 형상**만 돈다.
   세 분기 모두 이번에 신설/수정된 코드 경로이므로 "기존에 돌던 것"이라는 방어도 없다. done-when: 세
   분기를 픽스처 변형으로 추가하거나(비용: 형상마다 gradle/npm 왕복), 최소한 각 분기의 산출물 렌더
   결과를 오프라인으로 단언. 출처: 2026-08-14 하네스 자기-스코프 선언(등재만).
-- [ ] P2-105 — Next 특화 카탈로그 룰이 downstream에서 미검증: 하네스는 `ax/no-upward-layer-import`
+  → **closed 2026-08-18**: config 조건 분기 3종 **전부** 닫혔다.
+  **(c) `java.testTask` 대체 이름** → shape 2(`stacks=["java"]`, `testTask="verifyAxPractices"`),
+  신규 `A16-alttask`(하드코딩된 기본 이름이 아니라 **설정된 이름**으로 태스크가 discoverable하고
+  기본 이름은 부재함을 확인, 심은 java 위반이 그 태스크에 의해 거부되며 probe 클래스명이 출력에
+  명시됨) · `A17-alttask`(수정 후 커밋 성공 + `build/test-results/<설정한 이름>/*.xml`에
+  tests > 0). **여기서 실결함 F-035 발견·봉합**: `java-gradle-testpractices` 마커가
+  `tasks.register<Test>("testPractices")`를 하드코딩하는데 훅은 `java.testTask`를 해석했다(F-032)
+  → 기본값이 아닌 이름이면 **모든 java 커밋이 `Task 'x' not found in root project`로 죽고 게이트는
+  한 번도 안 돈다**. 형제 스킬의 default-then-override 패턴(변수 + `ax:if`/`ax:subst`)으로 봉합,
+  키 부재/기본값일 때 **byte 동일** 렌더.
+  **(a) `react.root:"."`** → shape 3(`frontend/`를 repo 루트로), 신규 `A18-rootdot`(심은
+  upward-import 위반이 BLOCK되고 배너가 `react=.`를 표시, 룰이 명시됨) · `A19-rootdot`(pass-after —
+  eslint `results > 0 AND errorCount == 0`; srcDir glob이 다른 디렉터리 기준으로 풀리므로
+  "매치 0"이 이 형상에서 살아있는 위장 형태다) · `A20-rootdot-skip`(react 확장자가 아닌 파일은
+  스코프-스킵되지만 F-034 배너는 남는다). 이전에 **죽어 있던 코드 경로 두 개**를 선택한다:
+  `findAxConfig()`의 첫 반복 hit, 훅의 `[ "$REACT_ROOT" = "." ]` 확장자 프록시.
+  **(b) `react.typescript=false`** — **살아있는 결함이었고 봉합했다**. `ax:if config.react.typescript`가
+  거짓이면 `languageOptions` 자체가 사라져 ESLint 9의 espree가 JSX를 못 읽는다(실측: `.jsx` →
+  `{"fatal":true,"message":"Parsing error: Unexpected token <"}`). 즉 **비-TS React 프로젝트에서
+  게이트가 파일을 한 줄도 파싱 못 했다.** 마커 DSL에 **`ax:else`**를 도입(부정 `ax:if !x` 대신
+  else를 택한 근거: 이 결함의 형상이 "false 분기를 아무도 저술하지 않았다"이므로 두 분기를
+  **조건에 붙들어 매는** 쪽이 재발을 막는다)해 false 분기가
+  `languageOptions: { parserOptions: { ecmaFeatures: { jsx: true } } } }`를 넣게 했다. 차등:
+  수정 후 클린 파일 exit 0, 위반 파일에서 `ax/no-upward-layer-import` **와**
+  `ax/no-falsy-numeric-render` 발화(파싱만 되는 게 아니라 JSX AST를 걷는 룰이 실제로 돈다).
+  TS=true 렌더 **byte 동일**(54개 렌더 중 정확히 한 줄만 차이).
+  ⚠️ (ii) `ecmaFeatures` 무조건 삽입안의 부작용 주장(`<T>expr` 깨짐)은 **측정으로 반증**됐다 —
+  typescript-eslint는 JSX를 **파일 확장자**로 판단한다. 그럼에도 (ii)를 기각한 이유는 그 거짓
+  우려가 아니라 **TS 렌더 byte 동일성 제약**이다. 이 구분을 기록한다.
+  **결함이 어떻게 출하됐나(한 줄)**: 이 조건 분기는 **저술 수준**에서만 검증됐고(`A9-eval`이 마커
+  트리를 렌더), **실행 수준에서는 한 번도 안 돌았다**. 그리고 그걸 잡았어야 할 스킬 §5 필수
+  probe가 **JSX 없는 파일**이라, React 파일을 한 줄도 못 읽는 게이트에 대해 **통과를 보고했다**.
+  **잔여(open으로 등재)**: 하네스 픽스처가 TS 전용이라 `typescript=false`를 E2E로 행사하는 standing
+  gate가 없다 — 증거는 수동 소비자 실행뿐. guard [112] check 10은 `bash`/`sh`만 렌더하므로 js
+  산출물의 렌더 가능성은 lint 구조 검사로만 커버된다.
+- [x] P2-105 — Next 특화 카탈로그 룰이 downstream에서 미검증: 하네스는 `ax/no-upward-layer-import`
   **하나**로 react 게이트의 발화를 증명한다(A1/A2). `no-god-route` · `no-route-client-data-fetching` ·
   `no-server-state-in-local-state` 같은 app-router 의존 룰은 픽스처의 Next 앱에서 **한 번도 발화된 적이
   없다**. P2-81/P2-87이 닫은 것은 그 룰들의 **문서 도달성**이지 downstream 발화가 아니므로, "룰이
   소비 프로젝트에서 실제로 돈다"는 주장은 아직 근거가 없다. done-when: app-router 위반 1건을 픽스처에
   심어 A1형 단언 추가(출력에서 룰 id 확인). 출처: 2026-08-14 하네스 커버리지 실측(등재만).
-- [ ] P2-106 — guard **[114]의 위조저항이 선례보다 약하다**: 49th guard
+  → **closed 2026-08-18**: `A11-route`가 107줄 `"use client"` route 파일 하나로 **세 룰을 동시에**
+  트립함을 확인 — `ax/no-god-route` · `ax/no-route-client-data-fetching` ·
+  `ax/no-server-state-in-local-state`(전부 플러그인에서 `recommended`+`'error'`임을 확인), 각 룰
+  id를 커밋 출력에서 개별 검사한다(A1/A2가 확인하던 `no-upward-layer-import`는 import 문자열만
+  보므로 route 감지 + `"use client"` directive를 요구하는 이 세 룰의 발화를 대변하지 못했다).
+  `A12-route`가 위반 제거 후 pass-after(commits)를 확인한다. 차등: `--artifact-override`로 세
+  룰 id를 손으로 골라 뺀 config를 주입 → `rc=0 (expected non-zero)`이면서 **A1/A2는 PASS 유지** =
+  기존 13개 단언이 이 클래스를 **볼 수 없었음**을 증명.
+- [x] P2-106 — guard **[114]의 위조저항이 선례보다 약하다**: 49th guard
   (`completion_checklist_recency_guard.sh` — 2515줄·14검사)는 여러 독립 판별자로 audit 로그 위조를
   막는다. [114]는 그중 **산출물 digest 재계산 1종**으로 대체했다(SKILL.md에서 마커 본문을 다시 읽어
   sha256을 재계산·대조 — `--artifact-override` run이 릴리스 증거로 오인될 수 없게 만드는 핵심
@@ -786,6 +905,28 @@ tier 배정 근거(기존 관례 대조): 이 결함 클래스는 "**검증 표�
   fingerprint 결박을 추가하거나 (b) 이 게이트의 위협모델(릴리스 버전을 올리는 maintainer 자신)이 그
   판별자들을 요구하지 않는다는 판정을 근거와 함께 기록하고 닫는다. 출처: 2026-08-14 GH #92 설계
   자기평가(등재만).
+  → **closed 2026-08-18**: 49th guard 대조로 갭 **5+1건**을 식별·봉합, 각각 pre-fix 통과 →
+  post-fix BLOCK 실측:
+  - **G1** 스키마 핀 부재 → 손타이핑 라인 + 발명한 키가 통과했다. `AUDIT_SCHEMA_KEYS` 8필드 정확일치
+    강제 + **pushed sha의 하네스 `entry = {…}` 리터럴에서 핀을 파싱해 교차검증**(하드코딩 스키마가
+    하네스와 조용히 갈라지는 것을 막는다).
+  - **G2(가장 중요)** — 마커가 0개면 `{} == {}`로 "digest 일치" 판정이 성립해 **이 게이트의 유일한
+    이빨이 공허**해질 수 있었다. `if not recomputed: BLOCK`.
+  - **G2b** SKILL.md `git show` 실패가 조용한 `continue`로 삼켜져 recompute 범위가 말없이 축소될 수
+    있었다. BLOCK.
+  - **G3** `git replace`로 pushed sha를 version-미변경 커밋에 겨눠 "gate does not fire" exit 0
+    완전 우회(로그를 읽지도 않는다)가 가능했다. `refs/replace/*` 전면 거부 + `GIT_NO_REPLACE_OBJECTS=1`.
+  - **G4** `GIT_DIR=<빈 decoy>` **한 줄**로 "not a plugin tree" exit 0 완전 우회가 가능했다.
+    `GIT_*`/`PYTHON*` family sweep + 키워드 전용 재확인 후 잔존 시 BLOCK.
+  - **G5** fixture 모드에서 `expected_head.txt` 부재 시 `""`와 로그의 `""`가 등호 성립해 통과했다.
+    BLOCK.
+  **넣지 않은 검사와 근거**: 값 형태 핀(이미 게이트가 도출한 값과 등호 비교되므로 약한 재진술) ·
+  `harness` 값(자기주장) · timestamp 타당성(아무것에도 바인딩 안 됨) · 로그 심링크/권한(경로를
+  돌릴 수 있는 자는 진짜 파일에도 append 가능) · git content filter(live에서 워킹 파일을 안 읽음) ·
+  run 전 구간 tree sampling(1초 미만 오프라인 감사).
+  **남는 강도 차이(정직)**: privileged re-exec 없음(`$BASH_ENV` 페이로드는 여전히 앞선다) · 훅
+  자신과 `pre-push-lib.sh`는 자기인증 불가 · `git`/`python3` ambient · 대조할 두 번째 산출물 없음 ·
+  키 없음. → **잔여의 종류는 그대로**이며, 닫은 것은 싸고 실측된 형상들이다.
 - [x] P2-109 — **closed 2026-08-15 (외부 adversarial critic 잔여 종결)**: guard **[112]**가 malformed
   마커를 통과시키던 결함 봉합 — `ax_markers.py`에 `MISSING_REQUIRED_ATTR`(id/path/kind 필수 속성
   부재) · `UNREGISTERED_KIND` · `INVALID_PATH_FOR_KIND` · `UNKNOWN_ATTR`(closed vocabulary 밖 속성) ·
@@ -921,7 +1062,7 @@ tier 배정 근거(기존 관례 대조): 이 결함 클래스는 "**검증 표�
   배열 존재)를 먼저 확정한 뒤 negative 스캔; `ErrorNoStacktraceLeakTest`는 두 케이스
   (`/practices/demo/bad`→400, `/practices/demo/missing`→404)를 `HttpExtract.pathAt(r, <status>,
   "title", ...)`로 status를 먼저 고정한 뒤 negative 스캔. 출처: 2026-08-17 P2-117 종결 라운드.
-- [ ] P2-119 — **잔여(정직 등재)**: guard [116]이 강제하는 축은 `*TestSupport.java`가 응답에서
+- [x] P2-119 — **잔여(정직 등재)**: guard [116]이 강제하는 축은 `*TestSupport.java`가 응답에서
   **직접** 값을 읽는 경로뿐이다. `HttpExtract.path`/`pathAt`는 terminal `.extract()`로 얻은
   `ExtractableResponse`를 그 자리에서 검증·소비하지만, TestSupport가 그 `ExtractableResponse`(또는
   `Response`)를 **호출자**(Compliance/IT 테스트)에게 그대로 반환하는 경로가 있고, 그 호출자가 그
@@ -940,6 +1081,26 @@ tier 배정 근거(기존 관례 대조): 이 결함 클래스는 "**검증 표�
   먼저 확정한 뒤 진행한다. done-when: 호출자 측 blind 읽기의 실측 규모(census)를 내고, 같은 레시피를
   호출자 레이어까지 확장하거나 `HttpExtract`가 검증된 값만 반환하도록 TestSupport 반환 타입을 좁힌다.
   출처: 2026-08-17 P2-117 종결 라운드 → 2026-08-17 fable5 적대적 검토 결함4 봉합(seed census 등재).
+  → **closed 2026-08-18**: 호출자 측 blind read를 **5가지 정의로 측정**해 정의가 결과를 지배함을
+  실측 — 좁은 리터럴 `.extract().path(` 체인 **209사이트/91파일** → guard [116] 탐지자 A/B 전체
+  shape로 넓힌 정의 **1710사이트/135파일** → 문장 단위 재계수 **1413** → 응답객체(단일 handoff)
+  단위 **561** → **origin-resolved 333, dedup 후 278**. **blind는 shape 매칭의 약 17%**뿐이므로
+  나머지 1651건을 옮기는 것은 순이득 0에 diff만 키운다고 판단했다(정의를 넓힐수록 다수가 이미
+  `HttpExtract`를 경유한 정당한 handoff였다). **278건 전건 봉합, 남은 blind 0.** guard [116]에
+  탐지자 **(C)(D)** 추가 — **(C)가 (D)의 soundness 전제**다: TestSupport의 응답 export를
+  금지하면 비-TestSupport의 응답 객체는 그 파일에서 만들어진 것뿐이므로 "서술됐는가"가 **파일 내
+  결정 가능**해진다(P2-117이 "단언이 다른 파일에 있을 수 있다"며 남긴 반론의 기계적 해소).
+  detector별 격리 fixture로 단독 anchor 1→0 flip 실증.
+  **seed 프레이밍 정정**: P2-119이 명시한 잔여(TestSupport가 `ExtractableResponse`를 그대로
+  반환)는 실측 **단 1개 메서드**뿐이었고, 실제 277건은 **호출자 자신의 체인·자기 파일 private
+  helper**에서 발생했다 — 같은 뿌리, 다른 축.
+  **레인이 스스로 잡은 실수 2건**도 기록: helper monomorphic 오분류 14/27(같은 문장만 봐서 두
+  문장 형태를 놓침, `testAdditiveFacts` 실패로 발각) · idempotency replay라 201이 아니라 200인
+  사이트.
+  **잔여(open)**: inter-procedural 파라미터 흐름 6사이트(call site 성질이라 추적 거부) ·
+  nested/anonymous class scope(실측 0사이트지만 실재하는 edge) · cross-file 비-TestSupport
+  helper(fail-closed) · `.asString()`/`getBody()` raw 읽기 · "단언된 status가 옳은 status인지"는
+  검사 안 함.
 - [x] P2-120 — **closed 2026-08-17 (단일 writer 흡수 + guard [117])**: 프로세스 전역 static
   `RestAssured.port`를 대입하던 **파일 139개**(그중 86개는 `useRandomPort` **정의**를 보유 — 정의
   본문 자체가 대입문 1개를 담는다 — 나머지 53개는 정의 없이 직접 대입문만 보유) + `useRandomPort`
@@ -982,6 +1143,38 @@ tier 배정 근거(기존 관례 대조): 이 결함 클래스는 "**검증 표�
   **P3-144와의 관계 — closed하지 않는다**: 이 항목은 P3-144의 두 생존 후보 중 "포트 오조준"을
   구조적으로 제거했을 뿐, 원 flake(P3-144)의 트리거는 여전히 미확정이다(P3-144 행 참조). 출처:
   2026-08-17 P2-120 종결 라운드.
+- [ ] P2-121 — `react-plugin-dep` 마커의 설치 위치가 `base=repo`다: `ax-install-react-enforcement`가
+  `npm i -D file:<plugin>`을 **repo 루트**에서 실행해 ax 플러그인이 루트 `package.json`에 들어간다
+  (형제 `react-ts-eslint-dep`는 `base=react.root`). 결과: `react.root` 안에서만 `npm ci`하는 통상
+  CI에서는 플러그인이 설치되지 않고, 게이트는 node의 상향 module 탐색 덕에만 우연히 동작한다 —
+  `react.root != "."`인 다단 워크스페이스에서 그 상향 탐색이 끊기면 무증상으로 게이트가 사라질 수
+  있다. **tier 판단**: P2 — P2-102~106과 같은 클래스("검증 표면이 소비 지점을 못 본다"), 설치
+  스킬 산출물의 BLOCKING 결함은 이 원장의 관례상 P0가 아니라 P2에 배정된다(카탈로그 자체의 live
+  defect가 아니라 소비자에게 나가는 설치 산출물의 결함이므로). done-when: `base=react.root`로
+  정합화하거나(다른 산출물과 일관), 또는 repo 루트가 올바른 설치 지점이라는 의도적 설계 근거를
+  명시하고 A9-eval류 렌더 단언으로 고정. 출처: 2026-08-18 클린룸 인간 설치 재점검(등재만).
+- [ ] P2-122 — `ax-install-hooks` §A0 F-2 preflight 산문이 **통상 케이스에서 오발화한다**: "if
+  EITHER prints a value, migrate"라 적혀 있으나 `git init`은 **모든 통상 체크아웃**에
+  `core.bare = false`를 쓴다 → 문자 그대로 따르면 통상(non-worktree) 케이스에서도 마이그레이션이
+  발화하고, 그 마이그레이션이 `core.bare true`를 `config.worktree`에 써 **비-bare repo를 bare라
+  잘못 선언**한다. 하네스 단언(`A15-worktree`)은 올바른 조건(`core.bare == true` OR
+  `core.worktree` 존재)을 쓰므로 이 결함을 하네스가 잡지 못한다 — 산문을 그대로 따르는 인간
+  설치자만 재현한다. **tier 판단**: P2 — 설치 스킬 산문의 결함이고 P2-103과 같은 SKILL.md §A0
+  영역이지만, P2-103의 done-when(세 배선을 픽스처로 행사)이 잡지 못한 **별개의 산문 결함**이라
+  분리 등재한다. done-when: §A0의 preflight 조건문을 하네스가 이미 쓰는 조건으로 정정. 출처:
+  2026-08-18 클린룸 인간 설치 재점검(등재만).
+- [ ] P2-123 — husky 분기(Branch B)의 `.husky/_/h` 셰임이 **shebang을 버린다**: 훅 본문은
+  `set -euo pipefail`로 시작하는데(다른 두 분기와 동일 본문), husky의 shim이 `sh -e "$s"`로
+  실행해 shebang line을 무시한다. macOS `/bin/sh`는 `-o pipefail`을 받아들이지만(실측·매 실행
+  인쇄) POSIX `/bin/sh`(dash 등)는 `-o pipefail`을 모른다. SKILL.md는 "shebang 포함 무수정
+  붙여넣기"라 적어 이 플랫폼 의존성을 감춘다 — `verify-downstream.sh`의 `A13-husky` 자체는 이미
+  "husky's `_/h` shim ends in `sh -e \"$s\"`, so the body runs under the PLATFORM /bin/sh with
+  its shebang DISCARDED"를 실행 시점에 출력하지만, SKILL.md 산문은 아직 이 사실과 모순된다.
+  **tier 판단**: P2 — P2-103이 배선 자체(A13-husky 신설)는 검증했으나 **SKILL.md 산문의 정확성**은
+  별개 축이라 분리 등재한다(A13-husky가 런타임에 출력하는 "honest limit" 메시지가 사실 원천이고,
+  산문은 아직 그것과 어긋난다). done-when: SKILL.md의 "shebang included" 주장을 정정하고, dash
+  비호환 문법(`pipefail` 등)을 husky 분기에서 dash-호환 형태로 재작성하거나 명시적 shebang 강제
+  방법을 처방. 출처: 2026-08-18 클린룸 인간 설치 재점검(등재만).
 
 ## P3 — industry-niche deferrals (generic 아님 — 낮은 우선순위)
 
@@ -1346,6 +1539,18 @@ tier 배정 근거(기존 관례 대조): 이 결함 클래스는 "**검증 표�
   toolchain preflight의 대상도 아니다: bash 자체는 이미 `baseline` 요구사항이고, 문제는 `bash`
   유무가 아니라 **어느 경로의 bash를 찾을 것인가**다). 출처: 2026-08-17 P2-120 종결 라운드 회귀
   검증.
+- [x] P3-146 — **closed 2026-08-18 (등재 즉시 — 교훈으로 등재, P2-103이 기술적 처방을 이미 흡수)**:
+  P2-103 husky/lefthook 배선 프로토타이핑 중 `lefthook install`이 **유효** `core.hooksPath`를
+  따라가 저장소 밖 사용자 전역 `~/.codex/git-hooks/pre-commit`을 덮어썼다 — lefthook의 `.old`
+  백업에서 복원·검증 완료(피해 없음). 하네스는 이제 repo-local `core.hooksPath`를 **먼저** 설정한
+  뒤에만 `lefthook install`을 실행하고, `A14-lefthook`이 호출자 전역 hooks 디렉터리 불변
+  (`--show-origin --get core.hooksPath`가 byte-identical 전후)을 단언해 재발을 하네스 수준에서
+  차단한다(P2-103 행 참조). **이 행에 남은 done-when은 없다** — 등재 목적은 카탈로그 산출물의
+  결함이 아니라 **방법론 위험**(훅 설치 도구는 전역 git 설정을 따라가므로, 격리 없이 프로토타이핑하면
+  사용자 환경을 건드린다)을 기록으로 남기는 것이다. **tier 판단**: P3 — P0/P1/P2는 카탈로그·설치
+  산출물의 correctness signature를 다루는데 이 행은 **이 저장소의 작업 관행에 대한 교훈**이라
+  성격이 다르다; P3-145(같은 라운드, "등재 즉시 문서화로 해소" 선례)와 동형으로 즉시 closed 처리한다.
+  출처: 2026-08-18 P2-103 봉합 중 발생.
 
 ## P4 — trigger-bound scope_deferrals (수렴 분모 제외; by-design)
 

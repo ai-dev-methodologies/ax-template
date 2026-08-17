@@ -41,7 +41,7 @@ class CorrectionRefireComplianceTest {
     private ExtractableResponse<Response> publish(String subjectRef, String content) {
         return given().header("Authorization", "Bearer " + member).header("Content-Type", "application/json")
             .body("{\"content\":\"" + content + "\"}")
-        .when().post("/api/correction-refire/subjects/" + subjectRef + "/publish").thenReturn().then().extract();
+        .when().post("/api/correction-refire/subjects/" + subjectRef + "/publish").thenReturn().then().statusCode(201).extract();
     }
 
     private ExtractableResponse<Response> ack(String subjectRef, int version) {

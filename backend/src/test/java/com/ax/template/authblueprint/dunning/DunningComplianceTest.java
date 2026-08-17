@@ -81,7 +81,9 @@ class DunningComplianceTest {
     void ladder_advancesOneWay_exactlyOnce_suspendedTerminal() {
         String id = openCase("INV-LADDER", LocalDate.now(ZoneOffset.UTC).minusDays(45), "100.00");
 
-        assertThat(advance(id, "REMINDER").jsonPath().getString("stage")).isEqualTo("NOTICE");
+        ExtractableResponse<Response> toNotice = advance(id, "REMINDER");
+        assertThat(toNotice.statusCode()).isEqualTo(200);
+        assertThat(toNotice.jsonPath().getString("stage")).isEqualTo("NOTICE");
 
         // re-emitting an already-reached rung (stale fromStage, case not yet terminal)
         // → 409 DUNNING_STAGE_ALREADY_REACHED
@@ -89,8 +91,12 @@ class DunningComplianceTest {
         assertThat(stale.statusCode()).isEqualTo(409);
         assertThat(stale.jsonPath().getString("code")).isEqualTo("DUNNING_STAGE_ALREADY_REACHED");
 
-        assertThat(advance(id, "NOTICE").jsonPath().getString("stage")).isEqualTo("FINAL_NOTICE");
-        assertThat(advance(id, "FINAL_NOTICE").jsonPath().getString("stage")).isEqualTo("SUSPENDED");
+        ExtractableResponse<Response> toFinalNotice = advance(id, "NOTICE");
+        assertThat(toFinalNotice.statusCode()).isEqualTo(200);
+        assertThat(toFinalNotice.jsonPath().getString("stage")).isEqualTo("FINAL_NOTICE");
+        ExtractableResponse<Response> toSuspended = advance(id, "FINAL_NOTICE");
+        assertThat(toSuspended.statusCode()).isEqualTo(200);
+        assertThat(toSuspended.jsonPath().getString("stage")).isEqualTo("SUSPENDED");
 
         // advancing past SUSPENDED → 409 DUNNING_LADDER_TERMINAL
         ExtractableResponse<Response> terminal = advance(id, "SUSPENDED");

@@ -91,8 +91,7 @@ class CommerceOrderComplianceTest {
         CommerceOrderTestSupport.addItem(memberToken, orderId, "sku-a", "Widget A", 500L, 1);
 
         // Submit the order
-        CommerceOrderTestSupport.submit(memberToken, orderId, 500L, 500L, 0L)
-            .response().then().statusCode(200);
+        CommerceOrderTestSupport.submit(memberToken, orderId, 500L, 500L, 0L);
 
         // Now try to add another item — must be 409 ORDER_NOT_EDITABLE
         String addBody = "{\"skuId\":\"sku-b\",\"nameAtAdd\":\"Widget B\",\"unitPriceAtAdd\":300,\"quantity\":1}";
@@ -119,14 +118,11 @@ class CommerceOrderComplianceTest {
         CommerceOrderTestSupport.addItem(memberToken, orderId, "sku-x", "Item X", 100L, 1);
 
         // First submit — must succeed
-        CommerceOrderTestSupport.submit(memberToken, orderId, 100L, 100L, 0L)
-            .response().then().statusCode(200);
+        CommerceOrderTestSupport.submit(memberToken, orderId, 100L, 100L, 0L);
 
         // Second submit — SUBMITTED → SUBMITTED is not in ALLOWED; must return 409
-        ExtractableResponse<Response> resp2 = CommerceOrderTestSupport.submit(memberToken, orderId, 100L, 100L, 0L);
-        assertThat(resp2.statusCode())
-            .as("re-submitting a SUBMITTED order must return 409 (ORDER_INVALID_TRANSITION)").isEqualTo(409);
-        String code = resp2.jsonPath().getString("code");
+        String code = CommerceOrderTestSupport.submitExpecting(
+            memberToken, orderId, 100L, 100L, 0L, 409, "code");
         assertThat(code).as("error code must be ORDER_INVALID_TRANSITION").isEqualTo("ORDER_INVALID_TRANSITION");
     }
 
@@ -134,8 +130,7 @@ class CommerceOrderComplianceTest {
     void cancel_submittedOrder_succeeds() {
         String orderId = CommerceOrderTestSupport.createCart(memberToken, "KRW");
         CommerceOrderTestSupport.addItem(memberToken, orderId, "sku-c", "Item C", 200L, 2);
-        CommerceOrderTestSupport.submit(memberToken, orderId, 400L, 400L, 0L)
-            .response().then().statusCode(200);
+        CommerceOrderTestSupport.submit(memberToken, orderId, 400L, 400L, 0L);
 
         // SUBMITTED → CANCELLED is allowed
         ExtractableResponse<Response> cancelResp = given()
@@ -159,10 +154,8 @@ class CommerceOrderComplianceTest {
         .then().statusCode(200);
 
         // CANCELLED → SUBMITTED is terminal — must return 409
-        ExtractableResponse<Response> submitResp = CommerceOrderTestSupport.submit(memberToken, orderId, 0L, 0L, 0L);
-        assertThat(submitResp.statusCode())
-            .as("submitting a CANCELLED order must return 409 (ORDER_INVALID_TRANSITION)").isEqualTo(409);
-        String code = submitResp.jsonPath().getString("code");
+        String code = CommerceOrderTestSupport.submitExpecting(
+            memberToken, orderId, 0L, 0L, 0L, 409, "code");
         assertThat(code).as("error code must be ORDER_INVALID_TRANSITION").isEqualTo("ORDER_INVALID_TRANSITION");
     }
 
@@ -176,8 +169,7 @@ class CommerceOrderComplianceTest {
         String itemId = CommerceOrderTestSupport.addItem(memberToken, orderId, "sku-ff", "Fulfillable", 100L, 5);
 
         // H1 fix: must submit before assigning fulfillment
-        CommerceOrderTestSupport.submit(memberToken, orderId, 500L, 500L, 0L)
-            .response().then().statusCode(200);
+        CommerceOrderTestSupport.submit(memberToken, orderId, 500L, 500L, 0L);
 
         // Assign fulfillment: 2 to address A, 3 to address B (total = 5 = item.quantity)
         String body = String.format(
@@ -202,8 +194,7 @@ class CommerceOrderComplianceTest {
         String itemId = CommerceOrderTestSupport.addItem(memberToken, orderId, "sku-nc", "NcItem", 100L, 5);
 
         // H1 fix: must submit before assigning fulfillment
-        CommerceOrderTestSupport.submit(memberToken, orderId, 500L, 500L, 0L)
-            .response().then().statusCode(200);
+        CommerceOrderTestSupport.submit(memberToken, orderId, 500L, 500L, 0L);
 
         // Assign fulfillment: 2+2=4 but item quantity=5 → must fail with 422
         String body = String.format(
@@ -290,8 +281,7 @@ class CommerceOrderComplianceTest {
     void fulfillment_reassign_replacesNotDoubles() {
         String orderId = CommerceOrderTestSupport.createCart(memberToken, "KRW");
         String itemId = CommerceOrderTestSupport.addItem(memberToken, orderId, "sku-h2", "H2 Item", 200L, 5);
-        CommerceOrderTestSupport.submit(memberToken, orderId, 1000L, 1000L, 0L)
-            .response().then().statusCode(200);
+        CommerceOrderTestSupport.submit(memberToken, orderId, 1000L, 1000L, 0L);
 
         String body = String.format(
             "{\"groups\":["
@@ -336,8 +326,7 @@ class CommerceOrderComplianceTest {
     void fulfillment_phantomOrderItemId_returns422() {
         String orderId = CommerceOrderTestSupport.createCart(memberToken, "KRW");
         CommerceOrderTestSupport.addItem(memberToken, orderId, "sku-h3", "H3 Item", 100L, 3);
-        CommerceOrderTestSupport.submit(memberToken, orderId, 300L, 300L, 0L)
-            .response().then().statusCode(200);
+        CommerceOrderTestSupport.submit(memberToken, orderId, 300L, 300L, 0L);
 
         // Reference a random UUID that does not belong to this order
         String phantomId = UUID.randomUUID().toString();
@@ -372,9 +361,7 @@ class CommerceOrderComplianceTest {
         long passedSub = 7000L;
         long passedTax = 500L;
 
-        ExtractableResponse<Response> submitResp = CommerceOrderTestSupport.submit(
-            memberToken, orderId, passedTotal, passedSub, passedTax);
-        submitResp.response().then().statusCode(200);
+        CommerceOrderTestSupport.submit(memberToken, orderId, passedTotal, passedSub, passedTax);
 
         // Read back the order — totals must equal exactly what was passed in
         ExtractableResponse<Response> getResp = given()
@@ -451,8 +438,7 @@ class CommerceOrderComplianceTest {
     void updateQty_afterSubmit_returns409() {
         String orderId = CommerceOrderTestSupport.createCart(memberToken, "KRW");
         String itemId = CommerceOrderTestSupport.addItem(memberToken, orderId, "sku-upd", "Update Item", 200L, 1);
-        CommerceOrderTestSupport.submit(memberToken, orderId, 200L, 200L, 0L)
-            .response().then().statusCode(200);
+        CommerceOrderTestSupport.submit(memberToken, orderId, 200L, 200L, 0L);
 
         // PATCH qty on submitted order — must be 409
         ExtractableResponse<Response> patchResp = given()

@@ -60,6 +60,7 @@ class GeoQueryComplianceTest {
         assertThat(register("bad-lon-lo", "0", "-181").statusCode()).isEqualTo(422);
 
         ExtractableResponse<Response> bad = register("bad-lat-hi", "91", "0");
+        assertThat(bad.statusCode()).isEqualTo(422);
         assertThat(bad.jsonPath().getString("code")).isEqualTo("GEO_INVALID_INPUT");
     }
 
@@ -104,15 +105,23 @@ class GeoQueryComplianceTest {
         double centerLat = 20.0;
         double centerLon = 20.0;
         // two points at the EXACT same location — distance 0 from center — tie broken by id.
-        String idA = register("tie-a", String.valueOf(centerLat + 0.001), String.valueOf(centerLon + 0.001))
-            .jsonPath().getString("id");
-        String idB = register("tie-b", String.valueOf(centerLat + 0.001), String.valueOf(centerLon + 0.001))
-            .jsonPath().getString("id");
+        ExtractableResponse<Response> tieA =
+            register("tie-a", String.valueOf(centerLat + 0.001), String.valueOf(centerLon + 0.001));
+        assertThat(tieA.statusCode()).isEqualTo(201);
+        String idA = tieA.jsonPath().getString("id");
+        ExtractableResponse<Response> tieB =
+            register("tie-b", String.valueOf(centerLat + 0.001), String.valueOf(centerLon + 0.001));
+        assertThat(tieB.statusCode()).isEqualTo(201);
+        String idB = tieB.jsonPath().getString("id");
 
-        var first = search(String.valueOf(centerLat), String.valueOf(centerLon), "1000")
-            .jsonPath().getList("point.id");
-        var second = search(String.valueOf(centerLat), String.valueOf(centerLon), "1000")
-            .jsonPath().getList("point.id");
+        ExtractableResponse<Response> firstSearch =
+            search(String.valueOf(centerLat), String.valueOf(centerLon), "1000");
+        assertThat(firstSearch.statusCode()).isEqualTo(200);
+        var first = firstSearch.jsonPath().getList("point.id");
+        ExtractableResponse<Response> secondSearch =
+            search(String.valueOf(centerLat), String.valueOf(centerLon), "1000");
+        assertThat(secondSearch.statusCode()).isEqualTo(200);
+        var second = secondSearch.jsonPath().getList("point.id");
 
         assertThat(first).as("repeated identical query returns the identical ordered list")
             .containsExactlyElementsOf(second);

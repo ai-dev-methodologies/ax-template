@@ -70,7 +70,7 @@ class MeceComplianceTest {
         return given().header("Authorization", "Bearer " + member).header("Content-Type", "application/json")
             .body("{\"attributeValue\":\"" + attributeValue + "\",\"actor\":\"tester\",\"reason\":\"auto\"}")
         .when().post("/api/mece/schemes/" + schemeKey + "/items/" + itemRef + "/classify-by-attribute")
-            .thenReturn().then().extract();
+            .thenReturn().then().statusCode(201).extract();
     }
 
     private ExtractableResponse<Response> reclassify(String schemeKey, String itemRef, String category, String reason) {

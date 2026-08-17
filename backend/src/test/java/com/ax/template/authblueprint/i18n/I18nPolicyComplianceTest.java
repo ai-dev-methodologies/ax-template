@@ -72,6 +72,7 @@ class I18nPolicyComplianceTest {
         // The string returned over HTTP is sourced from the bundle, per locale.
         Response en = given().header("Accept-Language", "en-US")
                 .when().get("/api/i18n/greeting");
+        assertThat(en.statusCode()).isEqualTo(200);
         assertThat(en.jsonPath().getString("greeting")).isEqualTo("Hello");
 
         // Key-set PARITY across every supported_locales bundle — a missing key in any
@@ -159,6 +160,7 @@ class I18nPolicyComplianceTest {
         Response number = given().header("Accept-Language", "en-US")
                 .queryParam("amount", 12345678).queryParam("type", "number")
                 .when().get("/api/i18n/format");
+        assertThat(number.statusCode()).isEqualTo(200);
         assertThat(number.jsonPath().getString("formatted")).isEqualTo("12,345,678");
     }
 
@@ -202,6 +204,7 @@ class I18nPolicyComplianceTest {
         return given().header("Accept-Language", acceptLanguage)
                 .queryParam("count", count)
                 .when().get("/api/i18n/plural")
+                .then().statusCode(200).extract().response()
                 .jsonPath().getString("message");
     }
 

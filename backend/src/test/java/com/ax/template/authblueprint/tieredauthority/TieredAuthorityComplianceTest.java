@@ -106,7 +106,7 @@ class TieredAuthorityComplianceTest {
     void decisionRecord_isImmutableSnapshot_survivesLaterReconfiguration() {
         assertThat(configure("[{\"minAmount\":0,\"minDeciderLevel\":2}]").statusCode()).isEqualTo(201);
         int versionAtDecision = given().header("Authorization", "Bearer " + member)
-            .when().get("/api/tiered-authority/config").then().extract().path("tableVersion");
+            .when().get("/api/tiered-authority/config").then().statusCode(200).extract().path("tableVersion");
 
         ExtractableResponse<Response> decision = decide(amt(777), 2, "approved-v1");
         assertThat(decision.statusCode()).isEqualTo(201);

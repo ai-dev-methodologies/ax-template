@@ -53,7 +53,7 @@ class VarianceComplianceTest {
             .body("{\"subject\":\"" + subject + "\",\"standardValue\":" + standard
                 + ",\"actualValue\":" + actual + ",\"lowerTolerance\":" + lower
                 + ",\"upperTolerance\":" + upper + "}")
-        .when().post("/api/variance-gate/appraisals").thenReturn().then().extract();
+        .when().post("/api/variance-gate/appraisals").thenReturn().then().statusCode(201).extract();
     }
 
     private String appraiseId(String subject, String standard, String actual, String lower, String upper) {

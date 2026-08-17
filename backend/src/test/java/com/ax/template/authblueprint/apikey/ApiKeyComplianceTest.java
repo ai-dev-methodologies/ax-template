@@ -82,7 +82,7 @@ class ApiKeyComplianceTest {
         String userId = given()
             .header("Authorization", "Bearer " + token)
         .when().get("/api/api-keys/scope-probe/whoami")
-        .then().extract().path("userId");
+        .then().statusCode(200).extract().path("userId");
 
         String plaintext = createKey(token, "[\"READ\"]");
 
@@ -125,7 +125,7 @@ class ApiKeyComplianceTest {
         String userId = given()
             .header("Authorization", "Bearer " + token2)
         .when().get("/api/api-keys/scope-probe/whoami")
-        .then().extract().path("userId");
+        .then().statusCode(200).extract().path("userId");
         String expiredPlaintext = ApiKeyHasher.newPlaintext();
         ApiKey expired = ApiKey.builder()
             .ownerUserId(userId)

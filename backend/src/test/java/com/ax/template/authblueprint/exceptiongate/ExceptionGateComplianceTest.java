@@ -103,7 +103,9 @@ class ExceptionGateComplianceTest {
         assertThat(get(path + "/audit").jsonPath().getList("$")).hasSize(2);
         assertThat(get(path + "/audit").jsonPath().getList("action")).containsExactly("RAISE", "RAISE");
 
-        assertThat(post(path + "/lift", "{\"reason\":\"cleared\"}").jsonPath().getBoolean("raised")).isFalse();
+        ExtractableResponse<Response> liftResp = post(path + "/lift", "{\"reason\":\"cleared\"}");
+        assertThat(liftResp.statusCode()).isEqualTo(200);
+        assertThat(liftResp.jsonPath().getBoolean("raised")).isFalse();
         assertThat(post(path + "/probe", "{\"operation\":\"write\"}").statusCode()).isEqualTo(200);
 
         // lifting again is idempotent — no error

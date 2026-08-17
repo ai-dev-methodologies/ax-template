@@ -45,13 +45,13 @@ class ReproducibilityComplianceTest {
     private ExtractableResponse<Response> draw(String token, String body) {
         return given().header("Authorization", "Bearer " + token).header("Content-Type", "application/json")
             .body(body)
-        .when().post("/api/reproducibility/draws").thenReturn().then().extract();
+        .when().post("/api/reproducibility/draws").thenReturn().then().statusCode(201).extract();
     }
 
     private ExtractableResponse<Response> classify(String token, String body) {
         return given().header("Authorization", "Bearer " + token).header("Content-Type", "application/json")
             .body(body)
-        .when().post("/api/reproducibility/classifications").thenReturn().then().extract();
+        .when().post("/api/reproducibility/classifications").thenReturn().then().statusCode(201).extract();
     }
 
     private ExtractableResponse<Response> getProc(String token, String id) {
@@ -100,7 +100,9 @@ class ReproducibilityComplianceTest {
         assertThat(drawn.statusCode()).isEqualTo(201);
         String id = drawn.jsonPath().getString("id");
         List<String> recorded = drawn.jsonPath().getList("selectedIds");
-        String recordedSeed = getProc(member, id).jsonPath().getString("seed");
+        ExtractableResponse<Response> seedProc = getProc(member, id);
+        assertThat(seedProc.statusCode()).isEqualTo(200);
+        String recordedSeed = seedProc.jsonPath().getString("seed");
 
         // replay N times → every replay reproduces the byte-identical selection
         for (int i = 0; i < 5; i++) {
@@ -113,6 +115,7 @@ class ReproducibilityComplianceTest {
 
         // the recorded procedure is unchanged by replay (same seed, same selection)
         ExtractableResponse<Response> after = getProc(member, id);
+        assertThat(after.statusCode()).isEqualTo(200);
         assertThat(after.jsonPath().getString("seed")).isEqualTo(recordedSeed);
         assertThat(after.jsonPath().getList("selectedIds")).isEqualTo(recorded);
     }
@@ -152,7 +155,9 @@ class ReproducibilityComplianceTest {
         assertThat(v2.statusCode()).isEqualTo(201);
         assertThat(v2.jsonPath().getString("id")).as("a newer version is a separate row").isNotEqualTo(firstId);
         assertThat(v2.jsonPath().getString("resolvedClass")).isEqualTo("CLASS_C");
-        assertThat(getProc(member, firstId).jsonPath().getString("resolvedClass"))
+        ExtractableResponse<Response> v1Proc = getProc(member, firstId);
+        assertThat(v1Proc.statusCode()).isEqualTo(200);
+        assertThat(v1Proc.jsonPath().getString("resolvedClass"))
             .as("the v1 result is unchanged").isEqualTo("CLASS_A");
     }
 

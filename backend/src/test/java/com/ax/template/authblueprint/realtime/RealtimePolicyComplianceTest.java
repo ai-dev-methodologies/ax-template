@@ -382,7 +382,7 @@ class RealtimePolicyComplianceTest {
         return given().header("Content-Type", "application/json")
             .body("{\"email\":\"" + email + "\",\"password\":\"securepassword12\"}")
         .when().post("/api/auth/email/login")
-        .then().extract().path("accessToken");
+        .then().statusCode(200).extract().path("accessToken");
     }
 
     /** A caller = its bearer token + its resolved userId (Authentication.getName()). */

@@ -38,15 +38,18 @@ name: consumer-e2e
 # (registry.npmjs.org, services.gradle.org, github.com) and generic package names.
 #
 # WHAT THIS RUN DOES NOT COVER — also printed in the job summary on every run:
+# (2026-08-18: the husky/lefthook branches (P2-103), the `react.root: "."` single-package-root
+#  shape (P2-104a), and the Next/app-router route-axis rules (P2-105) were CLOSED — the harness
+#  now materializes and exercises all three, as A13-husky/A14-lefthook, A18-rootdot/A19-rootdot/
+#  A20-rootdot-skip, and A11-route/A12-route respectively. They are removed from this list below.)
 #   - R25 as a whole (`verify-completion.sh` is never invoked here).
-#   - The husky / lefthook branches of `ax-install-hooks`. This is NOT merely outside the premise
-#     probe — it is outside the harness too: `verify-downstream.sh`'s own HONEST SCOPE states
-#     "Only branch A (`core.hooksPath`) of ax-install-hooks is exercised." Nothing in this
-#     repository measures the husky or lefthook branch (BACKLOG P2-103, P2-115).
+#   - `react.typescript=false` — the harness always installs with TypeScript ON. The
+#     `languageOptions` gap that broke this shape's JSX parsing was FIXED (P2-104(b), `ax:else`
+#     now supplies `languageOptions.parserOptions.ecmaFeatures.jsx` on the false branch), but this
+#     harness's fixture is TypeScript-only, so there is no standing gate exercising the fix —
+#     evidence for it is a manual consumer run, not this workflow.
 #   - Any Gradle or Node major version other than the ones pinned below.
 #   - Windows runners (this job is `ubuntu-latest` only).
-#   - The `react.root: "."` single-package-root project shape (see ax.config.json schema) —
-#     whichever shape `verify-downstream.sh`'s fixture project uses is the only shape measured.
 #   - The install skills' prose steps (user confirmation prompts, scope statements read aloud to
 #     a user) — only the `ax:artifact` fenced blocks that those skills materialize are exercised.
 
@@ -278,16 +281,20 @@ jobs:
             echo ""
             echo "### 3. What this run does NOT cover"
             echo ""
+            echo "_(2026-08-18: the husky/lefthook branches, the \`react.root: \".\"\` shape, and the"
+            echo "Next/app-router route-axis rules were CLOSED — the harness now exercises all"
+            echo "three (A13-husky/A14-lefthook, A18-rootdot/A19-rootdot/A20-rootdot-skip,"
+            echo "A11-route/A12-route) and they are removed from this list.)_"
+            echo ""
             echo "- **R25 as a whole** — \`verify-completion.sh\` is not invoked here."
-            echo "- **The husky / lefthook branch of \`ax-install-hooks\`** — only the toolchain"
-            echo "  (git + JDK 21 + node/npm) is asserted by the premise probe above; husky and"
-            echo "  lefthook wiring is exercised only to whatever extent"
-            echo "  \`verify-downstream.sh\` itself covers it."
+            echo "- **\`react.typescript=false\`** — the harness always installs with TypeScript ON."
+            echo "  The JSX-parsing gap this shape used to hit was FIXED (P2-104(b), \`ax:else\`"
+            echo "  now supplies the missing \`languageOptions\` on the false branch), but this"
+            echo "  fixture is TypeScript-only, so there is no standing gate exercising the fix —"
+            echo "  evidence is a manual consumer run, not this workflow."
             echo "- **Any Gradle or Node major version other than the ones pinned in this workflow**"
             echo "  (JDK 21 / node 24)."
             echo "- **Windows runners** — this job is \`ubuntu-latest\` only."
-            echo "- **The \`react.root: \".\"\` single-package-root project shape** — only whichever"
-            echo "  fixture project shape \`verify-downstream.sh\` materializes is measured."
             echo "- **The install skills' prose steps** (scope statements, user confirmation"
             echo "  prompts) — only their \`ax:artifact\` fenced blocks are exercised."
           } >> "$S"
