@@ -1,780 +1,2045 @@
-# archunit-userguide — upstream snapshot (2026-08-01 refresh, append-only)
+<!DOCTYPE html>
+<html lang="">
+<head>
+<meta charset="UTF-8">
+<meta http-equiv="X-UA-Compatible" content="IE=edge">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="generator" content="Asciidoctor 2.0.20">
+<meta name="description" content="index page of ArchUnit's documentation">
+<meta name="keywords" content="ArchUnit, Java, architecture, test, analysis">
+<title>ArchUnit User Guide</title>
+<style>
+/* Adapted for ArchUnit */
+h1,h2,h3,#toctitle,.sidebarblock>.content>.title,h4,h5,h6{font-family:"Open Sans","DejaVu Sans",sans-serif;font-weight:300;font-style:normal;color:#0563a5;text-rendering:optimizeLegibility;margin-top:1em;margin-bottom:.5em;line-height:1.0125em}
+.subheader,.admonitionblock td.content>.title,.audioblock>.title,.exampleblock>.title,.imageblock>.title,.listingblock>.title,.literalblock>.title,.stemblock>.title,.openblock>.title,.paragraph>.title,.quoteblock>.title,table.tableblock>.title,.verseblock>.title,.videoblock>.title,.dlist>.title,.olist>.title,.ulist>.title,.qlist>.title,.hdlist>.title{line-height:1.45;color:#000;font-weight:400;margin-top:0;margin-bottom:.25em}
+#toctitle{color:#000;font-size:1.2em}
 
-**Source URL(s):** https://www.archunit.org/userguide/html/000_Index.html (re-fetched 2026-08-01; every pre-existing section below the divider is preserved verbatim)
-**HTTP status:** 200
-**Fetched at:** 2026-08-01T02:23:42Z
-**Extractor invocation:** `practices/scripts/snapshot-extract.sh https://www.archunit.org/userguide/html/000_Index.html`
-**Fetch receipt:** `practices/upstream/_FETCH-RECEIPTS.yaml` id `r111`
-**Body SHA-256 (below the `---` divider, header excluded):** 539c957afbba9387b0ebe938c30c2c28e926991f08c817c3e94023202151d3a6
+/* Asciidoctor default stylesheet | MIT License | http://asciidoctor.org */
+/* Remove comment around @import statement below when using as a custom stylesheet */
+/*@import "https://fonts.googleapis.com/css?family=Open+Sans:300,300italic,400,400italic,600,600italic%7CNoto+Serif:400,400italic,700,700italic%7CDroid+Sans+Mono:400,700";*/
+article,aside,details,figcaption,figure,footer,header,hgroup,main,nav,section,summary{display:block}
+audio,canvas,video{display:inline-block}
+audio:not([controls]){display:none;height:0}
+[hidden],template{display:none}
+script{display:none!important}
+html{font-family:sans-serif;-ms-text-size-adjust:100%;-webkit-text-size-adjust:100%}
+a{background:transparent}
+a:focus{outline:thin dotted}
+a:active,a:hover{outline:0}
+h1{font-size:2em;margin:.67em 0}
+abbr[title]{border-bottom:1px dotted}
+b,strong{font-weight:bold}
+dfn{font-style:italic}
+hr{-moz-box-sizing:content-box;box-sizing:content-box;height:0}
+mark{background:#ff0;color:#000}
+code,kbd,pre,samp{font-family:monospace;font-size:1em}
+pre{white-space:pre-wrap}
+q{quotes:"\201C" "\201D" "\2018" "\2019"}
+small{font-size:80%}
+sub,sup{font-size:75%;line-height:0;position:relative;vertical-align:baseline}
+sup{top:-.5em}
+sub{bottom:-.25em}
+img{border:0}
+svg:not(:root){overflow:hidden}
+figure{margin:0}
+fieldset{border:1px solid silver;margin:0 2px;padding:.35em .625em .75em}
+legend{border:0;padding:0}
+button,input,select,textarea{font-family:inherit;font-size:100%;margin:0}
+button,input{line-height:normal}
+button,select{text-transform:none}
+button,html input[type="button"],input[type="reset"],input[type="submit"]{-webkit-appearance:button;cursor:pointer}
+button[disabled],html input[disabled]{cursor:default}
+input[type="checkbox"],input[type="radio"]{box-sizing:border-box;padding:0}
+input[type="search"]{-webkit-appearance:textfield;-moz-box-sizing:content-box;-webkit-box-sizing:content-box;box-sizing:content-box}
+input[type="search"]::-webkit-search-cancel-button,input[type="search"]::-webkit-search-decoration{-webkit-appearance:none}
+button::-moz-focus-inner,input::-moz-focus-inner{border:0;padding:0}
+textarea{overflow:auto;vertical-align:top}
+table{border-collapse:collapse;border-spacing:0}
+*,*:before,*:after{-moz-box-sizing:border-box;-webkit-box-sizing:border-box;box-sizing:border-box}
+html,body{font-size:100%}
+body{background:#fff;color:rgba(0,0,0,.8);padding:0;margin:0;font-family:"Noto Serif","DejaVu Serif",serif;font-weight:400;font-style:normal;line-height:1;position:relative;cursor:auto;tab-size:4;-moz-osx-font-smoothing:grayscale;-webkit-font-smoothing:antialiased}
+a:hover{cursor:pointer}
+img,object,embed{max-width:100%;height:auto}
+object,embed{height:100%}
+img{-ms-interpolation-mode:bicubic}
+.left{float:left!important}
+.right{float:right!important}
+.text-left{text-align:left!important}
+.text-right{text-align:right!important}
+.text-center{text-align:center!important}
+.text-justify{text-align:justify!important}
+.hide{display:none}
+img,object,svg{display:inline-block;vertical-align:middle}
+textarea{height:auto;min-height:50px}
+select{width:100%}
+.center{margin-left:auto;margin-right:auto}
+.spread{width:100%}
+p.lead,.paragraph.lead>p,#preamble>.sectionbody>.paragraph:first-of-type p{font-size:1.21875em;line-height:1.6}
+div,dl,dt,dd,ul,ol,li,h1,h2,h3,#toctitle,.sidebarblock>.content>.title,h4,h5,h6,pre,form,p,blockquote,th,td{margin:0;padding:0;direction:ltr}
+a{color:#2156a5;text-decoration:underline;line-height:inherit}
+a:hover,a:focus{color:#1d4b8f}
+a img{border:none}
+p{font-family:inherit;font-weight:400;font-size:1em;line-height:1.6;margin-bottom:1.25em;text-rendering:optimizeLegibility}
+p aside{font-size:.875em;line-height:1.35;font-style:italic}
+h1 small,h2 small,h3 small,#toctitle small,.sidebarblock>.content>.title small,h4 small,h5 small,h6 small{font-size:60%;color:#e99b8f;line-height:0}
+h1{font-size:2.125em}
+h2{font-size:1.6875em}
+h3,#toctitle,.sidebarblock>.content>.title{font-size:1.375em}
+h4,h5{font-size:1.125em}
+h6{font-size:1em}
+hr{border:solid #ddddd8;border-width:1px 0 0;clear:both;margin:1.25em 0 1.1875em;height:0}
+em,i{font-style:italic;line-height:inherit}
+strong,b{font-weight:bold;line-height:inherit}
+small{font-size:60%;line-height:inherit}
+code{font-family:"Droid Sans Mono","DejaVu Sans Mono",monospace;font-weight:400;color:rgba(0,0,0,.9)}
+ul,ol,dl{font-size:1em;line-height:1.6;margin-bottom:1.25em;list-style-position:outside;font-family:inherit}
+ul,ol{margin-left:1.5em}
+ul li ul,ul li ol{margin-left:1.25em;margin-bottom:0;font-size:1em}
+ul.square li ul,ul.circle li ul,ul.disc li ul{list-style:inherit}
+ul.square{list-style-type:square}
+ul.circle{list-style-type:circle}
+ul.disc{list-style-type:disc}
+ol li ul,ol li ol{margin-left:1.25em;margin-bottom:0}
+dl dt{margin-bottom:.3125em;font-weight:bold}
+dl dd{margin-bottom:1.25em}
+abbr,acronym{text-transform:uppercase;font-size:90%;color:rgba(0,0,0,.8);border-bottom:1px dotted #ddd;cursor:help}
+abbr{text-transform:none}
+blockquote{margin:0 0 1.25em;padding:.5625em 1.25em 0 1.1875em;border-left:1px solid #ddd}
+blockquote cite{display:block;font-size:.9375em;color:rgba(0,0,0,.6)}
+blockquote cite:before{content:"\2014 \0020"}
+blockquote cite a,blockquote cite a:visited{color:rgba(0,0,0,.6)}
+blockquote,blockquote p{line-height:1.6;color:rgba(0,0,0,.85)}
+@media only screen and (min-width:768px){h1,h2,h3,#toctitle,.sidebarblock>.content>.title,h4,h5,h6{line-height:1.2}
+h1{font-size:2.75em}
+h2{font-size:2.3125em}
+h3,#toctitle,.sidebarblock>.content>.title{font-size:1.6875em}
+h4{font-size:1.4375em}}
+table{background:#fff;margin-bottom:1.25em;border:solid 1px #dedede}
+table thead,table tfoot{background:#f7f8f7;font-weight:bold}
+table thead tr th,table thead tr td,table tfoot tr th,table tfoot tr td{padding:.5em .625em .625em;font-size:inherit;color:rgba(0,0,0,.8);text-align:left}
+table tr th,table tr td{padding:.5625em .625em;font-size:inherit;color:rgba(0,0,0,.8)}
+table tr.even,table tr.alt,table tr:nth-of-type(even){background:#f8f8f7}
+table thead tr th,table tfoot tr th,table tbody tr td,table tr td,table tfoot tr td{display:table-cell;line-height:1.6}
+h1,h2,h3,#toctitle,.sidebarblock>.content>.title,h4,h5,h6{line-height:1.2;word-spacing:-.05em}
+h1 strong,h2 strong,h3 strong,#toctitle strong,.sidebarblock>.content>.title strong,h4 strong,h5 strong,h6 strong{font-weight:400}
+.clearfix:before,.clearfix:after,.float-group:before,.float-group:after{content:" ";display:table}
+.clearfix:after,.float-group:after{clear:both}
+*:not(pre)>code{font-size:.9375em;font-style:normal!important;letter-spacing:0;padding:.1em .5ex;word-spacing:-.15em;background-color:#f7f7f8;-webkit-border-radius:4px;border-radius:4px;line-height:1.45;text-rendering:optimizeSpeed;word-wrap:break-word}
+*:not(pre)>code.nobreak{word-wrap:normal}
+*:not(pre)>code.nowrap{white-space:nowrap}
+pre,pre>code{line-height:1.45;color:rgba(0,0,0,.9);font-family:"Droid Sans Mono","DejaVu Sans Mono",monospace;font-weight:400;text-rendering:optimizeSpeed}
+em em{font-style:normal}
+strong strong{font-weight:400}
+.keyseq{color:rgba(51,51,51,.8)}
+kbd{font-family:"Droid Sans Mono","DejaVu Sans Mono",monospace;display:inline-block;color:rgba(0,0,0,.8);font-size:.65em;line-height:1.45;background-color:#f7f7f7;border:1px solid #ccc;-webkit-border-radius:3px;border-radius:3px;-webkit-box-shadow:0 1px 0 rgba(0,0,0,.2),0 0 0 .1em white inset;box-shadow:0 1px 0 rgba(0,0,0,.2),0 0 0 .1em #fff inset;margin:0 .15em;padding:.2em .5em;vertical-align:middle;position:relative;top:-.1em;white-space:nowrap}
+.keyseq kbd:first-child{margin-left:0}
+.keyseq kbd:last-child{margin-right:0}
+.menuseq,.menuref{color:#000}
+.menuseq b:not(.caret),.menuref{font-weight:inherit}
+.menuseq{word-spacing:-.02em}
+.menuseq b.caret{font-size:1.25em;line-height:.8}
+.menuseq i.caret{font-weight:bold;text-align:center;width:.45em}
+b.button:before,b.button:after{position:relative;top:-1px;font-weight:400}
+b.button:before{content:"[";padding:0 3px 0 2px}
+b.button:after{content:"]";padding:0 2px 0 3px}
+p a>code:hover{color:rgba(0,0,0,.9)}
+#header,#content,#footnotes,#footer{width:100%;margin-left:auto;margin-right:auto;margin-top:0;margin-bottom:0;max-width:62.5em;*zoom:1;position:relative;padding-left:.9375em;padding-right:.9375em}
+#header:before,#header:after,#content:before,#content:after,#footnotes:before,#footnotes:after,#footer:before,#footer:after{content:" ";display:table}
+#header:after,#content:after,#footnotes:after,#footer:after{clear:both}
+#content{margin-top:1.25em}
+#content:before{content:none}
+#header>h1:first-child{color:rgba(0,0,0,.85);margin-top:2.25rem;margin-bottom:0}
+#header>h1:first-child+#toc{margin-top:8px;border-top:1px solid #ddddd8}
+#header>h1:only-child,body.toc2 #header>h1:nth-last-child(2){border-bottom:1px solid #ddddd8;padding-bottom:8px}
+#header .details{border-bottom:1px solid #ddddd8;line-height:1.45;padding-top:.25em;padding-bottom:.25em;padding-left:.25em;color:rgba(0,0,0,.6);display:-ms-flexbox;display:-webkit-flex;display:flex;-ms-flex-flow:row wrap;-webkit-flex-flow:row wrap;flex-flow:row wrap}
+#header .details span:first-child{margin-left:-.125em}
+#header .details span.email a{color:rgba(0,0,0,.85)}
+#header .details br{display:none}
+#header .details br+span:before{content:"\00a0\2013\00a0"}
+#header .details br+span.author:before{content:"\00a0\22c5\00a0";color:rgba(0,0,0,.85)}
+#header .details br+span#revremark:before{content:"\00a0|\00a0"}
+#header #revnumber{text-transform:capitalize}
+#header #revnumber:after{content:"\00a0"}
+#content>h1:first-child:not([class]){color:rgba(0,0,0,.85);border-bottom:1px solid #ddddd8;padding-bottom:8px;margin-top:0;padding-top:1rem;margin-bottom:1.25rem}
+#toc{border-bottom:1px solid #efefed;padding-bottom:.5em}
+#toc>ul{margin-left:.125em}
+#toc ul.sectlevel0>li>a{font-style:italic}
+#toc ul.sectlevel0 ul.sectlevel1{margin:.5em 0}
+#toc ul{font-family:"Open Sans","DejaVu Sans",sans-serif;list-style-type:none}
+#toc li{line-height:1.3334;margin-top:.3334em}
+#toc a{text-decoration:none}
+#toc a:active{text-decoration:underline}
+@media only screen and (min-width:768px){#toctitle{font-size:1.375em}
+body.toc2{padding-left:15em;padding-right:0}
+#toc.toc2{margin-top:0!important;background-color:#f8f8f7;position:fixed;width:15em;left:0;top:0;border-right:1px solid #efefed;border-top-width:0!important;border-bottom-width:0!important;z-index:1000;padding:1.25em 1em;height:100%;overflow:auto}
+#toc.toc2 #toctitle{margin-top:0;margin-bottom:.8rem;font-size:1.2em}
+#toc.toc2>ul{font-size:.9em;margin-bottom:0}
+#toc.toc2 ul ul{margin-left:0;padding-left:1em}
+#toc.toc2 ul.sectlevel0 ul.sectlevel1{padding-left:0;margin-top:.5em;margin-bottom:.5em}
+body.toc2.toc-right{padding-left:0;padding-right:15em}
+body.toc2.toc-right #toc.toc2{border-right-width:0;border-left:1px solid #efefed;left:auto;right:0}}
+@media only screen and (min-width:1280px){body.toc2{padding-left:20em;padding-right:0}
+#toc.toc2{width:20em}
+#toc.toc2 #toctitle{font-size:1.375em}
+#toc.toc2>ul{font-size:.95em}
+#toc.toc2 ul ul{padding-left:1.25em}
+body.toc2.toc-right{padding-left:0;padding-right:20em}}
+#content #toc{border-style:solid;border-width:1px;border-color:#e0e0dc;margin-bottom:1.25em;padding:1.25em;background:#f8f8f7;-webkit-border-radius:4px;border-radius:4px}
+#content #toc>:first-child{margin-top:0}
+#content #toc>:last-child{margin-bottom:0}
+#footer{max-width:100%;background-color:rgba(0,0,0,.8);padding:1.25em}
+#footer-text{color:rgba(255,255,255,.8);line-height:1.44}
+#content{margin-bottom:.625em}
+.sect1{padding-bottom:.625em}
+@media only screen and (min-width:768px){#content{margin-bottom:1.25em}
+.sect1{padding-bottom:1.25em}}
+.sect1:last-child{padding-bottom:0}
+.sect1+.sect1{border-top:1px solid #efefed}
+#content h1>a.anchor,h2>a.anchor,h3>a.anchor,#toctitle>a.anchor,.sidebarblock>.content>.title>a.anchor,h4>a.anchor,h5>a.anchor,h6>a.anchor{position:absolute;z-index:1001;width:1.5ex;margin-left:-1.5ex;display:block;text-decoration:none!important;visibility:hidden;text-align:center;font-weight:400}
+#content h1>a.anchor:before,h2>a.anchor:before,h3>a.anchor:before,#toctitle>a.anchor:before,.sidebarblock>.content>.title>a.anchor:before,h4>a.anchor:before,h5>a.anchor:before,h6>a.anchor:before{content:"\00A7";font-size:.85em;display:block;padding-top:.1em}
+#content h1:hover>a.anchor,#content h1>a.anchor:hover,h2:hover>a.anchor,h2>a.anchor:hover,h3:hover>a.anchor,#toctitle:hover>a.anchor,.sidebarblock>.content>.title:hover>a.anchor,h3>a.anchor:hover,#toctitle>a.anchor:hover,.sidebarblock>.content>.title>a.anchor:hover,h4:hover>a.anchor,h4>a.anchor:hover,h5:hover>a.anchor,h5>a.anchor:hover,h6:hover>a.anchor,h6>a.anchor:hover{visibility:visible}
+#content h1>a.link,h2>a.link,h3>a.link,#toctitle>a.link,.sidebarblock>.content>.title>a.link,h4>a.link,h5>a.link,h6>a.link{color:#ba3925;text-decoration:none}
+#content h1>a.link:hover,h2>a.link:hover,h3>a.link:hover,#toctitle>a.link:hover,.sidebarblock>.content>.title>a.link:hover,h4>a.link:hover,h5>a.link:hover,h6>a.link:hover{color:#a53221}
+.audioblock,.imageblock,.literalblock,.listingblock,.stemblock,.videoblock{margin-bottom:1.25em}
+.admonitionblock td.content>.title,.audioblock>.title,.exampleblock>.title,.imageblock>.title,.listingblock>.title,.literalblock>.title,.stemblock>.title,.openblock>.title,.paragraph>.title,.quoteblock>.title,table.tableblock>.title,.verseblock>.title,.videoblock>.title,.dlist>.title,.olist>.title,.ulist>.title,.qlist>.title,.hdlist>.title{text-rendering:optimizeLegibility;text-align:left;font-family:"Noto Serif","DejaVu Serif",serif;font-size:1rem;font-style:italic}
+table.tableblock>caption.title{white-space:nowrap;overflow:visible;max-width:0}
+.paragraph.lead>p,#preamble>.sectionbody>.paragraph:first-of-type p{color:rgba(0,0,0,.85)}
+table.tableblock #preamble>.sectionbody>.paragraph:first-of-type p{font-size:inherit}
+.admonitionblock>table{border-collapse:separate;border:0;background:none;width:100%}
+.admonitionblock>table td.icon{text-align:center;width:80px}
+.admonitionblock>table td.icon img{max-width:none}
+.admonitionblock>table td.icon .title{font-weight:bold;font-family:"Open Sans","DejaVu Sans",sans-serif;text-transform:uppercase}
+.admonitionblock>table td.content{padding-left:1.125em;padding-right:1.25em;border-left:1px solid #ddddd8;color:rgba(0,0,0,.6)}
+.admonitionblock>table td.content>:last-child>:last-child{margin-bottom:0}
+.exampleblock>.content{border-style:solid;border-width:1px;border-color:#e6e6e6;margin-bottom:1.25em;padding:1.25em;background:#fff;-webkit-border-radius:4px;border-radius:4px}
+.exampleblock>.content>:first-child{margin-top:0}
+.exampleblock>.content>:last-child{margin-bottom:0}
+.sidebarblock{border-style:solid;border-width:1px;border-color:#e0e0dc;margin-bottom:1.25em;padding:1.25em;background:#f8f8f7;-webkit-border-radius:4px;border-radius:4px}
+.sidebarblock>:first-child{margin-top:0}
+.sidebarblock>:last-child{margin-bottom:0}
+.sidebarblock>.content>.title{color:#7a2518;margin-top:0;text-align:center}
+.exampleblock>.content>:last-child>:last-child,.exampleblock>.content .olist>ol>li:last-child>:last-child,.exampleblock>.content .ulist>ul>li:last-child>:last-child,.exampleblock>.content .qlist>ol>li:last-child>:last-child,.sidebarblock>.content>:last-child>:last-child,.sidebarblock>.content .olist>ol>li:last-child>:last-child,.sidebarblock>.content .ulist>ul>li:last-child>:last-child,.sidebarblock>.content .qlist>ol>li:last-child>:last-child{margin-bottom:0}
+.literalblock pre,.listingblock pre:not(.highlight),.listingblock pre[class="highlight"],.listingblock pre[class^="highlight "],.listingblock pre.CodeRay,.listingblock pre.prettyprint{background:#f7f7f8}
+.sidebarblock .literalblock pre,.sidebarblock .listingblock pre:not(.highlight),.sidebarblock .listingblock pre[class="highlight"],.sidebarblock .listingblock pre[class^="highlight "],.sidebarblock .listingblock pre.CodeRay,.sidebarblock .listingblock pre.prettyprint{background:#f2f1f1}
+.literalblock pre,.literalblock pre[class],.listingblock pre,.listingblock pre[class]{-webkit-border-radius:4px;border-radius:4px;word-wrap:break-word;padding:1em;font-size:.8125em}
+.literalblock pre.nowrap,.literalblock pre[class].nowrap,.listingblock pre.nowrap,.listingblock pre[class].nowrap{overflow-x:auto;white-space:pre;word-wrap:normal}
+@media only screen and (min-width:768px){.literalblock pre,.literalblock pre[class],.listingblock pre,.listingblock pre[class]{font-size:.90625em}}
+@media only screen and (min-width:1280px){.literalblock pre,.literalblock pre[class],.listingblock pre,.listingblock pre[class]{font-size:1em}}
+.literalblock.output pre{color:#f7f7f8;background-color:rgba(0,0,0,.9)}
+.listingblock pre.highlightjs{padding:0}
+.listingblock pre.highlightjs>code{padding:1em;-webkit-border-radius:4px;border-radius:4px}
+.listingblock pre.prettyprint{border-width:0}
+.listingblock>.content{position:relative}
+.listingblock code[data-lang]:before{display:none;content:attr(data-lang);position:absolute;font-size:.75em;top:.425rem;right:.5rem;line-height:1;text-transform:uppercase;color:#999}
+.listingblock:hover code[data-lang]:before{display:block}
+.listingblock.terminal pre .command:before{content:attr(data-prompt);padding-right:.5em;color:#999}
+.listingblock.terminal pre .command:not([data-prompt]):before{content:"$"}
+table.pyhltable{border-collapse:separate;border:0;margin-bottom:0;background:none}
+table.pyhltable td{vertical-align:top;padding-top:0;padding-bottom:0;line-height:1.45}
+table.pyhltable td.code{padding-left:.75em;padding-right:0}
+pre.pygments .lineno,table.pyhltable td:not(.code){color:#999;padding-left:0;padding-right:.5em;border-right:1px solid #ddddd8}
+pre.pygments .lineno{display:inline-block;margin-right:.25em}
+table.pyhltable .linenodiv{background:none!important;padding-right:0!important}
+.quoteblock{margin:0 1em 1.25em 1.5em;display:table}
+.quoteblock>.title{margin-left:-1.5em;margin-bottom:.75em}
+.quoteblock blockquote,.quoteblock blockquote p{color:rgba(0,0,0,.85);font-size:1.15rem;line-height:1.75;word-spacing:.1em;letter-spacing:0;font-style:italic;text-align:justify}
+.quoteblock blockquote{margin:0;padding:0;border:0}
+.quoteblock blockquote:before{content:"\201c";float:left;font-size:2.75em;font-weight:bold;line-height:.6em;margin-left:-.6em;color:#7a2518;text-shadow:0 1px 2px rgba(0,0,0,.1)}
+.quoteblock blockquote>.paragraph:last-child p{margin-bottom:0}
+.quoteblock .attribution{margin-top:.5em;margin-right:.5ex;text-align:right}
+.quoteblock .quoteblock{margin-left:0;margin-right:0;padding:.5em 0;border-left:3px solid rgba(0,0,0,.6)}
+.quoteblock .quoteblock blockquote{padding:0 0 0 .75em}
+.quoteblock .quoteblock blockquote:before{display:none}
+.verseblock{margin:0 1em 1.25em 1em}
+.verseblock pre{font-family:"Open Sans","DejaVu Sans",sans;font-size:1.15rem;color:rgba(0,0,0,.85);font-weight:300;text-rendering:optimizeLegibility}
+.verseblock pre strong{font-weight:400}
+.verseblock .attribution{margin-top:1.25rem;margin-left:.5ex}
+.quoteblock .attribution,.verseblock .attribution{font-size:.9375em;line-height:1.45;font-style:italic}
+.quoteblock .attribution br,.verseblock .attribution br{display:none}
+.quoteblock .attribution cite,.verseblock .attribution cite{display:block;letter-spacing:-.025em;color:rgba(0,0,0,.6)}
+.quoteblock.abstract{margin:0 0 1.25em 0;display:block}
+.quoteblock.abstract blockquote,.quoteblock.abstract blockquote p{text-align:left;word-spacing:0}
+.quoteblock.abstract blockquote:before,.quoteblock.abstract blockquote p:first-of-type:before{display:none}
+table.tableblock{max-width:100%;border-collapse:separate}
+table.tableblock td>.paragraph:last-child p>p:last-child,table.tableblock th>p:last-child,table.tableblock td>p:last-child{margin-bottom:0}
+table.tableblock,th.tableblock,td.tableblock{border:0 solid #dedede}
+table.grid-all>thead>tr>.tableblock,table.grid-all>tbody>tr>.tableblock{border-width:0 1px 1px 0}
+table.grid-all>tfoot>tr>.tableblock{border-width:1px 1px 0 0}
+table.grid-cols>*>tr>.tableblock{border-width:0 1px 0 0}
+table.grid-rows>thead>tr>.tableblock,table.grid-rows>tbody>tr>.tableblock{border-width:0 0 1px 0}
+table.grid-rows>tfoot>tr>.tableblock{border-width:1px 0 0 0}
+table.grid-all>*>tr>.tableblock:last-child,table.grid-cols>*>tr>.tableblock:last-child{border-right-width:0}
+table.grid-all>tbody>tr:last-child>.tableblock,table.grid-all>thead:last-child>tr>.tableblock,table.grid-rows>tbody>tr:last-child>.tableblock,table.grid-rows>thead:last-child>tr>.tableblock{border-bottom-width:0}
+table.frame-all{border-width:1px}
+table.frame-sides{border-width:0 1px}
+table.frame-topbot{border-width:1px 0}
+th.halign-left,td.halign-left{text-align:left}
+th.halign-right,td.halign-right{text-align:right}
+th.halign-center,td.halign-center{text-align:center}
+th.valign-top,td.valign-top{vertical-align:top}
+th.valign-bottom,td.valign-bottom{vertical-align:bottom}
+th.valign-middle,td.valign-middle{vertical-align:middle}
+table thead th,table tfoot th{font-weight:bold}
+tbody tr th{display:table-cell;line-height:1.6;background:#f7f8f7}
+tbody tr th,tbody tr th p,tfoot tr th,tfoot tr th p{color:rgba(0,0,0,.8);font-weight:bold}
+p.tableblock>code:only-child{background:none;padding:0}
+p.tableblock{font-size:1em}
+td>div.verse{white-space:pre}
+ol{margin-left:1.75em}
+ul li ol{margin-left:1.5em}
+dl dd{margin-left:1.125em}
+dl dd:last-child,dl dd:last-child>:last-child{margin-bottom:0}
+ol>li p,ul>li p,ul dd,ol dd,.olist .olist,.ulist .ulist,.ulist .olist,.olist .ulist{margin-bottom:.625em}
+ul.checklist,ul.none,ol.none,ul.no-bullet,ol.no-bullet,ol.unnumbered,ul.unstyled,ol.unstyled{list-style-type:none}
+ul.no-bullet,ol.no-bullet,ol.unnumbered{margin-left:.625em}
+ul.unstyled,ol.unstyled{margin-left:0}
+ul.checklist{margin-left:.625em}
+ul.checklist li>p:first-child>.fa-square-o:first-child,ul.checklist li>p:first-child>.fa-check-square-o:first-child{width:1.25em;font-size:.8em;position:relative;bottom:.125em}
+ul.checklist li>p:first-child>input[type="checkbox"]:first-child{margin-right:.25em}
+ul.inline{display:-ms-flexbox;display:-webkit-box;display:flex;-ms-flex-flow:row wrap;-webkit-flex-flow:row wrap;flex-flow:row wrap;list-style:none;margin:0 0 .625em -1.25em}
+ul.inline>li{margin-left:1.25em}
+.unstyled dl dt{font-weight:400;font-style:normal}
+ol.arabic{list-style-type:decimal}
+ol.decimal{list-style-type:decimal-leading-zero}
+ol.loweralpha{list-style-type:lower-alpha}
+ol.upperalpha{list-style-type:upper-alpha}
+ol.lowerroman{list-style-type:lower-roman}
+ol.upperroman{list-style-type:upper-roman}
+ol.lowergreek{list-style-type:lower-greek}
+.hdlist>table,.colist>table{border:0;background:none}
+.hdlist>table>tbody>tr,.colist>table>tbody>tr{background:none}
+td.hdlist1,td.hdlist2{vertical-align:top;padding:0 .625em}
+td.hdlist1{font-weight:bold;padding-bottom:1.25em}
+.literalblock+.colist,.listingblock+.colist{margin-top:-.5em}
+.colist td:not([class]):first-child{padding:.4em .75em 0 .75em;line-height:1;vertical-align:top}
+.colist td:not([class]):first-child img{max-width:none}
+.colist td:not([class]):last-child{padding:.25em 0}
+.thumb,.th{line-height:0;display:inline-block;border:solid 4px #fff;-webkit-box-shadow:0 0 0 1px #ddd;box-shadow:0 0 0 1px #ddd}
+.imageblock.left,.imageblock[style*="float: left"]{margin:.25em .625em 1.25em 0}
+.imageblock.right,.imageblock[style*="float: right"]{margin:.25em 0 1.25em .625em}
+.imageblock>.title{margin-bottom:0}
+.imageblock.thumb,.imageblock.th{border-width:6px}
+.imageblock.thumb>.title,.imageblock.th>.title{padding:0 .125em}
+.image.left,.image.right{margin-top:.25em;margin-bottom:.25em;display:inline-block;line-height:0}
+.image.left{margin-right:.625em}
+.image.right{margin-left:.625em}
+a.image{text-decoration:none;display:inline-block}
+a.image object{pointer-events:none}
+sup.footnote,sup.footnoteref{font-size:.875em;position:static;vertical-align:super}
+sup.footnote a,sup.footnoteref a{text-decoration:none}
+sup.footnote a:active,sup.footnoteref a:active{text-decoration:underline}
+#footnotes{padding-top:.75em;padding-bottom:.75em;margin-bottom:.625em}
+#footnotes hr{width:20%;min-width:6.25em;margin:-.25em 0 .75em 0;border-width:1px 0 0 0}
+#footnotes .footnote{padding:0 .375em 0 .225em;line-height:1.3334;font-size:.875em;margin-left:1.2em;margin-bottom:.2em}
+#footnotes .footnote a:first-of-type{font-weight:bold;text-decoration:none;margin-left:-1.05em}
+#footnotes .footnote:last-of-type{margin-bottom:0}
+#content #footnotes{margin-top:-.625em;margin-bottom:0;padding:.75em 0}
+.gist .file-data>table{border:0;background:#fff;width:100%;margin-bottom:0}
+.gist .file-data>table td.line-data{width:99%}
+div.unbreakable{page-break-inside:avoid}
+.big{font-size:larger}
+.small{font-size:smaller}
+.underline{text-decoration:underline}
+.overline{text-decoration:overline}
+.line-through{text-decoration:line-through}
+.aqua{color:#00bfbf}
+.aqua-background{background-color:#00fafa}
+.black{color:#000}
+.black-background{background-color:#000}
+.blue{color:#0000bf}
+.blue-background{background-color:#0000fa}
+.fuchsia{color:#bf00bf}
+.fuchsia-background{background-color:#fa00fa}
+.gray{color:#606060}
+.gray-background{background-color:#7d7d7d}
+.green{color:#006000}
+.green-background{background-color:#007d00}
+.lime{color:#00bf00}
+.lime-background{background-color:#00fa00}
+.maroon{color:#600000}
+.maroon-background{background-color:#7d0000}
+.navy{color:#000060}
+.navy-background{background-color:#00007d}
+.olive{color:#606000}
+.olive-background{background-color:#7d7d00}
+.purple{color:#600060}
+.purple-background{background-color:#7d007d}
+.red{color:#bf0000}
+.red-background{background-color:#fa0000}
+.silver{color:#909090}
+.silver-background{background-color:#bcbcbc}
+.teal{color:#006060}
+.teal-background{background-color:#007d7d}
+.white{color:#bfbfbf}
+.white-background{background-color:#fafafa}
+.yellow{color:#bfbf00}
+.yellow-background{background-color:#fafa00}
+span.icon>.fa{cursor:default}
+a span.icon>.fa{cursor:inherit}
+.admonitionblock td.icon [class^="fa icon-"]{font-size:2.5em;text-shadow:1px 1px 2px rgba(0,0,0,.5);cursor:default}
+.admonitionblock td.icon .icon-note:before{content:"\f05a";color:#19407c}
+.admonitionblock td.icon .icon-tip:before{content:"\f0eb";text-shadow:1px 1px 2px rgba(155,155,0,.8);color:#111}
+.admonitionblock td.icon .icon-warning:before{content:"\f071";color:#bf6900}
+.admonitionblock td.icon .icon-caution:before{content:"\f06d";color:#bf3400}
+.admonitionblock td.icon .icon-important:before{content:"\f06a";color:#bf0000}
+.conum[data-value]{display:inline-block;color:#fff!important;background-color:rgba(0,0,0,.8);-webkit-border-radius:100px;border-radius:100px;text-align:center;font-size:.75em;width:1.67em;height:1.67em;line-height:1.67em;font-family:"Open Sans","DejaVu Sans",sans-serif;font-style:normal;font-weight:bold}
+.conum[data-value] *{color:#fff!important}
+.conum[data-value]+b{display:none}
+.conum[data-value]:after{content:attr(data-value)}
+pre .conum[data-value]{position:relative;top:-.125em}
+b.conum *{color:inherit!important}
+.conum:not([data-value]):empty{display:none}
+dt,th.tableblock,td.content,div.footnote{text-rendering:optimizeLegibility}
+h1,h2,p,td.content,span.alt{letter-spacing:-.01em}
+p strong,td.content strong,div.footnote strong{letter-spacing:-.005em}
+p,blockquote,dt,td.content,span.alt{font-size:1.0625rem}
+p{margin-bottom:1.25rem}
+.sidebarblock p,.sidebarblock dt,.sidebarblock td.content,p.tableblock{font-size:1em}
+.exampleblock>.content{background-color:#fffef7;border-color:#e0e0dc;-webkit-box-shadow:0 1px 4px #e0e0dc;box-shadow:0 1px 4px #e0e0dc}
+.print-only{display:none!important}
+@media print{@page{margin:1.25cm .75cm}
+*{-webkit-box-shadow:none!important;box-shadow:none!important;text-shadow:none!important}
+a{color:inherit!important;text-decoration:underline!important}
+a.bare,a[href^="#"],a[href^="mailto:"]{text-decoration:none!important}
+a[href^="http:"]:not(.bare):after,a[href^="https:"]:not(.bare):after{content:"(" attr(href) ")";display:inline-block;font-size:.875em;padding-left:.25em}
+abbr[title]:after{content:" (" attr(title) ")"}
+pre,blockquote,tr,img,object,svg{page-break-inside:avoid}
+thead{display:table-header-group}
+svg{max-width:100%}
+p,blockquote,dt,td.content{font-size:1em;orphans:3;widows:3}
+h2,h3,#toctitle,.sidebarblock>.content>.title{page-break-after:avoid}
+#toc,.sidebarblock,.exampleblock>.content{background:none!important}
+#toc{border-bottom:1px solid #ddddd8!important;padding-bottom:0!important}
+.sect1{padding-bottom:0!important}
+.sect1+.sect1{border:0!important}
+#header>h1:first-child{margin-top:1.25rem}
+body.book #header{text-align:center}
+body.book #header>h1:first-child{border:0!important;margin:2.5em 0 1em 0}
+body.book #header .details{border:0!important;display:block;padding:0!important}
+body.book #header .details span:first-child{margin-left:0!important}
+body.book #header .details br{display:block}
+body.book #header .details br+span:before{content:none!important}
+body.book #toc{border:0!important;text-align:left!important;padding:0!important;margin:0!important}
+body.book #toc,body.book #preamble,body.book h1.sect0,body.book .sect1>h2{page-break-before:always}
+.listingblock code[data-lang]:before{display:block}
+#footer{background:none!important;padding:0 .9375em}
+#footer-text{color:rgba(0,0,0,.6)!important;font-size:.9em}
+.hide-on-print{display:none!important}
+.print-only{display:block!important}
+.hide-for-print{display:none!important}
+.show-for-print{display:inherit!important}}
 
----
-
----
-snapshot_id: archunit-userguide
-source: "https://www.archunit.org/userguide/html/000_Index.html"
-fetched_at: "2026-07-14T00:00:00Z"
-version_observed: "as published, fetched 2026-07-14"
-via: curl
-tier: 3
-bytes: 76515
-sha: "84d777d036d7adb62a4180cac5b7e91ce64a21abfc2f4a9ac1f1d3ee7fdfd705"
----
-
-# archunit userguide — upstream snapshot
-
-Source: https://www.archunit.org/userguide/html/000_Index.html
-Fetched: 2026-07-14
-
-ArchUnit User Guide
-
-# ArchUnit User Guide
-version 1.4.2
-Table of Contents
-1. Introduction
-1.1. Module Overview
-2. Installation
-2.1. JUnit 4
-2.2. JUnit 5
-2.3. Other Test Frameworks
-2.4. Maven Plugin
-3. Getting Started
-3.1. Importing Classes
-3.2. Asserting (Architectural) Constraints
-3.3. Using JUnit 4 or JUnit 5
-3.4. Using JUnit support with Kotlin
-4. What to Check
-4.1. Package Dependency Checks
-4.2. Class Dependency Checks
-4.3. Class and Package Containment Checks
-4.4. Inheritance Checks
-4.5. Annotation Checks
-4.6. Layer Checks
-4.7. Cycle Checks
-5. Ideas and Concepts
-5.1. Core
-5.2. Lang
-5.3. Library
-6. The Core API
-6.1. Import
-6.2. Domain
-7. The Lang API
-7.1. Composing Class Rules
-7.2. Composing Member Rules
-7.3. Creating Custom Rules
-7.4. Predefined Predicates and Conditions
-7.5. Rules with Custom Concepts
-7.6. Controlling the Rule Text
-7.7. Ignoring Violations
-8. The Library API
-8.1. Architectures
-8.2. Slices
-8.3. Modularization Rules
-8.4. General Coding Rules
-8.5. PlantUML Component Diagrams as rules
-8.6. Freezing Arch Rules
-8.7. Software Architecture Metrics
-9. JUnit Support
-9.1. JUnit 4 & 5 Support
-10. Advanced Configuration
-10.1. Overriding configuration
-10.2. Configuring the Resolution Behavior
-10.3. MD5 Sums of Classes
-10.4. Fail Rules on Empty Should
-10.5. Custom Error Messages
-
-## 1. Introduction
-ArchUnit is a free, simple and extensible library for checking the
+/* Some custom overrides to force some styles*/
+h2 {
+    margin-top: 1.5em !important;
+    margin-bottom: 0.75em !important;
+}
+h3 {
+    margin-top: 1.3em !important;
+    margin-bottom: 0.65em !important;
+}
+h4 {
+    margin-top: 1.2em !important;
+    margin-bottom: 0.55em !important;
+}
+/* Restore code box for single inline-code inside table cells */
+p.tableblock > code:only-child {
+    background-color: #f7f7f8 !important;
+    padding: .1em .5ex !important;
+    border-radius: 4px !important;
+    border: 1px solid #e0e0e0;   /* makes a lone dot's box clearly visible */
+}
+</style>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/9.18.3/styles/mono-blue.min.css">
+</head>
+<body class="article toc2 toc-left">
+<div id="header">
+<h1>ArchUnit User Guide</h1>
+<div class="details">
+<span id="revnumber">version 1.5.0</span>
+</div>
+<div id="toc" class="toc2">
+<div id="toctitle">Table of Contents</div>
+<ul class="sectlevel1">
+<li><a href="#_introduction">1. Introduction</a>
+<ul class="sectlevel2">
+<li><a href="#_module_overview">1.1. Module Overview</a></li>
+</ul>
+</li>
+<li><a href="#_installation">2. Installation</a>
+<ul class="sectlevel2">
+<li><a href="#_junit_5_6">2.1. JUnit 5 &amp; 6</a></li>
+<li><a href="#_junit_4">2.2. JUnit 4</a></li>
+<li><a href="#_other_test_frameworks">2.3. Other Test Frameworks</a></li>
+<li><a href="#_maven_plugin">2.4. Maven Plugin</a></li>
+</ul>
+</li>
+<li><a href="#_getting_started">3. Getting Started</a>
+<ul class="sectlevel2">
+<li><a href="#_importing_classes">3.1. Importing Classes</a></li>
+<li><a href="#_asserting_architectural_constraints">3.2. Asserting (Architectural) Constraints</a></li>
+<li><a href="#_using_junit">3.3. Using JUnit</a></li>
+<li><a href="#_using_junit_support_with_kotlin">3.4. Using JUnit support with Kotlin</a></li>
+</ul>
+</li>
+<li><a href="#_what_to_check">4. What to Check</a>
+<ul class="sectlevel2">
+<li><a href="#_package_dependency_checks">4.1. Package Dependency Checks</a></li>
+<li><a href="#_class_dependency_checks">4.2. Class Dependency Checks</a></li>
+<li><a href="#_class_and_package_containment_checks">4.3. Class and Package Containment Checks</a></li>
+<li><a href="#_inheritance_checks">4.4. Inheritance Checks</a></li>
+<li><a href="#_annotation_checks">4.5. Annotation Checks</a></li>
+<li><a href="#_layer_checks">4.6. Layer Checks</a></li>
+<li><a href="#_cycle_checks">4.7. Cycle Checks</a></li>
+</ul>
+</li>
+<li><a href="#_ideas_and_concepts">5. Ideas and Concepts</a>
+<ul class="sectlevel2">
+<li><a href="#_core">5.1. Core</a></li>
+<li><a href="#_lang">5.2. Lang</a></li>
+<li><a href="#_library">5.3. Library</a></li>
+</ul>
+</li>
+<li><a href="#_the_core_api">6. The Core API</a>
+<ul class="sectlevel2">
+<li><a href="#_import">6.1. Import</a></li>
+<li><a href="#_domain">6.2. Domain</a></li>
+</ul>
+</li>
+<li><a href="#_the_lang_api">7. The Lang API</a>
+<ul class="sectlevel2">
+<li><a href="#_composing_class_rules">7.1. Composing Class Rules</a></li>
+<li><a href="#_composing_member_rules">7.2. Composing Member Rules</a></li>
+<li><a href="#_creating_custom_rules">7.3. Creating Custom Rules</a></li>
+<li><a href="#_predefined_predicates_and_conditions">7.4. Predefined Predicates and Conditions</a></li>
+<li><a href="#_rules_with_custom_concepts">7.5. Rules with Custom Concepts</a></li>
+<li><a href="#_controlling_the_rule_text">7.6. Controlling the Rule Text</a></li>
+<li><a href="#_priority">7.7. Priority</a></li>
+<li><a href="#_ignoring_violations">7.8. Ignoring Violations</a></li>
+</ul>
+</li>
+<li><a href="#_the_library_api">8. The Library API</a>
+<ul class="sectlevel2">
+<li><a href="#_architectures">8.1. Architectures</a></li>
+<li><a href="#_slices">8.2. Slices</a></li>
+<li><a href="#_modularization_rules">8.3. Modularization Rules</a></li>
+<li><a href="#_general_coding_rules">8.4. General Coding Rules</a></li>
+<li><a href="#_plantuml_component_diagrams_as_rules">8.5. PlantUML Component Diagrams as rules</a></li>
+<li><a href="#_freezing_arch_rules">8.6. Freezing Arch Rules</a></li>
+<li><a href="#_software_architecture_metrics">8.7. Software Architecture Metrics</a></li>
+</ul>
+</li>
+<li><a href="#_junit_support">9. JUnit Support</a>
+<ul class="sectlevel2">
+<li><a href="#_junit_integration">9.1. JUnit Integration</a></li>
+</ul>
+</li>
+<li><a href="#_advanced_configuration">10. Advanced Configuration</a>
+<ul class="sectlevel2">
+<li><a href="#_overriding_configuration">10.1. Overriding configuration</a></li>
+<li><a href="#_configuring_the_resolution_behavior">10.2. Configuring the Resolution Behavior</a></li>
+<li><a href="#_md5_sums_of_classes">10.3. MD5 Sums of Classes</a></li>
+<li><a href="#_fail_rules_on_empty_should">10.4. Fail Rules on Empty Should</a></li>
+<li><a href="#_custom_error_messages">10.5. Custom Error Messages</a></li>
+</ul>
+</li>
+</ul>
+</div>
+</div>
+<div id="content">
+<div class="sect1">
+<h2 id="_introduction"><a class="anchor" href="#_introduction"></a>1. Introduction</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p><a href="https://archunit.org">ArchUnit</a> is a free, simple and extensible library for checking the
 architecture of your Java code.
 That is, ArchUnit can check dependencies between packages and classes, layers and slices,
 check for cyclic dependencies and more. It does so by analyzing given Java bytecode,
 importing all classes into a Java code structure.
-ArchUnit’s main focus is to automatically test architecture and coding rules,
-using any plain Java unit testing framework.
-
-### 1.1. Module Overview
-ArchUnit consists of the following production modules: archunit, archunit-junit4 as well
-as archunit-junit5-api, archunit-junit5-engine and archunit-junit5-engine-api.
-Also relevant for end users is the archunit-example module.
-
-#### 1.1.1. Module archunit
-This module contains the actual ArchUnit core infrastructure required to write architecture
-tests: The ClassFileImporter,
-the domain objects, as well as the rule syntax infrastructure.
-
-#### 1.1.2. Module archunit-junit4
-This module contains the infrastructure to integrate with JUnit 4, in particular
-the ArchUnitRunner to cache imported classes.
-
-#### 1.1.3. Modules archunit-junit5-*
-These modules contain the infrastructure to integrate with JUnit 5 and contain the respective
+ArchUnit&#8217;s main focus is to automatically test architecture and coding rules,
+using any plain Java unit testing framework.</p>
+</div>
+<div class="sect2">
+<h3 id="_module_overview"><a class="anchor" href="#_module_overview"></a>1.1. Module Overview</h3>
+<div class="paragraph">
+<p>ArchUnit consists of the following production modules:</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><code>archunit</code></p>
+</li>
+<li>
+<p><code>archunit-junit4</code></p>
+</li>
+<li>
+<p><code>archunit-junit5-api</code>, <code>archunit-junit5-engine</code>, <code>archunit-junit5-engine-api</code></p>
+</li>
+<li>
+<p><code>archunit-junit6-api</code>, <code>archunit-junit6-engine</code>, <code>archunit-junit6-engine-api</code></p>
+</li>
+</ul>
+</div>
+<div class="paragraph">
+<p>The <code>archunit-example</code> is also relevant to end users.</p>
+</div>
+<div class="sect3">
+<h4 id="_module_archunit"><a class="anchor" href="#_module_archunit"></a>1.1.1. Module archunit</h4>
+<div class="paragraph">
+<p>This module contains the actual ArchUnit core infrastructure required to write architecture
+tests: The <code>ClassFileImporter</code>,
+the domain objects, as well as the rule syntax infrastructure.</p>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_module_archunit_junit4"><a class="anchor" href="#_module_archunit_junit4"></a>1.1.2. Module archunit-junit4</h4>
+<div class="paragraph">
+<p>This module contains the infrastructure to integrate with JUnit 4, in particular
+the <code>ArchUnitRunner</code> to cache imported classes.</p>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_modules_archunit_junit"><a class="anchor" href="#_modules_archunit_junit"></a>1.1.3. Modules archunit-junit*-*</h4>
+<div class="paragraph">
+<p>These modules contain the infrastructure to integrate with JUnit 5 &amp; 6 and contain the respective
 infrastructure to cache imported classes between test runs.
-archunit-junit5-api contains the user API to write tests with ArchUnit’s JUnit 5 support,
-archunit-junit5-engine contains the runtime engine to run those tests.
-archunit-junit5-engine-api contains API code for tools that want more detailed control
-over running ArchUnit JUnit 5 tests, in particular a FieldSelector which can be used to
-instruct the ArchUnitTestEngine to run a specific rule field (compare JUnit 4 & 5 Support).
-
-#### 1.1.4. Module archunit-example
-This module contains example architecture rules and sample code that violates these rules.
+<code>archunit-junit*-api</code> contains the user API to write tests with ArchUnit&#8217;s JUnit support.
+<code>archunit-junit*-engine</code> contains the runtime engine to run those tests.
+<code>archunit-junit*-engine-api</code> contains API code for tools that want more detailed control
+over running ArchUnit JUnit tests, in particular a <code>FieldSelector</code> which can be used to
+instruct the <code>ArchUnitTestEngine</code> to run a specific rule field (compare <a href="#_junit_integration">JUnit Integration</a>).</p>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_module_archunit_example"><a class="anchor" href="#_module_archunit_example"></a>1.1.4. Module archunit-example</h4>
+<div class="paragraph">
+<p>This module contains example architecture rules and sample code that violates these rules.
 Look here to get inspiration on how to set up rules for your project, or at
-ArchUnit-Examples for the last released version.
-
-## 2. Installation
-To use ArchUnit, it is sufficient to include the respective JAR files in the classpath.
+<a href="https://github.com/TNG/ArchUnit-Examples">ArchUnit-Examples</a> for the last released version.</p>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_installation"><a class="anchor" href="#_installation"></a>2. Installation</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>To use ArchUnit, it is sufficient to include the respective JAR files in the classpath.
 Most commonly, this is done by adding the dependency to your dependency management tool,
-which is illustrated for Maven and Gradle below. Alternatively you
+which is illustrated for Maven and Gradle below. Alternatively, you
 can obtain the necessary JAR files directly from
-Maven Central.
-
-### 2.1. JUnit 4
-To use ArchUnit in combination with JUnit 4, include the following dependency from
-Maven Central:
-pom.xml
-com.tngtech.archunit
- archunit-junit4
- 1.4.2
- test
-build.gradle
-dependencies {
- testImplementation 'com.tngtech.archunit:archunit-junit4:1.4.2'
-}
-
-### 2.2. JUnit 5
-ArchUnit’s JUnit 5 artifacts follow the pattern of JUnit Jupiter. There is one artifact containing
+<a href="http://search.maven.org/#search%7Cga%7C1%7Cg%3A%22com.tngtech.archunit%22">Maven Central</a>.</p>
+</div>
+<div class="sect2">
+<h3 id="_junit_5_6"><a class="anchor" href="#_junit_5_6"></a>2.1. JUnit 5 &amp; 6</h3>
+<div class="paragraph">
+<p>ArchUnit&#8217;s JUnit 5 &amp; 6 artifacts follow the pattern of JUnit Jupiter. There is one artifact containing
 the API, i.e. the compile time dependencies to write tests. Then there is another artifact containing
-the actual TestEngine used at runtime. Just like JUnit Jupiter ArchUnit offers one convenience
+the actual <code>TestEngine</code> used at runtime. Just like JUnit Jupiter, ArchUnit offers one convenience
 artifact transitively including both API and engine with the correct scope, which in turn can be added
-as a test compile dependency. Thus to include ArchUnit’s JUnit 5 support, simply add the following dependency
-from Maven Central:
-pom.xml
-com.tngtech.archunit
- archunit-junit5
- 1.4.2
- test
-build.gradle
-dependencies {
- testImplementation 'com.tngtech.archunit:archunit-junit5:1.4.2'
-}
-
-### 2.3. Other Test Frameworks
-ArchUnit works with any test framework that executes Java code. To use ArchUnit in such a
-context, include the core ArchUnit dependency from Maven Central:
-pom.xml
-com.tngtech.archunit
- archunit
- 1.4.2
- test
-build.gradle
-dependencies {
- testImplementation 'com.tngtech.archunit:archunit:1.4.2'
-}
-
-### 2.4. Maven Plugin
-There exists a Maven plugin by Société Générale to run ArchUnit rules straight from Maven. For
-more information visit their GitHub repo: https://github.com/societe-generale/arch-unit-maven-plugin
-
-## 3. Getting Started
-ArchUnit tests are written the same way as any Java unit test and can be written with any
+as a test compile dependency. Thus, to include ArchUnit&#8217;s JUnit 5 &amp; 6 support, simply add the following dependency
+from Maven Central:</p>
+</div>
+<div class="listingblock">
+<div class="title">build.gradle</div>
+<div class="content">
+<pre class="highlightjs highlight nowrap"><code class="language-groovy hljs" data-lang="groovy">dependencies {
+    // testImplementation 'com.tngtech.archunit:archunit-junit5:1.5.0' // for JUnit 5
+    testImplementation 'com.tngtech.archunit:archunit-junit6:1.5.0'
+}</code></pre>
+</div>
+</div>
+<div class="listingblock">
+<div class="title">pom.xml</div>
+<div class="content">
+<pre class="highlightjs highlight nowrap"><code class="language-xml hljs" data-lang="xml">&lt;dependency&gt;
+    &lt;groupId&gt;com.tngtech.archunit&lt;/groupId&gt;
+    &lt;!-- &lt;artifactId&gt;archunit-junit5&lt;/artifactId&gt; --&gt; &lt;!-- for JUnit 5 --&gt;
+    &lt;artifactId&gt;archunit-junit6&lt;/artifactId&gt;
+    &lt;version&gt;1.5.0&lt;/version&gt;
+    &lt;scope&gt;test&lt;/scope&gt;
+&lt;/dependency&gt;</code></pre>
+</div>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_junit_4"><a class="anchor" href="#_junit_4"></a>2.2. JUnit 4</h3>
+<div class="paragraph">
+<p>To use ArchUnit in combination with JUnit 4, include the following dependency from
+Maven Central:</p>
+</div>
+<div class="listingblock">
+<div class="title">build.gradle</div>
+<div class="content">
+<pre class="highlightjs highlight nowrap"><code class="language-groovy hljs" data-lang="groovy">dependencies {
+    testImplementation 'com.tngtech.archunit:archunit-junit4:1.5.0'
+}</code></pre>
+</div>
+</div>
+<div class="listingblock">
+<div class="title">pom.xml</div>
+<div class="content">
+<pre class="highlightjs highlight nowrap"><code class="language-xml hljs" data-lang="xml">&lt;dependency&gt;
+    &lt;groupId&gt;com.tngtech.archunit&lt;/groupId&gt;
+    &lt;artifactId&gt;archunit-junit4&lt;/artifactId&gt;
+    &lt;version&gt;1.5.0&lt;/version&gt;
+    &lt;scope&gt;test&lt;/scope&gt;
+&lt;/dependency&gt;</code></pre>
+</div>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_other_test_frameworks"><a class="anchor" href="#_other_test_frameworks"></a>2.3. Other Test Frameworks</h3>
+<div class="paragraph">
+<p>ArchUnit works with any test framework that executes Java code. To use ArchUnit in such a
+context, include the core ArchUnit dependency from Maven Central:</p>
+</div>
+<div class="listingblock">
+<div class="title">build.gradle</div>
+<div class="content">
+<pre class="highlightjs highlight nowrap"><code class="language-groovy hljs" data-lang="groovy">dependencies {
+   testImplementation 'com.tngtech.archunit:archunit:1.5.0'
+}</code></pre>
+</div>
+</div>
+<div class="listingblock">
+<div class="title">pom.xml</div>
+<div class="content">
+<pre class="highlightjs highlight nowrap"><code class="language-xml hljs" data-lang="xml">&lt;dependency&gt;
+    &lt;groupId&gt;com.tngtech.archunit&lt;/groupId&gt;
+    &lt;artifactId&gt;archunit&lt;/artifactId&gt;
+    &lt;version&gt;1.5.0&lt;/version&gt;
+    &lt;scope&gt;test&lt;/scope&gt;
+&lt;/dependency&gt;</code></pre>
+</div>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_maven_plugin"><a class="anchor" href="#_maven_plugin"></a>2.4. Maven Plugin</h3>
+<div class="paragraph">
+<p>There exists a Maven plugin by Société Générale to run ArchUnit rules straight from Maven. For
+more information visit their GitHub repo: <a href="https://github.com/societe-generale/arch-unit-maven-plugin" class="bare">https://github.com/societe-generale/arch-unit-maven-plugin</a></p>
+</div>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_getting_started"><a class="anchor" href="#_getting_started"></a>3. Getting Started</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>ArchUnit tests are written the same way as any Java unit test and can be written with any
 Java unit testing framework. To really understand the ideas behind ArchUnit, one should consult
-Ideas and Concepts. The following will outline a "technical" getting started.
-
-### 3.1. Importing Classes
-At its core ArchUnit provides infrastructure to import Java bytecode into Java code structures.
-This can be done using the ClassFileImporter
-JavaClasses classes = new ClassFileImporter().importPackages("com.mycompany.myapp");
-The ClassFileImporter offers many ways to import classes. Some ways depend on
-the current project’s classpath, like importPackages(..). However there are other ways
-that do not, for example:
-JavaClasses classes = new ClassFileImporter().importPath("/some/path");
-The returned object of type JavaClasses represents a collection of elements of type
-JavaClass, where JavaClass in turn represents a single imported class file. You can
-in fact access most properties of the imported class via the public API:
-JavaClass clazz = classes.get(Object.class);
-System.out.print(clazz.getSimpleName()); // returns 'Object'
-
-### 3.2. Asserting (Architectural) Constraints
-To express architectural rules, like 'Services should only be accessed by Controllers',
+<a href="#_ideas_and_concepts">Ideas and Concepts</a>. The following will outline a "technical" getting started.</p>
+</div>
+<div class="sect2">
+<h3 id="_importing_classes"><a class="anchor" href="#_importing_classes"></a>3.1. Importing Classes</h3>
+<div class="paragraph">
+<p>At its core, ArchUnit provides infrastructure to import Java bytecode into Java code structures.
+This can be done using the <code>ClassFileImporter</code>:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight nowrap"><code class="language-java hljs" data-lang="java">JavaClasses classes = new ClassFileImporter().importPackages("com.mycompany.myapp");</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>The <code>ClassFileImporter</code> offers many ways to import classes. Some ways depend on
+the current project&#8217;s classpath, like <code>importPackages(..)</code>. However there are other ways
+that do not, for example:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight nowrap"><code class="language-java hljs" data-lang="java">JavaClasses classes = new ClassFileImporter().importPath("/some/path");</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>The returned object of type <code>JavaClasses</code> represents a collection of elements of type
+<code>JavaClass</code>, where <code>JavaClass</code> in turn represents a single imported class file. You can
+in fact access most properties of the imported class via the public API:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight nowrap"><code class="language-java hljs" data-lang="java">JavaClass clazz = classes.get(Object.class);
+System.out.print(clazz.getSimpleName()); // returns 'Object'</code></pre>
+</div>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_asserting_architectural_constraints"><a class="anchor" href="#_asserting_architectural_constraints"></a>3.2. Asserting (Architectural) Constraints</h3>
+<div class="paragraph">
+<p>To express architectural rules, like 'Services should only be accessed by Controllers',
 ArchUnit offers an abstract DSL-like fluent API, which can in turn be evaluated against
-imported classes. To specify a rule, use the class ArchRuleDefinition as entry point:
-import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.classes;
+imported classes. To specify a rule, use the class <code>ArchRuleDefinition</code> as entry point:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight nowrap"><code class="language-java hljs" data-lang="java">import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.classes;
 
 // ...
 
 ArchRule myRule = classes()
- .that().resideInAPackage("..service..")
- .should().onlyBeAccessed().byAnyPackage("..controller..", "..service..");
-The two dots represent any number of packages (compare AspectJ Pointcuts). The returned
-object of type ArchRule can now be evaluated against a set of imported classes:
-myRule.check(importedClasses);
-Thus the complete example could look like
-@Test
+    .that().resideInAPackage("..service..")
+    .should().onlyBeAccessed().byAnyPackage("..controller..", "..service..");</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>The two dots represent any number of packages (compare AspectJ Pointcuts); for details on
+the supported package pattern syntax see <a href="#_package_identifiers">Package Identifiers</a>. The returned object of
+type <code>ArchRule</code> can now be evaluated against a set of imported classes:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight nowrap"><code class="language-java hljs" data-lang="java">myRule.check(importedClasses);</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Thus the complete example could look like</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight nowrap"><code class="language-java hljs" data-lang="java">@Test
 public void Services_should_only_be_accessed_by_Controllers() {
- JavaClasses importedClasses = new ClassFileImporter().importPackages("com.mycompany.myapp");
+    JavaClasses importedClasses = new ClassFileImporter().importPackages("com.mycompany.myapp");
 
- ArchRule myRule = classes()
- .that().resideInAPackage("..service..")
- .should().onlyBeAccessed().byAnyPackage("..controller..", "..service..");
+    ArchRule myRule = classes()
+        .that().resideInAPackage("..service..")
+        .should().onlyBeAccessed().byAnyPackage("..controller..", "..service..");
 
- myRule.check(importedClasses);
-}
-
-### 3.3. Using JUnit 4 or JUnit 5
-While ArchUnit can be used with any unit testing framework, it provides extended support
-for writing tests with JUnit 4 and JUnit 5. The main advantage is automatic caching of imported
-classes between tests (of the same imported classes), as well as reduction of boilerplate code.
-To use the JUnit support, declare ArchUnit’s ArchUnitRunner (only JUnit 4), declare the classes
-to import via @AnalyzeClasses and add the respective rules as fields:
-@RunWith(ArchUnitRunner.class) // Remove this line for JUnit 5!!
+    myRule.check(importedClasses);
+}</code></pre>
+</div>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_using_junit"><a class="anchor" href="#_using_junit"></a>3.3. Using JUnit</h3>
+<div class="paragraph">
+<p>While ArchUnit can be used with any unit testing framework, it provides extended support
+for writing tests with JUnit. The main advantage is automatic caching of imported
+classes between tests (of the same imported classes), as well as reduction of boilerplate code.</p>
+</div>
+<div class="paragraph">
+<p>To use the JUnit support, declare ArchUnit&#8217;s <code>ArchUnitRunner</code> (only JUnit 4), declare the classes
+to import via <code>@AnalyzeClasses</code> and add the respective rules as fields:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight nowrap"><code class="language-java hljs" data-lang="java">// @RunWith(ArchUnitRunner.class) // Enable this line for JUnit 4
 @AnalyzeClasses(packages = "com.mycompany.myapp")
 public class MyArchitectureTest {
 
- @ArchTest
- public static final ArchRule myRule = classes()
- .that().resideInAPackage("..service..")
- .should().onlyBeAccessed().byAnyPackage("..controller..", "..service..");
+    @ArchTest
+    public static final ArchRule myRule = classes()
+        .that().resideInAPackage("..service..")
+        .should().onlyBeAccessed().byAnyPackage("..controller..", "..service..");
 
-}
-The JUnit test support will automatically import (or reuse) the specified classes and
-evaluate any rule annotated with @ArchTest against those classes.
-For further information on how to use the JUnit support refer to JUnit Support.
-
-### 3.4. Using JUnit support with Kotlin
-Using the JUnit support with Kotlin is quite similar to Java:
-@RunWith(ArchUnitRunner::class) // Remove this line for JUnit 5!!
+}</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>The JUnit test support will automatically import (or reuse) the specified classes and
+evaluate any rule annotated with <code>@ArchTest</code> against those classes.</p>
+</div>
+<div class="paragraph">
+<p>For further information on how to use the JUnit support refer to <a href="#_junit_support">JUnit Support</a>.</p>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_using_junit_support_with_kotlin"><a class="anchor" href="#_using_junit_support_with_kotlin"></a>3.4. Using JUnit support with Kotlin</h3>
+<div class="paragraph">
+<p>Using the JUnit support with Kotlin is quite similar to Java:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight nowrap"><code class="language-kotlin hljs" data-lang="kotlin">// @RunWith(ArchUnitRunner::class) // Enable this line for JUnit 4
 @AnalyzeClasses(packagesOf = [MyArchitectureTest::class])
 class MyArchitectureTest {
- @ArchTest
- val rule_as_field = ArchRuleDefinition.noClasses().should()...
+    @ArchTest
+    val rule_as_field = ArchRuleDefinition.noClasses().should()...
 
- @ArchTest
- fun rule_as_method(importedClasses: JavaClasses) {
- val rule = ArchRuleDefinition.noClasses().should()...
- rule.check(importedClasses)
- }
-}
+    @ArchTest
+    fun rule_as_method(importedClasses: JavaClasses) {
+        val rule = ArchRuleDefinition.noClasses().should()...
+        rule.check(importedClasses)
+    }
+}</code></pre>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_what_to_check"><a class="anchor" href="#_what_to_check"></a>4. What to Check</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>The following section illustrates some typical checks you could do with ArchUnit.</p>
+</div>
+<div class="sect2">
+<h3 id="_package_dependency_checks"><a class="anchor" href="#_package_dependency_checks"></a>4.1. Package Dependency Checks</h3>
+<div class="imageblock">
+<div class="content">
+<object type="image/svg+xml" data="package-deps-no-access.svg" width="453" height="68"><span class="alt">package deps no access</span></object>
+</div>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight nowrap"><code class="language-java hljs" data-lang="java">noClasses().that().resideInAPackage("..source..")
+    .should().dependOnClassesThat().resideInAPackage("..foo..")</code></pre>
+</div>
+</div>
+<div class="imageblock">
+<div class="content">
+<object type="image/svg+xml" data="package-deps-only-access.svg" width="484" height="324"><span class="alt">package deps only access</span></object>
+</div>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight nowrap"><code class="language-java hljs" data-lang="java">classes().that().resideInAPackage("..foo..")
+    .should().onlyHaveDependentClassesThat().resideInAnyPackage("..source.one..", "..foo..")</code></pre>
+</div>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_class_dependency_checks"><a class="anchor" href="#_class_dependency_checks"></a>4.2. Class Dependency Checks</h3>
+<div class="imageblock">
+<div class="content">
+<object type="image/svg+xml" data="class-naming-deps.svg" width="324" height="173"><span class="alt">class naming deps</span></object>
+</div>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight nowrap"><code class="language-java hljs" data-lang="java">classes().that().haveNameMatching(".*Bar")
+    .should().onlyHaveDependentClassesThat().haveSimpleName("Bar")</code></pre>
+</div>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_class_and_package_containment_checks"><a class="anchor" href="#_class_and_package_containment_checks"></a>4.3. Class and Package Containment Checks</h3>
+<div class="imageblock">
+<div class="content">
+<object type="image/svg+xml" data="class-package-contain.svg" width="347" height="165"><span class="alt">class package contain</span></object>
+</div>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight nowrap"><code class="language-java hljs" data-lang="java">classes().that().haveSimpleNameStartingWith("Foo")
+    .should().resideInAPackage("com.foo")</code></pre>
+</div>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_inheritance_checks"><a class="anchor" href="#_inheritance_checks"></a>4.4. Inheritance Checks</h3>
+<div class="imageblock">
+<div class="content">
+<object type="image/svg+xml" data="inheritance-naming-check.svg" width="486" height="188"><span class="alt">inheritance naming check</span></object>
+</div>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight nowrap"><code class="language-java hljs" data-lang="java">classes().that().implement(Connection.class)
+    .should().haveSimpleNameEndingWith("Connection")</code></pre>
+</div>
+</div>
+<div class="imageblock">
+<div class="content">
+<object type="image/svg+xml" data="inheritance-access-check.svg" width="558" height="209"><span class="alt">inheritance access check</span></object>
+</div>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight nowrap"><code class="language-java hljs" data-lang="java">classes().that().areAssignableTo(EntityManager.class)
+    .should().onlyHaveDependentClassesThat().resideInAnyPackage("..persistence..")</code></pre>
+</div>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_annotation_checks"><a class="anchor" href="#_annotation_checks"></a>4.5. Annotation Checks</h3>
+<div class="imageblock">
+<div class="content">
+<object type="image/svg+xml" data="inheritance-annotation-check.svg" width="601" height="181"><span class="alt">inheritance annotation check</span></object>
+</div>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight nowrap"><code class="language-java hljs" data-lang="java">classes().that().areAssignableTo(EntityManager.class)
+    .should().onlyHaveDependentClassesThat().areAnnotatedWith(Transactional.class)</code></pre>
+</div>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_layer_checks"><a class="anchor" href="#_layer_checks"></a>4.6. Layer Checks</h3>
+<div class="imageblock">
+<div class="content">
+<object type="image/svg+xml" data="layer-check.svg" width="627" height="520"><span class="alt">layer check</span></object>
+</div>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight nowrap"><code class="language-java hljs" data-lang="java">layeredArchitecture()
+    .consideringAllDependencies()
+    .layer("Controller").definedBy("..controller..")
+    .layer("Service").definedBy("..service..")
+    .layer("Persistence").definedBy("..persistence..")
 
-## 4. What to Check
-The following section illustrates some typical checks you could do with ArchUnit.
-
-### 4.1. Package Dependency Checks
-package deps no access
-noClasses().that().resideInAPackage("..source..")
- .should().dependOnClassesThat().resideInAPackage("..foo..")
-package deps only access
-classes().that().resideInAPackage("..foo..")
- .should().onlyHaveDependentClassesThat().resideInAnyPackage("..source.one..", "..foo..")
-
-### 4.2. Class Dependency Checks
-class naming deps
-classes().that().haveNameMatching(".*Bar")
- .should().onlyHaveDependentClassesThat().haveSimpleName("Bar")
-
-### 4.3. Class and Package Containment Checks
-class package contain
-classes().that().haveSimpleNameStartingWith("Foo")
- .should().resideInAPackage("com.foo")
-
-### 4.4. Inheritance Checks
-inheritance naming check
-classes().that().implement(Connection.class)
- .should().haveSimpleNameEndingWith("Connection")
-inheritance access check
-classes().that().areAssignableTo(EntityManager.class)
- .should().onlyHaveDependentClassesThat().resideInAnyPackage("..persistence..")
-
-### 4.5. Annotation Checks
-inheritance annotation check
-classes().that().areAssignableTo(EntityManager.class)
- .should().onlyHaveDependentClassesThat().areAnnotatedWith(Transactional.class)
-
-### 4.6. Layer Checks
-layer check
-layeredArchitecture()
- .consideringAllDependencies()
- .layer("Controller").definedBy("..controller..")
- .layer("Service").definedBy("..service..")
- .layer("Persistence").definedBy("..persistence..")
-
- .whereLayer("Controller").mayNotBeAccessedByAnyLayer()
- .whereLayer("Service").mayOnlyBeAccessedByLayers("Controller")
- .whereLayer("Persistence").mayOnlyBeAccessedByLayers("Service")
-
-### 4.7. Cycle Checks
-cycle check
-slices().matching("com.myapp.(*)..").should().beFreeOfCycles()
-
-## 5. Ideas and Concepts
-ArchUnit is divided into different layers, where the most important ones are the "Core" layer,
+    .whereLayer("Controller").mayNotBeAccessedByAnyLayer()
+    .whereLayer("Service").mayOnlyBeAccessedByLayers("Controller")
+    .whereLayer("Persistence").mayOnlyBeAccessedByLayers("Service")</code></pre>
+</div>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_cycle_checks"><a class="anchor" href="#_cycle_checks"></a>4.7. Cycle Checks</h3>
+<div class="imageblock">
+<div class="content">
+<object type="image/svg+xml" data="cycle-check.svg" width="771" height="328"><span class="alt">cycle check</span></object>
+</div>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight nowrap"><code class="language-java hljs" data-lang="java">slices().matching("com.myapp.(*)..").should().beFreeOfCycles()</code></pre>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_ideas_and_concepts"><a class="anchor" href="#_ideas_and_concepts"></a>5. Ideas and Concepts</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>ArchUnit is divided into different layers, where the most important ones are the "Core" layer,
 the "Lang" layer and the "Library" layer. In short the Core layer deals with the basic
 infrastructure, i.e. how to import byte code into Java objects. The Lang layer contains the
 rule syntax to specify architecture rules in a succinct way. The Library layer contains
 more complex predefined rules, like a layered architecture with several layers. The following
-section will explain these layers in more detail.
-
-### 5.1. Core
-Much of ArchUnit’s core API resembles the Java Reflection API.
-There are classes like JavaMethod, JavaField, and more,
-and the public API consists of methods like getName(), getMethods(),
-getRawType() or getRawParameterTypes().
+section will explain these layers in more detail.</p>
+</div>
+<div class="sect2">
+<h3 id="_core"><a class="anchor" href="#_core"></a>5.1. Core</h3>
+<div class="paragraph">
+<p>Much of ArchUnit&#8217;s core API resembles the Java Reflection API.
+There are classes like <code>JavaMethod</code>, <code>JavaField</code>, and more,
+and the public API consists of methods like <code>getName()</code>, <code>getMethods()</code>,
+<code>getRawType()</code> or <code>getRawParameterTypes()</code>.
 Additionally ArchUnit extends this API for concepts needed to talk about dependencies between code,
-like JavaMethodCall, JavaConstructorCall or JavaFieldAccess.
-For example, it is possible to programmatically iterate over javaClass.getAccessesFromSelf()
-and react to the imported accesses between this Java class and other Java classes.
-To import compiled Java class files, ArchUnit provides the ClassFileImporter, which can
-for example be used to import packages from the classpath:
-JavaClasses classes = new ClassFileImporter().importPackages("com.mycompany.myapp");
-For more information refer to The Core API.
-
-### 5.2. Lang
-The Core API is quite powerful and offers a lot of information about the static structure
+like <code>JavaMethodCall</code>, <code>JavaConstructorCall</code> or <code>JavaFieldAccess</code>.
+For example, it is possible to programmatically iterate over <code>javaClass.getAccessesFromSelf()</code>
+and react to the imported accesses between this Java class and other Java classes.</p>
+</div>
+<div class="paragraph">
+<p>To import compiled Java class files, ArchUnit provides the <code>ClassFileImporter</code>, which can
+for example be used to import packages from the classpath:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight nowrap"><code class="language-java hljs" data-lang="java">JavaClasses classes = new ClassFileImporter().importPackages("com.mycompany.myapp");</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>For more information refer to <a href="#_the_core_api">The Core API</a>.</p>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_lang"><a class="anchor" href="#_lang"></a>5.2. Lang</h3>
+<div class="paragraph">
+<p>The Core API is quite powerful and offers a lot of information about the static structure
 of a Java program. However, tests directly using the Core API lack expressiveness,
-in particular with respect to architectural rules.
-For this reason ArchUnit provides the Lang API, which offers a powerful syntax to express rules
+in particular with respect to architectural rules.</p>
+</div>
+<div class="paragraph">
+<p>For this reason ArchUnit provides the Lang API, which offers a powerful syntax to express rules
 in an abstract way. Most parts of the Lang API are composed as fluent APIs, i.e. an IDE can
-provide valuable suggestions on the possibilities the syntax offers.
-An example for a specified architecture rule would be:
-ArchRule rule =
- classes().that().resideInAPackage("..service..")
- .should().onlyBeAccessed().byAnyPackage("..controller..", "..service..");
-Once a rule is composed, imported Java classes can be checked against it:
-JavaClasses importedClasses = new ClassFileImporter().importPackage("com.myapp");
+provide valuable suggestions on the possibilities the syntax offers.</p>
+</div>
+<div class="paragraph">
+<p>An example for a specified architecture rule would be:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight nowrap"><code class="language-java hljs" data-lang="java">ArchRule rule =
+    classes().that().resideInAPackage("..service..")
+        .should().onlyBeAccessed().byAnyPackage("..controller..", "..service..");</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Once a rule is composed, imported Java classes can be checked against it:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight nowrap"><code class="language-java hljs" data-lang="java">JavaClasses importedClasses = new ClassFileImporter().importPackage("com.myapp");
 ArchRule rule = // define the rule
-rule.check(importedClasses);
-The syntax ArchUnit provides is fully extensible and can thus be adjusted to almost any
-specific need. For further information, please refer to The Lang API.
-
-### 5.3. Library
-The Library API offers predefined complex rules for typical architectural goals. For example
+rule.check(importedClasses);</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>The syntax ArchUnit provides is fully extensible and can thus be adjusted to almost any
+specific need. For further information, please refer to <a href="#_the_lang_api">The Lang API</a>.</p>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_library"><a class="anchor" href="#_library"></a>5.3. Library</h3>
+<div class="paragraph">
+<p>The Library API offers predefined complex rules for typical architectural goals. For example
 a succinct definition of a layered architecture via package definitions. Or rules to slice
 the code base in a certain way, for example in different areas of the domain, and enforce these
 slices to be acyclic or independent of each other. More detailed information is provided in
-The Library API.
-
-## 6. The Core API
-The Core API is itself divided into the domain objects and the actual import.
-
-### 6.1. Import
-As mentioned in Ideas and Concepts the backbone of the infrastructure is the ClassFileImporter,
+<a href="#_the_library_api">The Library API</a>.</p>
+</div>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_the_core_api"><a class="anchor" href="#_the_core_api"></a>6. The Core API</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>The Core API is itself divided into the domain objects and the actual import.</p>
+</div>
+<div class="sect2">
+<h3 id="_import"><a class="anchor" href="#_import"></a>6.1. Import</h3>
+<div class="paragraph">
+<p>As mentioned in <a href="#_ideas_and_concepts">Ideas and Concepts</a> the backbone of the infrastructure is the <code>ClassFileImporter</code>,
 which provides various ways to import Java classes. One way is to import packages from
-the classpath, or the complete classpath via
-JavaClasses classes = new ClassFileImporter().importClasspath();
-However, the import process is completely independent of the classpath, so it would be well possible
-to import any path from the file system:
-JavaClasses classes = new ClassFileImporter().importPath("/some/path/to/classes");
-The ClassFileImporter offers several other methods to import classes, for example locations can be
-specified as URLs or as JAR files.
-Furthermore specific locations can be filtered out, if they are contained in the source of classes,
+the classpath, or the complete classpath via</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight nowrap"><code class="language-java hljs" data-lang="java">JavaClasses classes = new ClassFileImporter().importClasspath();</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>However, the import process is completely independent of the classpath, so it would be well possible
+to import any path from the file system:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight nowrap"><code class="language-java hljs" data-lang="java">JavaClasses classes = new ClassFileImporter().importPath("/some/path/to/classes");</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>The <code>ClassFileImporter</code> offers several other methods to import classes, for example locations can be
+specified as URLs or as JAR files.</p>
+</div>
+<div class="paragraph">
+<p>Furthermore specific locations can be filtered out, if they are contained in the source of classes,
 but should not be imported. A typical use case would be to ignore test classes, when the classpath
-is imported. This can be achieved by specifying ImportOption﻿s:
-ImportOption ignoreTests = new ImportOption() {
- @Override
- public boolean includes(Location location) {
- return !location.contains("/test/"); // ignore any URI to sources that contains '/test/'
- }
+is imported. This can be achieved by specifying <code>ImportOption</code>﻿s:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight nowrap"><code class="language-java hljs" data-lang="java">ImportOption ignoreTests = new ImportOption() {
+    @Override
+    public boolean includes(Location location) {
+        return !location.contains("/test/"); // ignore any URI to sources that contains '/test/'
+    }
 };
 
-JavaClasses classes = new ClassFileImporter().withImportOption(ignoreTests).importClasspath();
-A Location is principally an URI, i.e. ArchUnit considers sources as File or JAR URIs
-file:///home/dev/my/project/target/classes/some/Thing.class
-jar:file:///home/dev/.m2/repository/some/things.jar!/some/Thing.class
-For the two common cases to skip importing JAR files and to skip importing test files
+JavaClasses classes = new ClassFileImporter().withImportOption(ignoreTests).importClasspath();</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>A <code>Location</code> is principally an URI, i.e. ArchUnit considers sources as File or JAR URIs</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><code><a href="file:///home/dev/my/project/target/classes/some/Thing.class" class="bare">file:///home/dev/my/project/target/classes/some/Thing.class</a></code></p>
+</li>
+<li>
+<p><code>jar:file:///home/dev/.m2/repository/some/things.jar!/some/Thing.class</code></p>
+</li>
+</ul>
+</div>
+<div class="paragraph">
+<p>For the two common cases to skip importing JAR files and to skip importing test files
 (for typical setups, like a Maven or Gradle build),
-there already exist predefined ImportOption﻿s:
-new ClassFileImporter()
- .withImportOption(ImportOption.Predefined.DO_NOT_INCLUDE_JARS)
- .withImportOption(ImportOption.Predefined.DO_NOT_INCLUDE_TESTS)
- .importClasspath();
-
-#### 6.1.1. Dealing with Missing Classes
-While importing the requested classes (e.g. target/classes or target/test-classes)
+there already exist predefined <code>ImportOption</code>﻿s:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight nowrap"><code class="language-java hljs" data-lang="java">new ClassFileImporter()
+    .withImportOption(ImportOption.Predefined.DO_NOT_INCLUDE_JARS)
+    .withImportOption(ImportOption.Predefined.DO_NOT_INCLUDE_TESTS)
+    .importClasspath();</code></pre>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_dealing_with_missing_classes"><a class="anchor" href="#_dealing_with_missing_classes"></a>6.1.1. Dealing with Missing Classes</h4>
+<div class="paragraph">
+<p>While importing the requested classes (e.g. <code>target/classes</code> or <code>target/test-classes</code>)
 it can happen that a class within the scope of the import has a reference to a class outside of the
 scope of the import. This will naturally happen, if the classes of the JDK are not imported,
-since then for example any dependency on Object.class will be unresolved within the import.
-At this point ArchUnit needs to decide how to treat these classes that are missing from the
+since then for example any dependency on <code>Object.class</code> will be unresolved within the import.</p>
+</div>
+<div class="paragraph">
+<p>At this point ArchUnit needs to decide how to treat these classes that are missing from the
 import. By default, ArchUnit searches within the classpath for missing classes and if found
 imports them. This obviously has the advantage that information about those classes
-(which interfaces they implement, how they are annotated) is present during rule evaluation.
-On the downside this additional lookup from the classpath will cost some performance and in some
+(which interfaces they implement, how they are annotated) is present during rule evaluation.</p>
+</div>
+<div class="paragraph">
+<p>On the downside this additional lookup from the classpath will cost some performance and in some
 cases might not make sense (e.g. if information about classes not present in the original import
 is known to be unnecessary for evaluating rules).
-Thus ArchUnit can be configured to create stubs instead, i.e. a JavaClass that has all the known
+Thus ArchUnit can be configured to create stubs instead, i.e. a <code>JavaClass</code> that has all the known
 information, like the fully qualified name or the method called. However, this stub might
 naturally lack some information, like superclasses, annotations or other details that cannot
 be determined without importing the bytecode of this class. This behavior will also happen,
-if ArchUnit fails to determine the location of a missing class from the classpath.
-To find out, how to configure the default behavior, refer to Configuring the Resolution Behavior.
-
-### 6.2. Domain
-The domain objects represent Java code, thus the naming should be pretty straight forward. Most
-commonly, the ClassFileImporter imports instances of type JavaClass. A rough overview looks
-like this:
-domain overview
-Most objects resemble the Java Reflection API, including inheritance relations. Thus a JavaClass
-has JavaMembers, which can in turn be either JavaField, JavaMethod,
-JavaConstructor (or JavaStaticInitializer). While not present within the reflection API,
+if ArchUnit fails to determine the location of a missing class from the classpath.</p>
+</div>
+<div class="paragraph">
+<p>To find out, how to configure the default behavior, refer to <a href="#_configuring_the_resolution_behavior">Configuring the Resolution Behavior</a>.</p>
+</div>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_domain"><a class="anchor" href="#_domain"></a>6.2. Domain</h3>
+<div class="paragraph">
+<p>The domain objects represent Java code, thus the naming should be pretty straight forward. Most
+commonly, the <code>ClassFileImporter</code> imports instances of type <code>JavaClass</code>. A rough overview looks
+like this:</p>
+</div>
+<div class="imageblock">
+<div class="content">
+<object type="image/svg+xml" data="domain-overview.svg" width="2068" height="941"><span class="alt">domain overview</span></object>
+</div>
+</div>
+<div class="paragraph">
+<p>Most objects resemble the Java Reflection API, including inheritance relations. Thus a <code>JavaClass</code>
+has <code>JavaMembers</code>, which can in turn be either <code>JavaField</code>, <code>JavaMethod</code>,
+<code>JavaConstructor</code> (or <code>JavaStaticInitializer</code>). While not present within the reflection API,
 it makes sense to introduce an expression for anything that can access other code, which ArchUnit
 calls 'code unit', and is in fact either a method, a constructor (including the class initializer)
-or a static initializer of a class (e.g. a static { …​ } block, a static field assignment,
-etc.).
-Furthermore one of the most interesting features of ArchUnit that exceeds the Java Reflection API,
+or a static initializer of a class (e.g. a <code>static { &#8230;&#8203; }</code> block, a static field assignment,
+etc.).</p>
+</div>
+<div class="paragraph">
+<p>Furthermore one of the most interesting features of ArchUnit that exceeds the Java Reflection API,
 is the concept of accesses to another class. On the lowest level accesses can only take place
-from a code unit (as mentioned, any block of executable code) to either a field (JavaFieldAccess),
-a method (JavaMethodCall) or constructor (JavaConstructorCall).
-ArchUnit imports the whole graph of classes and their relationship to each other. While checking
-the accesses from a class is pretty isolated (the bytecode offers all this information),
-checking accesses to a class requires the whole graph to be built first. To distinguish which
-sort of access is referred to, methods will always clearly state fromSelf and toSelf.
-For example, every JavaField allows to call JavaField#getAccessesToSelf() to retrieve all
+from a code unit (as mentioned, any block of executable code) to either a field (<code>JavaFieldAccess</code>),
+a method (<code>JavaMethodCall</code>) or constructor (<code>JavaConstructorCall</code>).</p>
+</div>
+<div class="paragraph">
+<p>ArchUnit imports the whole graph of classes and their relationship to each other. While checking
+the accesses <strong>from</strong> a class is pretty isolated (the bytecode offers all this information),
+checking accesses <strong>to</strong> a class requires the whole graph to be built first. To distinguish which
+sort of access is referred to, methods will always clearly state <strong>fromSelf</strong> and <strong>toSelf</strong>.
+For example, every <code>JavaField</code> allows to call <code>JavaField#getAccessesToSelf()</code> to retrieve all
 code units within the graph that access this specific field. The resolution process through
-inheritance is not completely straight forward. Consider for example
-resolution example
-The bytecode will record a field access from ClassAccessing.accessField() to
-ClassBeingAccessed.accessedField. However, there is no such field, since the field is
-actually declared in the superclass. This is the reason why a JavaFieldAccess
-has no JavaField as its target, but a FieldAccessTarget. In other words, ArchUnit models
+inheritance is not completely straight forward. Consider for example</p>
+</div>
+<div class="imageblock">
+<div class="content">
+<object type="image/svg+xml" data="resolution-example.svg" width="405" height="162"><span class="alt">resolution example</span></object>
+</div>
+</div>
+<div class="paragraph">
+<p>The bytecode will record a field access from <code>ClassAccessing.accessField()</code> to
+<code>ClassBeingAccessed.accessedField</code>. However, there is no such field, since the field is
+actually declared in the superclass. This is the reason why a <code>JavaFieldAccess</code>
+has no <code>JavaField</code> as its target, but a <code>FieldAccessTarget</code>. In other words, ArchUnit models
 the situation, as it is found within the bytecode, and an access target is not an actual
-member within another class. If a member is queried for accessesToSelf() though, ArchUnit
+member within another class. If a member is queried for <code>accessesToSelf()</code> though, ArchUnit
 will resolve the necessary targets and determine, which member is represented by which target.
-The situation looks roughly like
-resolution overview
-Two things might seem strange at the first look.
-First, why can a target resolve to zero matching members? The reason is that the set of classes
+The situation looks roughly like</p>
+</div>
+<div class="imageblock">
+<div class="content">
+<object type="image/svg+xml" data="resolution-overview.svg" width="581" height="264"><span class="alt">resolution overview</span></object>
+</div>
+</div>
+<div class="paragraph">
+<p>Two things might seem strange at the first look.</p>
+</div>
+<div class="paragraph">
+<p>First, why can a target resolve to zero matching members? The reason is that the set of classes
 that was imported does not need to have all classes involved within this resolution process.
-Consider the above example, if SuperclassBeingAccessed would not be imported, ArchUnit would
+Consider the above example, if <code>SuperclassBeingAccessed</code> would not be imported, ArchUnit would
 have no way of knowing where the actual targeted field resides. Thus in this case the
-resolution would return zero elements.
-Second, why can there be more than one resolved methods for method calls?
+resolution would return zero elements.</p>
+</div>
+<div class="paragraph">
+<p>Second, why can there be more than one resolved methods for method calls?
 The reason for this is that a call target might indeed match several methods in those
-cases, for example:
-diamond example
-While this situation will always be resolved in a specified way for a real program,
+cases, for example:</p>
+</div>
+<div class="imageblock">
+<div class="content">
+<object type="image/svg+xml" data="diamond-example.svg" width="567" height="212"><span class="alt">diamond example</span></object>
+</div>
+</div>
+<div class="paragraph">
+<p>While this situation will always be resolved in a specified way for a real program,
 ArchUnit cannot do the same. Instead, the resolution will report all candidates that match a
-specific access target, so in the above example, the call target C.targetMethod() would in fact
-resolve to two JavaMethods, namely A.targetMethod() and B.targetMethod(). Likewise a check
-of either A.targetMethod.getCallsToSelf() or B.targetMethod.getCallsToSelf() would return
-the same call from D.callTargetMethod() to C.targetMethod().
-
-#### 6.2.1. Domain Objects, Reflection and the Classpath
-ArchUnit tries to offer a lot of information from the bytecode. For example, a JavaClass
-provides details like if it is an enum or an interface, modifiers like public or abstract,
+specific access target, so in the above example, the call target <code>C.targetMethod()</code> would in fact
+resolve to two <code>JavaMethods</code>, namely <code>A.targetMethod()</code> and <code>B.targetMethod()</code>. Likewise a check
+of either <code>A.targetMethod.getCallsToSelf()</code> or <code>B.targetMethod.getCallsToSelf()</code> would return
+the same call from <code>D.callTargetMethod()</code> to <code>C.targetMethod()</code>.</p>
+</div>
+<div class="sect3">
+<h4 id="_domain_objects_reflection_and_the_classpath"><a class="anchor" href="#_domain_objects_reflection_and_the_classpath"></a>6.2.1. Domain Objects, Reflection and the Classpath</h4>
+<div class="paragraph">
+<p>ArchUnit tries to offer a lot of information from the bytecode. For example, a <code>JavaClass</code>
+provides details like if it is an enum or an interface, modifiers like <code>public</code> or <code>abstract</code>,
 but also the source, where this class was imported from (namely the URI mentioned in the first
 section). However, if information is missing, and the classpath is correct, ArchUnit offers
 some convenience to rely on the reflection API for extended details. For this reason, most
-Java* objects offer a method reflect(), which will in fact try to resolve the respective
-object from the Reflection API. For example:
-JavaClasses classes = new ClassFileImporter().importClasspath();
+<code>Java*</code> objects offer a method <code>reflect()</code>, which will in fact try to resolve the respective
+object from the Reflection API. For example:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight nowrap"><code class="language-java hljs" data-lang="java">JavaClasses classes = new ClassFileImporter().importClasspath();
 
 // ArchUnit's java.lang.String
 JavaClass javaClass = classes.get(String.class);
 // Reflection API's java.lang.String
-Class stringClass = javaClass.reflect();
+Class&lt;?&gt; stringClass = javaClass.reflect();
 
 // ArchUnit's public int java.lang.String.length()
 JavaMethod javaMethod = javaClass.getMethod("length");
 // Reflection API's public int java.lang.String.length()
-Method lengthMethod = javaMethod.reflect();
-However, this will throw an Exception, if the respective classes are missing on the classpath
-(e.g. because they were just imported from some file path).
-This restriction also applies to handling annotations in a more convenient way.
-Consider the following annotation:
-@interface CustomAnnotation {
- String value();
-}
-If you need to access this annotation without it being on the classpath, you must rely on
-JavaAnnotation annotation = javaClass.getAnnotationOfType("some.pkg.CustomAnnotation");
+Method lengthMethod = javaMethod.reflect();</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>However, this will throw an <code>Exception</code>, if the respective classes are missing on the classpath
+(e.g. because they were just imported from some file path).</p>
+</div>
+<div class="paragraph">
+<p>This restriction also applies to handling annotations in a more convenient way.
+Consider the following annotation:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight nowrap"><code class="language-java hljs" data-lang="java">@interface CustomAnnotation {
+    String value();
+}</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>If you need to access this annotation without it being on the classpath, you must rely on</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight nowrap"><code class="language-java hljs" data-lang="java">JavaAnnotation&lt;?&gt; annotation = javaClass.getAnnotationOfType("some.pkg.CustomAnnotation");
 // result is untyped, since it might not be on the classpath (e.g. enums)
-Object value = annotation.get("value");
-So there is neither type safety nor automatic refactoring support. If this annotation is on the classpath, however,
-this can be written way more naturally:
-CustomAnnotation annotation = javaClass.getAnnotationOfType(CustomAnnotation.class);
-String value = annotation.value();
-ArchUnit’s own rule APIs (compare The Lang API) never rely on the
+Object value = annotation.get("value");</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>So there is neither type safety nor automatic refactoring support. If this annotation is on the classpath, however,
+this can be written way more naturally:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight nowrap"><code class="language-java hljs" data-lang="java">CustomAnnotation annotation = javaClass.getAnnotationOfType(CustomAnnotation.class);
+String value = annotation.value();</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>ArchUnit&#8217;s own rule APIs (compare <a href="#_the_lang_api">The Lang API</a>) never rely on the
 classpath though. Thus the evaluation of default rules and syntax combinations, described in the
 next section, does not depend on whether the classes were imported from the classpath or
-some JAR / folder.
-
-## 7. The Lang API
-
-### 7.1. Composing Class Rules
-The Core API is pretty powerful with regard to all the details from the bytecode
+some JAR / folder.</p>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_package_identifiers"><a class="anchor" href="#_package_identifiers"></a>6.2.2. Package Identifiers</h4>
+<div class="paragraph">
+<p>Several ArchUnit methods accept a <code>String</code> package identifier to describe a set of packages,
+for example <code>resideInAPackage(..)</code> and <code>resideInAnyPackage(..)</code> (and their negated variants)
+in the Lang API, <code>slices().matching(..)</code> and <code>modules().definedByPackages(..)</code> in the Library
+API, or the component stereotypes of a PlantUML component diagram. All of them delegate to
+the same underlying <a href="https://javadoc.io/doc/com.tngtech.archunit/archunit/latest/com/tngtech/archunit/core/domain/PackageMatcher.html"><code>PackageMatcher</code></a>, whose syntax is inspired by AspectJ type patterns and
+extended with capturing groups.</p>
+</div>
+<div class="sect4">
+<h5 id="_wildcards"><a class="anchor" href="#_wildcards"></a>Wildcards</h5>
+<div class="paragraph">
+<p>The syntax is built from the following elements:</p>
+</div>
+<table class="tableblock frame-all grid-all stretch">
+<colgroup>
+<col style="width: 20%;">
+<col style="width: 80%;">
+</colgroup>
+<thead>
+<tr>
+<th class="tableblock halign-left valign-top">Pattern</th>
+<th class="tableblock halign-left valign-top">Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td class="tableblock halign-left valign-top"><div class="literal"><pre>*</pre></div></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Matches any non-empty sequence of characters not containing the dot <code>.</code>, i.e. exactly one package segment.</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><div class="literal"><pre>..</pre></div></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Matches any (possibly empty) sequence of characters that may contain the dot <code>.</code>, i.e. any number of package segments (including zero).</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><div class="literal"><pre>(*)</pre></div></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Like <code>*</code>, but additionally <em>captures</em> the matched segment, so it can be referenced later (e.g. as a slice identifier, see <a href="#_slices">Slices</a>).</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><div class="literal"><pre>(**)</pre></div></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Like <code>..</code>, but additionally <em>captures</em> the matched segments.</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><div class="literal"><pre>[a|b]</pre></div></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Alternation: matches either <code>a</code> or <code>b</code>. Alternations are only allowed inside brackets <code>[...]</code> or inside capturing groups <code>(...)</code>.</p></td>
+</tr>
+</tbody>
+</table>
+<div class="paragraph">
+<p>Note that <code>(..)</code> is not a valid capturing group — use <code>(**)</code> instead. <code>()</code> and <code>[]</code> cannot
+be nested inside each other.</p>
+</div>
+<div class="paragraph">
+<p>The segments matched by capturing groups can be retrieved from the result of
+<a href="https://javadoc.io/doc/com.tngtech.archunit/archunit/latest/com/tngtech/archunit/core/domain/PackageMatcher.html#match(java.lang.String)"><code>PackageMatcher#match(String)</code></a>
+via
+<a href="https://javadoc.io/doc/com.tngtech.archunit/archunit/latest/com/tngtech/archunit/core/domain/PackageMatcher.Result.html#getGroup(int)"><code>PackageMatcher.Result#getGroup(int)</code></a>
+(groups are 1-based, in the order the capturing groups appear in the pattern).</p>
+</div>
+</div>
+<div class="sect4">
+<h5 id="_worked_example"><a class="anchor" href="#_worked_example"></a>Worked Example</h5>
+<div class="paragraph">
+<p>Consider the following five classes and the packages they reside in:</p>
+</div>
+<table class="tableblock frame-all grid-all stretch">
+<colgroup>
+<col style="width: 50%;">
+<col style="width: 50%;">
+</colgroup>
+<thead>
+<tr>
+<th class="tableblock halign-left valign-top">Class</th>
+<th class="tableblock halign-left valign-top">Package</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>com.myapp.controller.SomeController</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>com.myapp.controller</code></p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>com.myapp.service.SomeService</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>com.myapp.service</code></p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>com.myapp.service.impl.SomeServiceImpl</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>com.myapp.service.impl</code></p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>com.myapp.persistence.dao.SomeDao</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>com.myapp.persistence.dao</code></p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>com.myapp.persistence.dao.jpa.SomeJpa</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>com.myapp.persistence.dao.jpa</code></p></td>
+</tr>
+</tbody>
+</table>
+<div class="paragraph">
+<p>The following table shows a range of package identifiers and which of the five packages
+above each of them matches:</p>
+</div>
+<table class="tableblock frame-all grid-all stretch">
+<colgroup>
+<col style="width: 40%;">
+<col style="width: 60%;">
+</colgroup>
+<thead>
+<tr>
+<th class="tableblock halign-left valign-top">Package Identifier</th>
+<th class="tableblock halign-left valign-top">Matches</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>com.myapp.service</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>com.myapp.service</code> only (exact match).</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>com.myapp.*</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>com.myapp.controller</code> and <code>com.myapp.service</code>
+(exactly one more segment after <code>com.myapp</code>).</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>com.myapp..</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">All five packages — <code>com.myapp..</code> matches <code>com.myapp</code> itself and every subpackage of it.</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>..service</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>com.myapp.service</code> only (segment <code>service</code> at the end).</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>..service..</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>com.myapp.service</code> and <code>com.myapp.service.impl</code>
+(any package containing a segment <code>service</code>).</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>..dao..</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>com.myapp.persistence.dao</code> and <code>com.myapp.persistence.dao.jpa</code>.</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>..impl</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>com.myapp.service.impl</code> only.</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>com.myapp.(*)</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>com.myapp.controller</code> (group 1 = <code>controller</code>) and
+<code>com.myapp.service</code> (group 1 = <code>service</code>).
+The deeper packages do not match because <code>(*)</code> allows only a single segment.</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>com.myapp.(*)..</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">All five packages; group 1 captures the first sub-package below <code>com.myapp</code>
+(<code>controller</code>, <code>service</code>, <code>service</code>, <code>persistence</code>, <code>persistence</code> respectively).
+This is the typical pattern used by <code>slices().matching(..)</code>.</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>..[service|controller]..</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>com.myapp.controller</code>, <code>com.myapp.service</code> and <code>com.myapp.service.impl</code>.</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="sect4">
+<h5 id="_what_is_matched_against_the_pattern"><a class="anchor" href="#_what_is_matched_against_the_pattern"></a>What is Matched Against the Pattern</h5>
+<div class="paragraph">
+<p>An important detail is that the package identifier is matched against the
+<strong>package name of a class</strong>, not against the fully qualified class name.
+So for <code>com.myapp.service.SomeService</code> the string that is checked against
+the pattern is <code>com.myapp.service</code>, not <code>com.myapp.service.SomeService</code>.</p>
+</div>
+<div class="paragraph">
+<p>This means that a pattern like <code>..SomeService</code> will <em>not</em> match a class named <code>SomeService</code>,
+because <code>SomeService</code> is the simple class name, not a package segment. To match by class
+name use a name-based predicate such as
+<code>haveSimpleName("SomeService")</code> or <code>haveNameMatching(".*SomeService")</code> instead.</p>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_the_lang_api"><a class="anchor" href="#_the_lang_api"></a>7. The Lang API</h2>
+<div class="sectionbody">
+<div class="sect2">
+<h3 id="_composing_class_rules"><a class="anchor" href="#_composing_class_rules"></a>7.1. Composing Class Rules</h3>
+<div class="paragraph">
+<p><a href="#_the_core_api">The Core API</a> is pretty powerful with regard to all the details from the bytecode
 that it provides to tests. However, tests written this way lack conciseness and fail to convey the
-architectural concept that they should assert. Consider:
-Set services = new HashSet<>();
+architectural concept that they should assert. Consider:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight nowrap"><code class="language-java hljs" data-lang="java">Set&lt;JavaClass&gt; services = new HashSet&lt;&gt;();
 for (JavaClass clazz : classes) {
- // choose those classes with FQN with infix '.service.'
- if (clazz.getName().contains(".service.")) {
- services.add(clazz);
- }
+    // choose those classes with FQN with infix '.service.'
+    if (clazz.getName().contains(".service.")) {
+        services.add(clazz);
+    }
 }
 
 for (JavaClass service : services) {
- for (JavaAccess access : service.getAccessesFromSelf()) {
- String targetName = access.getTargetOwner().getName();
+    for (JavaAccess&lt;?&gt; access : service.getAccessesFromSelf()) {
+        String targetName = access.getTargetOwner().getName();
 
- // fail if the target FQN has the infix ".controller."
- if (targetName.contains(".controller.")) {
- String message = String.format(
- "Service %s accesses Controller %s in line %d",
- service.getName(), targetName, access.getLineNumber());
- Assert.fail(message);
- }
- }
-}
-What we want to express, is the rule "no classes that reside in a package 'service' should
-access classes that reside in a package 'controller'". Nevertheless, it’s hard to read through
+        // fail if the target FQN has the infix ".controller."
+        if (targetName.contains(".controller.")) {
+            String message = String.format(
+                    "Service %s accesses Controller %s in line %d",
+                    service.getName(), targetName, access.getLineNumber());
+            Assert.fail(message);
+        }
+    }
+}</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>What we want to express, is the rule <em>"no classes that reside in a package 'service' should
+access classes that reside in a package 'controller'"</em>. Nevertheless, it&#8217;s hard to read through
 that code and distill that information. And the same process has to be done every time someone
-needs to understand the semantics of this rule.
-To solve this shortcoming, ArchUnit offers a high level API to express architectural concepts
+needs to understand the semantics of this rule.</p>
+</div>
+<div class="paragraph">
+<p>To solve this shortcoming, ArchUnit offers a high level API to express architectural concepts
 in a concise way. In fact, we can write code that is almost equivalent to the prose rule text
-mentioned before:
-ArchRule rule = ArchRuleDefinition.noClasses()
- .that().resideInAPackage("..service..")
- .should().accessClassesThat().resideInAPackage("..controller..");
+mentioned before:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight nowrap"><code class="language-java hljs" data-lang="java">ArchRule rule = ArchRuleDefinition.noClasses()
+    .that().resideInAPackage("..service..")
+    .should().accessClassesThat().resideInAPackage("..controller..");
 
-rule.check(importedClasses);
-The only difference to colloquial language is the ".." in the package notation,
+rule.check(importedClasses);</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>The only difference to colloquial language is the ".." in the package notation,
 which refers to any number of packages. Thus "..service.." just expresses
-"any package that contains some sub-package 'service'", e.g. com.myapp.service.any.
-If this test fails, it will report an AssertionError with the following message:
-java.lang.AssertionError: Architecture Violation [Priority: MEDIUM] -
+<em>"any package that contains some sub-package 'service'"</em>, e.g. <code>com.myapp.service.any</code>.
+If this test fails, it will report an <code>AssertionError</code> with the following message:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight nowrap"><code class="language-bash hljs" data-lang="bash">java.lang.AssertionError: Architecture Violation [Priority: MEDIUM] -
 Rule 'no classes that reside in a package '..service..'
 should access classes that reside in a package '..controller..'' was violated (1 times):
-Method 
-calls method 
-in (SomeService.java:14)
-So as a benefit, the assertion error contains the full rule text out of the box and reports
+Method &lt;some.pkg.service.SomeService.callController()&gt;
+calls method &lt;some.pkg.controller.SomeController.execute()&gt;
+in (SomeService.java:14)</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>So as a benefit, the assertion error contains the full rule text out of the box and reports
 all violations including the exact class and line number. The rule API also allows to combine
-predicates and conditions:
-noClasses()
- .that().resideInAPackage("..service..")
- .or().resideInAPackage("..persistence..")
- .should().accessClassesThat().resideInAPackage("..controller..")
- .orShould().accessClassesThat().resideInAPackage("..ui..")
+predicates and conditions:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight nowrap"><code class="language-java hljs" data-lang="java">noClasses()
+    .that().resideInAPackage("..service..")
+    .or().resideInAPackage("..persistence..")
+    .should().accessClassesThat().resideInAPackage("..controller..")
+    .orShould().accessClassesThat().resideInAPackage("..ui..")
 
-rule.check(importedClasses);
-
-### 7.2. Composing Member Rules
-In addition to a predefined API to write rules about Java classes and their relations, there is
+rule.check(importedClasses);</code></pre>
+</div>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_composing_member_rules"><a class="anchor" href="#_composing_member_rules"></a>7.2. Composing Member Rules</h3>
+<div class="paragraph">
+<p>In addition to a predefined API to write rules about Java classes and their relations, there is
 an extended API to define rules for members of Java classes. This might be relevant, for example,
 if methods in a certain context need to be annotated with a specific annotation, or return
-types implementing a certain interface. The entry point is again ArchRuleDefinition, e.g.
-ArchRule rule = ArchRuleDefinition.methods()
- .that().arePublic()
- .and().areDeclaredInClassesThat().resideInAPackage("..controller..")
- .should().beAnnotatedWith(Secured.class);
+types implementing a certain interface. The entry point is again <code>ArchRuleDefinition</code>, e.g.</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight nowrap"><code class="language-java hljs" data-lang="java">ArchRule rule = ArchRuleDefinition.methods()
+    .that().arePublic()
+    .and().areDeclaredInClassesThat().resideInAPackage("..controller..")
+    .should().beAnnotatedWith(Secured.class);
 
-rule.check(importedClasses);
-Besides methods(), ArchRuleDefinition offers the methods members(), fields(), codeUnits(), constructors()
-– and the corresponding negations noMembers(), noFields(), noMethods(), etc.
-
-### 7.3. Creating Custom Rules
-In fact, most architectural rules take the form
-classes that ${PREDICATE} should ${CONDITION}
-In other words, we always want to limit imported classes to a relevant subset,
+rule.check(importedClasses);</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Besides <code>methods()</code>, <code>ArchRuleDefinition</code> offers the methods <code>members()</code>, <code>fields()</code>, <code>codeUnits()</code>, <code>constructors()</code>
+– and the corresponding negations <code>noMembers()</code>, <code>noFields()</code>, <code>noMethods()</code>, etc.</p>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_creating_custom_rules"><a class="anchor" href="#_creating_custom_rules"></a>7.3. Creating Custom Rules</h3>
+<div class="paragraph">
+<p>In fact, most architectural rules take the form</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight nowrap"><code class="language-none hljs">classes that ${PREDICATE} should ${CONDITION}</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>In other words, we always want to limit imported classes to a relevant subset,
 and then evaluate some condition to see that all those classes satisfy it.
-ArchUnit’s API allows you to do just that, by exposing the concepts of DescribedPredicate and ArchCondition.
-So the rule above is just an application of this generic API:
-DescribedPredicate resideInAPackageService = // define the predicate
-ArchCondition accessClassesThatResideInAPackageController = // define the condition
+ArchUnit&#8217;s API allows you to do just that, by exposing the concepts of <code>DescribedPredicate</code> and <code>ArchCondition</code>.
+So the rule above is just an application of this generic API:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight nowrap"><code class="language-java hljs" data-lang="java">DescribedPredicate&lt;JavaClass&gt; resideInAPackageService = // define the predicate
+ArchCondition&lt;JavaClass&gt; accessClassesThatResideInAPackageController = // define the condition
 
 noClasses().that(resideInAPackageService)
- .should(accessClassesThatResideInAPackageController);
-Thus, if the predefined API does not allow to express some concept,
+    .should(accessClassesThatResideInAPackageController);</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Thus, if the predefined API does not allow to express some concept,
 it is possible to extend it in any custom way.
-For example:
-DescribedPredicate haveAFieldAnnotatedWithPayload =
- new DescribedPredicate("have a field annotated with @Payload"){
- @Override
- public boolean test(JavaClass input) {
- boolean someFieldAnnotatedWithPayload = // iterate fields and check for @Payload
- return someFieldAnnotatedWithPayload;
- }
- };
+For example:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight nowrap"><code class="language-java hljs" data-lang="java">DescribedPredicate&lt;JavaClass&gt; haveAFieldAnnotatedWithPayload =
+    new DescribedPredicate&lt;JavaClass&gt;("have a field annotated with @Payload"){
+        @Override
+        public boolean test(JavaClass input) {
+            boolean someFieldAnnotatedWithPayload = // iterate fields and check for @Payload
+            return someFieldAnnotatedWithPayload;
+        }
+    };
 
-ArchCondition onlyBeAccessedBySecuredMethods =
- new ArchCondition("only be accessed by @Secured methods") {
- @Override
- public void check(JavaClass item, ConditionEvents events) {
- for (JavaMethodCall call : item.getMethodCallsToSelf()) {
- if (!call.getOrigin().isAnnotatedWith(Secured.class)) {
- String message = String.format(
- "Method %s is not @Secured", call.getOrigin().getFullName());
- events.add(SimpleConditionEvent.violated(call, message));
- }
- }
- }
- };
+ArchCondition&lt;JavaClass&gt; onlyBeAccessedBySecuredMethods =
+    new ArchCondition&lt;JavaClass&gt;("only be accessed by @Secured methods") {
+        @Override
+        public void check(JavaClass item, ConditionEvents events) {
+            for (JavaMethodCall call : item.getMethodCallsToSelf()) {
+                if (!call.getOrigin().isAnnotatedWith(Secured.class)) {
+                    String message = String.format(
+                        "Method %s is not @Secured", call.getOrigin().getFullName());
+                    events.add(SimpleConditionEvent.violated(call, message));
+                }
+            }
+        }
+    };
 
-classes().that(haveAFieldAnnotatedWithPayload).should(onlyBeAccessedBySecuredMethods);
-If the rule fails, the error message will be built from the supplied descriptions. In the
-example above, it would be
-classes that have a field annotated with @Payload should only be accessed by @Secured methods
-
-### 7.4. Predefined Predicates and Conditions
-Custom predicates and conditions like in the last section can often be composed from predefined elements.
-ArchUnit’s basic convention for predicates is that they are defined in an inner class Predicates within the type they target.
-For example, one can find the predicate to check for the simple name of a JavaClass as
-JavaClass.Predicates.simpleName(String)
-Predicates can be joined using the methods predicate.or(other) and predicate.and(other).
+classes().that(haveAFieldAnnotatedWithPayload).should(onlyBeAccessedBySecuredMethods);</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>If the rule fails, the error message will be built from the supplied descriptions. In the
+example above, it would be</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight nowrap"><code class="language-none hljs">classes that have a field annotated with @Payload should only be accessed by @Secured methods</code></pre>
+</div>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_predefined_predicates_and_conditions"><a class="anchor" href="#_predefined_predicates_and_conditions"></a>7.4. Predefined Predicates and Conditions</h3>
+<div class="paragraph">
+<p>Custom predicates and conditions like in the last section can often be composed from predefined elements.
+ArchUnit&#8217;s basic convention for predicates is that they are defined in an inner class <code>Predicates</code> within the type they target.
+For example, one can find the predicate to check for the simple name of a <code>JavaClass</code> as</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight nowrap"><code class="language-java hljs" data-lang="java">JavaClass.Predicates.simpleName(String)</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Predicates can be joined using the methods <code>predicate.or(other)</code> and <code>predicate.and(other)</code>.
 So for example a predicate testing for a class with simple name "Foo" that is serializable
-could be created the following way:
-import static com.tngtech.archunit.core.domain.JavaClass.Predicates.assignableTo;
+could be created the following way:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight nowrap"><code class="language-java hljs" data-lang="java">import static com.tngtech.archunit.core.domain.JavaClass.Predicates.assignableTo;
 import static com.tngtech.archunit.core.domain.JavaClass.Predicates.simpleName;
 
-DescribedPredicate serializableNamedFoo =
- simpleName("Foo").and(assignableTo(Serializable.class));
-Note that for some properties, there exist interfaces with predicates defined for them.
-For example the property to have a name is represented by the interface HasName;
-consequently the predicate to check the name of a JavaClass
-is the same as the predicate to check the name of a JavaMethod,
-and resides within
-HasName.Predicates.name(String)
-This can at times lead to problems with the type system, if predicates are supposed to be joined.
-Since the or(..) method accepts a type of DescribedPredicate,
-where T is the type of the first predicate. For example:
-// Does not compile, because type(..) targets a subtype of HasName
+DescribedPredicate&lt;JavaClass&gt; serializableNamedFoo =
+    simpleName("Foo").and(assignableTo(Serializable.class));</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Note that for some properties, there exist interfaces with predicates defined for them.
+For example the property to have a name is represented by the interface <code>HasName</code>;
+consequently the predicate to check the name of a <code>JavaClass</code>
+is the same as the predicate to check the name of a <code>JavaMethod</code>,
+and resides within</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight nowrap"><code class="language-java hljs" data-lang="java">HasName.Predicates.name(String)</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>This can at times lead to problems with the type system, if predicates are supposed to be joined.
+Since the <code>or(..)</code> method accepts a type of <code>DescribedPredicate&lt;? super T&gt;</code>,
+where <code>T</code> is the type of the first predicate. For example:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight nowrap"><code class="language-java hljs" data-lang="java">// Does not compile, because type(..) targets a subtype of HasName
 HasName.Predicates.name("").and(JavaClass.Predicates.type(Serializable.class))
 
 // Does compile, because name(..) targets a supertype of JavaClass
 JavaClass.Predicates.type(Serializable.class).and(HasName.Predicates.name(""))
 
 // Does compile, because the compiler now sees name(..) as a predicate for JavaClass
-DescribedPredicate name = HasName.Predicates.name("").forSubtype();
-name.and(JavaClass.Predicates.type(Serializable.class));
-This behavior is somewhat tedious, but unfortunately it is a shortcoming of the Java type system
-that cannot be circumvented in a satisfying way.
-Just like predicates, there exist predefined conditions that can be combined in a similar way.
-Since ArchCondition is a less generic concept, all predefined conditions can be found within ArchConditions.
-Examples:
-ArchCondition callEquals =
- ArchConditions.callMethod(Object.class, "equals", Object.class);
-ArchCondition callHashCode =
- ArchConditions.callMethod(Object.class, "hashCode");
+DescribedPredicate&lt;JavaClass&gt; name = HasName.Predicates.name("").forSubtype();
+name.and(JavaClass.Predicates.type(Serializable.class));</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>This behavior is somewhat tedious, but unfortunately it is a shortcoming of the Java type system
+that cannot be circumvented in a satisfying way.</p>
+</div>
+<div class="paragraph">
+<p>Just like predicates, there exist predefined conditions that can be combined in a similar way.
+Since <code>ArchCondition</code> is a less generic concept, all predefined conditions can be found within <code>ArchConditions</code>.
+Examples:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight nowrap"><code class="language-java hljs" data-lang="java">ArchCondition&lt;JavaClass&gt; callEquals =
+    ArchConditions.callMethod(Object.class, "equals", Object.class);
+ArchCondition&lt;JavaClass&gt; callHashCode =
+    ArchConditions.callMethod(Object.class, "hashCode");
 
-ArchCondition callEqualsOrHashCode = callEquals.or(callHashCode);
-
-### 7.5. Rules with Custom Concepts
-Earlier we stated that most architectural rules take the form
-classes that ${PREDICATE} should ${CONDITION}
-However, we do not always talk about classes, if we express architectural concepts. We might
+ArchCondition&lt;JavaClass&gt; callEqualsOrHashCode = callEquals.or(callHashCode);</code></pre>
+</div>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_rules_with_custom_concepts"><a class="anchor" href="#_rules_with_custom_concepts"></a>7.5. Rules with Custom Concepts</h3>
+<div class="paragraph">
+<p>Earlier we stated that most architectural rules take the form</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight nowrap"><code class="language-none hljs">classes that ${PREDICATE} should ${CONDITION}</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>However, we do not always talk about classes, if we express architectural concepts. We might
 have custom language, we might talk about modules, about slices, or on the other hand more
 detailed about fields, methods or constructors. A generic API will never be able to support
-every imaginable concept out of the box. Thus ArchUnit’s rule API has at its foundation
-a more generic API that controls the types of objects that our concept targets.
-import vs lang
-To achieve this, any rule definition is based on a ClassesTransformer that defines how
-JavaClasses are to be transformed to the desired rule input. In many cases, like the ones
+every imaginable concept out of the box. Thus ArchUnit&#8217;s rule API has at its foundation
+a more generic API that controls the types of objects that our concept targets.</p>
+</div>
+<div class="imageblock">
+<div class="content">
+<object type="image/svg+xml" data="import-vs-lang.svg" width="707" height="74"><span class="alt">import vs lang</span></object>
+</div>
+</div>
+<div class="paragraph">
+<p>To achieve this, any rule definition is based on a <code>ClassesTransformer</code> that defines how
+<code>JavaClasses</code> are to be transformed to the desired rule input. In many cases, like the ones
 mentioned in the sections above, this is the identity transformation, passing classes on to the rule
 as they are. However, one can supply any custom transformation to express a rule about a
-different type of input object. For example:
-ClassesTransformer packages = new AbstractClassesTransformer("packages") {
- @Override
- public Iterable doTransform(JavaClasses classes) {
- Set result = new HashSet<>();
- classes.getDefaultPackage().traversePackageTree(alwaysTrue(), new PackageVisitor() {
- @Override
- public void visit(JavaPackage javaPackage) {
- result.add(javaPackage);
- }
- });
- return result;
- }
+different type of input object. For example:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight nowrap"><code class="language-java hljs" data-lang="java">ClassesTransformer&lt;JavaPackage&gt; packages = new AbstractClassesTransformer&lt;JavaPackage&gt;("packages") {
+    @Override
+    public Iterable&lt;JavaPackage&gt; doTransform(JavaClasses classes) {
+        Set&lt;JavaPackage&gt; result = new HashSet&lt;&gt;();
+        classes.getDefaultPackage().traversePackageTree(alwaysTrue(), new PackageVisitor() {
+            @Override
+            public void visit(JavaPackage javaPackage) {
+                result.add(javaPackage);
+            }
+        });
+        return result;
+    }
 };
 
-all(packages).that(containACoreClass()).should(...);
-Of course these transformers can represent any custom concept desired:
-// how we map classes to business modules
-ClassesTransformer businessModules = ...
+all(packages).that(containACoreClass()).should(...);</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Of course these transformers can represent any custom concept desired:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight nowrap"><code class="language-java hljs" data-lang="java">// how we map classes to business modules
+ClassesTransformer&lt;BusinessModule&gt; businessModules = ...
 
 // filter business module dealing with orders
-DescribedPredicate dealWithOrders = ...
+DescribedPredicate&lt;BusinessModule&gt; dealWithOrders = ...
 
 // check that the actual business module is independent of payment
-ArchCondition beIndependentOfPayment = ...
+ArchCondition&lt;BusinessModule&gt; beIndependentOfPayment = ...
 
-all(businessModules).that(dealWithOrders).should(beIndependentOfPayment);
-
-### 7.6. Controlling the Rule Text
-If the rule is straight forward, the rule text that is created automatically should be
+all(businessModules).that(dealWithOrders).should(beIndependentOfPayment);</code></pre>
+</div>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_controlling_the_rule_text"><a class="anchor" href="#_controlling_the_rule_text"></a>7.6. Controlling the Rule Text</h3>
+<div class="paragraph">
+<p>If the rule is straight forward, the rule text that is created automatically should be
 sufficient in many cases. However, for rules that are not common knowledge, it is good practice
-to document the reason for this rule. This can be done in the following way:
-classes().that(haveAFieldAnnotatedWithPayload).should(onlyBeAccessedBySecuredMethods)
- .because("@Secured methods will be intercepted, checking for increased privileges " +
- "and obfuscating sensitive auditing information");
-Nevertheless, the generated rule text might sometimes not convey the real intention
+to document the reason for this rule. This can be done in the following way:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight nowrap"><code class="language-java hljs" data-lang="java">classes().that(haveAFieldAnnotatedWithPayload).should(onlyBeAccessedBySecuredMethods)
+    .because("@Secured methods will be intercepted, checking for increased privileges " +
+        "and obfuscating sensitive auditing information");</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Nevertheless, the generated rule text might sometimes not convey the real intention
 concisely enough, e.g. if multiple predicates or conditions are joined.
-It is possible to completely overwrite the rule description in those cases:
-classes().that(haveAFieldAnnotatedWithPayload).should(onlyBeAccessedBySecuredMethods)
- .as("Payload may only be accessed in a secure way");
-
-### 7.7. Ignoring Violations
-In legacy projects there might be too many violations to fix at once. Nevertheless, that code
+It is possible to completely overwrite the rule description in those cases:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight nowrap"><code class="language-java hljs" data-lang="java">classes().that(haveAFieldAnnotatedWithPayload).should(onlyBeAccessedBySecuredMethods)
+    .as("Payload may only be accessed in a secure way");</code></pre>
+</div>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_priority"><a class="anchor" href="#_priority"></a>7.7. Priority</h3>
+<div class="paragraph">
+<p>Most entrypoints in <code>ArchRuleDefinition</code> create <code>ArchRule</code>s that evaluate to <code>EvaluationResult</code>s with <code>Priority.MEDIUM</code>; <code>ArchRuleDefinition.priority</code> allows to create rules with other <code>Priority</code>, e.g.:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight nowrap"><code class="language-java hljs" data-lang="java">ArchRule rule = ArchRuleDefinition.priority(Priority.LOW).noClasses() // ...</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>The resulting error messages show the priority accordingly:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight nowrap"><code class="language-bash hljs" data-lang="bash">java.lang.AssertionError: Architecture Violation [Priority: LOW] - Rule 'no classes // ...</code></pre>
+</div>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_ignoring_violations"><a class="anchor" href="#_ignoring_violations"></a>7.8. Ignoring Violations</h3>
+<div class="paragraph">
+<p>In legacy projects there might be too many violations to fix at once. Nevertheless, that code
 should be covered completely by architecture tests to ensure that no further violations will
 be added to the existing code. One approach to ignore existing violations is
-to tailor the that(..) clause of the rules in question to ignore certain violations.
+to tailor the <code>that(..)</code> clause of the rules in question to ignore certain violations.
 A more generic approach is to ignore violations based on simple regex matches.
-For this one can put a file named archunit_ignore_patterns.txt in the root of the classpath.
+For this one can put a file named <code>archunit_ignore_patterns.txt</code> in the root of the classpath.
 Every line will be interpreted as a regular expression and checked against reported violations.
 Violations with a message matching the pattern will be ignored. If no violations are left,
-the check will pass.
-For example, suppose the class some.pkg.LegacyService violates a lot of different rules.
-It is possible to add
-archunit_ignore_patterns.txt
-.*some\.pkg\.LegacyService.*
-All violations mentioning some.pkg.LegacyService will consequently be ignored, and rules that
-are only violated by such violations will report success instead of failure.
-It is possible to add comments to ignore patterns by prefixing the line with a '#':
-archunit_ignore_patterns.txt
-# There are many known violations where LegacyService is involved; we'll ignore them all
-.*some\.pkg\.LegacyService.*
-
-## 8. The Library API
-The Library API offers a growing collection of predefined rules, which offer a more concise API
+the check will pass.</p>
+</div>
+<div class="paragraph">
+<p>For example, suppose the class <code>some.pkg.LegacyService</code> violates a lot of different rules.
+It is possible to add</p>
+</div>
+<div class="listingblock">
+<div class="title">archunit_ignore_patterns.txt</div>
+<div class="content">
+<pre class="highlightjs highlight nowrap"><code class="language-bash hljs" data-lang="bash">.*some\.pkg\.LegacyService.*</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>All violations mentioning <code>some.pkg.LegacyService</code> will consequently be ignored, and rules that
+are only violated by such violations will report success instead of failure.</p>
+</div>
+<div class="paragraph">
+<p>It is possible to add comments to ignore patterns by prefixing the line with a '#':</p>
+</div>
+<div class="listingblock">
+<div class="title">archunit_ignore_patterns.txt</div>
+<div class="content">
+<pre class="highlightjs highlight nowrap"><code class="language-bash hljs" data-lang="bash"># There are many known violations where LegacyService is involved; we'll ignore them all
+.*some\.pkg\.LegacyService.*</code></pre>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_the_library_api"><a class="anchor" href="#_the_library_api"></a>8. The Library API</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>The Library API offers a growing collection of predefined rules, which offer a more concise API
 for more complex but common patterns, like a layered architecture or checks for cycles between
-slices (compare What to Check).
-
-### 8.1. Architectures
-The entrance point for checks of common architectural styles is:
-com.tngtech.archunit.library.Architectures
-At the moment this only provides a convenient check for a layered architecture and onion architecture.
+slices (compare <a href="#_what_to_check">What to Check</a>).</p>
+</div>
+<div class="sect2">
+<h3 id="_architectures"><a class="anchor" href="#_architectures"></a>8.1. Architectures</h3>
+<div class="paragraph">
+<p>The entrance point for checks of common architectural styles is:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight nowrap"><code class="language-java hljs" data-lang="java">com.tngtech.archunit.library.Architectures</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>At the moment this only provides a convenient check for a layered architecture and onion architecture.
 But in the future it might be extended for styles like a pipes and filters,
-separation of business logic and technical infrastructure, etc.
-
-#### 8.1.1. Layered Architecture
-In layered architectures, we define different layers and how those interact with each other.
-An example setup for a simple 3-tier architecture can be found in Layer Checks.
-
-#### 8.1.2. Onion Architecture
-In an "Onion Architecture" (also known as "Hexagonal Architecture" or "Ports and Adapters"),
-we can define domain packages and adapter packages as follows.
-onionArchitecture()
- .domainModels("com.myapp.domain.model..")
- .domainServices("com.myapp.domain.service..")
- .applicationServices("com.myapp.application..")
- .adapter("cli", "com.myapp.adapter.cli..")
- .adapter("persistence", "com.myapp.adapter.persistence..")
- .adapter("rest", "com.myapp.adapter.rest..");
-The semantic follows the descriptions in https://jeffreypalermo.com/2008/07/the-onion-architecture-part-1/.
-More precisely, the following holds:
-The domain package is the core of the application. It consists of two parts.
-The domainModels packages contain the domain entities.
-The packages in domainServices contains services that use the entities in the domainModel packages.
-The applicationServices packages contain services and configuration to run the application and use cases.
-It can use the items of the domain package but there must not be any dependency from the domain
-to the application packages.
-The adapter package contains logic to connect to external systems and/or infrastructure.
-No adapter may depend on another adapter. Adapters can use both the items of the domain as well as
-the application packages. Vice versa, neither the domain nor the application packages must
-contain dependencies on any adapter package.
-onion architecture check
-
-### 8.2. Slices
-Currently, there are two "slice" rules offered by the Library API. These are basically rules
-that slice the code by packages, and contain assertions on those slices. The entrance point is:
-com.tngtech.archunit.library.dependencies.SlicesRuleDefinition
-The API is based on the idea to sort classes into slices according to one or several package
-infixes, and then write assertions against those slices. At the moment this is for example:
-// sort classes by the first package after 'myapp'
+separation of business logic and technical infrastructure, etc.</p>
+</div>
+<div class="sect3">
+<h4 id="_layered_architecture"><a class="anchor" href="#_layered_architecture"></a>8.1.1. Layered Architecture</h4>
+<div class="paragraph">
+<p>In layered architectures, we define different layers and how those interact with each other.
+An example setup for a simple 3-tier architecture can be found in <a href="#_layer_checks">Layer Checks</a>.</p>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_onion_architecture"><a class="anchor" href="#_onion_architecture"></a>8.1.2. Onion Architecture</h4>
+<div class="paragraph">
+<p>In an "Onion Architecture" (also known as "Hexagonal Architecture" or "Ports and Adapters"),
+we can define domain packages and adapter packages as follows.</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight nowrap"><code class="language-java hljs" data-lang="java">onionArchitecture()
+        .domainModels("com.myapp.domain.model..")
+        .domainServices("com.myapp.domain.service..")
+        .applicationServices("com.myapp.application..")
+        .adapter("cli", "com.myapp.adapter.cli..")
+        .adapter("persistence", "com.myapp.adapter.persistence..")
+        .adapter("rest", "com.myapp.adapter.rest..");</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>The semantic follows the descriptions in <a href="https://jeffreypalermo.com/2008/07/the-onion-architecture-part-1/" class="bare">https://jeffreypalermo.com/2008/07/the-onion-architecture-part-1/</a>.
+More precisely, the following holds:</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p>The <code>domain</code> package is the core of the application. It consists of two parts.</p>
+<div class="olist arabic">
+<ol class="arabic">
+<li>
+<p>The <code>domainModels</code> packages contain the domain entities.</p>
+</li>
+<li>
+<p>The packages in <code>domainServices</code> contains services that use the entities in the <code>domainModel</code> packages.</p>
+</li>
+</ol>
+</div>
+</li>
+<li>
+<p>The <code>applicationServices</code> packages contain services and configuration to run the application and use cases.
+It can use the items of the <code>domain</code> package but there must not be any dependency from the <code>domain</code>
+to the <code>application</code> packages.</p>
+</li>
+<li>
+<p>The <code>adapter</code> package contains logic to connect to external systems and/or infrastructure.
+No adapter may depend on another adapter. Adapters can use both the items of the <code>domain</code> as well as
+the <code>application</code> packages. Vice versa, neither the <code>domain</code> nor the <code>application</code> packages must
+contain dependencies on any <code>adapter</code> package.</p>
+</li>
+</ul>
+</div>
+<div class="imageblock">
+<div class="content">
+<object type="image/svg+xml" data="onion-architecture-check.svg" width="1155" height="693"><span class="alt">onion architecture check</span></object>
+</div>
+</div>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_slices"><a class="anchor" href="#_slices"></a>8.2. Slices</h3>
+<div class="paragraph">
+<p>Currently, there are two "slice" rules offered by the Library API. These are basically rules
+that slice the code by packages, and contain assertions on those slices. The entrance point is:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight nowrap"><code class="language-java hljs" data-lang="java">com.tngtech.archunit.library.dependencies.SlicesRuleDefinition</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>The API is based on the idea to sort classes into slices according to one or several package
+infixes, and then write assertions against those slices. The <code>matching(..)</code> argument follows
+the package pattern syntax described in <a href="#_package_identifiers">Package Identifiers</a>, where the parentheses
+<code>(*)</code> / <code>(**)</code> mark the captured segment(s) that are used as slice identifiers.
+At the moment this is for example:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight nowrap"><code class="language-java hljs" data-lang="java">// sort classes by the first package after 'myapp'
 // then check those slices for cyclic dependencies
 SlicesRuleDefinition.slices().matching("..myapp.(*)..").should().beFreeOfCycles()
 
@@ -783,41 +2048,53 @@ SlicesRuleDefinition.slices().matching("..myapp.(**)").should().beFreeOfCycles()
 
 // sort classes by packages between 'myapp' and 'service'
 // then check those slices for not having any dependencies on each other
-SlicesRuleDefinition.slices().matching("..myapp.(**).service..").should().notDependOnEachOther()
-If this constraint is too rigid, e.g. in legacy applications where the package structure is rather
+SlicesRuleDefinition.slices().matching("..myapp.(**).service..").should().notDependOnEachOther()</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>If this constraint is too rigid, e.g. in legacy applications where the package structure is rather
 inconsistent, it is possible to further customize the slice creation. This can be done by specifying
-a mapping of JavaClass to SliceIdentifier where classes with the same SliceIdentifier will
-be sorted into the same slice. Consider this example:
-SliceAssignment legacyPackageStructure = new SliceAssignment() {
- // this will specify which classes belong together in the same slice
- @Override
- public SliceIdentifier getIdentifierOf(JavaClass javaClass) {
- if (javaClass.getPackageName().startsWith("com.oldapp")) {
- return SliceIdentifier.of("Legacy");
- }
- if (javaClass.getName().contains(".esb.")) {
- return SliceIdentifier.of("ESB");
- }
- // ... further custom mappings
+a mapping of <code>JavaClass</code> to <code>SliceIdentifier</code> where classes with the same <code>SliceIdentifier</code> will
+be sorted into the same slice. Consider this example:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight nowrap"><code class="language-java hljs" data-lang="java">SliceAssignment legacyPackageStructure = new SliceAssignment() {
+    // this will specify which classes belong together in the same slice
+    @Override
+    public SliceIdentifier getIdentifierOf(JavaClass javaClass) {
+        if (javaClass.getPackageName().startsWith("com.oldapp")) {
+            return SliceIdentifier.of("Legacy");
+        }
+        if (javaClass.getName().contains(".esb.")) {
+            return SliceIdentifier.of("ESB");
+        }
+        // ... further custom mappings
 
- // if the class does not match anything, we ignore it
- return SliceIdentifier.ignore();
- }
+        // if the class does not match anything, we ignore it
+        return SliceIdentifier.ignore();
+    }
 
- // this will be part of the rule description if the test fails
- @Override
- public String getDescription() {
- return "legacy package structure";
- }
+    // this will be part of the rule description if the test fails
+    @Override
+    public String getDescription() {
+        return "legacy package structure";
+    }
 };
 
-SlicesRuleDefinition.slices().assignedFrom(legacyPackageStructure).should().beFreeOfCycles()
-
-#### 8.2.1. Configurations
-There are two configuration parameters to adjust the behavior of the cycle detection.
-They can be configured via archunit.properties (compare Advanced Configuration).
-archunit.properties
-# This will limit the maximum number of cycles to detect and thus required CPU and heap.
+SlicesRuleDefinition.slices().assignedFrom(legacyPackageStructure).should().beFreeOfCycles()</code></pre>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_configurations"><a class="anchor" href="#_configurations"></a>8.2.1. Configurations</h4>
+<div class="paragraph">
+<p>There are two configuration parameters to adjust the behavior of the cycle detection.
+They can be configured via <code>archunit.properties</code> (compare <a href="#_advanced_configuration">Advanced Configuration</a>).</p>
+</div>
+<div class="listingblock">
+<div class="title">archunit.properties</div>
+<div class="content">
+<pre class="highlightjs highlight nowrap"><code class="language-none hljs"># This will limit the maximum number of cycles to detect and thus required CPU and heap.
 # default is 100
 cycles.maxNumberToDetect=50
 
@@ -827,321 +2104,635 @@ cycles.maxNumberToDetect=50
 # Also note that this number will quickly affect the required heap since it scales with number.
 # of edges and number of cycles
 # default is 20
-cycles.maxNumberOfDependenciesPerEdge=5
-
-#### 8.2.2. The Cycle Detection Core API
-The underlying infrastructure for cycle detection that the slices() rule makes use of can also be accessed
+cycles.maxNumberOfDependenciesPerEdge=5</code></pre>
+</div>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_the_cycle_detection_core_api"><a class="anchor" href="#_the_cycle_detection_core_api"></a>8.2.2. The Cycle Detection Core API</h4>
+<div class="paragraph">
+<p>The underlying infrastructure for cycle detection that the <code>slices()</code> rule makes use of can also be accessed
 without any rule syntax around it. This allows to use the pure cycle detection algorithm in custom
-checks or libraries. The core class of the cycle detection is
-com.tngtech.archunit.library.cycle_detection.CycleDetector
-It can be used on a set of a generic type NODE in combination with a generic Set
-(where EDGE implements Edge) representing the edges of the graph:
-Set nodes = // ...
-Set> edges = // ...
-Cycles> foundCycles = CycleDetector.detectCycles(nodes, edges);
-Edges are parameterized by a generic type EDGE to allow custom edge types that can
-then transport additional meta-information if needed.
-
-### 8.3. Modularization Rules
-Note: ArchUnit doesn’t strive to be a "competition" for module systems like the
+checks or libraries. The core class of the cycle detection is</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight nowrap"><code class="language-java hljs" data-lang="java">com.tngtech.archunit.library.cycle_detection.CycleDetector</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>It can be used on a set of a generic type <code>NODE</code> in combination with a generic <code>Set&lt;EDGE&gt;</code>
+(where <code>EDGE implements Edge&lt;NODE&gt;</code>) representing the edges of the graph:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight nowrap"><code class="language-java hljs" data-lang="java">Set&lt;MyNode&gt; nodes = // ...
+Set&lt;Edge&lt;MyNode&gt;&gt; edges = // ...
+Cycles&lt;Edge&lt;MyNode&gt;&gt; foundCycles = CycleDetector.detectCycles(nodes, edges);</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Edges are parameterized by a generic type <code>EDGE</code> to allow custom edge types that can
+then transport additional meta-information if needed.</p>
+</div>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_modularization_rules"><a class="anchor" href="#_modularization_rules"></a>8.3. Modularization Rules</h3>
+<div class="admonitionblock note">
+<table>
+<tr>
+<td class="icon">
+<i class="fa icon-note" title="Note"></i>
+</td>
+<td class="content">
+Note: ArchUnit doesn&#8217;t strive to be a "competition" for module systems like the
 Java Platform Module System. Such systems have advantages like checks at compile time
 versus test time as ArchUnit does. So, if another module system works well in your
 environment, there is no need to switch over. But ArchUnit can bring JPMS-like features
 to older code bases, e.g. Java 8 projects, or environments where the JPMS is for some
 reason no option. It also can accompany a module system by adding additional rules e.g.
 on the API of a module.
-To express the concept of modularization ArchUnit offers ArchModule﻿s. The entrypoint into
-the API is ModuleRuleDefinition, e.g.
-ModuleRuleDefinition.modules().definedByPackages("..example.(*)..").should().beFreeOfCycles();
-As the example shows, it shares some concepts with the Slices API. For example definedByPackages(..)
-follows the same semantics as slices().matching(..).
+</td>
+</tr>
+</table>
+</div>
+<div class="paragraph">
+<p>To express the concept of modularization ArchUnit offers <code>ArchModule</code>﻿s. The entrypoint into
+the API is <code>ModuleRuleDefinition</code>, e.g.</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight nowrap"><code class="language-java hljs" data-lang="java">ModuleRuleDefinition.modules().definedByPackages("..example.(*)..").should().beFreeOfCycles();</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>As the example shows, it shares some concepts with the <a href="#_slices">Slices</a> API. For example <code>definedByPackages(..)</code>
+follows the same semantics as <code>slices().matching(..)</code>, using <a href="#_package_identifiers">Package Identifiers</a>.
 Also, the configuration options for cycle detection mentioned in the last section are shared by these APIs.
-But, it also offers several powerful concepts beyond that API to express many different modularization scenarios.
-One example would be to express modules via annotation. We can introduce a custom annotation
-like @AppModule and follow a convention to annotate the top-level package-info file
-of each package we consider the root of a module. E.g.
-com/myapp/example/module_one/package-info.java
-@AppModule(
- name = "Module One",
- allowedDependencies = {"Module Two", "Module Three"},
- exposedPackages = {"..module_one.api.."}
+But, it also offers several powerful concepts beyond that API to express many different modularization scenarios.</p>
+</div>
+<div class="paragraph">
+<p>One example would be to express modules via annotation. We can introduce a custom annotation
+like <code>@AppModule</code> and follow a convention to annotate the top-level <code>package-info</code> file
+of each package we consider the root of a module. E.g.</p>
+</div>
+<div class="listingblock">
+<div class="title">com/myapp/example/module_one/package-info.java</div>
+<div class="content">
+<pre class="highlightjs highlight nowrap"><code class="language-java hljs" data-lang="java">@AppModule(
+  name = "Module One",
+  allowedDependencies = {"Module Two", "Module Three"},
+  exposedPackages = {"..module_one.api.."}
 )
-package com.myapp.example.module_one;
-We can then define a rule using this annotation:
-modules()
- .definedByAnnotation(AppModule.class)
- .should().respectTheirAllowedDependenciesDeclaredIn("allowedDependencies",
- consideringOnlyDependenciesInAnyPackage("..example.."))
- .andShould().onlyDependOnEachOtherThroughPackagesDeclaredIn("exposedPackages")
-As the example shows, the syntax carries on meta-information (like the annotation of the annotated
-package-info) into the created ArchModule objects where it can
-be used to define the rule. In this example, the allowed dependencies are taken from the @AppModule
-annotation on the respective package-info and compared to the actual module dependencies. Any
+package com.myapp.example.module_one;</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>We can then define a rule using this annotation:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight nowrap"><code class="language-java hljs" data-lang="java">modules()
+  .definedByAnnotation(AppModule.class)
+  .should().respectTheirAllowedDependenciesDeclaredIn("allowedDependencies",
+      consideringOnlyDependenciesInAnyPackage("..example.."))
+  .andShould().onlyDependOnEachOtherThroughPackagesDeclaredIn("exposedPackages")</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>As the example shows, the syntax carries on meta-information (like the annotation of the annotated
+<code>package-info</code>) into the created <code>ArchModule</code> objects where it can
+be used to define the rule. In this example, the allowed dependencies are taken from the <code>@AppModule</code>
+annotation on the respective <code>package-info</code> and compared to the actual module dependencies. Any
 dependency not listed is reported as violation.
-Likewise, the exposed packages are taken from the @AppModule annotation and any dependency
-where the target class’s package doesn’t match any declared package identifier is reported
-as violation.
-Note that the modules() API can be adjusted in many ways to model custom requirements.
-For further details, please take a look at the examples provided
-here.
+Likewise, the exposed packages are taken from the <code>@AppModule</code> annotation and any dependency
+where the target class&#8217;s package doesn&#8217;t match any declared package identifier is reported
+as violation.</p>
+</div>
+<div class="paragraph">
+<p>Note that the <code>modules()</code> API can be adjusted in many ways to model custom requirements.
+For further details, please take a look at the
+<a href="https://github.com/TNG/ArchUnit-Examples/blob/main/example-junit6/src/test/java/com/tngtech/archunit/exampletest/junit6/ModulesTest.java">examples</a>.</p>
+</div>
+<div class="sect3">
+<h4 id="_modularization_core_api"><a class="anchor" href="#_modularization_core_api"></a>8.3.1. Modularization Core API</h4>
+<div class="paragraph">
+<p>The infrastructure to create modules and inspect their dependencies can also be used outside
+the rule syntax, e.g. for custom checks or utility code:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight nowrap"><code class="language-java hljs" data-lang="java">ArchModules&lt;?&gt; modules = ArchModules.defineByPackages("..example.(*)..").modularize(javaClasses);
+ArchModule&lt;?&gt; coreModule = modules.getByIdentifier("core");
+Set&lt;? extends ModuleDependency&lt;?&gt;&gt; coreDependencies = coreModule.getModuleDependenciesFromSelf();
+coreDependencies.forEach(...);</code></pre>
+</div>
+</div>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_general_coding_rules"><a class="anchor" href="#_general_coding_rules"></a>8.4. General Coding Rules</h3>
+<div class="paragraph">
+<p>The Library API also offers a small set of coding rules that might be useful in various projects.
+Those can be found within</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight nowrap"><code class="language-java hljs" data-lang="java">com.tngtech.archunit.library</code></pre>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_generalcodingrules"><a class="anchor" href="#_generalcodingrules"></a>8.4.1. GeneralCodingRules</h4>
+<div class="paragraph">
+<p>The class <code>GeneralCodingRules</code> contains a set of very general rules and conditions for coding.
+For example:</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p>To check that classes do not access <code>System.out</code> or <code>System.err</code>, but use logging instead.</p>
+</li>
+<li>
+<p>To check that classes do not throw generic exceptions, but use specific exceptions instead.</p>
+</li>
+<li>
+<p>To check that classes do not use <code>java.util.logging</code>, but use other libraries like Log4j, Logback, or SLF4J instead</p>
+</li>
+<li>
+<p>To check that classes do not use JodaTime, but use <code>java.time</code> instead.</p>
+</li>
+<li>
+<p>To check that classes do not use field injection, but constructor injection instead.</p>
+</li>
+</ul>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_dependencyrules"><a class="anchor" href="#_dependencyrules"></a>8.4.2. DependencyRules</h4>
+<div class="paragraph">
+<p>The class <code>DependencyRules</code> contains a set of rules and conditions for checking dependencies between classes.
+For example:</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p>To check that classes do not depend on classes from upper packages.</p>
+</li>
+</ul>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_proxyrules"><a class="anchor" href="#_proxyrules"></a>8.4.3. ProxyRules</h4>
+<div class="paragraph">
+<p>The class <code>ProxyRules</code> contains a set of rules and conditions for checking the usage of proxy objects.
+For example:</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p>To check that methods that matches a predicate are not called directly from within the same class.</p>
+</li>
+</ul>
+</div>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_plantuml_component_diagrams_as_rules"><a class="anchor" href="#_plantuml_component_diagrams_as_rules"></a>8.5. PlantUML Component Diagrams as rules</h3>
+<div class="paragraph">
+<p>The Library API offers a feature that supports <a href="http://plantuml.com/component-diagram">PlantUML</a> diagrams.
+This feature is located in</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight nowrap"><code class="language-java hljs" data-lang="java">com.tngtech.archunit.library.plantuml</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>ArchUnit can derive rules straight from PlantUML diagrams and check to make sure that all imported
+<code>JavaClasses</code> abide by the dependencies of the diagram. The respective rule can be created in the following way:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight nowrap"><code class="language-java hljs" data-lang="java">URL myDiagram = getClass().getResource("my-diagram.puml");
 
-#### 8.3.1. Modularization Core API
-The infrastructure to create modules and inspect their dependencies can also be used outside
-the rule syntax, e.g. for custom checks or utility code:
-ArchModules modules = ArchModules.defineByPackages("..example.(*)..").modularize(javaClasses);
-ArchModule coreModule = modules.getByIdentifier("core");
-Set> coreDependencies = coreModule.getModuleDependenciesFromSelf();
-coreDependencies.forEach(...);
-
-### 8.4. General Coding Rules
-The Library API also offers a small set of coding rules that might be useful in various projects.
-Those can be found within
-com.tngtech.archunit.library
-
-#### 8.4.1. GeneralCodingRules
-The class GeneralCodingRules contains a set of very general rules and conditions for coding.
-For example:
-To check that classes do not access System.out or System.err, but use logging instead.
-To check that classes do not throw generic exceptions, but use specific exceptions instead.
-To check that classes do not use java.util.logging, but use other libraries like Log4j, Logback, or SLF4J instead
-To check that classes do not use JodaTime, but use java.time instead.
-To check that classes do not use field injection, but constructor injection instead.
-
-#### 8.4.2. DependencyRules
-The class DependencyRules contains a set of rules and conditions for checking dependencies between classes.
-For example:
-To check that classes do not depend on classes from upper packages.
-
-#### 8.4.3. ProxyRules
-The class ProxyRules contains a set of rules and conditions for checking the usage of proxy objects.
-For example:
-To check that methods that matches a predicate are not called directly from within the same class.
-
-### 8.5. PlantUML Component Diagrams as rules
-The Library API offers a feature that supports PlantUML diagrams.
-This feature is located in
-com.tngtech.archunit.library.plantuml
-ArchUnit can derive rules straight from PlantUML diagrams and check to make sure that all imported
-JavaClasses abide by the dependencies of the diagram. The respective rule can be created in the following way:
-URL myDiagram = getClass().getResource("my-diagram.puml");
-
-classes().should(adhereToPlantUmlDiagram(myDiagram, consideringAllDependencies()));
-Diagrams supported have to be component diagrams and associate classes to components via stereotypes.
+classes().should(adhereToPlantUmlDiagram(myDiagram, consideringAllDependencies()));</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Diagrams supported have to be component diagrams and associate classes to components via stereotypes.
 The way this works is to use the respective package identifiers (compare
-ArchConditions.onlyHaveDependenciesInAnyPackage(..)) as stereotypes:
-simple plantuml archrule example
-@startuml
-[Some Source] <<..some.source..>>
-[Some Target] <<..some.target..>> as target
+<code>ArchConditions.onlyHaveDependenciesInAnyPackage(..)</code>) as stereotypes:</p>
+</div>
+<div class="imageblock">
+<div class="content">
+<object type="image/svg+xml" data="simple-plantuml-archrule-example.svg" width="176" height="198"><span class="alt">simple plantuml archrule example</span></object>
+</div>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight nowrap"><code class="language-none hljs">@startuml
+[Some Source] &lt;&lt;..some.source..&gt;&gt;
+[Some Target] &lt;&lt;..some.target..&gt;&gt; as target
 
-[Some Source] --> target
-@enduml
-Consider this diagram applied as a rule via adhereToPlantUmlDiagram(..), then for example
-a class some.target.Target accessing some.source.Source would be reported as a violation.
-
-#### 8.5.1. Configurations
-There are different ways to deal with dependencies of imported classes not covered by the
+[Some Source] --&gt; target
+@enduml</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Consider this diagram applied as a rule via <code>adhereToPlantUmlDiagram(..)</code>, then for example
+a class <code>some.target.Target</code> accessing <code>some.source.Source</code> would be reported as a violation.</p>
+</div>
+<div class="sect3">
+<h4 id="_configurations_2"><a class="anchor" href="#_configurations_2"></a>8.5.1. Configurations</h4>
+<div class="paragraph">
+<p>There are different ways to deal with dependencies of imported classes not covered by the
 diagram at all. The behavior of the PlantUML API can be configured by supplying a respective
-Configuration:
-// considers all dependencies possible (including java.lang, java.util, ...)
+<code>Configuration</code>:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight nowrap"><code class="language-java hljs" data-lang="java">// considers all dependencies possible (including java.lang, java.util, ...)
 classes().should(adhereToPlantUmlDiagram(
- mydiagram, consideringAllDependencies())
+        mydiagram, consideringAllDependencies())
 
 // considers only dependencies specified in the PlantUML diagram
 // (so any unknown dependency will be ignored)
 classes().should(adhereToPlantUmlDiagram(
- mydiagram, consideringOnlyDependenciesInDiagram())
+        mydiagram, consideringOnlyDependenciesInDiagram())
 
 // considers only dependencies in any specified package
 // (control the set of dependencies to consider, e.g. only com.myapp..)
 classes().should(adhereToPlantUmlDiagram(
- mydiagram, consideringOnlyDependenciesInAnyPackage("..some.package.."))
-It is possible to further customize which dependencies to ignore:
-// there are further ignore flavors available
-classes().should(adhereToPlantUmlDiagram(mydiagram).ignoreDependencies(predicate))
-A PlantUML diagram used with ArchUnit must abide by a certain set of rules:
-Components must be declared in the bracket notation (i.e. [Some Component])
-Components must have at least one (possible multiple) stereotype(s). Each stereotype in the diagram
-must be unique and represent a valid package identifier (e.g. <<..example..>> where .. represents
-an arbitrary number of packages; compare the core API)
-Components may have an optional alias (e.g. [Some Component] <<..example..>> as myalias). The alias must be alphanumeric and must not be quoted.
-Components may have an optional color (e.g. [Some Component] <<..example..>> #OrangeRed)
-Dependencies must use arrows only consisting of dashes (e.g. -->)
-Dependencies may go from left to right --> or right to left <--
-Dependencies may consist of any number of dashes (e.g -> or ----->)
-Dependencies may contain direction hints (e.g. -up->) or color directives (e.g. -[#green]->)
-You can compare this
-diagram of ArchUnit-Examples.
-
-### 8.6. Freezing Arch Rules
-When rules are introduced in grown projects, there are often hundreds or even thousands of violations,
+        mydiagram, consideringOnlyDependenciesInAnyPackage("..some.package.."))</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>It is possible to further customize which dependencies to ignore:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight nowrap"><code class="language-java hljs" data-lang="java">// there are further ignore flavors available
+classes().should(adhereToPlantUmlDiagram(mydiagram).ignoreDependencies(predicate))</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>A PlantUML diagram used with ArchUnit must abide by a certain set of rules:</p>
+</div>
+<div class="olist arabic">
+<ol class="arabic">
+<li>
+<p>Components must be declared in the bracket notation (i.e. <code>[Some Component]</code>)</p>
+</li>
+<li>
+<p>Components must have at least one (possible multiple) stereotype(s). Each stereotype in the diagram
+must be unique and represent a valid <a href="#_package_identifiers">package identifier</a>
+(e.g. <code>&lt;&lt;..example..&gt;&gt;</code> where <code>..</code> represents an arbitrary number of packages; compare the core API)</p>
+</li>
+<li>
+<p>Components may have an optional alias (e.g. <code>[Some Component] &lt;&lt;..example..&gt;&gt; as myalias</code>). The alias must be alphanumeric and must not be quoted.</p>
+</li>
+<li>
+<p>Components may have an optional color (e.g. <code>[Some Component] &lt;&lt;..example..&gt;&gt; #OrangeRed</code>)</p>
+</li>
+<li>
+<p>Dependencies must use arrows only consisting of dashes (e.g. <code>--&gt;</code>)</p>
+</li>
+<li>
+<p>Dependencies may go from left to right <code>--&gt;</code> or right to left <code>&lt;--</code></p>
+</li>
+<li>
+<p>Dependencies may consist of any number of dashes (e.g <code>-&gt;</code> or <code>-----&gt;</code>)</p>
+</li>
+<li>
+<p>Dependencies may contain direction hints (e.g. <code>-up-&gt;</code>) or color directives (e.g. <code>-[#green]-&gt;</code>)</p>
+</li>
+</ol>
+</div>
+<div class="paragraph">
+<p>You can compare this
+<a href="https://github.com/TNG/ArchUnit-Examples/blob/main/example-plain/src/test/resources/com/tngtech/archunit/exampletest/shopping_example.puml">diagram of ArchUnit-Examples</a>.</p>
+</div>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_freezing_arch_rules"><a class="anchor" href="#_freezing_arch_rules"></a>8.6. Freezing Arch Rules</h3>
+<div class="paragraph">
+<p>When rules are introduced in grown projects, there are often hundreds or even thousands of violations,
 way too many to fix immediately. The only way to tackle such extensive violations is to establish an
-iterative approach, which prevents the code base from further deterioration.
-FreezingArchRule can help in these scenarios by recording all existing violations to a ViolationStore.
+iterative approach, which prevents the code base from further deterioration.</p>
+</div>
+<div class="paragraph">
+<p><code>FreezingArchRule</code> can help in these scenarios by recording all existing violations to a <code>ViolationStore</code>.
 Consecutive runs will then only report new violations and ignore known violations.
-If violations are fixed, FreezingArchRule will automatically reduce the known stored violations to prevent any regression.
-
-#### 8.6.1. Usage
-To freeze an arbitrary ArchRule just wrap it into a FreezingArchRule:
-ArchRule rule = FreezingArchRule.freeze(classes().should()./*complete ArchRule*/);
-On the first run all violations of that rule will be stored as the current state. On consecutive runs only
-new violations will be reported. By default FreezingArchRule will ignore line numbers, i.e. if a
+If violations are fixed, <code>FreezingArchRule</code> will automatically reduce the known stored violations to prevent any regression.</p>
+</div>
+<div class="sect3">
+<h4 id="_usage"><a class="anchor" href="#_usage"></a>8.6.1. Usage</h4>
+<div class="paragraph">
+<p>To freeze an arbitrary <code>ArchRule</code> just wrap it into a <code>FreezingArchRule</code>:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight nowrap"><code class="language-java hljs" data-lang="java">ArchRule rule = FreezingArchRule.freeze(classes().should()./*complete ArchRule*/);</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>On the first run all violations of that rule will be stored as the current state. On consecutive runs only
+new violations will be reported. By default <code>FreezingArchRule</code> will ignore line numbers, i.e. if a
 violation is just shifted to a different line, it will still count as previously recorded
-and will not be reported.
-
-#### 8.6.2. Configuration
-By default FreezingArchRule will use a simple ViolationStore based on plain text files.
+and will not be reported.</p>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_configuration"><a class="anchor" href="#_configuration"></a>8.6.2. Configuration</h4>
+<div class="paragraph">
+<p>By default <code>FreezingArchRule</code> will use a simple <code>ViolationStore</code> based on plain text files.
 This is sufficient to add these files to any version control system to continuously track the progress.
-You can configure the location of the violation store within archunit.properties (compare Advanced Configuration):
-archunit.properties
-freeze.store.default.path=/some/path/in/a/vcs/repo
-Furthermore, it is possible to configure
-archunit.properties
-# must be set to true to allow the creation of a new violation store
+You can configure the location of the violation store within <code>archunit.properties</code> (compare <a href="#_advanced_configuration">Advanced Configuration</a>):</p>
+</div>
+<div class="listingblock">
+<div class="title">archunit.properties</div>
+<div class="content">
+<pre class="highlightjs highlight nowrap"><code class="language-none hljs">freeze.store.default.path=/some/path/in/a/vcs/repo</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Furthermore, it is possible to configure</p>
+</div>
+<div class="listingblock">
+<div class="title">archunit.properties</div>
+<div class="content">
+<pre class="highlightjs highlight nowrap"><code class="language-none hljs"># must be set to true to allow the creation of a new violation store
 # default is false
 freeze.store.default.allowStoreCreation=true
 
 # can be set to false to forbid updates of the violations stored for frozen rules
 # default is true
-freeze.store.default.allowStoreUpdate=false
-This can help in CI environments to prevent misconfiguration:
+freeze.store.default.allowStoreUpdate=false</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>This can help in CI environments to prevent misconfiguration:
 For example, a CI build should probably never create a new the violation store, but operate on
-an existing one.
-As mentioned in Overriding configuration, these properties can be passed as system properties as needed.
-For example to allow the creation of the violation store in a specific environment, it is possible to pass the system property via
--Darchunit.freeze.store.default.allowStoreCreation=true
-It is also possible to allow all violations to be "refrozen", i.e. the store will just be updated
+an existing one.</p>
+</div>
+<div class="paragraph">
+<p>As mentioned in <a href="#_overriding_configuration">Overriding configuration</a>, these properties can be passed as system properties as needed.
+For example to allow the creation of the violation store in a specific environment, it is possible to pass the system property via</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight nowrap"><code class="language-none hljs">-Darchunit.freeze.store.default.allowStoreCreation=true</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>It is also possible to allow all violations to be "refrozen", i.e. the store will just be updated
 with the current state, and the reported result will be success. Thus, it is effectively the same behavior
 as if all rules would never have been frozen.
 This can e.g. make sense, because current violations are consciously accepted and should be added to the store,
 or because the format of some violations has changed. The respective property to allow refreezing
-all current violations is freeze.refreeze=true, where the default is false.
-
-#### 8.6.3. Extension
-FreezingArchRule provides two extension points to adjust the behavior to custom needs.
-The first one is the ViolationStore, i.e. the store violations will be recorded to. The second one
-is the ViolationLineMatcher, i.e. how FreezingArchRule will associate lines of stored violations
+all current violations is <code>freeze.refreeze=true</code>, where the default is <code>false</code>.</p>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_extension"><a class="anchor" href="#_extension"></a>8.6.3. Extension</h4>
+<div class="paragraph">
+<p><code>FreezingArchRule</code> provides two extension points to adjust the behavior to custom needs.
+The first one is the <code>ViolationStore</code>, i.e. the store violations will be recorded to. The second one
+is the <code>ViolationLineMatcher</code>, i.e. how <code>FreezingArchRule</code> will associate lines of stored violations
 with lines of actual violations. As mentioned, by default this is a line matcher that ignores the
-line numbers of violations within the same class.
-
-##### Violation Store
-As mentioned in Configuration, the default ViolationStore is a simple text based store.
+line numbers of violations within the same class.</p>
+</div>
+<div class="sect4">
+<h5 id="_violation_store"><a class="anchor" href="#_violation_store"></a>Violation Store</h5>
+<div class="paragraph">
+<p>As mentioned in <a href="#_configuration">Configuration</a>, the default <code>ViolationStore</code> is a simple text based store.
 It can be exchanged though, for example to store violations in a database.
-To provide your own implementation, implement com.tngtech.archunit.library.freeze.ViolationStore and
-configure FreezingArchRule to use it. This can either be done programmatically:
-FreezingArchRule.freeze(rule).persistIn(customViolationStore);
-Alternatively it can be configured via archunit.properties (compare Advanced Configuration):
-freeze.store=fully.qualified.name.of.MyCustomViolationStore
-You can supply properties to initialize the store by using the namespace freeze.store.
-For properties
-freeze.store.propOne=valueOne
-freeze.store.propTwo=valueTwo
-the method ViolationStore.initialize(props) will be called with the properties
-propOne=valueOne
-propTwo=valueTwo
-
-##### Violation Line Matcher
-The ViolationLineMatcher compares lines from occurred violations with lines from the store.
+To provide your own implementation, implement <code>com.tngtech.archunit.library.freeze.ViolationStore</code> and
+configure <code>FreezingArchRule</code> to use it. This can either be done programmatically:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight nowrap"><code class="language-java hljs" data-lang="java">FreezingArchRule.freeze(rule).persistIn(customViolationStore);</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Alternatively it can be configured via <code>archunit.properties</code> (compare <a href="#_advanced_configuration">Advanced Configuration</a>):</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight nowrap"><code class="language-none hljs">freeze.store=fully.qualified.name.of.MyCustomViolationStore</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>You can supply properties to initialize the store by using the namespace <code>freeze.store</code>.
+For properties</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight nowrap"><code class="language-none hljs">freeze.store.propOne=valueOne
+freeze.store.propTwo=valueTwo</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>the method <code>ViolationStore.initialize(props)</code> will be called with the properties</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight nowrap"><code class="language-none hljs">propOne=valueOne
+propTwo=valueTwo</code></pre>
+</div>
+</div>
+</div>
+<div class="sect4">
+<h5 id="_violation_line_matcher"><a class="anchor" href="#_violation_line_matcher"></a>Violation Line Matcher</h5>
+<div class="paragraph">
+<p>The <code>ViolationLineMatcher</code> compares lines from occurred violations with lines from the store.
 The default implementation ignores line numbers and numbers of anonymous classes or lambda expressions,
 and counts lines as equivalent when all other details match.
-A custom ViolationLineMatcher can again either be defined programmatically:
-FreezingArchRule.freeze(rule).associateViolationLinesVia(customLineMatcher);
-or via archunit.properties:
-freeze.lineMatcher=fully.qualified.name.of.MyCustomLineMatcher
-
-### 8.7. Software Architecture Metrics
-Similar to code quality metrics, like cyclomatic complexity or method length,
+A custom <code>ViolationLineMatcher</code> can again either be defined programmatically:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight nowrap"><code class="language-java hljs" data-lang="java">FreezingArchRule.freeze(rule).associateViolationLinesVia(customLineMatcher);</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>or via <code>archunit.properties</code>:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight nowrap"><code class="language-none hljs">freeze.lineMatcher=fully.qualified.name.of.MyCustomLineMatcher</code></pre>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_software_architecture_metrics"><a class="anchor" href="#_software_architecture_metrics"></a>8.7. Software Architecture Metrics</h3>
+<div class="paragraph">
+<p>Similar to code quality metrics, like cyclomatic complexity or method length,
 software architecture metrics strive to measure the structure and design of software.
 ArchUnit can be used to calculate some well-known software architecture metrics.
 The foundation of these metrics is generally some form of componentization, i.e.
 we partition the classes/methods/fields of a Java application into related units
 and provide measurements for these units. In ArchUnit this concept is expressed by
-com.tngtech.archunit.library.metrics.MetricsComponent. For some metrics, like the
+<code>com.tngtech.archunit.library.metrics.MetricsComponent</code>. For some metrics, like the
 Cumulative Dependency Metrics by John Lakos, we also need to know the dependencies
 between those components, which are naturally derived from the dependencies between
-the elements (e.g. classes) within these components.
-A very simple concrete example would be to consider some Java packages as
+the elements (e.g. classes) within these components.</p>
+</div>
+<div class="paragraph">
+<p>A very simple concrete example would be to consider some Java packages as
 components and the classes within these packages as the contained elements. From
 the dependencies between the classes we can derive which package depends on which
-other package.
-The following will give a quick overview of the metrics that ArchUnit can calculate.
+other package.</p>
+</div>
+<div class="paragraph">
+<p>The following will give a quick overview of the metrics that ArchUnit can calculate.
 However, for further background information it is recommended to rely on
-some dedicated literature that explains these metrics in full detail.
-
-#### 8.7.1. Cumulative Dependency Metrics by John Lakos
-These are software architecture metrics as defined by John Lakos in his book
-"Large-Scale C++ Software Design". The basic idea is to calculate the DependsOn
+some dedicated literature that explains these metrics in full detail.</p>
+</div>
+<div class="sect3">
+<h4 id="_cumulative_dependency_metrics_by_john_lakos"><a class="anchor" href="#_cumulative_dependency_metrics_by_john_lakos"></a>8.7.1. Cumulative Dependency Metrics by John Lakos</h4>
+<div class="paragraph">
+<p>These are software architecture metrics as defined by John Lakos in his book
+"Large-Scale C++ Software Design". The basic idea is to calculate the <code>DependsOn</code>
 value for each component, which is the sum of all components that can be
-transitively reached from some component including the component itself.
-From these values we can derive
-Cumulative Component Dependency (CCD):
-The sum of all DependsOn values of all components
-Average Component Dependency (ACD):
-The CCD divided by the number of all components
-Relative Average Component Dependency (RACD):
-The ACD divided by the number of all components
-Normalized Cumulative Component Dependency (NCCD):
-The CCD of the system divided by the CCD of a balanced binary tree with the same number of components
-
-##### Example
-lakos example
-Thus these metrics provide some insights into the complexity of the dependency graph of a system.
-Note that in a cycle all elements have the same DependsOn value which will lead to an increased
-CCD. In fact for any non-trivial (n >= 5) acyclic graph of components the RACD is bound by 0.6.
-
-##### How to use the API
-The values described for these metrics can be calculated in the following way:
-import com.tngtech.archunit.library.metrics.ArchitectureMetrics;
+transitively reached from some component including the component itself.</p>
+</div>
+<div class="paragraph">
+<p>From these values we can derive</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p>Cumulative Component Dependency (<strong>CCD</strong>):
+The sum of all <code>DependsOn</code> values of all components</p>
+</li>
+<li>
+<p>Average Component Dependency (<strong>ACD</strong>):
+The <code>CCD</code> divided by the number of all components</p>
+</li>
+<li>
+<p>Relative Average Component Dependency (<strong>RACD</strong>):
+The <code>ACD</code> divided by the number of all components</p>
+</li>
+<li>
+<p>Normalized Cumulative Component Dependency (<strong>NCCD</strong>):
+The <code>CCD</code> of the system divided by the <code>CCD</code> of a balanced binary tree with the same number of components</p>
+</li>
+</ul>
+</div>
+<div class="sect4">
+<h5 id="_example"><a class="anchor" href="#_example"></a>Example</h5>
+<div class="imageblock">
+<div class="content">
+<object type="image/svg+xml" data="lakos-example.svg" width="463" height="554"><span class="alt">lakos example</span></object>
+</div>
+</div>
+<div class="paragraph">
+<p>Thus these metrics provide some insights into the complexity of the dependency graph of a system.
+Note that in a cycle all elements have the same <code>DependsOn</code> value which will lead to an increased
+CCD. In fact for any non-trivial (<code>n &gt;= 5</code>) acyclic graph of components the RACD is bound by <code>0.6</code>.</p>
+</div>
+</div>
+<div class="sect4">
+<h5 id="_how_to_use_the_api"><a class="anchor" href="#_how_to_use_the_api"></a>How to use the API</h5>
+<div class="paragraph">
+<p>The values described for these metrics can be calculated in the following way:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight nowrap"><code class="language-java hljs" data-lang="java">import com.tngtech.archunit.library.metrics.ArchitectureMetrics;
 // ...
 
 JavaClasses classes = // ...
-Set packages = classes.getPackage("com.example").getSubpackages();
+Set&lt;JavaPackage&gt; packages = classes.getPackage("com.example").getSubpackages();
 
 // These components can also be created in a package agnostic way, compare MetricsComponents.from(..)
-MetricsComponents components = MetricsComponents.fromPackages(packages);
+MetricsComponents&lt;JavaClass&gt; components = MetricsComponents.fromPackages(packages);
 
 LakosMetrics metrics = ArchitectureMetrics.lakosMetrics(components);
 
 System.out.println("CCD: " + metrics.getCumulativeComponentDependency());
 System.out.println("ACD: " + metrics.getAverageComponentDependency());
 System.out.println("RACD: " + metrics.getRelativeAverageComponentDependency());
-System.out.println("NCCD: " + metrics.getNormalizedCumulativeComponentDependency());
-
-#### 8.7.2. Component Dependency Metrics by Robert C. Martin
-These software architecture metrics were defined by Robert C. Martin in various sources,
-for example in his book "Clean architecture : a craftsman’s guide to software structure and design".
-The foundation are again components, that must in this case contain classes as their elements
-(i.e. these are purely object-oriented metrics that need a concept of abstract classes).
-The metrics are based on the following definitions:
-Efferent Coupling (Ce): The number of outgoing dependencies to any other component
-Afferent Coupling (Ca): The number of incoming dependencies from any other component
-Instability (I): Ce / (Ca + Ce), i.e. the relationship of outgoing dependencies
-to all dependencies
-Abstractness (A): num(abstract_classes) / num(all_classes) in the component
-Distance from Main Sequence (D): | A + I - 1 |, i.e. the normalized distance from
-the ideal line between (A=1, I=0) and (A=0, I=1)
-Note that ArchUnit slightly differs from the original definition. In ArchUnit
+System.out.println("NCCD: " + metrics.getNormalizedCumulativeComponentDependency());</code></pre>
+</div>
+</div>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_component_dependency_metrics_by_robert_c_martin"><a class="anchor" href="#_component_dependency_metrics_by_robert_c_martin"></a>8.7.2. Component Dependency Metrics by Robert C. Martin</h4>
+<div class="paragraph">
+<p>These software architecture metrics were defined by Robert C. Martin in various sources,
+for example in his book "Clean architecture : a craftsman&#8217;s guide to software structure and design".</p>
+</div>
+<div class="paragraph">
+<p>The foundation are again components, that must in this case contain classes as their elements
+(i.e. these are purely object-oriented metrics that need a concept of abstract classes).</p>
+</div>
+<div class="paragraph">
+<p>The metrics are based on the following definitions:</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p>Efferent Coupling (<strong>Ce</strong>): The number of outgoing dependencies to any other component</p>
+</li>
+<li>
+<p>Afferent Coupling (<strong>Ca</strong>): The number of incoming dependencies from any other component</p>
+</li>
+<li>
+<p>Instability (<strong>I</strong>): <code>Ce / (Ca + Ce)</code>, i.e. the relationship of outgoing dependencies
+to all dependencies</p>
+</li>
+<li>
+<p>Abstractness (<strong>A</strong>): <code>num(abstract_classes) / num(all_classes)</code> in the component</p>
+</li>
+<li>
+<p>Distance from Main Sequence (<strong>D</strong>): <code>| A + I - 1 |</code>, i.e. the normalized distance from
+the ideal line between <code>(A=1, I=0)</code> and <code>(A=0, I=1)</code></p>
+</li>
+</ul>
+</div>
+<div class="paragraph">
+<p>Note that ArchUnit slightly differs from the original definition. In ArchUnit
 the Abstractness value is only based on public classes, i.e.
-classes that are visible from the outside. The reason is that Ce, Ca and I all
+classes that are visible from the outside. The reason is that <strong>Ce</strong>, <strong>Ca</strong> and <strong>I</strong> all
 are metrics with respect to coupling of components. But only classes that are visible
 to the outside can affect coupling between components,
-so it makes sense to only consider those classes to calculate the A value.
-
-##### Example
-The following provides some example where the A values assume some random factor
-of abstract classes within the respective component.
-martin example
-
-##### How to use the API
-The values described for these metrics can be calculated in the following way:
-import com.tngtech.archunit.library.metrics.ArchitectureMetrics;
+so it makes sense to only consider those classes to calculate the <strong>A</strong> value.</p>
+</div>
+<div class="sect4">
+<h5 id="_example_2"><a class="anchor" href="#_example_2"></a>Example</h5>
+<div class="paragraph">
+<p>The following provides some example where the <code>A</code> values assume some random factor
+of abstract classes within the respective component.</p>
+</div>
+<div class="imageblock">
+<div class="content">
+<object type="image/svg+xml" data="martin-example.svg" width="463" height="704"><span class="alt">martin example</span></object>
+</div>
+</div>
+</div>
+<div class="sect4">
+<h5 id="_how_to_use_the_api_2"><a class="anchor" href="#_how_to_use_the_api_2"></a>How to use the API</h5>
+<div class="paragraph">
+<p>The values described for these metrics can be calculated in the following way:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight nowrap"><code class="language-java hljs" data-lang="java">import com.tngtech.archunit.library.metrics.ArchitectureMetrics;
 // ...
 
 JavaClasses classes = // ...
-Set packages = classes.getPackage("com.example").getSubpackages();
+Set&lt;JavaPackage&gt; packages = classes.getPackage("com.example").getSubpackages();
 
 // These components can also be created in a package agnostic way, compare MetricsComponents.from(..)
-MetricsComponents components = MetricsComponents.fromPackages(packages);
+MetricsComponents&lt;JavaClass&gt; components = MetricsComponents.fromPackages(packages);
 
 ComponentDependencyMetrics metrics = ArchitectureMetrics.componentDependencyMetrics(components);
 
@@ -1149,358 +2740,693 @@ System.out.println("Ce: " + metrics.getEfferentCoupling("com.example.component")
 System.out.println("Ca: " + metrics.getAfferentCoupling("com.example.component"));
 System.out.println("I: " + metrics.getInstability("com.example.component"));
 System.out.println("A: " + metrics.getAbstractness("com.example.component"));
-System.out.println("D: " + metrics.getNormalizedDistanceFromMainSequence("com.example.component"));
-
-#### 8.7.3. Visibility Metrics by Herbert Dowalil
-These software architecture metrics were defined by Herbert Dowalil in his book
+System.out.println("D: " + metrics.getNormalizedDistanceFromMainSequence("com.example.component"));</code></pre>
+</div>
+</div>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_visibility_metrics_by_herbert_dowalil"><a class="anchor" href="#_visibility_metrics_by_herbert_dowalil"></a>8.7.3. Visibility Metrics by Herbert Dowalil</h4>
+<div class="paragraph">
+<p>These software architecture metrics were defined by Herbert Dowalil in his book
 "Modulare Softwarearchitektur: Nachhaltiger Entwurf durch Microservices, Modulithen und SOA 2.0".
 They provide a measure for the Information Hiding Principle, i.e. the relation of visible to hidden
-elements within a component.
-The metrics are composed from the following definitions:
-Relative Visibility (RV): num(visible_elements) / num(all_elements) for each component
-Average Relative Visibility (ARV): The average of all RV values
-Global Relative Visibility (GRV): num(visible_elements) / num(all_elements) over all components
-
-##### Example
-dowalil example
-
-##### How to use the API
-The values described for these metrics can be calculated in the following way:
-import com.tngtech.archunit.library.metrics.ArchitectureMetrics;
+elements within a component.</p>
+</div>
+<div class="paragraph">
+<p>The metrics are composed from the following definitions:</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p>Relative Visibility (<strong>RV</strong>): <code>num(visible_elements) / num(all_elements)</code> for each component</p>
+</li>
+<li>
+<p>Average Relative Visibility (<strong>ARV</strong>): The average of all <code>RV</code> values</p>
+</li>
+<li>
+<p>Global Relative Visibility (<strong>GRV</strong>): <code>num(visible_elements) / num(all_elements)</code> over all components</p>
+</li>
+</ul>
+</div>
+<div class="sect4">
+<h5 id="_example_3"><a class="anchor" href="#_example_3"></a>Example</h5>
+<div class="imageblock">
+<div class="content">
+<object type="image/svg+xml" data="dowalil-example.svg" width="693" height="327"><span class="alt">dowalil example</span></object>
+</div>
+</div>
+</div>
+<div class="sect4">
+<h5 id="_how_to_use_the_api_3"><a class="anchor" href="#_how_to_use_the_api_3"></a>How to use the API</h5>
+<div class="paragraph">
+<p>The values described for these metrics can be calculated in the following way:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight nowrap"><code class="language-java hljs" data-lang="java">import com.tngtech.archunit.library.metrics.ArchitectureMetrics;
 // ...
 
 JavaClasses classes = // ...
-Set packages = classes.getPackage("com.example").getSubpackages();
+Set&lt;JavaPackage&gt; packages = classes.getPackage("com.example").getSubpackages();
 
 // These components can also be created in a package agnostic way, compare MetricsComponents.from(..)
-MetricsComponents components = MetricsComponents.fromPackages(packages);
+MetricsComponents&lt;JavaClass&gt; components = MetricsComponents.fromPackages(packages);
 
 VisibilityMetrics metrics = ArchitectureMetrics.visibilityMetrics(components);
 
 System.out.println("RV : " + metrics.getRelativeVisibility("com.example.component"));
 System.out.println("ARV: " + metrics.getAverageRelativeVisibility());
-System.out.println("GRV: " + metrics.getGlobalRelativeVisibility());
-
-## 9. JUnit Support
-At the moment ArchUnit offers extended support for writing tests with JUnit 4 and JUnit 5.
-This mainly tackles the problem of caching classes between test runs and to remove some boilerplate.
-Consider a straight forward approach to write tests:
-@Test
+System.out.println("GRV: " + metrics.getGlobalRelativeVisibility());</code></pre>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_junit_support"><a class="anchor" href="#_junit_support"></a>9. JUnit Support</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>At the moment, ArchUnit offers extended support for writing tests with JUnit 4, JUnit 5, and JUnit 6.
+This mainly tackles the problem of caching classes between test runs and to remove some boilerplate.</p>
+</div>
+<div class="paragraph">
+<p>Consider a straight forward approach to write tests:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight nowrap"><code class="language-java hljs" data-lang="java">@Test
 public void rule1() {
- JavaClasses importedClasses = new ClassFileImporter().importClasspath();
+    JavaClasses importedClasses = new ClassFileImporter().importClasspath();
 
- ArchRule rule = classes()...
+    ArchRule rule = classes()...
 
- rule.check(importedClasses);
+    rule.check(importedClasses);
 }
 
 @Test
 public void rule2() {
- JavaClasses importedClasses = new ClassFileImporter().importClasspath();
+    JavaClasses importedClasses = new ClassFileImporter().importClasspath();
 
- ArchRule rule = classes()...
+    ArchRule rule = classes()...
 
- rule.check(importedClasses);
-}
-For bigger projects, this will have a significant performance impact, since the import can take
-a noticeable amount of time. Also rules will always be checked against the imported classes, thus
-the explicit call of check(importedClasses) is bloat and error prone (i.e. it can be forgotten).
-
-### 9.1. JUnit 4 & 5 Support
-Make sure you follow the installation instructions at Installation, in particular to include
-the correct dependency for the respective JUnit support.
-
-#### 9.1.1. Writing tests
-Tests look and behave very similar between JUnit 4 and 5. The only difference is, that with JUnit 4
-it is necessary to add a specific Runner to take care of caching and checking rules, while JUnit 5
-picks up the respective TestEngine transparently. A test typically looks the following way:
-@RunWith(ArchUnitRunner.class) // Remove this line for JUnit 5!!
+    rule.check(importedClasses);
+}</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>For bigger projects, this will have a significant performance impact, since the import can take
+a noticeable amount of time. Furthermore, rules will always be checked against the imported classes, thus
+the explicit call of <code>check(importedClasses)</code> is bloat and error-prone (i.e. it can be forgotten).</p>
+</div>
+<div class="sect2">
+<h3 id="_junit_integration"><a class="anchor" href="#_junit_integration"></a>9.1. JUnit Integration</h3>
+<div class="paragraph">
+<p>Make sure you follow the installation instructions at <a href="#_installation">Installation</a>, in particular to include
+the correct dependency for the respective JUnit support.</p>
+</div>
+<div class="sect3">
+<h4 id="_writing_tests"><a class="anchor" href="#_writing_tests"></a>9.1.1. Writing tests</h4>
+<div class="paragraph">
+<p>Tests look and behave very similar between JUnit 4 and JUnit 5 &amp; 6. The only difference is that with JUnit 4
+it is necessary to add a specific <code>Runner</code> to take care of caching and checking rules, while JUnit 5 &amp; 6
+pick up the respective <code>TestEngine</code> transparently. A test typically looks the following way:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight nowrap"><code class="language-java hljs" data-lang="java">// @RunWith(ArchUnitRunner.class) // Enable this line for JUnit 4
 @AnalyzeClasses(packages = "com.myapp")
 public class ArchitectureTest {
 
- // ArchRules can just be declared as static fields and will be evaluated
- @ArchTest
- public static final ArchRule rule1 = classes().should()...
+    // ArchRules can just be declared as static fields and will be evaluated
+    @ArchTest
+    public static final ArchRule rule1 = classes().should()...
 
- @ArchTest
- public static final ArchRule rule2 = classes().should()...
+    @ArchTest
+    public static final ArchRule rule2 = classes().should()...
 
- @ArchTest
- public static void rule3(JavaClasses classes) {
- // The runner also understands static methods with a single JavaClasses argument
- // reusing the cached classes
- }
+    @ArchTest
+    public static void rule3(JavaClasses classes) {
+        // The runner also understands static methods with a single JavaClasses argument
+        // reusing the cached classes
+    }
 
-}
-The JavaClass cache will work in two ways. On the one hand it will cache the classes by test,
+}</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>The <code>JavaClass</code> cache will work in two ways. On the one hand it will cache the classes by test,
 so they can be reused by several rules declared within the same class. On the other hand, it
 will cache the classes by location, so a second test that wants to import classes from the same
 URLs will reuse the classes previously imported as well. Note that this second caching uses
 soft references, so the classes will be dropped from memory, if the heap runs low.
-For further information see Controlling the Cache.
-
-#### 9.1.2. Controlling the Import
-Which classes will be imported can be controlled in a declarative way through @AnalyzeClasses.
+For further information see <a href="#_controlling_the_cache">Controlling the Cache</a>.</p>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_controlling_the_import"><a class="anchor" href="#_controlling_the_import"></a>9.1.2. Controlling the Import</h4>
+<div class="paragraph">
+<p>Which classes will be imported can be controlled in a declarative way through <code>@AnalyzeClasses</code>.
 If no packages or locations are provided, the package of the annotated test class will be imported.
-You can specify packages to import as strings:
-@AnalyzeClasses(packages = {"com.myapp.subone", "com.myapp.subtwo"})
-To better support refactorings, packages can also be declared relative to classes, i.e. the
-packages these classes reside in will be imported:
-@AnalyzeClasses(packagesOf = {SubOneConfiguration.class, SubTwoConfiguration.class})
-As a third option, locations can be specified freely by implementing a LocationProvider:
-public class MyLocationProvider implements LocationProvider {
- @Override
- public Set get(Class testClass) {
- // Determine Locations (= URLs) to import
- // Can also consider the actual test class, e.g. to read some custom annotation
- }
+You can specify packages to import as strings:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight nowrap"><code class="language-java hljs" data-lang="java">@AnalyzeClasses(packages = {"com.myapp.subone", "com.myapp.subtwo"})</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>To better support refactorings, packages can also be declared relative to classes, i.e. the
+packages these classes reside in will be imported:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight nowrap"><code class="language-java hljs" data-lang="java">@AnalyzeClasses(packagesOf = {SubOneConfiguration.class, SubTwoConfiguration.class})</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>As an alternative to specifying packages, you can directly specify individual classes to be analyzed:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight nowrap"><code class="language-java hljs" data-lang="java">@AnalyzeClasses(classes = {String.class, Integer.class})</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>This allows for more fine-grained control over which classes are imported for testing.
+You can combine the <code>classes</code> property with other properties like <code>packages</code>, <code>packagesOf</code>, etc.
+In this case, all specified classes and packages will be imported for analysis.</p>
+</div>
+<div class="paragraph">
+<p>As another option, locations can be specified freely by implementing a <code>LocationProvider</code>:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight nowrap"><code class="language-java hljs" data-lang="java">public class MyLocationProvider implements LocationProvider {
+    @Override
+    public Set&lt;Location&gt; get(Class&lt;?&gt; testClass) {
+        // Determine Locations (= URLs) to import
+        // Can also consider the actual test class, e.g. to read some custom annotation
+    }
 }
 
-@AnalyzeClasses(locations = MyLocationProvider.class)
-Furthermore, to choose specific classes beneath those locations, ImportOption﻿s can be
-specified (compare The Core API). For example, to import the classpath, but only consider
-production code, and only consider code that is directly supplied and does not come from JARs:
-@AnalyzeClasses(importOptions = {DoNotIncludeTests.class, DoNotIncludeJars.class})
-As explained in The Core API, you can write your own custom implementation of ImportOption
-and then supply the type to @AnalyzeClasses.
-To import the whole classpath, instead of just the package of the test class, use the option
-@AnalyzeClasses(wholeClasspath = true)
-Note that @AnalyzeClasses can also be used as a meta-annotation to avoid repeating the same configuration:
-@Retention(RetentionPolicy.RUNTIME)
+@AnalyzeClasses(locations = MyLocationProvider.class)</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Furthermore, in order to choose specific classes beneath those locations, <code>ImportOption</code>﻿s can be
+specified (compare <a href="#_the_core_api">The Core API</a>). The following example imports the classpath, but only considers
+production code and only considers code that is directly supplied and does not come from JARs:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight nowrap"><code class="language-java hljs" data-lang="java">@AnalyzeClasses(importOptions = {DoNotIncludeTests.class, DoNotIncludeJars.class})</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>As explained in <a href="#_the_core_api">The Core API</a>, you can write your own custom implementation of <code>ImportOption</code>
+and then supply the type to <code>@AnalyzeClasses</code>.</p>
+</div>
+<div class="paragraph">
+<p>To import the whole classpath, instead of just the package of the test class, use the option</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight nowrap"><code class="language-java hljs" data-lang="java">@AnalyzeClasses(wholeClasspath = true)</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Note that <code>@AnalyzeClasses</code> can also be used as a meta-annotation to avoid repeating the same configuration:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight nowrap"><code class="language-java hljs" data-lang="java">@Retention(RetentionPolicy.RUNTIME)
 @AnalyzeClasses(packagesOf = MyApplicationRoot.class, importOptions = DoNotIncludeTests.class)
-public @interface AnalyzeMainClasses {}
-This annotation can then be used on test classes without repeating the specific configuration of @AnalyzeClasses:
-@AnalyzeMainClasses
+public @interface AnalyzeMainClasses {}</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>This annotation can then be used on test classes without repeating the specific configuration of <code>@AnalyzeClasses</code>:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight nowrap"><code class="language-java hljs" data-lang="java">@AnalyzeMainClasses
 public class ArchitectureTest {
- // ...
-}
-
-#### 9.1.3. Controlling the Cache
-By default, all classes will be cached by location. This means that between different
+    // ...
+}</code></pre>
+</div>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_controlling_the_cache"><a class="anchor" href="#_controlling_the_cache"></a>9.1.3. Controlling the Cache</h4>
+<div class="paragraph">
+<p>By default, all classes will be cached by location. This means that between different
 test class runs imported Java classes will be reused, if the exact combination of locations has already
-been imported.
-If the heap runs low, and thus the garbage collector has to do a big sweep in one run,
+been imported.</p>
+</div>
+<div class="paragraph">
+<p>If the heap runs low, and thus the garbage collector has to do a big sweep in one run,
 this can cause a noticeable delay. On the other hand, if it is known that no other test class will
-reuse the imported Java classes, it would make sense to deactivate this cache.
-This can be achieved by configuring CacheMode.PER_CLASS, e.g.
-@AnalyzeClasses(packages = "com.myapp.special", cacheMode = CacheMode.PER_CLASS)
-The Java classes imported during this test run will not be cached by location and just be reused within
+reuse the imported Java classes, it would make sense to deactivate this cache.</p>
+</div>
+<div class="paragraph">
+<p>This can be achieved by configuring <code>CacheMode.PER_CLASS</code>, e.g.</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight nowrap"><code class="language-java hljs" data-lang="java">@AnalyzeClasses(packages = "com.myapp.special", cacheMode = CacheMode.PER_CLASS)</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>The Java classes imported during this test run will not be cached by location and just be reused within
 the same test class. After all tests of this class have been run,
-the imported Java classes will simply be dropped.
+the imported Java classes will simply be dropped.</p>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_ignoring_tests"><a class="anchor" href="#_ignoring_tests"></a>9.1.4. Ignoring Tests</h4>
+<div class="paragraph">
+<p>It is possible to skip tests by annotating them with <code>@ArchIgnore</code>, for example:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight nowrap"><code class="language-java hljs" data-lang="java">public class ArchitectureTest {
 
-#### 9.1.4. Ignoring Tests
-It is possible to skip tests by annotating them with @ArchIgnore, for example:
-public class ArchitectureTest {
+    // will run
+    @ArchTest
+    public static final ArchRule rule1 = classes().should()...
 
- // will run
- @ArchTest
- public static final ArchRule rule1 = classes().should()...
-
- // won't run
- @ArchIgnore
- @ArchTest
- public static final ArchRule rule2 = classes().should()...
-}
-Note for users of JUnit 5: the annotation @Disabled has no effect here.
-Instead, @ArchIgnore should be used.
-
-#### 9.1.5. Grouping Rules
-Often a project might end up with different categories of rules, for example "service rules"
+    // won't run
+    @ArchIgnore
+    @ArchTest
+    public static final ArchRule rule2 = classes().should()...
+}</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Note for users of JUnit 5 &amp; 6: the annotation <code>@Disabled</code> has no effect here.
+Instead, <code>@ArchIgnore</code> should be used.</p>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_grouping_rules"><a class="anchor" href="#_grouping_rules"></a>9.1.5. Grouping Rules</h4>
+<div class="paragraph">
+<p>Often, a project might end up with different categories of rules, for example "service rules"
 and "persistence rules". It is possible to write one class for each set of rules, and then
-refer to those sets from another test:
-public class ServiceRules {
- @ArchTest
- public static final ArchRule ruleOne = ...
+refer to those sets from another test:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight nowrap"><code class="language-java hljs" data-lang="java">public class ServiceRules {
+    @ArchTest
+    public static final ArchRule ruleOne = ...
 
- // further rules
+    // further rules
 }
 
 public class PersistenceRules {
- @ArchTest
- public static final ArchRule ruleOne = ...
+    @ArchTest
+    public static final ArchRule ruleOne = ...
 
- // further rules
+    // further rules
 }
 
-@RunWith(ArchUnitRunner.class) // Remove this line for JUnit 5!!
+// @RunWith(ArchUnitRunner.class) // Enable this line for JUnit 4
 @AnalyzeClasses
 public class ArchitectureTest {
 
- @ArchTest
- static final ArchTests serviceRules = ArchTests.in(ServiceRules.class);
+    @ArchTest
+    static final ArchTests serviceRules = ArchTests.in(ServiceRules.class);
 
- @ArchTest
- static final ArchTests persistenceRules = ArchTests.in(PersistenceRules.class);
+    @ArchTest
+    static final ArchTests persistenceRules = ArchTests.in(PersistenceRules.class);
 
-}
-The runner will include all @ArchTest annotated members within ServiceRules and PersistenceRules and evaluate
-them against the classes declared within @AnalyzeClasses on ArchitectureTest.
-This also allows an easy reuse of a rule library in different projects or modules.
-
-#### 9.1.6. Executing Single Rules
-It is possible to filter specific rules (e.g. @ArchTest fields) via archunit.properties (compare Advanced Configuration).
-archunit.properties
-# Specify the field or method name here. Multiple names can be joined by ','
-junit.testFilter=my_custom_rule_field
-As always with archunit.properties, this can also be passed dynamically using a system property,
-E.g. passing
--Darchunit.junit.testFilter=my_custom_rule_field
-
-#### 9.1.7. Generating Display Names
-ArchUnit offers the possibility to generate more readable names in the test report by replacing underscores in the
-original rule names by spaces. For example, if a method or field is named
-some_Field_or_Method_rule
-this will appear as
-some Field or Method rule
-in the test report.
-This is similar to JUnit 5’s @DisplayNameGeneration annotation, but because this display name generation does not
-fit well with ArchUnit’s rule execution and because we’d like to offer this feature for JUnit 4 as well, you can enable
-display name generation in ArchUnit with a configuration property (see Advanced Configuration):
-archunit.properties
-junit.displayName.replaceUnderscoresBySpaces=true
-If you omit the property (or set it to false) the original rule names are used as display names.
-
-## 10. Advanced Configuration
-Some behavior of ArchUnit can be centrally configured by adding a file archunit.properties
-to the root of the classpath (e.g. under src/test/resources).
-This section will outline some global configuration options.
-
-### 10.1. Overriding configuration
-ArchUnit will use exactly the archunit.properties file returned by the context
-ClassLoader from the classpath root, via the standard Java resource loading mechanism.
-It is possible to override any property from archunit.properties, by passing a system property
-to the respective JVM process executing ArchUnit:
--Darchunit.propertyName=propertyValue
-E.g. to override the property resolveMissingDependenciesFromClassPath described in the next section, it would be possible to pass:
--Darchunit.resolveMissingDependenciesFromClassPath=false
-
-### 10.2. Configuring the Resolution Behavior
-As mentioned in Dealing with Missing Classes, it might be preferable to configure a different
+}</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>The runner will include all <code>@ArchTest</code> annotated members within <code>ServiceRules</code> and <code>PersistenceRules</code> and evaluate
+them against the classes declared within <code>@AnalyzeClasses</code> on <code>ArchitectureTest</code>.
+This also allows an easy reuse of a rule library in different projects or modules.</p>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_executing_single_rules"><a class="anchor" href="#_executing_single_rules"></a>9.1.6. Executing Single Rules</h4>
+<div class="paragraph">
+<p>It is possible to filter specific rules (e.g. <code>@ArchTest</code> fields) via <code>archunit.properties</code> (compare <a href="#_advanced_configuration">Advanced Configuration</a>).</p>
+</div>
+<div class="listingblock">
+<div class="title">archunit.properties</div>
+<div class="content">
+<pre class="highlightjs highlight nowrap"><code class="language-none hljs"># Specify the field or method name here. Multiple names can be joined by ','
+junit.testFilter=my_custom_rule_field</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>As always with <code>archunit.properties</code>, this can also be passed dynamically using a system property,
+E.g. passing</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight nowrap"><code class="language-none hljs">-Darchunit.junit.testFilter=my_custom_rule_field</code></pre>
+</div>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_generating_display_names"><a class="anchor" href="#_generating_display_names"></a>9.1.7. Generating Display Names</h4>
+<div class="paragraph">
+<p>ArchUnit offers the possibility to generate more readable names in the test report by replacing underscores in the
+original rule names by spaces. For example, if a method or field is named</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight nowrap"><code class="language-none hljs">some_Field_or_Method_rule</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>this will appear as</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight nowrap"><code class="language-none hljs">some Field or Method rule</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>in the test report.</p>
+</div>
+<div class="paragraph">
+<p>This is similar to JUnit 5&#8217;s <code>@DisplayNameGeneration</code> annotation, but because this display name generation does not
+fit well with ArchUnit&#8217;s rule execution and because we&#8217;d like to offer this feature for JUnit 4 as well, you can enable
+display name generation in ArchUnit with a configuration property (see <a href="#_advanced_configuration">Advanced Configuration</a>):</p>
+</div>
+<div class="listingblock">
+<div class="title">archunit.properties</div>
+<div class="content">
+<pre class="highlightjs highlight nowrap"><code class="language-none hljs">junit.displayName.replaceUnderscoresBySpaces=true</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>If you omit the property (or set it to <code>false</code>), the original rule names are used as display names.</p>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="_advanced_configuration"><a class="anchor" href="#_advanced_configuration"></a>10. Advanced Configuration</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>Some behavior of ArchUnit can be centrally configured by adding a file <code>archunit.properties</code>
+to the root of the classpath (e.g. under <code>src/test/resources</code>).
+This section will outline some global configuration options.</p>
+</div>
+<div class="sect2">
+<h3 id="_overriding_configuration"><a class="anchor" href="#_overriding_configuration"></a>10.1. Overriding configuration</h3>
+<div class="paragraph">
+<p>ArchUnit will use exactly the <code>archunit.properties</code> file returned by the context
+<code>ClassLoader</code> from the classpath root, via the standard Java resource loading mechanism.</p>
+</div>
+<div class="paragraph">
+<p>It is possible to override any property from <code>archunit.properties</code>, by passing a system property
+to the respective JVM process executing ArchUnit:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight nowrap"><code class="language-none hljs">-Darchunit.propertyName=propertyValue</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>E.g. to override the property <code>resolveMissingDependenciesFromClassPath</code> described in the next section, it would be possible to pass:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight nowrap"><code class="language-none hljs">-Darchunit.resolveMissingDependenciesFromClassPath=false</code></pre>
+</div>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_configuring_the_resolution_behavior"><a class="anchor" href="#_configuring_the_resolution_behavior"></a>10.2. Configuring the Resolution Behavior</h3>
+<div class="paragraph">
+<p>As mentioned in <a href="#_dealing_with_missing_classes">Dealing with Missing Classes</a>, it might be preferable to configure a different
 import behavior if dealing with missing classes wastes too much performance.
-One way that can be chosen out of the box is to never resolve any missing class from the classpath:
-archunit.properties
-resolveMissingDependenciesFromClassPath=false
-If you want to resolve just some classes from the classpath (e.g. to import missing classes from
+One way that can be chosen out of the box is to never resolve any missing class from the classpath:</p>
+</div>
+<div class="listingblock">
+<div class="title">archunit.properties</div>
+<div class="content">
+<pre class="highlightjs highlight nowrap"><code class="language-none hljs">resolveMissingDependenciesFromClassPath=false</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>If you want to resolve just some classes from the classpath (e.g. to import missing classes from
 your own organization but avoid the performance impact of importing classes from 3rd party packages),
-it is possible to configure only specific packages to be resolved from the classpath:
-archunit.properties
-classResolver=com.tngtech.archunit.core.importer.resolvers.SelectedClassResolverFromClasspath
-classResolver.args=some.pkg.one,some.pkg.two
-This configuration would only resolve the packages some.pkg.one and some.pkg.two from the
-classpath, and stub all other missing classes.
-The last example also demonstrates, how the behavior can be customized freely, for example
-if classes are imported from a different source and are not on the classpath:
-First Supply a custom implementation of
-com.tngtech.archunit.core.importer.resolvers.ClassResolver
-Then configure it
-archunit.properties
-classResolver=some.pkg.MyCustomClassResolver
-If the resolver needs some further arguments, create a public constructor with one List
-argument, and supply the concrete arguments as
-archunit.properties
-classResolver.args=myArgOne,myArgTwo
-For further details, compare the sources of SelectedClassResolverFromClasspath.
-
-#### 10.2.1. Configuring the Number of Resolution Iterations
-It is also possible to apply a more fine-grained configuration to the import dependency resolution behavior.
-In particular, the ArchUnit importer distinguishes 6 types of import dependencies:
-member types (e.g. the type of a field of a class, type of a method parameter, etc.)
-accesses to types (e.g. a method calls another method of a different class)
-supertypes (i.e. superclasses that are extended and interfaces that are implemented)
-enclosing types (i.e. outer classes of nested classes)
-annotation types, including parameters of annotations
-generic signature types (i.e. types that comprise a parameterized type, like List and String for List)
-For each of these dependency types it is possible to configure the maximum number of iterations to traverse the dependencies.
-E.g. let us assume we configure the maximum iterations as 2 for member types and we have a class A that declares a field of type B which in turn holds a field of type C.
-On the first run we would automatically resolve the type B as a dependency of A.
-On the second run we would then also resolve C as a member type dependency of B.
-The configuration parameters with their defaults are the following:
-archunit.properties
-import.dependencyResolutionProcess.maxIterationsForMemberTypes = 1
+it is possible to configure only specific packages to be resolved from the classpath:</p>
+</div>
+<div class="listingblock">
+<div class="title">archunit.properties</div>
+<div class="content">
+<pre class="highlightjs highlight nowrap"><code class="language-none hljs">classResolver=com.tngtech.archunit.core.importer.resolvers.SelectedClassResolverFromClasspath
+classResolver.args=some.pkg.one,some.pkg.two</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>This configuration would only resolve the packages <code>some.pkg.one</code> and <code>some.pkg.two</code> from the
+classpath, and stub all other missing classes.</p>
+</div>
+<div class="paragraph">
+<p>The last example also demonstrates, how the behavior can be customized freely, for example
+if classes are imported from a different source and are not on the classpath:</p>
+</div>
+<div class="paragraph">
+<p>First Supply a custom implementation of</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight nowrap"><code class="language-java hljs" data-lang="java">com.tngtech.archunit.core.importer.resolvers.ClassResolver</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Then configure it</p>
+</div>
+<div class="listingblock">
+<div class="title">archunit.properties</div>
+<div class="content">
+<pre class="highlightjs highlight nowrap"><code class="language-none hljs">classResolver=some.pkg.MyCustomClassResolver</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>If the resolver needs some further arguments, create a public constructor with one <code>List&lt;String&gt;</code>
+argument, and supply the concrete arguments as</p>
+</div>
+<div class="listingblock">
+<div class="title">archunit.properties</div>
+<div class="content">
+<pre class="highlightjs highlight nowrap"><code class="language-none hljs">classResolver.args=myArgOne,myArgTwo</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>For further details, compare the sources of <code>SelectedClassResolverFromClasspath</code>.</p>
+</div>
+<div class="sect3">
+<h4 id="_configuring_the_number_of_resolution_iterations"><a class="anchor" href="#_configuring_the_number_of_resolution_iterations"></a>10.2.1. Configuring the Number of Resolution Iterations</h4>
+<div class="paragraph">
+<p>It is also possible to apply a more fine-grained configuration to the import dependency resolution behavior.</p>
+</div>
+<div class="paragraph">
+<p>In particular, the ArchUnit importer distinguishes the following types of import dependencies:</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p>member types (e.g. the type of a field of a class, type of a method parameter, etc.)</p>
+</li>
+<li>
+<p>accesses to types (e.g. a method calls another method of a different class)</p>
+</li>
+<li>
+<p>supertypes (i.e. superclasses that are extended and interfaces that are implemented)</p>
+</li>
+<li>
+<p>permitted subclasses (i.e. classes that are permitted to extend or implement a sealed class or interface)</p>
+</li>
+<li>
+<p>enclosing types (i.e. outer classes of nested classes)</p>
+</li>
+<li>
+<p>annotation types, including parameters of annotations</p>
+</li>
+<li>
+<p>generic signature types (i.e. types that comprise a parameterized type, like <code>List</code> and <code>String</code> for <code>List&lt;String&gt;</code>)</p>
+</li>
+</ul>
+</div>
+<div class="paragraph">
+<p>For each of these dependency types it is possible to configure the maximum number of iterations to traverse the dependencies.
+E.g. let us assume we configure the maximum iterations as <code>2</code> for member types and we have a class <code>A</code> that declares a field of type <code>B</code> which in turn holds a field of type <code>C</code>.
+On the first run we would automatically resolve the type <code>B</code> as a dependency of <code>A</code>.
+On the second run we would then also resolve <code>C</code> as a member type dependency of <code>B</code>.</p>
+</div>
+<div class="paragraph">
+<p>The configuration parameters with their defaults are the following:</p>
+</div>
+<div class="listingblock">
+<div class="title">archunit.properties</div>
+<div class="content">
+<pre class="highlightjs highlight nowrap"><code class="language-none hljs">import.dependencyResolutionProcess.maxIterationsForMemberTypes = 1
 import.dependencyResolutionProcess.maxIterationsForAccessesToTypes = 1
 import.dependencyResolutionProcess.maxIterationsForSupertypes = -1
+import.dependencyResolutionProcess.maxIterationsForPermittedSubclasses = -1
 import.dependencyResolutionProcess.maxIterationsForEnclosingTypes = -1
 import.dependencyResolutionProcess.maxIterationsForAnnotationTypes = -1
-import.dependencyResolutionProcess.maxIterationsForGenericSignatureTypes = -1
-Note that setting a property to a negative value (e.g. -1) will not stop the resolution until all types for the given sort of dependency have been resolved.
-E.g. for generic type signatures a value of -1 will by default lead to all types comprising the signature Map> (that is Map, List and String) to be automatically resolved.
-Setting a property to 0 will disable the automatic resolution,
+import.dependencyResolutionProcess.maxIterationsForGenericSignatureTypes = -1</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Note that setting a property to a negative value (e.g. <code>-1</code>) will not stop the resolution until all types for the given sort of dependency have been resolved.
+E.g. for generic type signatures a value of <code>-1</code> will by default lead to all types comprising the signature <code>Map&lt;?, List&lt;? extends String&gt;&gt;</code> (that is <code>Map</code>, <code>List</code> and <code>String</code>) to be automatically resolved.</p>
+</div>
+<div class="paragraph">
+<p>Setting a property to <code>0</code> will disable the automatic resolution,
 which can lead to types being only partially imported or stubbed.
-For these types the information is likely not complete or even wrong (e.g. an interface might be reported as class if the bytecode was never analyzed, or annotations might be missing).
-On the other hand, bigger (or negative) values can have a massive performance impact.
+For these types the information is likely not complete or even wrong (e.g. an interface might be reported as class if the bytecode was never analyzed, or annotations might be missing).</p>
+</div>
+<div class="paragraph">
+<p>On the other hand, bigger (or negative) values can have a massive performance impact.
 The defaults should provide a reasonable behavior.
 They include the class graph for all types that are used by members or accesses directly and cut the resolution at that point.
-However, relevant information for these types is fully imported, no matter how many iterations it takes (e.g. supertypes or generic signatures).
-
-### 10.3. MD5 Sums of Classes
-Sometimes it can be valuable to record the MD5 sums of classes being imported to track
+However, relevant information for these types is fully imported, no matter how many iterations it takes (e.g. supertypes or generic signatures).</p>
+</div>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_md5_sums_of_classes"><a class="anchor" href="#_md5_sums_of_classes"></a>10.3. MD5 Sums of Classes</h3>
+<div class="paragraph">
+<p>Sometimes it can be valuable to record the MD5 sums of classes being imported to track
 unexpected behavior. Since this has a performance impact, it is disabled by default,
-but it can be activated the following way:
-archunit.properties
-enableMd5InClassSources=true
-If this feature is enabled, the MD5 sum can be queried as
-javaClass.getSource().get().getMd5sum()
-
-### 10.4. Fail Rules on Empty Should
-By default, ArchUnit will forbid the should-part of rules to be evaluated against an empty set of classes.
+but it can be activated the following way:</p>
+</div>
+<div class="listingblock">
+<div class="title">archunit.properties</div>
+<div class="content">
+<pre class="highlightjs highlight nowrap"><code class="language-none hljs">enableMd5InClassSources=true</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>If this feature is enabled, the MD5 sum can be queried as</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight nowrap"><code class="language-java hljs" data-lang="java">javaClass.getSource().get().getMd5sum()</code></pre>
+</div>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_fail_rules_on_empty_should"><a class="anchor" href="#_fail_rules_on_empty_should"></a>10.4. Fail Rules on Empty Should</h3>
+<div class="paragraph">
+<p>By default, ArchUnit will forbid the should-part of rules to be evaluated against an empty set of classes.
 The reason is that this can lead to rules that by accident do not check any classes at all.
-Take for example
-classes().that().resideInAPackage("com.myapp.old").should()...
-Now consider somebody renames the package old to newer.
+Take for example</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight nowrap"><code class="language-java hljs" data-lang="java">classes().that().resideInAPackage("com.myapp.old").should()...</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Now consider somebody renames the package <code>old</code> to <code>newer</code>.
 The rule will now always evaluate successfully without any reported error.
 However, it actually does not check any classes at all anymore.
 This is likely not what most users want.
 Thus, by default ArchUnit will fail checking the rule in this case.
 If you want to allow evaluating such rules,
 i.e. where the actual input to the should-clause is empty,
-you can use one of the following ways:
-Allow Empty Should on a Per-Rule Basis
-On each ArchRule you can use the method ArchRule.allowEmptyShould(..) to override the behavior
-for a single rule, e.g.
-// create a rule that allows that no classes are passed to the should-clause
-classes().that()...should()...allowEmptyShould(true)
-Allow Empty Should Globally
-To allow all rules to be evaluated without checking any classes you can set the following property:
-archunit.properties
-archRule.failOnEmptyShould=false
+you can use one of the following ways:</p>
+</div>
+<div class="paragraph">
+<p><strong>Allow Empty Should on a Per-Rule Basis</strong></p>
+</div>
+<div class="paragraph">
+<p>On each <code>ArchRule</code> you can use the method <code>ArchRule.allowEmptyShould(..)</code> to override the behavior
+for a single rule, e.g.</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight nowrap"><code class="language-java hljs" data-lang="java">// create a rule that allows that no classes are passed to the should-clause
+classes().that()...should()...allowEmptyShould(true)</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p><strong>Allow Empty Should Globally</strong></p>
+</div>
+<div class="paragraph">
+<p>To allow all rules to be evaluated without checking any classes you can set the following property:</p>
+</div>
+<div class="listingblock">
+<div class="title">archunit.properties</div>
+<div class="content">
+<pre class="highlightjs highlight nowrap"><code class="language-none hljs">archRule.failOnEmptyShould=false</code></pre>
+</div>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_custom_error_messages"><a class="anchor" href="#_custom_error_messages"></a>10.5. Custom Error Messages</h3>
+<div class="paragraph">
+<p>You can configure a custom format to display the failures of a rule.</p>
+</div>
+<div class="paragraph">
+<p>First Supply a custom implementation of</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight nowrap"><code class="language-java hljs" data-lang="java">com.tngtech.archunit.lang.FailureDisplayFormat</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Then configure it</p>
+</div>
+<div class="listingblock">
+<div class="title">archunit.properties</div>
+<div class="content">
+<pre class="highlightjs highlight nowrap"><code class="language-none hljs">failureDisplayFormat=some.pkg.MyCustomFailureDisplayFormat</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>One example would be to shorten the fully qualified class names in failure messages:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight nowrap"><code class="language-java hljs" data-lang="java">private static class SimpleClassNameFailureFormat implements FailureDisplayFormat {
+    @Override
+    public String formatFailure(HasDescription rule, FailureMessages failureMessages, Priority priority) {
+        String failureDetails = failureMessages.stream()
+                .map(message -&gt; message.replaceAll("&lt;(?:\\w+\\.)+([A-Z][^&gt;]*)&gt;", "&lt;$1&gt;"))
+                .collect(joining(lineSeparator()));
 
-### 10.5. Custom Error Messages
-You can configure a custom format to display the failures of a rule.
-First Supply a custom implementation of
-com.tngtech.archunit.lang.FailureDisplayFormat
-Then configure it
-archunit.properties
-failureDisplayFormat=some.pkg.MyCustomFailureDisplayFormat
-One example would be to shorten the fully qualified class names in failure messages:
-private static class SimpleClassNameFailureFormat implements FailureDisplayFormat {
- @Override
- public String formatFailure(HasDescription rule, FailureMessages failureMessages, Priority priority) {
- String failureDetails = failureMessages.stream()
- .map(message -> message.replaceAll("<(?:\\w+\\.)+([A-Z][^>]*)>", "<$1>"))
- .collect(joining(lineSeparator()));
-
- return String.format("Architecture Violation [Priority: %s] - Rule '%s' was violated (%s):%n%s",
- priority.asString(), rule.getDescription(), failureMessages.getInformationAboutNumberOfViolations(), failureDetails);
- }
-}
-Note that due to the free format how violation texts can be composed,
+        return String.format("Architecture Violation [Priority: %s] - Rule '%s' was violated (%s):%n%s",
+                priority.asString(), rule.getDescription(), failureMessages.getInformationAboutNumberOfViolations(), failureDetails);
+    }
+}</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Note that due to the free format how violation texts can be composed,
 in particular by custom predicates and conditions,
 there is at the moment no more sophisticated way than plain text parsing.
 Users can tailor this to their specific environments where they know
-which sorts of failure formats can appear in practice.
-
----
-
-## Upstream refresh 2026-08-01 (verbatim extractor output)
-
-Source: https://www.archunit.org/userguide/html/000_Index.html
-HTTP status: 200 · extracted bytes: 76670 · sha256: fb6223b5662b2705c6efb425bab57662001cf6afb7bc8c3d73059f6f21f665ed
-Extractor: `practices/scripts/snapshot-extract.sh` (curl -> deterministic HTML->text; no model in the loop)
-Fetch receipt: `practices/upstream/_FETCH-RECEIPTS.yaml` id `r111`
-
-Everything above this divider is the previous snapshot, preserved byte-for-byte (append-only:
-history is recorded, never rewritten). The block below is the UNMODIFIED extractor output for
-the 2026-08-01 re-fetch of the same URL — it is the current upstream text, and any citation that
-claims to quote this source verbatim must match it.
-
-ArchUnit User Guide ArchUnit User Guide version 1.4.2 Table of Contents 1. Introduction 1.1. Module Overview 2. Installation 2.1. JUnit 4 2.2. JUnit 5 2.3. Other Test Frameworks 2.4. Maven Plugin 3. Getting Started 3.1. Importing Classes 3.2. Asserting (Architectural) Constraints 3.3. Using JUnit 4 or JUnit 5 3.4. Using JUnit support with Kotlin 4. What to Check 4.1. Package Dependency Checks 4.2. Class Dependency Checks 4.3. Class and Package Containment Checks 4.4. Inheritance Checks 4.5. Annotation Checks 4.6. Layer Checks 4.7. Cycle Checks 5. Ideas and Concepts 5.1. Core 5.2. Lang 5.3. Library 6. The Core API 6.1. Import 6.2. Domain 7. The Lang API 7.1. Composing Class Rules 7.2. Composing Member Rules 7.3. Creating Custom Rules 7.4. Predefined Predicates and Conditions 7.5. Rules with Custom Concepts 7.6. Controlling the Rule Text 7.7. Ignoring Violations 8. The Library API 8.1. Architectures 8.2. Slices 8.3. Modularization Rules 8.4. General Coding Rules 8.5. PlantUML Component Diagrams as rules 8.6. Freezing Arch Rules 8.7. Software Architecture Metrics 9. JUnit Support 9.1. JUnit 4 & 5 Support 10. Advanced Configuration 10.1. Overriding configuration 10.2. Configuring the Resolution Behavior 10.3. MD5 Sums of Classes 10.4. Fail Rules on Empty Should 10.5. Custom Error Messages 1. Introduction ArchUnit is a free, simple and extensible library for checking the architecture of your Java code. That is, ArchUnit can check dependencies between packages and classes, layers and slices, check for cyclic dependencies and more. It does so by analyzing given Java bytecode, importing all classes into a Java code structure. ArchUnit’s main focus is to automatically test architecture and coding rules, using any plain Java unit testing framework. 1.1. Module Overview ArchUnit consists of the following production modules: archunit , archunit-junit4 as well as archunit-junit5-api , archunit-junit5-engine and archunit-junit5-engine-api . Also relevant for end users is the archunit-example module. 1.1.1. Module archunit This module contains the actual ArchUnit core infrastructure required to write architecture tests: The ClassFileImporter , the domain objects, as well as the rule syntax infrastructure. 1.1.2. Module archunit-junit4 This module contains the infrastructure to integrate with JUnit 4, in particular the ArchUnitRunner to cache imported classes. 1.1.3. Modules archunit-junit5-* These modules contain the infrastructure to integrate with JUnit 5 and contain the respective infrastructure to cache imported classes between test runs. archunit-junit5-api contains the user API to write tests with ArchUnit’s JUnit 5 support, archunit-junit5-engine contains the runtime engine to run those tests. archunit-junit5-engine-api contains API code for tools that want more detailed control over running ArchUnit JUnit 5 tests, in particular a FieldSelector which can be used to instruct the ArchUnitTestEngine to run a specific rule field (compare JUnit 4 & 5 Support ). 1.1.4. Module archunit-example This module contains example architecture rules and sample code that violates these rules. Look here to get inspiration on how to set up rules for your project, or at ArchUnit-Examples for the last released version. 2. Installation To use ArchUnit, it is sufficient to include the respective JAR files in the classpath. Most commonly, this is done by adding the dependency to your dependency management tool, which is illustrated for Maven and Gradle below. Alternatively you can obtain the necessary JAR files directly from Maven Central . 2.1. JUnit 4 To use ArchUnit in combination with JUnit 4, include the following dependency from Maven Central: pom.xml <dependency> <groupId>com.tngtech.archunit</groupId> <artifactId>archunit-junit4</artifactId> <version>1.4.2</version> <scope>test</scope> </dependency> build.gradle dependencies { testImplementation 'com.tngtech.archunit:archunit-junit4:1.4.2' } 2.2. JUnit 5 ArchUnit’s JUnit 5 artifacts follow the pattern of JUnit Jupiter. There is one artifact containing the API, i.e. the compile time dependencies to write tests. Then there is another artifact containing the actual TestEngine used at runtime. Just like JUnit Jupiter ArchUnit offers one convenience artifact transitively including both API and engine with the correct scope, which in turn can be added as a test compile dependency. Thus to include ArchUnit’s JUnit 5 support, simply add the following dependency from Maven Central: pom.xml <dependency> <groupId>com.tngtech.archunit</groupId> <artifactId>archunit-junit5</artifactId> <version>1.4.2</version> <scope>test</scope> </dependency> build.gradle dependencies { testImplementation 'com.tngtech.archunit:archunit-junit5:1.4.2' } 2.3. Other Test Frameworks ArchUnit works with any test framework that executes Java code. To use ArchUnit in such a context, include the core ArchUnit dependency from Maven Central: pom.xml <dependency> <groupId>com.tngtech.archunit</groupId> <artifactId>archunit</artifactId> <version>1.4.2</version> <scope>test</scope> </dependency> build.gradle dependencies { testImplementation 'com.tngtech.archunit:archunit:1.4.2' } 2.4. Maven Plugin There exists a Maven plugin by Société Générale to run ArchUnit rules straight from Maven. For more information visit their GitHub repo: https://github.com/societe-generale/arch-unit-maven-plugin 3. Getting Started ArchUnit tests are written the same way as any Java unit test and can be written with any Java unit testing framework. To really understand the ideas behind ArchUnit, one should consult Ideas and Concepts . The following will outline a "technical" getting started. 3.1. Importing Classes At its core ArchUnit provides infrastructure to import Java bytecode into Java code structures. This can be done using the ClassFileImporter JavaClasses classes = new ClassFileImporter().importPackages("com.mycompany.myapp"); The ClassFileImporter offers many ways to import classes. Some ways depend on the current project’s classpath, like importPackages(..) . However there are other ways that do not, for example: JavaClasses classes = new ClassFileImporter().importPath("/some/path"); The returned object of type JavaClasses represents a collection of elements of type JavaClass , where JavaClass in turn represents a single imported class file. You can in fact access most properties of the imported class via the public API: JavaClass clazz = classes.get(Object.class); System.out.print(clazz.getSimpleName()); // returns 'Object' 3.2. Asserting (Architectural) Constraints To express architectural rules, like 'Services should only be accessed by Controllers', ArchUnit offers an abstract DSL-like fluent API, which can in turn be evaluated against imported classes. To specify a rule, use the class ArchRuleDefinition as entry point: import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.classes; // ... ArchRule myRule = classes() .that().resideInAPackage("..service..") .should().onlyBeAccessed().byAnyPackage("..controller..", "..service.."); The two dots represent any number of packages (compare AspectJ Pointcuts). The returned object of type ArchRule can now be evaluated against a set of imported classes: myRule.check(importedClasses); Thus the complete example could look like @Test public void Services_should_only_be_accessed_by_Controllers() { JavaClasses importedClasses = new ClassFileImporter().importPackages("com.mycompany.myapp"); ArchRule myRule = classes() .that().resideInAPackage("..service..") .should().onlyBeAccessed().byAnyPackage("..controller..", "..service.."); myRule.check(importedClasses); } 3.3. Using JUnit 4 or JUnit 5 While ArchUnit can be used with any unit testing framework, it provides extended support for writing tests with JUnit 4 and JUnit 5. The main advantage is automatic caching of imported classes between tests (of the same imported classes), as well as reduction of boilerplate code. To use the JUnit support, declare ArchUnit’s ArchUnitRunner (only JUnit 4), declare the classes to import via @AnalyzeClasses and add the respective rules as fields: @RunWith(ArchUnitRunner.class) // Remove this line for JUnit 5!! @AnalyzeClasses(packages = "com.mycompany.myapp") public class MyArchitectureTest { @ArchTest public static final ArchRule myRule = classes() .that().resideInAPackage("..service..") .should().onlyBeAccessed().byAnyPackage("..controller..", "..service.."); } The JUnit test support will automatically import (or reuse) the specified classes and evaluate any rule annotated with @ArchTest against those classes. For further information on how to use the JUnit support refer to JUnit Support . 3.4. Using JUnit support with Kotlin Using the JUnit support with Kotlin is quite similar to Java: @RunWith(ArchUnitRunner::class) // Remove this line for JUnit 5!! @AnalyzeClasses(packagesOf = [MyArchitectureTest::class]) class MyArchitectureTest { @ArchTest val rule_as_field = ArchRuleDefinition.noClasses().should()... @ArchTest fun rule_as_method(importedClasses: JavaClasses) { val rule = ArchRuleDefinition.noClasses().should()... rule.check(importedClasses) } } 4. What to Check The following section illustrates some typical checks you could do with ArchUnit. 4.1. Package Dependency Checks package deps no access noClasses().that().resideInAPackage("..source..") .should().dependOnClassesThat().resideInAPackage("..foo..") package deps only access classes().that().resideInAPackage("..foo..") .should().onlyHaveDependentClassesThat().resideInAnyPackage("..source.one..", "..foo..") 4.2. Class Dependency Checks class naming deps classes().that().haveNameMatching(".*Bar") .should().onlyHaveDependentClassesThat().haveSimpleName("Bar") 4.3. Class and Package Containment Checks class package contain classes().that().haveSimpleNameStartingWith("Foo") .should().resideInAPackage("com.foo") 4.4. Inheritance Checks inheritance naming check classes().that().implement(Connection.class) .should().haveSimpleNameEndingWith("Connection") inheritance access check classes().that().areAssignableTo(EntityManager.class) .should().onlyHaveDependentClassesThat().resideInAnyPackage("..persistence..") 4.5. Annotation Checks inheritance annotation check classes().that().areAssignableTo(EntityManager.class) .should().onlyHaveDependentClassesThat().areAnnotatedWith(Transactional.class) 4.6. Layer Checks layer check layeredArchitecture() .consideringAllDependencies() .layer("Controller").definedBy("..controller..") .layer("Service").definedBy("..service..") .layer("Persistence").definedBy("..persistence..") .whereLayer("Controller").mayNotBeAccessedByAnyLayer() .whereLayer("Service").mayOnlyBeAccessedByLayers("Controller") .whereLayer("Persistence").mayOnlyBeAccessedByLayers("Service") 4.7. Cycle Checks cycle check slices().matching("com.myapp.(*)..").should().beFreeOfCycles() 5. Ideas and Concepts ArchUnit is divided into different layers, where the most important ones are the "Core" layer, the "Lang" layer and the "Library" layer. In short the Core layer deals with the basic infrastructure, i.e. how to import byte code into Java objects. The Lang layer contains the rule syntax to specify architecture rules in a succinct way. The Library layer contains more complex predefined rules, like a layered architecture with several layers. The following section will explain these layers in more detail. 5.1. Core Much of ArchUnit’s core API resembles the Java Reflection API. There are classes like JavaMethod , JavaField , and more, and the public API consists of methods like getName() , getMethods() , getRawType() or getRawParameterTypes() . Additionally ArchUnit extends this API for concepts needed to talk about dependencies between code, like JavaMethodCall , JavaConstructorCall or JavaFieldAccess . For example, it is possible to programmatically iterate over javaClass.getAccessesFromSelf() and react to the imported accesses between this Java class and other Java classes. To import compiled Java class files, ArchUnit provides the ClassFileImporter , which can for example be used to import packages from the classpath: JavaClasses classes = new ClassFileImporter().importPackages("com.mycompany.myapp"); For more information refer to The Core API . 5.2. Lang The Core API is quite powerful and offers a lot of information about the static structure of a Java program. However, tests directly using the Core API lack expressiveness, in particular with respect to architectural rules. For this reason ArchUnit provides the Lang API, which offers a powerful syntax to express rules in an abstract way. Most parts of the Lang API are composed as fluent APIs, i.e. an IDE can provide valuable suggestions on the possibilities the syntax offers. An example for a specified architecture rule would be: ArchRule rule = classes().that().resideInAPackage("..service..") .should().onlyBeAccessed().byAnyPackage("..controller..", "..service.."); Once a rule is composed, imported Java classes can be checked against it: JavaClasses importedClasses = new ClassFileImporter().importPackage("com.myapp"); ArchRule rule = // define the rule rule.check(importedClasses); The syntax ArchUnit provides is fully extensible and can thus be adjusted to almost any specific need. For further information, please refer to The Lang API . 5.3. Library The Library API offers predefined complex rules for typical architectural goals. For example a succinct definition of a layered architecture via package definitions. Or rules to slice the code base in a certain way, for example in different areas of the domain, and enforce these slices to be acyclic or independent of each other. More detailed information is provided in The Library API . 6. The Core API The Core API is itself divided into the domain objects and the actual import. 6.1. Import As mentioned in Ideas and Concepts the backbone of the infrastructure is the ClassFileImporter , which provides various ways to import Java classes. One way is to import packages from the classpath, or the complete classpath via JavaClasses classes = new ClassFileImporter().importClasspath(); However, the import process is completely independent of the classpath, so it would be well possible to import any path from the file system: JavaClasses classes = new ClassFileImporter().importPath("/some/path/to/classes"); The ClassFileImporter offers several other methods to import classes, for example locations can be specified as URLs or as JAR files. Furthermore specific locations can be filtered out, if they are contained in the source of classes, but should not be imported. A typical use case would be to ignore test classes, when the classpath is imported. This can be achieved by specifying ImportOption ﻿s: ImportOption ignoreTests = new ImportOption() { @Override public boolean includes(Location location) { return !location.contains("/test/"); // ignore any URI to sources that contains '/test/' } }; JavaClasses classes = new ClassFileImporter().withImportOption(ignoreTests).importClasspath(); A Location is principally an URI, i.e. ArchUnit considers sources as File or JAR URIs file:///home/dev/my/project/target/classes/some/Thing.class jar:file:///home/dev/.m2/repository/some/things.jar!/some/Thing.class For the two common cases to skip importing JAR files and to skip importing test files (for typical setups, like a Maven or Gradle build), there already exist predefined ImportOption ﻿s: new ClassFileImporter() .withImportOption(ImportOption.Predefined.DO_NOT_INCLUDE_JARS) .withImportOption(ImportOption.Predefined.DO_NOT_INCLUDE_TESTS) .importClasspath(); 6.1.1. Dealing with Missing Classes While importing the requested classes (e.g. target/classes or target/test-classes ) it can happen that a class within the scope of the import has a reference to a class outside of the scope of the import. This will naturally happen, if the classes of the JDK are not imported, since then for example any dependency on Object.class will be unresolved within the import. At this point ArchUnit needs to decide how to treat these classes that are missing from the import. By default, ArchUnit searches within the classpath for missing classes and if found imports them. This obviously has the advantage that information about those classes (which interfaces they implement, how they are annotated) is present during rule evaluation. On the downside this additional lookup from the classpath will cost some performance and in some cases might not make sense (e.g. if information about classes not present in the original import is known to be unnecessary for evaluating rules). Thus ArchUnit can be configured to create stubs instead, i.e. a JavaClass that has all the known information, like the fully qualified name or the method called. However, this stub might naturally lack some information, like superclasses, annotations or other details that cannot be determined without importing the bytecode of this class. This behavior will also happen, if ArchUnit fails to determine the location of a missing class from the classpath. To find out, how to configure the default behavior, refer to Configuring the Resolution Behavior . 6.2. Domain The domain objects represent Java code, thus the naming should be pretty straight forward. Most commonly, the ClassFileImporter imports instances of type JavaClass . A rough overview looks like this: domain overview Most objects resemble the Java Reflection API, including inheritance relations. Thus a JavaClass has JavaMembers , which can in turn be either JavaField , JavaMethod , JavaConstructor (or JavaStaticInitializer ). While not present within the reflection API, it makes sense to introduce an expression for anything that can access other code, which ArchUnit calls 'code unit', and is in fact either a method, a constructor (including the class initializer) or a static initializer of a class (e.g. a static { …​ } block, a static field assignment, etc.). Furthermore one of the most interesting features of ArchUnit that exceeds the Java Reflection API, is the concept of accesses to another class. On the lowest level accesses can only take place from a code unit (as mentioned, any block of executable code) to either a field ( JavaFieldAccess ), a method ( JavaMethodCall ) or constructor ( JavaConstructorCall ). ArchUnit imports the whole graph of classes and their relationship to each other. While checking the accesses from a class is pretty isolated (the bytecode offers all this information), checking accesses to a class requires the whole graph to be built first. To distinguish which sort of access is referred to, methods will always clearly state fromSelf and toSelf . For example, every JavaField allows to call JavaField#getAccessesToSelf() to retrieve all code units within the graph that access this specific field. The resolution process through inheritance is not completely straight forward. Consider for example resolution example The bytecode will record a field access from ClassAccessing.accessField() to ClassBeingAccessed.accessedField . However, there is no such field, since the field is actually declared in the superclass. This is the reason why a JavaFieldAccess has no JavaField as its target, but a FieldAccessTarget . In other words, ArchUnit models the situation, as it is found within the bytecode, and an access target is not an actual member within another class. If a member is queried for accessesToSelf() though, ArchUnit will resolve the necessary targets and determine, which member is represented by which target. The situation looks roughly like resolution overview Two things might seem strange at the first look. First, why can a target resolve to zero matching members? The reason is that the set of classes that was imported does not need to have all classes involved within this resolution process. Consider the above example, if SuperclassBeingAccessed would not be imported, ArchUnit would have no way of knowing where the actual targeted field resides. Thus in this case the resolution would return zero elements. Second, why can there be more than one resolved methods for method calls? The reason for this is that a call target might indeed match several methods in those cases, for example: diamond example While this situation will always be resolved in a specified way for a real program, ArchUnit cannot do the same. Instead, the resolution will report all candidates that match a specific access target, so in the above example, the call target C.targetMethod() would in fact resolve to two JavaMethods , namely A.targetMethod() and B.targetMethod() . Likewise a check of either A.targetMethod.getCallsToSelf() or B.targetMethod.getCallsToSelf() would return the same call from D.callTargetMethod() to C.targetMethod() . 6.2.1. Domain Objects, Reflection and the Classpath ArchUnit tries to offer a lot of information from the bytecode. For example, a JavaClass provides details like if it is an enum or an interface, modifiers like public or abstract , but also the source, where this class was imported from (namely the URI mentioned in the first section). However, if information is missing, and the classpath is correct, ArchUnit offers some convenience to rely on the reflection API for extended details. For this reason, most Java* objects offer a method reflect() , which will in fact try to resolve the respective object from the Reflection API. For example: JavaClasses classes = new ClassFileImporter().importClasspath(); // ArchUnit's java.lang.String JavaClass javaClass = classes.get(String.class); // Reflection API's java.lang.String Class<?> stringClass = javaClass.reflect(); // ArchUnit's public int java.lang.String.length() JavaMethod javaMethod = javaClass.getMethod("length"); // Reflection API's public int java.lang.String.length() Method lengthMethod = javaMethod.reflect(); However, this will throw an Exception , if the respective classes are missing on the classpath (e.g. because they were just imported from some file path). This restriction also applies to handling annotations in a more convenient way. Consider the following annotation: @interface CustomAnnotation { String value(); } If you need to access this annotation without it being on the classpath, you must rely on JavaAnnotation<?> annotation = javaClass.getAnnotationOfType("some.pkg.CustomAnnotation"); // result is untyped, since it might not be on the classpath (e.g. enums) Object value = annotation.get("value"); So there is neither type safety nor automatic refactoring support. If this annotation is on the classpath, however, this can be written way more naturally: CustomAnnotation annotation = javaClass.getAnnotationOfType(CustomAnnotation.class); String value = annotation.value(); ArchUnit’s own rule APIs (compare The Lang API ) never rely on the classpath though. Thus the evaluation of default rules and syntax combinations, described in the next section, does not depend on whether the classes were imported from the classpath or some JAR / folder. 7. The Lang API 7.1. Composing Class Rules The Core API is pretty powerful with regard to all the details from the bytecode that it provides to tests. However, tests written this way lack conciseness and fail to convey the architectural concept that they should assert. Consider: Set<JavaClass> services = new HashSet<>(); for (JavaClass clazz : classes) { // choose those classes with FQN with infix '.service.' if (clazz.getName().contains(".service.")) { services.add(clazz); } } for (JavaClass service : services) { for (JavaAccess<?> access : service.getAccessesFromSelf()) { String targetName = access.getTargetOwner().getName(); // fail if the target FQN has the infix ".controller." if (targetName.contains(".controller.")) { String message = String.format( "Service %s accesses Controller %s in line %d", service.getName(), targetName, access.getLineNumber()); Assert.fail(message); } } } What we want to express, is the rule "no classes that reside in a package 'service' should access classes that reside in a package 'controller'" . Nevertheless, it’s hard to read through that code and distill that information. And the same process has to be done every time someone needs to understand the semantics of this rule. To solve this shortcoming, ArchUnit offers a high level API to express architectural concepts in a concise way. In fact, we can write code that is almost equivalent to the prose rule text mentioned before: ArchRule rule = ArchRuleDefinition.noClasses() .that().resideInAPackage("..service..") .should().accessClassesThat().resideInAPackage("..controller.."); rule.check(importedClasses); The only difference to colloquial language is the ".." in the package notation, which refers to any number of packages. Thus "..service.." just expresses "any package that contains some sub-package 'service'" , e.g. com.myapp.service.any . If this test fails, it will report an AssertionError with the following message: java.lang.AssertionError: Architecture Violation [Priority: MEDIUM] - Rule 'no classes that reside in a package '..service..' should access classes that reside in a package '..controller..'' was violated (1 times): Method <some.pkg.service.SomeService.callController()> calls method <some.pkg.controller.SomeController.execute()> in (SomeService.java:14) So as a benefit, the assertion error contains the full rule text out of the box and reports all violations including the exact class and line number. The rule API also allows to combine predicates and conditions: noClasses() .that().resideInAPackage("..service..") .or().resideInAPackage("..persistence..") .should().accessClassesThat().resideInAPackage("..controller..") .orShould().accessClassesThat().resideInAPackage("..ui..") rule.check(importedClasses); 7.2. Composing Member Rules In addition to a predefined API to write rules about Java classes and their relations, there is an extended API to define rules for members of Java classes. This might be relevant, for example, if methods in a certain context need to be annotated with a specific annotation, or return types implementing a certain interface. The entry point is again ArchRuleDefinition , e.g. ArchRule rule = ArchRuleDefinition.methods() .that().arePublic() .and().areDeclaredInClassesThat().resideInAPackage("..controller..") .should().beAnnotatedWith(Secured.class); rule.check(importedClasses); Besides methods() , ArchRuleDefinition offers the methods members() , fields() , codeUnits() , constructors() – and the corresponding negations noMembers() , noFields() , noMethods() , etc. 7.3. Creating Custom Rules In fact, most architectural rules take the form classes that ${PREDICATE} should ${CONDITION} In other words, we always want to limit imported classes to a relevant subset, and then evaluate some condition to see that all those classes satisfy it. ArchUnit’s API allows you to do just that, by exposing the concepts of DescribedPredicate and ArchCondition . So the rule above is just an application of this generic API: DescribedPredicate<JavaClass> resideInAPackageService = // define the predicate ArchCondition<JavaClass> accessClassesThatResideInAPackageController = // define the condition noClasses().that(resideInAPackageService) .should(accessClassesThatResideInAPackageController); Thus, if the predefined API does not allow to express some concept, it is possible to extend it in any custom way. For example: DescribedPredicate<JavaClass> haveAFieldAnnotatedWithPayload = new DescribedPredicate<JavaClass>("have a field annotated with @Payload"){ @Override public boolean test(JavaClass input) { boolean someFieldAnnotatedWithPayload = // iterate fields and check for @Payload return someFieldAnnotatedWithPayload; } }; ArchCondition<JavaClass> onlyBeAccessedBySecuredMethods = new ArchCondition<JavaClass>("only be accessed by @Secured methods") { @Override public void check(JavaClass item, ConditionEvents events) { for (JavaMethodCall call : item.getMethodCallsToSelf()) { if (!call.getOrigin().isAnnotatedWith(Secured.class)) { String message = String.format( "Method %s is not @Secured", call.getOrigin().getFullName()); events.add(SimpleConditionEvent.violated(call, message)); } } } }; classes().that(haveAFieldAnnotatedWithPayload).should(onlyBeAccessedBySecuredMethods); If the rule fails, the error message will be built from the supplied descriptions. In the example above, it would be classes that have a field annotated with @Payload should only be accessed by @Secured methods 7.4. Predefined Predicates and Conditions Custom predicates and conditions like in the last section can often be composed from predefined elements. ArchUnit’s basic convention for predicates is that they are defined in an inner class Predicates within the type they target. For example, one can find the predicate to check for the simple name of a JavaClass as JavaClass.Predicates.simpleName(String) Predicates can be joined using the methods predicate.or(other) and predicate.and(other) . So for example a predicate testing for a class with simple name "Foo" that is serializable could be created the following way: import static com.tngtech.archunit.core.domain.JavaClass.Predicates.assignableTo; import static com.tngtech.archunit.core.domain.JavaClass.Predicates.simpleName; DescribedPredicate<JavaClass> serializableNamedFoo = simpleName("Foo").and(assignableTo(Serializable.class)); Note that for some properties, there exist interfaces with predicates defined for them. For example the property to have a name is represented by the interface HasName ; consequently the predicate to check the name of a JavaClass is the same as the predicate to check the name of a JavaMethod , and resides within HasName.Predicates.name(String) This can at times lead to problems with the type system, if predicates are supposed to be joined. Since the or(..) method accepts a type of DescribedPredicate<? super T> , where T is the type of the first predicate. For example: // Does not compile, because type(..) targets a subtype of HasName HasName.Predicates.name("").and(JavaClass.Predicates.type(Serializable.class)) // Does compile, because name(..) targets a supertype of JavaClass JavaClass.Predicates.type(Serializable.class).and(HasName.Predicates.name("")) // Does compile, because the compiler now sees name(..) as a predicate for JavaClass DescribedPredicate<JavaClass> name = HasName.Predicates.name("").forSubtype(); name.and(JavaClass.Predicates.type(Serializable.class)); This behavior is somewhat tedious, but unfortunately it is a shortcoming of the Java type system that cannot be circumvented in a satisfying way. Just like predicates, there exist predefined conditions that can be combined in a similar way. Since ArchCondition is a less generic concept, all predefined conditions can be found within ArchConditions . Examples: ArchCondition<JavaClass> callEquals = ArchConditions.callMethod(Object.class, "equals", Object.class); ArchCondition<JavaClass> callHashCode = ArchConditions.callMethod(Object.class, "hashCode"); ArchCondition<JavaClass> callEqualsOrHashCode = callEquals.or(callHashCode); 7.5. Rules with Custom Concepts Earlier we stated that most architectural rules take the form classes that ${PREDICATE} should ${CONDITION} However, we do not always talk about classes, if we express architectural concepts. We might have custom language, we might talk about modules, about slices, or on the other hand more detailed about fields, methods or constructors. A generic API will never be able to support every imaginable concept out of the box. Thus ArchUnit’s rule API has at its foundation a more generic API that controls the types of objects that our concept targets. import vs lang To achieve this, any rule definition is based on a ClassesTransformer that defines how JavaClasses are to be transformed to the desired rule input. In many cases, like the ones mentioned in the sections above, this is the identity transformation, passing classes on to the rule as they are. However, one can supply any custom transformation to express a rule about a different type of input object. For example: ClassesTransformer<JavaPackage> packages = new AbstractClassesTransformer<JavaPackage>("packages") { @Override public Iterable<JavaPackage> doTransform(JavaClasses classes) { Set<JavaPackage> result = new HashSet<>(); classes.getDefaultPackage().traversePackageTree(alwaysTrue(), new PackageVisitor() { @Override public void visit(JavaPackage javaPackage) { result.add(javaPackage); } }); return result; } }; all(packages).that(containACoreClass()).should(...); Of course these transformers can represent any custom concept desired: // how we map classes to business modules ClassesTransformer<BusinessModule> businessModules = ... // filter business module dealing with orders DescribedPredicate<BusinessModule> dealWithOrders = ... // check that the actual business module is independent of payment ArchCondition<BusinessModule> beIndependentOfPayment = ... all(businessModules).that(dealWithOrders).should(beIndependentOfPayment); 7.6. Controlling the Rule Text If the rule is straight forward, the rule text that is created automatically should be sufficient in many cases. However, for rules that are not common knowledge, it is good practice to document the reason for this rule. This can be done in the following way: classes().that(haveAFieldAnnotatedWithPayload).should(onlyBeAccessedBySecuredMethods) .because("@Secured methods will be intercepted, checking for increased privileges " + "and obfuscating sensitive auditing information"); Nevertheless, the generated rule text might sometimes not convey the real intention concisely enough, e.g. if multiple predicates or conditions are joined. It is possible to completely overwrite the rule description in those cases: classes().that(haveAFieldAnnotatedWithPayload).should(onlyBeAccessedBySecuredMethods) .as("Payload may only be accessed in a secure way"); 7.7. Ignoring Violations In legacy projects there might be too many violations to fix at once. Nevertheless, that code should be covered completely by architecture tests to ensure that no further violations will be added to the existing code. One approach to ignore existing violations is to tailor the that(..) clause of the rules in question to ignore certain violations. A more generic approach is to ignore violations based on simple regex matches. For this one can put a file named archunit_ignore_patterns.txt in the root of the classpath. Every line will be interpreted as a regular expression and checked against reported violations. Violations with a message matching the pattern will be ignored. If no violations are left, the check will pass. For example, suppose the class some.pkg.LegacyService violates a lot of different rules. It is possible to add archunit_ignore_patterns.txt .*some\.pkg\.LegacyService.* All violations mentioning some.pkg.LegacyService will consequently be ignored, and rules that are only violated by such violations will report success instead of failure. It is possible to add comments to ignore patterns by prefixing the line with a '#': archunit_ignore_patterns.txt # There are many known violations where LegacyService is involved; we'll ignore them all .*some\.pkg\.LegacyService.* 8. The Library API The Library API offers a growing collection of predefined rules, which offer a more concise API for more complex but common patterns, like a layered architecture or checks for cycles between slices (compare What to Check ). 8.1. Architectures The entrance point for checks of common architectural styles is: com.tngtech.archunit.library.Architectures At the moment this only provides a convenient check for a layered architecture and onion architecture. But in the future it might be extended for styles like a pipes and filters, separation of business logic and technical infrastructure, etc. 8.1.1. Layered Architecture In layered architectures, we define different layers and how those interact with each other. An example setup for a simple 3-tier architecture can be found in Layer Checks . 8.1.2. Onion Architecture In an "Onion Architecture" (also known as "Hexagonal Architecture" or "Ports and Adapters"), we can define domain packages and adapter packages as follows. onionArchitecture() .domainModels("com.myapp.domain.model..") .domainServices("com.myapp.domain.service..") .applicationServices("com.myapp.application..") .adapter("cli", "com.myapp.adapter.cli..") .adapter("persistence", "com.myapp.adapter.persistence..") .adapter("rest", "com.myapp.adapter.rest.."); The semantic follows the descriptions in https://jeffreypalermo.com/2008/07/the-onion-architecture-part-1/ . More precisely, the following holds: The domain package is the core of the application. It consists of two parts. The domainModels packages contain the domain entities. The packages in domainServices contains services that use the entities in the domainModel packages. The applicationServices packages contain services and configuration to run the application and use cases. It can use the items of the domain package but there must not be any dependency from the domain to the application packages. The adapter package contains logic to connect to external systems and/or infrastructure. No adapter may depend on another adapter. Adapters can use both the items of the domain as well as the application packages. Vice versa, neither the domain nor the application packages must contain dependencies on any adapter package. onion architecture check 8.2. Slices Currently, there are two "slice" rules offered by the Library API. These are basically rules that slice the code by packages, and contain assertions on those slices. The entrance point is: com.tngtech.archunit.library.dependencies.SlicesRuleDefinition The API is based on the idea to sort classes into slices according to one or several package infixes, and then write assertions against those slices. At the moment this is for example: // sort classes by the first package after 'myapp' // then check those slices for cyclic dependencies SlicesRuleDefinition.slices().matching("..myapp.(*)..").should().beFreeOfCycles() // checks all subpackages of 'myapp' for cycles SlicesRuleDefinition.slices().matching("..myapp.(**)").should().beFreeOfCycles() // sort classes by packages between 'myapp' and 'service' // then check those slices for not having any dependencies on each other SlicesRuleDefinition.slices().matching("..myapp.(**).service..").should().notDependOnEachOther() If this constraint is too rigid, e.g. in legacy applications where the package structure is rather inconsistent, it is possible to further customize the slice creation. This can be done by specifying a mapping of JavaClass to SliceIdentifier where classes with the same SliceIdentifier will be sorted into the same slice. Consider this example: SliceAssignment legacyPackageStructure = new SliceAssignment() { // this will specify which classes belong together in the same slice @Override public SliceIdentifier getIdentifierOf(JavaClass javaClass) { if (javaClass.getPackageName().startsWith("com.oldapp")) { return SliceIdentifier.of("Legacy"); } if (javaClass.getName().contains(".esb.")) { return SliceIdentifier.of("ESB"); } // ... further custom mappings // if the class does not match anything, we ignore it return SliceIdentifier.ignore(); } // this will be part of the rule description if the test fails @Override public String getDescription() { return "legacy package structure"; } }; SlicesRuleDefinition.slices().assignedFrom(legacyPackageStructure).should().beFreeOfCycles() 8.2.1. Configurations There are two configuration parameters to adjust the behavior of the cycle detection. They can be configured via archunit.properties (compare Advanced Configuration ). archunit.properties # This will limit the maximum number of cycles to detect and thus required CPU and heap. # default is 100 cycles.maxNumberToDetect=50 # This will limit the maximum number of dependencies to report per cycle edge. # Note that ArchUnit will regardless always analyze all dependencies to detect cycles, # so this purely affects how many dependencies will be printed in the report. # Also note that this number will quickly affect the required heap since it scales with number. # of edges and number of cycles # default is 20 cycles.maxNumberOfDependenciesPerEdge=5 8.2.2. The Cycle Detection Core API The underlying infrastructure for cycle detection that the slices() rule makes use of can also be accessed without any rule syntax around it. This allows to use the pure cycle detection algorithm in custom checks or libraries. The core class of the cycle detection is com.tngtech.archunit.library.cycle_detection.CycleDetector It can be used on a set of a generic type NODE in combination with a generic Set<EDGE> (where EDGE implements Edge<NODE> ) representing the edges of the graph: Set<MyNode> nodes = // ... Set<Edge<MyNode>> edges = // ... Cycles<Edge<MyNode>> foundCycles = CycleDetector.detectCycles(nodes, edges); Edges are parameterized by a generic type EDGE to allow custom edge types that can then transport additional meta-information if needed. 8.3. Modularization Rules Note: ArchUnit doesn’t strive to be a "competition" for module systems like the Java Platform Module System. Such systems have advantages like checks at compile time versus test time as ArchUnit does. So, if another module system works well in your environment, there is no need to switch over. But ArchUnit can bring JPMS-like features to older code bases, e.g. Java 8 projects, or environments where the JPMS is for some reason no option. It also can accompany a module system by adding additional rules e.g. on the API of a module. To express the concept of modularization ArchUnit offers ArchModule ﻿s. The entrypoint into the API is ModuleRuleDefinition , e.g. ModuleRuleDefinition.modules().definedByPackages("..example.(*)..").should().beFreeOfCycles(); As the example shows, it shares some concepts with the Slices API. For example definedByPackages(..) follows the same semantics as slices().matching(..) . Also, the configuration options for cycle detection mentioned in the last section are shared by these APIs. But, it also offers several powerful concepts beyond that API to express many different modularization scenarios. One example would be to express modules via annotation. We can introduce a custom annotation like @AppModule and follow a convention to annotate the top-level package-info file of each package we consider the root of a module. E.g. com/myapp/example/module_one/package-info.java @AppModule( name = "Module One", allowedDependencies = {"Module Two", "Module Three"}, exposedPackages = {"..module_one.api.."} ) package com.myapp.example.module_one; We can then define a rule using this annotation: modules() .definedByAnnotation(AppModule.class) .should().respectTheirAllowedDependenciesDeclaredIn("allowedDependencies", consideringOnlyDependenciesInAnyPackage("..example..")) .andShould().onlyDependOnEachOtherThroughPackagesDeclaredIn("exposedPackages") As the example shows, the syntax carries on meta-information (like the annotation of the annotated package-info ) into the created ArchModule objects where it can be used to define the rule. In this example, the allowed dependencies are taken from the @AppModule annotation on the respective package-info and compared to the actual module dependencies. Any dependency not listed is reported as violation. Likewise, the exposed packages are taken from the @AppModule annotation and any dependency where the target class’s package doesn’t match any declared package identifier is reported as violation. Note that the modules() API can be adjusted in many ways to model custom requirements. For further details, please take a look at the examples provided here . 8.3.1. Modularization Core API The infrastructure to create modules and inspect their dependencies can also be used outside the rule syntax, e.g. for custom checks or utility code: ArchModules<?> modules = ArchModules.defineByPackages("..example.(*)..").modularize(javaClasses); ArchModule<?> coreModule = modules.getByIdentifier("core"); Set<? extends ModuleDependency<?>> coreDependencies = coreModule.getModuleDependenciesFromSelf(); coreDependencies.forEach(...); 8.4. General Coding Rules The Library API also offers a small set of coding rules that might be useful in various projects. Those can be found within com.tngtech.archunit.library 8.4.1. GeneralCodingRules The class GeneralCodingRules contains a set of very general rules and conditions for coding. For example: To check that classes do not access System.out or System.err , but use logging instead. To check that classes do not throw generic exceptions, but use specific exceptions instead. To check that classes do not use java.util.logging , but use other libraries like Log4j, Logback, or SLF4J instead To check that classes do not use JodaTime, but use java.time instead. To check that classes do not use field injection, but constructor injection instead. 8.4.2. DependencyRules The class DependencyRules contains a set of rules and conditions for checking dependencies between classes. For example: To check that classes do not depend on classes from upper packages. 8.4.3. ProxyRules The class ProxyRules contains a set of rules and conditions for checking the usage of proxy objects. For example: To check that methods that matches a predicate are not called directly from within the same class. 8.5. PlantUML Component Diagrams as rules The Library API offers a feature that supports PlantUML diagrams. This feature is located in com.tngtech.archunit.library.plantuml ArchUnit can derive rules straight from PlantUML diagrams and check to make sure that all imported JavaClasses abide by the dependencies of the diagram. The respective rule can be created in the following way: URL myDiagram = getClass().getResource("my-diagram.puml"); classes().should(adhereToPlantUmlDiagram(myDiagram, consideringAllDependencies())); Diagrams supported have to be component diagrams and associate classes to components via stereotypes. The way this works is to use the respective package identifiers (compare ArchConditions.onlyHaveDependenciesInAnyPackage(..) ) as stereotypes: simple plantuml archrule example @startuml [Some Source] <<..some.source..>> [Some Target] <<..some.target..>> as target [Some Source] --> target @enduml Consider this diagram applied as a rule via adhereToPlantUmlDiagram(..) , then for example a class some.target.Target accessing some.source.Source would be reported as a violation. 8.5.1. Configurations There are different ways to deal with dependencies of imported classes not covered by the diagram at all. The behavior of the PlantUML API can be configured by supplying a respective Configuration : // considers all dependencies possible (including java.lang, java.util, ...) classes().should(adhereToPlantUmlDiagram( mydiagram, consideringAllDependencies()) // considers only dependencies specified in the PlantUML diagram // (so any unknown dependency will be ignored) classes().should(adhereToPlantUmlDiagram( mydiagram, consideringOnlyDependenciesInDiagram()) // considers only dependencies in any specified package // (control the set of dependencies to consider, e.g. only com.myapp..) classes().should(adhereToPlantUmlDiagram( mydiagram, consideringOnlyDependenciesInAnyPackage("..some.package..")) It is possible to further customize which dependencies to ignore: // there are further ignore flavors available classes().should(adhereToPlantUmlDiagram(mydiagram).ignoreDependencies(predicate)) A PlantUML diagram used with ArchUnit must abide by a certain set of rules: Components must be declared in the bracket notation (i.e. [Some Component] ) Components must have at least one (possible multiple) stereotype(s). Each stereotype in the diagram must be unique and represent a valid package identifier (e.g. <<..example..>> where .. represents an arbitrary number of packages; compare the core API) Components may have an optional alias (e.g. [Some Component] <<..example..>> as myalias ). The alias must be alphanumeric and must not be quoted. Components may have an optional color (e.g. [Some Component] <<..example..>> #OrangeRed ) Dependencies must use arrows only consisting of dashes (e.g. --> ) Dependencies may go from left to right --> or right to left <-- Dependencies may consist of any number of dashes (e.g -> or -----> ) Dependencies may contain direction hints (e.g. -up-> ) or color directives (e.g. -[#green]-> ) You can compare this diagram of ArchUnit-Examples . 8.6. Freezing Arch Rules When rules are introduced in grown projects, there are often hundreds or even thousands of violations, way too many to fix immediately. The only way to tackle such extensive violations is to establish an iterative approach, which prevents the code base from further deterioration. FreezingArchRule can help in these scenarios by recording all existing violations to a ViolationStore . Consecutive runs will then only report new violations and ignore known violations. If violations are fixed, FreezingArchRule will automatically reduce the known stored violations to prevent any regression. 8.6.1. Usage To freeze an arbitrary ArchRule just wrap it into a FreezingArchRule : ArchRule rule = FreezingArchRule.freeze(classes().should()./*complete ArchRule*/); On the first run all violations of that rule will be stored as the current state. On consecutive runs only new violations will be reported. By default FreezingArchRule will ignore line numbers, i.e. if a violation is just shifted to a different line, it will still count as previously recorded and will not be reported. 8.6.2. Configuration By default FreezingArchRule will use a simple ViolationStore based on plain text files. This is sufficient to add these files to any version control system to continuously track the progress. You can configure the location of the violation store within archunit.properties (compare Advanced Configuration ): archunit.properties freeze.store.default.path=/some/path/in/a/vcs/repo Furthermore, it is possible to configure archunit.properties # must be set to true to allow the creation of a new violation store # default is false freeze.store.default.allowStoreCreation=true # can be set to false to forbid updates of the violations stored for frozen rules # default is true freeze.store.default.allowStoreUpdate=false This can help in CI environments to prevent misconfiguration: For example, a CI build should probably never create a new the violation store, but operate on an existing one. As mentioned in Overriding configuration , these properties can be passed as system properties as needed. For example to allow the creation of the violation store in a specific environment, it is possible to pass the system property via -Darchunit.freeze.store.default.allowStoreCreation=true It is also possible to allow all violations to be "refrozen", i.e. the store will just be updated with the current state, and the reported result will be success. Thus, it is effectively the same behavior as if all rules would never have been frozen. This can e.g. make sense, because current violations are consciously accepted and should be added to the store, or because the format of some violations has changed. The respective property to allow refreezing all current violations is freeze.refreeze=true , where the default is false . 8.6.3. Extension FreezingArchRule provides two extension points to adjust the behavior to custom needs. The first one is the ViolationStore , i.e. the store violations will be recorded to. The second one is the ViolationLineMatcher , i.e. how FreezingArchRule will associate lines of stored violations with lines of actual violations. As mentioned, by default this is a line matcher that ignores the line numbers of violations within the same class. Violation Store As mentioned in Configuration , the default ViolationStore is a simple text based store. It can be exchanged though, for example to store violations in a database. To provide your own implementation, implement com.tngtech.archunit.library.freeze.ViolationStore and configure FreezingArchRule to use it. This can either be done programmatically: FreezingArchRule.freeze(rule).persistIn(customViolationStore); Alternatively it can be configured via archunit.properties (compare Advanced Configuration ): freeze.store=fully.qualified.name.of.MyCustomViolationStore You can supply properties to initialize the store by using the namespace freeze.store . For properties freeze.store.propOne=valueOne freeze.store.propTwo=valueTwo the method ViolationStore.initialize(props) will be called with the properties propOne=valueOne propTwo=valueTwo Violation Line Matcher The ViolationLineMatcher compares lines from occurred violations with lines from the store. The default implementation ignores line numbers and numbers of anonymous classes or lambda expressions, and counts lines as equivalent when all other details match. A custom ViolationLineMatcher can again either be defined programmatically: FreezingArchRule.freeze(rule).associateViolationLinesVia(customLineMatcher); or via archunit.properties : freeze.lineMatcher=fully.qualified.name.of.MyCustomLineMatcher 8.7. Software Architecture Metrics Similar to code quality metrics, like cyclomatic complexity or method length, software architecture metrics strive to measure the structure and design of software. ArchUnit can be used to calculate some well-known software architecture metrics. The foundation of these metrics is generally some form of componentization, i.e. we partition the classes/methods/fields of a Java application into related units and provide measurements for these units. In ArchUnit this concept is expressed by com.tngtech.archunit.library.metrics.MetricsComponent . For some metrics, like the Cumulative Dependency Metrics by John Lakos, we also need to know the dependencies between those components, which are naturally derived from the dependencies between the elements (e.g. classes) within these components. A very simple concrete example would be to consider some Java packages as components and the classes within these packages as the contained elements. From the dependencies between the classes we can derive which package depends on which other package. The following will give a quick overview of the metrics that ArchUnit can calculate. However, for further background information it is recommended to rely on some dedicated literature that explains these metrics in full detail. 8.7.1. Cumulative Dependency Metrics by John Lakos These are software architecture metrics as defined by John Lakos in his book "Large-Scale C++ Software Design". The basic idea is to calculate the DependsOn value for each component, which is the sum of all components that can be transitively reached from some component including the component itself. From these values we can derive Cumulative Component Dependency ( CCD ): The sum of all DependsOn values of all components Average Component Dependency ( ACD ): The CCD divided by the number of all components Relative Average Component Dependency ( RACD ): The ACD divided by the number of all components Normalized Cumulative Component Dependency ( NCCD ): The CCD of the system divided by the CCD of a balanced binary tree with the same number of components Example lakos example Thus these metrics provide some insights into the complexity of the dependency graph of a system. Note that in a cycle all elements have the same DependsOn value which will lead to an increased CCD. In fact for any non-trivial ( n >= 5 ) acyclic graph of components the RACD is bound by 0.6 . How to use the API The values described for these metrics can be calculated in the following way: import com.tngtech.archunit.library.metrics.ArchitectureMetrics; // ... JavaClasses classes = // ... Set<JavaPackage> packages = classes.getPackage("com.example").getSubpackages(); // These components can also be created in a package agnostic way, compare MetricsComponents.from(..) MetricsComponents<JavaClass> components = MetricsComponents.fromPackages(packages); LakosMetrics metrics = ArchitectureMetrics.lakosMetrics(components); System.out.println("CCD: " + metrics.getCumulativeComponentDependency()); System.out.println("ACD: " + metrics.getAverageComponentDependency()); System.out.println("RACD: " + metrics.getRelativeAverageComponentDependency()); System.out.println("NCCD: " + metrics.getNormalizedCumulativeComponentDependency()); 8.7.2. Component Dependency Metrics by Robert C. Martin These software architecture metrics were defined by Robert C. Martin in various sources, for example in his book "Clean architecture : a craftsman’s guide to software structure and design". The foundation are again components, that must in this case contain classes as their elements (i.e. these are purely object-oriented metrics that need a concept of abstract classes). The metrics are based on the following definitions: Efferent Coupling ( Ce ): The number of outgoing dependencies to any other component Afferent Coupling ( Ca ): The number of incoming dependencies from any other component Instability ( I ): Ce / (Ca + Ce) , i.e. the relationship of outgoing dependencies to all dependencies Abstractness ( A ): num(abstract_classes) / num(all_classes) in the component Distance from Main Sequence ( D ): | A + I - 1 | , i.e. the normalized distance from the ideal line between (A=1, I=0) and (A=0, I=1) Note that ArchUnit slightly differs from the original definition. In ArchUnit the Abstractness value is only based on public classes, i.e. classes that are visible from the outside. The reason is that Ce , Ca and I all are metrics with respect to coupling of components. But only classes that are visible to the outside can affect coupling between components, so it makes sense to only consider those classes to calculate the A value. Example The following provides some example where the A values assume some random factor of abstract classes within the respective component. martin example How to use the API The values described for these metrics can be calculated in the following way: import com.tngtech.archunit.library.metrics.ArchitectureMetrics; // ... JavaClasses classes = // ... Set<JavaPackage> packages = classes.getPackage("com.example").getSubpackages(); // These components can also be created in a package agnostic way, compare MetricsComponents.from(..) MetricsComponents<JavaClass> components = MetricsComponents.fromPackages(packages); ComponentDependencyMetrics metrics = ArchitectureMetrics.componentDependencyMetrics(components); System.out.println("Ce: " + metrics.getEfferentCoupling("com.example.component")); System.out.println("Ca: " + metrics.getAfferentCoupling("com.example.component")); System.out.println("I: " + metrics.getInstability("com.example.component")); System.out.println("A: " + metrics.getAbstractness("com.example.component")); System.out.println("D: " + metrics.getNormalizedDistanceFromMainSequence("com.example.component")); 8.7.3. Visibility Metrics by Herbert Dowalil These software architecture metrics were defined by Herbert Dowalil in his book "Modulare Softwarearchitektur: Nachhaltiger Entwurf durch Microservices, Modulithen und SOA 2.0". They provide a measure for the Information Hiding Principle, i.e. the relation of visible to hidden elements within a component. The metrics are composed from the following definitions: Relative Visibility ( RV ): num(visible_elements) / num(all_elements) for each component Average Relative Visibility ( ARV ): The average of all RV values Global Relative Visibility ( GRV ): num(visible_elements) / num(all_elements) over all components Example dowalil example How to use the API The values described for these metrics can be calculated in the following way: import com.tngtech.archunit.library.metrics.ArchitectureMetrics; // ... JavaClasses classes = // ... Set<JavaPackage> packages = classes.getPackage("com.example").getSubpackages(); // These components can also be created in a package agnostic way, compare MetricsComponents.from(..) MetricsComponents<JavaClass> components = MetricsComponents.fromPackages(packages); VisibilityMetrics metrics = ArchitectureMetrics.visibilityMetrics(components); System.out.println("RV : " + metrics.getRelativeVisibility("com.example.component")); System.out.println("ARV: " + metrics.getAverageRelativeVisibility()); System.out.println("GRV: " + metrics.getGlobalRelativeVisibility()); 9. JUnit Support At the moment ArchUnit offers extended support for writing tests with JUnit 4 and JUnit 5. This mainly tackles the problem of caching classes between test runs and to remove some boilerplate. Consider a straight forward approach to write tests: @Test public void rule1() { JavaClasses importedClasses = new ClassFileImporter().importClasspath(); ArchRule rule = classes()... rule.check(importedClasses); } @Test public void rule2() { JavaClasses importedClasses = new ClassFileImporter().importClasspath(); ArchRule rule = classes()... rule.check(importedClasses); } For bigger projects, this will have a significant performance impact, since the import can take a noticeable amount of time. Also rules will always be checked against the imported classes, thus the explicit call of check(importedClasses) is bloat and error prone (i.e. it can be forgotten). 9.1. JUnit 4 & 5 Support Make sure you follow the installation instructions at Installation , in particular to include the correct dependency for the respective JUnit support. 9.1.1. Writing tests Tests look and behave very similar between JUnit 4 and 5. The only difference is, that with JUnit 4 it is necessary to add a specific Runner to take care of caching and checking rules, while JUnit 5 picks up the respective TestEngine transparently. A test typically looks the following way: @RunWith(ArchUnitRunner.class) // Remove this line for JUnit 5!! @AnalyzeClasses(packages = "com.myapp") public class ArchitectureTest { // ArchRules can just be declared as static fields and will be evaluated @ArchTest public static final ArchRule rule1 = classes().should()... @ArchTest public static final ArchRule rule2 = classes().should()... @ArchTest public static void rule3(JavaClasses classes) { // The runner also understands static methods with a single JavaClasses argument // reusing the cached classes } } The JavaClass cache will work in two ways. On the one hand it will cache the classes by test, so they can be reused by several rules declared within the same class. On the other hand, it will cache the classes by location, so a second test that wants to import classes from the same URLs will reuse the classes previously imported as well. Note that this second caching uses soft references, so the classes will be dropped from memory, if the heap runs low. For further information see Controlling the Cache . 9.1.2. Controlling the Import Which classes will be imported can be controlled in a declarative way through @AnalyzeClasses . If no packages or locations are provided, the package of the annotated test class will be imported. You can specify packages to import as strings: @AnalyzeClasses(packages = {"com.myapp.subone", "com.myapp.subtwo"}) To better support refactorings, packages can also be declared relative to classes, i.e. the packages these classes reside in will be imported: @AnalyzeClasses(packagesOf = {SubOneConfiguration.class, SubTwoConfiguration.class}) As a third option, locations can be specified freely by implementing a LocationProvider : public class MyLocationProvider implements LocationProvider { @Override public Set<Location> get(Class<?> testClass) { // Determine Locations (= URLs) to import // Can also consider the actual test class, e.g. to read some custom annotation } } @AnalyzeClasses(locations = MyLocationProvider.class) Furthermore, to choose specific classes beneath those locations, ImportOption ﻿s can be specified (compare The Core API ). For example, to import the classpath, but only consider production code, and only consider code that is directly supplied and does not come from JARs: @AnalyzeClasses(importOptions = {DoNotIncludeTests.class, DoNotIncludeJars.class}) As explained in The Core API , you can write your own custom implementation of ImportOption and then supply the type to @AnalyzeClasses . To import the whole classpath, instead of just the package of the test class, use the option @AnalyzeClasses(wholeClasspath = true) Note that @AnalyzeClasses can also be used as a meta-annotation to avoid repeating the same configuration: @Retention(RetentionPolicy.RUNTIME) @AnalyzeClasses(packagesOf = MyApplicationRoot.class, importOptions = DoNotIncludeTests.class) public @interface AnalyzeMainClasses {} This annotation can then be used on test classes without repeating the specific configuration of @AnalyzeClasses : @AnalyzeMainClasses public class ArchitectureTest { // ... } 9.1.3. Controlling the Cache By default, all classes will be cached by location. This means that between different test class runs imported Java classes will be reused, if the exact combination of locations has already been imported. If the heap runs low, and thus the garbage collector has to do a big sweep in one run, this can cause a noticeable delay. On the other hand, if it is known that no other test class will reuse the imported Java classes, it would make sense to deactivate this cache. This can be achieved by configuring CacheMode.PER_CLASS , e.g. @AnalyzeClasses(packages = "com.myapp.special", cacheMode = CacheMode.PER_CLASS) The Java classes imported during this test run will not be cached by location and just be reused within the same test class. After all tests of this class have been run, the imported Java classes will simply be dropped. 9.1.4. Ignoring Tests It is possible to skip tests by annotating them with @ArchIgnore , for example: public class ArchitectureTest { // will run @ArchTest public static final ArchRule rule1 = classes().should()... // won't run @ArchIgnore @ArchTest public static final ArchRule rule2 = classes().should()... } Note for users of JUnit 5: the annotation @Disabled has no effect here. Instead, @ArchIgnore should be used. 9.1.5. Grouping Rules Often a project might end up with different categories of rules, for example "service rules" and "persistence rules". It is possible to write one class for each set of rules, and then refer to those sets from another test: public class ServiceRules { @ArchTest public static final ArchRule ruleOne = ... // further rules } public class PersistenceRules { @ArchTest public static final ArchRule ruleOne = ... // further rules } @RunWith(ArchUnitRunner.class) // Remove this line for JUnit 5!! @AnalyzeClasses public class ArchitectureTest { @ArchTest static final ArchTests serviceRules = ArchTests.in(ServiceRules.class); @ArchTest static final ArchTests persistenceRules = ArchTests.in(PersistenceRules.class); } The runner will include all @ArchTest annotated members within ServiceRules and PersistenceRules and evaluate them against the classes declared within @AnalyzeClasses on ArchitectureTest . This also allows an easy reuse of a rule library in different projects or modules. 9.1.6. Executing Single Rules It is possible to filter specific rules (e.g. @ArchTest fields) via archunit.properties (compare Advanced Configuration ). archunit.properties # Specify the field or method name here. Multiple names can be joined by ',' junit.testFilter=my_custom_rule_field As always with archunit.properties , this can also be passed dynamically using a system property, E.g. passing -Darchunit.junit.testFilter=my_custom_rule_field 9.1.7. Generating Display Names ArchUnit offers the possibility to generate more readable names in the test report by replacing underscores in the original rule names by spaces. For example, if a method or field is named some_Field_or_Method_rule this will appear as some Field or Method rule in the test report. This is similar to JUnit 5’s @DisplayNameGeneration annotation, but because this display name generation does not fit well with ArchUnit’s rule execution and because we’d like to offer this feature for JUnit 4 as well, you can enable display name generation in ArchUnit with a configuration property (see Advanced Configuration ): archunit.properties junit.displayName.replaceUnderscoresBySpaces=true If you omit the property (or set it to false ) the original rule names are used as display names. 10. Advanced Configuration Some behavior of ArchUnit can be centrally configured by adding a file archunit.properties to the root of the classpath (e.g. under src/test/resources ). This section will outline some global configuration options. 10.1. Overriding configuration ArchUnit will use exactly the archunit.properties file returned by the context ClassLoader from the classpath root, via the standard Java resource loading mechanism. It is possible to override any property from archunit.properties , by passing a system property to the respective JVM process executing ArchUnit: -Darchunit.propertyName=propertyValue E.g. to override the property resolveMissingDependenciesFromClassPath described in the next section, it would be possible to pass: -Darchunit.resolveMissingDependenciesFromClassPath=false 10.2. Configuring the Resolution Behavior As mentioned in Dealing with Missing Classes , it might be preferable to configure a different import behavior if dealing with missing classes wastes too much performance. One way that can be chosen out of the box is to never resolve any missing class from the classpath: archunit.properties resolveMissingDependenciesFromClassPath=false If you want to resolve just some classes from the classpath (e.g. to import missing classes from your own organization but avoid the performance impact of importing classes from 3rd party packages), it is possible to configure only specific packages to be resolved from the classpath: archunit.properties classResolver=com.tngtech.archunit.core.importer.resolvers.SelectedClassResolverFromClasspath classResolver.args=some.pkg.one,some.pkg.two This configuration would only resolve the packages some.pkg.one and some.pkg.two from the classpath, and stub all other missing classes. The last example also demonstrates, how the behavior can be customized freely, for example if classes are imported from a different source and are not on the classpath: First Supply a custom implementation of com.tngtech.archunit.core.importer.resolvers.ClassResolver Then configure it archunit.properties classResolver=some.pkg.MyCustomClassResolver If the resolver needs some further arguments, create a public constructor with one List<String> argument, and supply the concrete arguments as archunit.properties classResolver.args=myArgOne,myArgTwo For further details, compare the sources of SelectedClassResolverFromClasspath . 10.2.1. Configuring the Number of Resolution Iterations It is also possible to apply a more fine-grained configuration to the import dependency resolution behavior. In particular, the ArchUnit importer distinguishes 6 types of import dependencies: member types (e.g. the type of a field of a class, type of a method parameter, etc.) accesses to types (e.g. a method calls another method of a different class) supertypes (i.e. superclasses that are extended and interfaces that are implemented) enclosing types (i.e. outer classes of nested classes) annotation types, including parameters of annotations generic signature types (i.e. types that comprise a parameterized type, like List and String for List<String> ) For each of these dependency types it is possible to configure the maximum number of iterations to traverse the dependencies. E.g. let us assume we configure the maximum iterations as 2 for member types and we have a class A that declares a field of type B which in turn holds a field of type C . On the first run we would automatically resolve the type B as a dependency of A . On the second run we would then also resolve C as a member type dependency of B . The configuration parameters with their defaults are the following: archunit.properties import.dependencyResolutionProcess.maxIterationsForMemberTypes = 1 import.dependencyResolutionProcess.maxIterationsForAccessesToTypes = 1 import.dependencyResolutionProcess.maxIterationsForSupertypes = -1 import.dependencyResolutionProcess.maxIterationsForEnclosingTypes = -1 import.dependencyResolutionProcess.maxIterationsForAnnotationTypes = -1 import.dependencyResolutionProcess.maxIterationsForGenericSignatureTypes = -1 Note that setting a property to a negative value (e.g. -1 ) will not stop the resolution until all types for the given sort of dependency have been resolved. E.g. for generic type signatures a value of -1 will by default lead to all types comprising the signature Map<?, List<? extends String>> (that is Map , List and String ) to be automatically resolved. Setting a property to 0 will disable the automatic resolution, which can lead to types being only partially imported or stubbed. For these types the information is likely not complete or even wrong (e.g. an interface might be reported as class if the bytecode was never analyzed, or annotations might be missing). On the other hand, bigger (or negative) values can have a massive performance impact. The defaults should provide a reasonable behavior. They include the class graph for all types that are used by members or accesses directly and cut the resolution at that point. However, relevant information for these types is fully imported, no matter how many iterations it takes (e.g. supertypes or generic signatures). 10.3. MD5 Sums of Classes Sometimes it can be valuable to record the MD5 sums of classes being imported to track unexpected behavior. Since this has a performance impact, it is disabled by default, but it can be activated the following way: archunit.properties enableMd5InClassSources=true If this feature is enabled, the MD5 sum can be queried as javaClass.getSource().get().getMd5sum() 10.4. Fail Rules on Empty Should By default, ArchUnit will forbid the should-part of rules to be evaluated against an empty set of classes. The reason is that this can lead to rules that by accident do not check any classes at all. Take for example classes().that().resideInAPackage("com.myapp.old").should()... Now consider somebody renames the package old to newer . The rule will now always evaluate successfully without any reported error. However, it actually does not check any classes at all anymore. This is likely not what most users want. Thus, by default ArchUnit will fail checking the rule in this case. If you want to allow evaluating such rules, i.e. where the actual input to the should-clause is empty, you can use one of the following ways: Allow Empty Should on a Per-Rule Basis On each ArchRule you can use the method ArchRule.allowEmptyShould(..) to override the behavior for a single rule, e.g. // create a rule that allows that no classes are passed to the should-clause classes().that()...should()...allowEmptyShould(true) Allow Empty Should Globally To allow all rules to be evaluated without checking any classes you can set the following property: archunit.properties archRule.failOnEmptyShould=false 10.5. Custom Error Messages You can configure a custom format to display the failures of a rule. First Supply a custom implementation of com.tngtech.archunit.lang.FailureDisplayFormat Then configure it archunit.properties failureDisplayFormat=some.pkg.MyCustomFailureDisplayFormat One example would be to shorten the fully qualified class names in failure messages: private static class SimpleClassNameFailureFormat implements FailureDisplayFormat { @Override public String formatFailure(HasDescription rule, FailureMessages failureMessages, Priority priority) { String failureDetails = failureMessages.stream() .map(message -> message.replaceAll("<(?:\\w+\\.)+([A-Z][^>]*)>", "<$1>")) .collect(joining(lineSeparator())); return String.format("Architecture Violation [Priority: %s] - Rule '%s' was violated (%s):%n%s", priority.asString(), rule.getDescription(), failureMessages.getInformationAboutNumberOfViolations(), failureDetails); } } Note that due to the free format how violation texts can be composed, in particular by custom predicates and conditions, there is at the moment no more sophisticated way than plain text parsing. Users can tailor this to their specific environments where they know which sorts of failure formats can appear in practice.
+which sorts of failure formats can appear in practice.</p>
+</div>
+</div>
+</div>
+</div>
+</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/9.18.3/highlight.min.js"></script>
+<script>
+if (!hljs.initHighlighting.called) {
+  hljs.initHighlighting.called = true
+  ;[].slice.call(document.querySelectorAll('pre.highlight > code[data-lang]')).forEach(function (el) { hljs.highlightBlock(el) })
+}
+</script>
+</body>
+</html>
