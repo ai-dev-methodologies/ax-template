@@ -1,263 +1,829 @@
-# spring-jpa-locking — upstream snapshot (2026-08-01 refresh, append-only)
-
-**Source URL(s):** https://docs.spring.io/spring-data/jpa/reference/jpa/locking.html (re-fetched 2026-08-01; every pre-existing section below the divider is preserved verbatim)
-**HTTP status:** 200
-**Fetched at:** 2026-08-01T02:24:30Z
-**Extractor invocation:** `practices/scripts/snapshot-extract.sh https://docs.spring.io/spring-data/jpa/reference/jpa/locking.html`
-**Fetch receipt:** `practices/upstream/_FETCH-RECEIPTS.yaml` id `r144`
-**Body SHA-256 (below the `---` divider, header excluded):** d555db976b7372d487ca6eb671abb061c05559076c9912fbd1c47e074e4333f9
-
----
-
----
-snapshot_id: spring-jpa-locking
-source: "https://docs.spring.io/spring-data/jpa/reference/jpa/locking.html"
-fetched_at: "2026-07-14T00:00:00Z"
-version_observed: "as published, fetched 2026-07-14"
-via: curl
-tier: 3
-bytes: 3872
-sha: "dfcd4ee1bcc2838ecc81a69ed78b2e2dc134ce57b1107303cf0f9f5515019f0c"
----
-
-# spring jpa locking — upstream snapshot
-
-Source: https://docs.spring.io/spring-data/jpa/reference/jpa/locking.html
-Fetched: 2026-07-14
-
-Locking :: Spring Data JPA
-
-Why Spring
-OverviewMicroservicesReactiveEvent
-DrivenCloudWeb
-ApplicationsServerlessBatch
-
-Learn
-OverviewQuickstartGuidesBlog
-
-Projects
-OverviewSpring BootSpring FrameworkSpring CloudSpring Cloud Data FlowSpring DataSpring IntegrationSpring BatchSpring SecurityView all projects
-DEVELOPMENT TOOLS
-Spring Tools 4Spring Initializr
-
-Academy
-CoursesGet Certified
-
-Solutions
-OverviewSpring RuntimeSpring ConsultingSpring Academy For TeamsSecurity Advisories
-
-Community
-OverviewEventsTeam
-
-light
-
-Spring Data JPA4.1.0
-Search
-
-Overview
-
-Upgrading Spring Data
-
-JPA
-
-Getting Started
-
-Core concepts
-
-Defining Repository Interfaces
-
-Configuration
-
-Persisting Entities
-
-Defining Query Methods
-
-JPA Query Methods
-
-Value Expressions Fundamentals
-
-Projections
-
-Stored Procedures
-
-Specifications
-
-Query by Example
-
-Vector Search
-
-Transactionality
-
-Locking
-
-Auditing
-
-Merging persistence units
-
-CDI Integration
-
-Custom Repository Implementations
-
-Publishing Events from Aggregate Roots
-
-Null Handling of Repository Methods
-
-Spring Data Extensions
-
-Repository query keywords
-
-Repository query return types
-
-Ahead of Time Optimizations
-
-Frequently Asked Questions
-
-Glossary
-
-Envers
-
-Introduction
-
-Configuration
-
-Usage
-
-Javadoc
-
-Wiki
-
-Search
-
-Edit this Page
-
-GitHub Project
-
-Stack Overflow
-
-Spring Data JPA
-
-JPA
-
-Locking
-
-# Locking
-
-To specify the lock mode to be used, you can use the @Lock annotation on query methods, as shown in the following example:
-
-Example 1. Defining lock metadata on query methods
-
-interface UserRepository extends Repository<User, Long> {
-
-// Plain query method
-@Lock(LockModeType.READ)
-List<User> findByLastname(String lastname);
-}
-
-This method declaration causes the query being triggered to be equipped with a LockModeType of READ. You can also define locking for CRUD methods by redeclaring them in your repository interface and adding the @Lock annotation, as shown in the following example:
-
-Example 2. Defining lock metadata on CRUD methods
-
-interface UserRepository extends Repository<User, Long> {
-
-// Redeclaration of a CRUD method
-@Lock(LockModeType.READ)
-List<User> findAll();
-}
-
-Spring Data Commons
-
-Stable
-
-4.1.0
-
-4.0.6
-
-3.5.13
-
-Snapshot
-
-4.2.0-SNAPSHOT
-
-4.1.1-SNAPSHOT
-
-4.0.7-SNAPSHOT
-
-3.5.14-SNAPSHOT
-
-Spring Data JPA
-
-Stable
-
-4.1.0
-
-4.0.6
-
-3.5.13
-
-Snapshot
-
-4.2.0-SNAPSHOT
-
-4.1.1-SNAPSHOT
-
-4.0.7-SNAPSHOT
-
-3.5.14-SNAPSHOT
-
-Related Spring Documentation
-
-Spring Framework
-
-Spring Data
-
-Spring Data Cassandra
-
-Spring Data Commons
-
-Spring Data Couchbase
-
-Spring Data Elasticsearch
-
-Spring Data JPA
-
-Spring Data KeyValue
-
-Spring Data LDAP
-
-Spring Data MongoDB
-
-Spring Data Neo4j
-
-Spring Data Redis
-
-Spring Data JDBC & R2DBC
-
-Spring Data REST
-
-Spring GraphQL
-
-All Docs...
-
-Copyright © 2005 - Broadcom. All Rights Reserved. The term "Broadcom" refers to Broadcom Inc. and/or its subsidiaries.
-
-Terms of Use • Privacy • Trademark Guidelines • Thank you • Your California Privacy Rights • Cookie Settings
-
-Apache®, Apache Tomcat®, Apache Kafka®, Apache Cassandra™, and Apache Geode™ are trademarks or registered trademarks of the Apache Software Foundation in the United States and/or other countries. Java™, Java™ SE, Java™ EE, and OpenJDK™ are trademarks of Oracle and/or its affiliates. Kubernetes® is a registered trademark of the Linux Foundation in the United States and other countries. Linux® is the registered trademark of Linus Torvalds in the United States and other countries. Windows® and Microsoft® Azure are registered trademarks of Microsoft Corporation. “AWS” and “Amazon Web Services” are trademarks or registered trademarks of Amazon.com Inc. or its affiliates. All other trademarks and copyrights are property of their respective owners and are only mentioned for informative purposes. Other names may be trademarks of their respective owners.
-
-Search in all Spring Docs
-
----
-
-## Upstream refresh 2026-08-01 (verbatim extractor output)
-
-Source: https://docs.spring.io/spring-data/jpa/reference/jpa/locking.html
-HTTP status: 200 · extracted bytes: 3797 · sha256: c36e009605e7476af35e738bc4f96e5a18749df2d472f51763096390c275a2c5
-Extractor: `practices/scripts/snapshot-extract.sh` (curl -> deterministic HTML->text; no model in the loop)
-Fetch receipt: `practices/upstream/_FETCH-RECEIPTS.yaml` id `r144`
-
-Everything above this divider is the previous snapshot, preserved byte-for-byte (append-only:
-history is recorded, never rewritten). The block below is the UNMODIFIED extractor output for
-the 2026-08-01 re-fetch of the same URL — it is the current upstream text, and any citation that
-claims to quote this source verbatim must match it.
-
-Locking :: Spring Data JPA Why Spring Overview Microservices Reactive Event Driven Cloud Web Applications Serverless Batch Learn Overview Quickstart Guides Blog Projects Overview Spring Boot Spring Framework Spring Cloud Spring Cloud Data Flow Spring Data Spring Integration Spring Batch Spring Security View all projects DEVELOPMENT TOOLS Spring Tools 4 Spring Initializr Academy Courses Get Certified Solutions Overview Spring Runtime Spring Consulting Spring Academy For Teams Security Advisories Community Overview Events Team light Spring Data JPA 4.1.0 Search Overview Upgrading Spring Data JPA Getting Started Core concepts Defining Repository Interfaces Configuration Persisting Entities Defining Query Methods JPA Query Methods Value Expressions Fundamentals Projections Stored Procedures Specifications Query by Example Vector Search Transactionality Locking Auditing Merging persistence units CDI Integration Custom Repository Implementations Publishing Events from Aggregate Roots Null Handling of Repository Methods Spring Data Extensions Repository query keywords Repository query return types Ahead of Time Optimizations Frequently Asked Questions Glossary Envers Introduction Configuration Usage Javadoc Wiki Search Edit this Page GitHub Project Stack Overflow Spring Data JPA JPA Locking Locking To specify the lock mode to be used, you can use the @Lock annotation on query methods, as shown in the following example: Example 1. Defining lock metadata on query methods interface UserRepository extends Repository<User, Long> { // Plain query method @Lock(LockModeType.READ) List<User> findByLastname(String lastname); } This method declaration causes the query being triggered to be equipped with a LockModeType of READ . You can also define locking for CRUD methods by redeclaring them in your repository interface and adding the @Lock annotation, as shown in the following example: Example 2. Defining lock metadata on CRUD methods interface UserRepository extends Repository<User, Long> { // Redeclaration of a CRUD method @Lock(LockModeType.READ) List<User> findAll(); } Spring Data Commons Stable 4.1.0 4.0.6 3.5.13 Snapshot 4.2.0-SNAPSHOT 4.1.1-SNAPSHOT 4.0.7-SNAPSHOT 3.5.14-SNAPSHOT Spring Data JPA Stable 4.1.0 4.0.6 3.5.13 Snapshot 4.2.0-SNAPSHOT 4.1.1-SNAPSHOT 4.0.7-SNAPSHOT 3.5.14-SNAPSHOT Related Spring Documentation Spring Framework Spring Data Spring Data Cassandra Spring Data Commons Spring Data Couchbase Spring Data Elasticsearch Spring Data JPA Spring Data KeyValue Spring Data LDAP Spring Data MongoDB Spring Data Neo4j Spring Data Redis Spring Data JDBC & R2DBC Spring Data REST Spring GraphQL All Docs... Copyright © 2005 - Broadcom. All Rights Reserved. The term "Broadcom" refers to Broadcom Inc. and/or its subsidiaries. Terms of Use • Privacy • Trademark Guidelines • Thank you • Your California Privacy Rights • Cookie Settings Apache®, Apache Tomcat®, Apache Kafka®, Apache Cassandra™, and Apache Geode™ are trademarks or registered trademarks of the Apache Software Foundation in the United States and/or other countries. Java™, Java™ SE, Java™ EE, and OpenJDK™ are trademarks of Oracle and/or its affiliates. Kubernetes® is a registered trademark of the Linux Foundation in the United States and other countries. Linux® is the registered trademark of Linus Torvalds in the United States and other countries. Windows® and Microsoft® Azure are registered trademarks of Microsoft Corporation. “AWS” and “Amazon Web Services” are trademarks or registered trademarks of Amazon.com Inc. or its affiliates. All other trademarks and copyrights are property of their respective owners and are only mentioned for informative purposes. Other names may be trademarks of their respective owners. Search in all Spring Docs
+<!DOCTYPE html>
+<html lang="en">
+  <script src="https://cdn.cookielaw.org/scripttemplates/otSDKStub.js" data-domain-script="018ee325-b3a7-7753-937b-b8b3e643b1a7"></script><script>function OptanonWrapper() {}</script><script>function setGTM(w, d, s, l, i) { w[l] = w[l] || []; w[l].push({ "gtm.start": new Date().getTime(), event: "gtm.js"}); var f = d.getElementsByTagName(s)[0], j = d.createElement(s), dl = l != "dataLayer" ? "&l=" + l : ""; j.async = true; j.src = "https://www.googletagmanager.com/gtm.js?id=" + i + dl; f.parentNode.insertBefore(j, f); } if (document.cookie.indexOf("OptanonConsent") > -1 && document.cookie.indexOf("groups=") > -1) { setGTM(window, document, "script", "dataLayer", "GTM-W8CQ8TL"); } else { waitForOnetrustActiveGroups(); } var timer; function waitForOnetrustActiveGroups() { if (document.cookie.indexOf("OptanonConsent") > -1 && document.cookie.indexOf("groups=") > -1) { clearTimeout(timer); setGTM(window, document, "script", "dataLayer", "GTM-W8CQ8TL"); } else { timer = setTimeout(waitForOnetrustActiveGroups, 250); }}</script>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>Locking :: Spring Data JPA</title>
+    <link rel="canonical" href="https://docs.spring.io/spring-data/jpa/reference/jpa/locking.html">
+    <meta name="generator" content="Antora 3.2.0-alpha.12">
+    <script>
+!function (theme, navWidth) {
+  if (theme === 'dark') document.documentElement.classList.add('dark-theme')
+  if (navWidth) document.documentElement.style.setProperty('--nav-width', `${navWidth}px`)
+}(localStorage && localStorage.getItem('theme') || (matchMedia('(prefers-color-scheme: dark)')?.matches && 'dark'),
+  localStorage && localStorage.getItem('nav-width'))
+    </script>
+    <link rel="stylesheet" href="../_/css/site.css">
+    <link rel="stylesheet" href="../_/css/vendor/search.css">
+    <link rel="stylesheet" href="../_/css/vendor/page-search.css">
+    <link rel="stylesheet" href="../_/css/vendor/onetrust.css">
+    <link rel="stylesheet" href="../_/css/vendor/asciidoctor-tabs.css">
+
+    <meta name="antora-ui-version" content="v0.4.25"> 
+    <meta name="version" content="4.1.1">
+    <meta name="generation" content="4.1">
+    <meta name="versioned-url" content="https://docs.spring.io/spring-data/jpa/reference/4.1/jpa/locking.html">
+    <meta name="component" content="data-jpa">
+    <meta name="latest-version" content="true">
+    <link rel="icon" href="../_/img/favicon.ico" type="image/vnd.microsoft.icon">
+  </head>
+  <body class="article">
+<header class="header">
+  <nav class="navbar">
+    <div class="navbar-brand">
+      <a class="navbar-item" href="https://spring.io">
+        <img
+          id="springlogo"
+          class="block"
+          src="../_/img/spring-logo.svg"
+          alt="Spring"
+        />
+      </a>
+      <button class="navbar-burger" data-target="topbar-nav">
+        <span></span>
+        <span></span>
+        <span></span>
+      </button>
+    </div>
+    <div id="topbar-nav" class="navbar-menu">
+      <div class="navbar-end">
+        <div class="navbar-item has-dropdown is-hoverable">
+          <a class="navbar-link" href="#">Why Spring</a>
+          <div class="navbar-dropdown">
+            <a
+              class="navbar-item"
+              href="https://spring.io/why-spring"
+            >Overview</a>
+            <a
+              class="navbar-item"
+              href="https://spring.io/microservices"
+            >Microservices</a>
+            <a
+              class="navbar-item"
+              href="https://spring.io/reactive"
+            >Reactive</a>
+            <a class="navbar-item" href="https://spring.io/event-driven">Event
+              Driven</a>
+            <a class="navbar-item" href="https://spring.io/cloud">Cloud</a>
+            <a class="navbar-item" href="https://spring.io/web-applications">Web
+              Applications</a>
+            <a
+              class="navbar-item"
+              href="https://spring.io/serverless"
+            >Serverless</a>
+            <a class="navbar-item" href="https://spring.io/batch">Batch</a>
+          </div>
+        </div>
+        <div class="navbar-item has-dropdown is-hoverable">
+          <a class="navbar-link" href="#">Learn</a>
+          <div class="navbar-dropdown">
+            <a class="navbar-item" href="https://spring.io/learn">Overview</a>
+            <a
+              class="navbar-item"
+              href="https://spring.io/quickstart"
+            >Quickstart</a>
+            <a class="navbar-item" href="https://spring.io/guides">Guides</a>
+            <a class="navbar-item" href="https://spring.io/blog">Blog</a>
+          </div>
+        </div>
+        <div class="navbar-item has-dropdown is-hoverable">
+          <a class="navbar-link" href="#">Projects</a>
+          <div class="navbar-dropdown" style="min-width: 280px">
+            <a
+              class="navbar-item"
+              href="https://spring.io/projects"
+            >Overview</a>
+            <a
+              class="navbar-item"
+              href="https://spring.io/projects/spring-boot"
+            >Spring Boot</a>
+            <a
+              class="navbar-item"
+              href="https://spring.io/projects/spring-framework"
+            >Spring Framework</a>
+            <a
+              class="navbar-item"
+              href="https://spring.io/projects/spring-cloud"
+            >Spring Cloud</a>
+            <a
+              class="navbar-item"
+              href="https://spring.io/projects/spring-cloud-dataflow"
+            >Spring Cloud Data Flow</a>
+            <a
+              class="navbar-item"
+              href="https://spring.io/projects/spring-data"
+            >Spring Data</a>
+            <a
+              class="navbar-item"
+              href="https://spring.io/projects/spring-integration"
+            >Spring Integration</a>
+            <a
+              class="navbar-item"
+              href="https://spring.io/projects/spring-batch"
+            >Spring Batch</a>
+            <a
+              class="navbar-item"
+              href="https://spring.io/projects/spring-security"
+            >Spring Security</a>
+            <a
+              class="navbar-item navbar-item-special"
+              href="https://spring.io/projects"
+            >View all projects</a>
+            <li class="navbar-item navbar-item-special-3">DEVELOPMENT TOOLS</li>
+            <a class="navbar-item" href="https://spring.io/tools">Spring Tools 4</a>
+            <a
+              class="navbar-item navbar-item-special-2"
+              href="https://start.spring.io"
+            >Spring Initializr
+              <svg
+                class="external-link-icon"
+                xmlns="http://www.w3.org/2000/svg"
+                viewBox="0 0 16 16"
+              ><polyline
+                  points="15 10.94 15 15 1 15 1 1 5.06 1"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-miterlimit="10"
+                  stroke-width="2"
+                ></polyline><polyline
+                  points="8.93 1 15 1 15 7.07"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-miterlimit="10"
+                  stroke-width="2"
+                ></polyline><line
+                  x1="15"
+                  y1="1"
+                  x2="8"
+                  y2="8"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-miterlimit="10"
+                  stroke-width="2"
+                ></line></svg></a>
+          </div>
+        </div>
+
+        <div class="navbar-item has-dropdown is-hoverable">
+          <a class="navbar-link" href="#">Academy</a>
+          <div class="navbar-dropdown">
+            <a
+              class="navbar-item"
+              href="https://spring.academy/courses"
+            >Courses</a>
+            <a
+              class="navbar-item"
+              href="https://spring.academy/learning-path"
+            >Get Certified</a>
+          </div>
+        </div>
+
+        <div class="navbar-item has-dropdown is-hoverable">
+          <a class="navbar-link" href="#">Solutions</a>
+          <div class="navbar-dropdown lg">
+            <a class="navbar-item" href="https://spring.io/solutions">Overview</a>
+            <a class="navbar-item" href="https://spring.io/support">Spring Runtime</a>
+            <a class="navbar-item" href="https://spring.io/consulting">Spring Consulting</a>
+            <a class="navbar-item" href="https://spring.academy/teams">Spring Academy For Teams</a>
+            <a class="navbar-item" href="https://spring.io/security">Security Advisories</a>
+          </div>
+        </div>
+
+        <div class="navbar-item has-dropdown is-hoverable is-community">
+          <a class="navbar-link" href="#">Community</a>
+          <div class="navbar-dropdown">
+            <a
+              class="navbar-item"
+              href="https://spring.io/community"
+            >Overview</a>
+            <a class="navbar-item" href="https://spring.io/events">Events</a>
+            <a class="navbar-item" href="https://spring.io/team">Team</a>
+          </div>
+        </div>
+      </div>
+    </div>
+    <label class="theme-toggler">
+      <input
+        type="checkbox"
+        type="checkbox"
+        id="switch-theme-checkbox"
+        name="switch-theme-checkbox"
+      />
+      <span class="icon"><svg
+          aria-hidden="true"
+          focusable="false"
+          data-prefix="fas"
+          data-icon="moon"
+          class="svg-inline--fa fa-moon moon"
+          role="img"
+          xmlns="http://www.w3.org/2000/svg"
+          viewBox="0 0 384 512"
+        ><path
+            fill="currentColor"
+            d="M223.5 32C100 32 0 132.3 0 256S100 480 223.5 480c60.6 0 115.5-24.2 155.8-63.4c5-4.9 6.3-12.5 3.1-18.7s-10.1-9.7-17-8.5c-9.8 1.7-19.8 2.6-30.1 2.6c-96.9 0-175.5-78.8-175.5-176c0-65.8 36-123.1 89.3-153.3c6.1-3.5 9.2-10.5 7.7-17.3s-7.3-11.9-14.3-12.5c-6.3-.5-12.6-.8-19-.8z"
+          ></path>
+        </svg>
+        <svg
+          aria-hidden="true"
+          focusable="false"
+          data-prefix="fas"
+          data-icon="sun"
+          class="svg-inline--fa fa-sun sun"
+          role="img"
+          xmlns="http://www.w3.org/2000/svg"
+          viewBox="0 0 512 512"
+        ><path
+            fill="currentColor"
+            d="M361.5 1.2c5 2.1 8.6 6.6 9.6 11.9L391 121l107.9 19.8c5.3 1 9.8 4.6 11.9 9.6s1.5 10.7-1.6 15.2L446.9 256l62.3 90.3c3.1 4.5 3.7 10.2 1.6 15.2s-6.6 8.6-11.9 9.6L391 391 371.1 498.9c-1 5.3-4.6 9.8-9.6 11.9s-10.7 1.5-15.2-1.6L256 446.9l-90.3 62.3c-4.5 3.1-10.2 3.7-15.2 1.6s-8.6-6.6-9.6-11.9L121 391 13.1 371.1c-5.3-1-9.8-4.6-11.9-9.6s-1.5-10.7 1.6-15.2L65.1 256 2.8 165.7c-3.1-4.5-3.7-10.2-1.6-15.2s6.6-8.6 11.9-9.6L121 121 140.9 13.1c1-5.3 4.6-9.8 9.6-11.9s10.7-1.5 15.2 1.6L256 65.1 346.3 2.8c4.5-3.1 10.2-3.7 15.2-1.6zM160 256a96 96 0 1 1 192 0 96 96 0 1 1 -192 0zm224 0a128 128 0 1 0 -256 0 128 128 0 1 0 256 0z"
+          ></path>
+        </svg></span>
+      <span class="text">light</span>
+    </label>
+  </nav>
+</header>
+<script>
+!function (theme) {
+  if (theme === 'dark') {
+    document.getElementById('switch-theme-checkbox').parentElement.classList.add('active')
+  }
+}(localStorage && localStorage.getItem('theme') || (matchMedia('(prefers-color-scheme: dark)')?.matches && 'dark'))
+</script>
+<div class="body">
+<div class="nav-container" data-component="data-jpa" data-version="4.1.1">
+  <aside class="nav">
+    <div class="panels">
+      <div class="nav-panel-menu is-active" data-panel="menu">
+        <nav class="nav-menu">
+<div class="context">
+  <span class="title">Spring Data JPA</span>
+  <span class="version">4.1.1</span>
+  <button class="browse-version" id="browse-version">
+    <svg
+      height="24px"
+      id="Layer_1"
+      style="enable-background:new 0 0 512 512;"
+      version="1.1"
+      viewBox="0 0 512 512"
+      width="24px"
+      xml:space="preserve"
+    ><g><path
+          d="M256,224c-17.7,0-32,14.3-32,32s14.3,32,32,32c17.7,0,32-14.3,32-32S273.7,224,256,224L256,224z"
+        ></path><path
+          d="M128.4,224c-17.7,0-32,14.3-32,32s14.3,32,32,32c17.7,0,32-14.3,32-32S146,224,128.4,224L128.4,224z"
+        ></path><path
+          d="M384,224c-17.7,0-32,14.3-32,32s14.3,32,32,32s32-14.3,32-32S401.7,224,384,224L384,224z"
+        ></path></g></svg>
+  </button>
+  <div class="search">
+  <button class="DocSearch-Button search-button">
+    <svg enable-background="new 0 0 32 32" id="Glyph" version="1.1" viewBox="0 0 32 32" xml:space="preserve" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+      <path d="M27.414,24.586l-5.077-5.077C23.386,17.928,24,16.035,24,14c0-5.514-4.486-10-10-10S4,8.486,4,14  s4.486,10,10,10c2.035,0,3.928-0.614,5.509-1.663l5.077,5.077c0.78,0.781,2.048,0.781,2.828,0  C28.195,26.633,28.195,25.367,27.414,24.586z M7,14c0-3.86,3.14-7,7-7s7,3.14,7,7s-3.14,7-7,7S7,17.86,7,14z" id="XMLID_223_"/>
+    </svg>
+    <span>Search</span>
+    <span class="search-key"></span>
+  </button>
+</div>
+</div><ul class="nav-list">
+  <li class="nav-item" data-depth="0">
+<ul class="nav-list">
+  <li class="nav-item" data-depth="1">
+    <button class="nav-item-toggle"></button>
+    <a class="nav-link"  href="../index.html">Overview</a>
+<ul class="nav-list">
+  <li class="nav-item" data-depth="2">
+    <a class="nav-link"  href="../commons/upgrade.html">Upgrading Spring Data</a>
+  </li>
+</ul>
+  </li>
+  <li class="nav-item" data-depth="1">
+    <button class="nav-item-toggle"></button>
+    <a class="nav-link"  href="../jpa.html">JPA</a>
+<ul class="nav-list">
+  <li class="nav-item" data-depth="2">
+    <a class="nav-link"  href="getting-started.html">Getting Started</a>
+  </li>
+  <li class="nav-item" data-depth="2">
+    <a class="nav-link"  href="../repositories/core-concepts.html">Core concepts</a>
+  </li>
+  <li class="nav-item" data-depth="2">
+    <a class="nav-link"  href="../repositories/definition.html">Defining Repository Interfaces</a>
+  </li>
+  <li class="nav-item" data-depth="2">
+    <a class="nav-link"  href="../repositories/create-instances.html">Configuration</a>
+  </li>
+  <li class="nav-item" data-depth="2">
+    <a class="nav-link"  href="entity-persistence.html">Persisting Entities</a>
+  </li>
+  <li class="nav-item" data-depth="2">
+    <a class="nav-link"  href="../repositories/query-methods-details.html">Defining Query Methods</a>
+  </li>
+  <li class="nav-item" data-depth="2">
+    <a class="nav-link"  href="query-methods.html">JPA Query Methods</a>
+  </li>
+  <li class="nav-item" data-depth="2">
+    <a class="nav-link"  href="value-expressions.html">Value Expressions Fundamentals</a>
+  </li>
+  <li class="nav-item" data-depth="2">
+    <a class="nav-link"  href="../repositories/projections.html">Projections</a>
+  </li>
+  <li class="nav-item" data-depth="2">
+    <a class="nav-link"  href="stored-procedures.html">Stored Procedures</a>
+  </li>
+  <li class="nav-item" data-depth="2">
+    <a class="nav-link"  href="specifications.html">Specifications</a>
+  </li>
+  <li class="nav-item" data-depth="2">
+    <a class="nav-link"  href="../repositories/query-by-example.html">Query by Example</a>
+  </li>
+  <li class="nav-item" data-depth="2">
+    <a class="nav-link"  href="../repositories/vector-search.html">Vector Search</a>
+  </li>
+  <li class="nav-item" data-depth="2">
+    <a class="nav-link"  href="transactions.html">Transactionality</a>
+  </li>
+  <li class="nav-item is-current-page" data-depth="2">
+    <a class="nav-link"  href="locking.html">Locking</a>
+  </li>
+  <li class="nav-item" data-depth="2">
+    <a class="nav-link"  href="../auditing.html">Auditing</a>
+  </li>
+  <li class="nav-item" data-depth="2">
+    <a class="nav-link"  href="misc-merging-persistence-units.html">Merging persistence units</a>
+  </li>
+  <li class="nav-item" data-depth="2">
+    <a class="nav-link"  href="jpd-misc-cdi-integration.html">CDI Integration</a>
+  </li>
+  <li class="nav-item" data-depth="2">
+    <a class="nav-link"  href="../repositories/custom-implementations.html">Custom Repository Implementations</a>
+  </li>
+  <li class="nav-item" data-depth="2">
+    <a class="nav-link"  href="../repositories/core-domain-events.html">Publishing Events from Aggregate Roots</a>
+  </li>
+  <li class="nav-item" data-depth="2">
+    <a class="nav-link"  href="../repositories/null-handling.html">Null Handling of Repository Methods</a>
+  </li>
+  <li class="nav-item" data-depth="2">
+    <a class="nav-link"  href="../repositories/core-extensions.html">Spring Data Extensions</a>
+  </li>
+  <li class="nav-item" data-depth="2">
+    <a class="nav-link"  href="../repositories/query-keywords-reference.html">Repository query keywords</a>
+  </li>
+  <li class="nav-item" data-depth="2">
+    <a class="nav-link"  href="../repositories/query-return-types-reference.html">Repository query return types</a>
+  </li>
+  <li class="nav-item" data-depth="2">
+    <a class="nav-link"  href="aot.html">Ahead of Time Optimizations</a>
+  </li>
+  <li class="nav-item" data-depth="2">
+    <a class="nav-link"  href="faq.html">Frequently Asked Questions</a>
+  </li>
+  <li class="nav-item" data-depth="2">
+    <a class="nav-link"  href="glossary.html">Glossary</a>
+  </li>
+</ul>
+  </li>
+  <li class="nav-item" data-depth="1">
+    <button class="nav-item-toggle"></button>
+    <a class="nav-link"  href="../envers.html">Envers</a>
+<ul class="nav-list">
+  <li class="nav-item" data-depth="2">
+    <a class="nav-link"  href="../envers/introduction.html">Introduction</a>
+  </li>
+  <li class="nav-item" data-depth="2">
+    <a class="nav-link"  href="../envers/configuration.html">Configuration</a>
+  </li>
+  <li class="nav-item" data-depth="2">
+    <a class="nav-link"  href="../envers/usage.html">Usage</a>
+  </li>
+</ul>
+  </li>
+  <li class="nav-item" data-depth="1">
+    <a class="nav-link attachment link-external"  target="_blank" href="../api/java/index.html">Javadoc</a>
+  </li>
+  <li class="nav-item" data-depth="1">
+    <a class="nav-link link-external"  target="_blank" href="https://github.com/spring-projects/spring-data-commons/wiki">Wiki</a>
+  </li>
+</ul>
+  </li>
+</ul>
+          <div class="toggle-sm">
+            <button id="nav-toggle-2" class="nav-toggle"></button>
+          </div>
+        </nav>
+      </div>
+      <div class="nav-collapse">
+        <button id="nav-collapse-toggle"><span></span></button>        
+      </div>
+    </div>
+    <div class="nav-resize"></div>
+  </aside>
+</div>
+<script>
+!function (sidebar) {
+  if (sidebar) {
+    document.body.classList.add('nav-sm')
+  }
+}(localStorage && localStorage.getItem('sidebar') === 'close')
+</script><main class="article">
+<div class="toolbar" role="navigation">
+  <button id="nav-toggle-1" class="nav-toggle"></button>
+<div class="search">
+  <button class="DocSearch-Button search-button">
+    <svg enable-background="new 0 0 32 32" id="Glyph" version="1.1" viewBox="0 0 32 32" xml:space="preserve" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+      <path d="M27.414,24.586l-5.077-5.077C23.386,17.928,24,16.035,24,14c0-5.514-4.486-10-10-10S4,8.486,4,14  s4.486,10,10,10c2.035,0,3.928-0.614,5.509-1.663l5.077,5.077c0.78,0.781,2.048,0.781,2.828,0  C28.195,26.633,28.195,25.367,27.414,24.586z M7,14c0-3.86,3.14-7,7-7s7,3.14,7,7s-3.14,7-7,7S7,17.86,7,14z" id="XMLID_223_"/>
+    </svg>
+    <span>Search</span>
+    <span class="search-key"></span>
+  </button>
+</div>
+</div>
+  <div class="content">
+<aside class="sidebar">
+  <div class="content">
+    <div
+      class="toc"
+      data-title="Locking"
+      data-levels="2"
+    >
+      <div class="toc-menu"></div>
+    </div>
+    <div class="sidebar-links">
+        <a href="https://github.com/spring-projects/spring-data-jpa/blob/4.1.1/src/main/antora/modules/ROOT/pages/jpa/locking.adoc">
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            height="24"
+            viewBox="0 0 24 24"
+            width="24"
+          ><path
+              d="m16 2.012 3 3L16.713 7.3l-3-3zM4 14v3h3l8.299-8.287-3-3zm0 6h16v2H4z"
+            ></path></svg>
+          Edit this Page
+        </a>
+              <a href="https://github.com/spring-projects/spring-data-jpa" title="GitHub">
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            height="512px"
+            id="Layer_1"
+            version="1.1"
+            viewBox="0 0 512 512"
+            width="512px"
+          ><style type="text/css"><![CDATA[
+              .st0{fill-rule:evenodd;clip-rule:evenodd;} ]]></style><g><path
+                class="st0"
+                d="M256,32C132.3,32,32,134.8,32,261.7c0,101.5,64.2,187.5,153.2,217.9c11.2,2.1,15.3-5,15.3-11.1   c0-5.5-0.2-19.9-0.3-39.1c-62.3,13.9-75.5-30.8-75.5-30.8c-10.2-26.5-24.9-33.6-24.9-33.6c-20.3-14.3,1.5-14,1.5-14   c22.5,1.6,34.3,23.7,34.3,23.7c20,35.1,52.4,25,65.2,19.1c2-14.8,7.8-25,14.2-30.7c-49.7-5.8-102-25.5-102-113.5   c0-25.1,8.7-45.6,23-61.6c-2.3-5.8-10-29.2,2.2-60.8c0,0,18.8-6.2,61.6,23.5c17.9-5.1,37-7.6,56.1-7.7c19,0.1,38.2,2.6,56.1,7.7   c42.8-29.7,61.5-23.5,61.5-23.5c12.2,31.6,4.5,55,2.2,60.8c14.3,16.1,23,36.6,23,61.6c0,88.2-52.4,107.6-102.3,113.3   c8,7.1,15.2,21.1,15.2,42.5c0,30.7-0.3,55.5-0.3,63c0,6.1,4,13.3,15.4,11C415.9,449.1,480,363.1,480,261.7   C480,134.8,379.7,32,256,32z"
+              ></path></g></svg>
+          GitHub Project
+        </a>
+        <a href="https://stackoverflow.com/tags/spring-data-jpa">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 384 512"><path
+              d="M290.7 311L95 269.7 86.8 309l195.7 41zm51-87L188.2 95.7l-25.5 30.8 153.5 128.3zm-31.2 39.7L129.2 179l-16.7 36.5L293.7 300zM262 32l-32 24 119.3 160.3 32-24zm20.5 328h-200v39.7h200zm39.7 80H42.7V320h-40v160h359.5V320h-40z"
+            ></path></svg>
+          Stack Overflow
+        </a>
+    </div>
+  </div>
+</aside>
+<article class="doc">
+<div class="breadcrumbs-container">
+  <nav class="breadcrumbs" aria-label="breadcrumbs">
+    <ul>
+      <li id="copy-url" title="Copy versioned URL"></li>
+      <li><a href="../index.html">Spring Data JPA</a></li>
+      <li><a href="../jpa.html">JPA</a></li>
+      <li><a href="locking.html">Locking</a></li>
+    </ul>
+  </nav>
+</div><h1 id="page-title" class="page">Locking</h1>
+<div class="paragraph">
+<p>To specify the lock mode to be used, you can use the <code>@Lock</code> annotation on query methods, as shown in the following example:</p>
+</div>
+<div class="exampleblock">
+<div class="title">Example 1. Defining lock metadata on query methods</div>
+<div class="content">
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight"><code class="language-java hljs" data-lang="java">interface UserRepository extends Repository&lt;User, Long&gt; {
+
+  // Plain query method
+  @Lock(LockModeType.READ)
+  List&lt;User&gt; findByLastname(String lastname);
+}</code></pre>
+</div>
+</div>
+</div>
+</div>
+<div class="paragraph">
+<p>This method declaration causes the query being triggered to be equipped with a <code>LockModeType</code> of <code>READ</code>. You can also define locking for CRUD methods by redeclaring them in your repository interface and adding the <code>@Lock</code> annotation, as shown in the following example:</p>
+</div>
+<div class="exampleblock">
+<div class="title">Example 2. Defining lock metadata on CRUD methods</div>
+<div class="content">
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight"><code class="language-java hljs" data-lang="java">interface UserRepository extends Repository&lt;User, Long&gt; {
+
+  // Redeclaration of a CRUD method
+  @Lock(LockModeType.READ)
+  List&lt;User&gt; findAll();
+}</code></pre>
+</div>
+</div>
+</div>
+</div>
+</article>  </div>
+</main>
+<div class="modal micromodal-slide" id="modal-versions" aria-hidden="true">
+    <div class="modal__overlay" tabindex="-1" data-micromodal-close>
+        <div class="modal__container" role="dialog" aria-modal="true">
+            <main class="modal__content" id="modal-versions-content">
+              <button data-micromodal-close class="modal-versions-close">
+                <svg width="28px" height="28px" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><defs><style>.cls-1h{fill:none;stroke:#000;stroke-linecap:round;stroke-linejoin:round;stroke-width:2px;}</style></defs><title/><g id="cross"><line class="cls-1h" x1="7" x2="25" y1="7" y2="25"/><line class="cls-1h" x1="7" x2="25" y1="25" y2="7"/></g></svg>
+              </button>
+              <div class="colset">
+                <div class="col-left">
+
+                  <ul class="nav-versions">
+                      <li class="component">
+                        <div>
+                          <a class="title" href="../data-commons/index.html">Spring Data Commons</a>
+                        </div>                        <div class="version-item is-active">
+                          <div>
+                            <button class="version-toggle" type="button">
+                              <span></span>
+                              Stable
+                            </button>
+                          </div>
+                          <ul class="versions">
+  <li class="version">
+    <a href="../data-commons/index.html">
+      4.1.1
+    </a>
+  </li>
+  <li class="version">
+    <a href="../data-commons/4.0/index.html">
+      4.0.7
+    </a>
+  </li>
+  <li class="version">
+    <a href="../data-commons/3.5/index.html">
+      3.5.13
+    </a>
+  </li>
+</ul>                        </div>
+                        <div class="version-item">
+                          <div>
+                            <button class="version-toggle" type="button">
+                              <span></span>
+                              Preview
+                            </button>
+                          </div>
+                          <ul class="versions">
+  <li class="version">
+    <a href="../data-commons/4.2/index.html">
+      4.2.0-M1
+    </a>
+  </li>
+</ul>                        </div>
+                        <div class="version-item">
+                          <div>
+                            <button class="version-toggle" type="button">
+                              <span></span>
+                              Snapshot
+                            </button>
+                          </div>
+                          <ul class="versions">
+  <li class="version">
+    <a href="../data-commons/4.2-SNAPSHOT/index.html">
+      4.2.0-SNAPSHOT
+    </a>
+  </li>
+  <li class="version">
+    <a href="../data-commons/4.1-SNAPSHOT/index.html">
+      4.1.2-SNAPSHOT
+    </a>
+  </li>
+  <li class="version">
+    <a href="../data-commons/4.0-SNAPSHOT/index.html">
+      4.0.8-SNAPSHOT
+    </a>
+  </li>
+  <li class="version">
+    <a href="../data-commons/3.5-SNAPSHOT/index.html">
+      3.5.14-SNAPSHOT
+    </a>
+  </li>
+</ul>                        </div>
+                        
+                      </li>
+                      <li class="component">
+                        <div>
+                          <a class="title" href="../index.html">Spring Data JPA</a>
+                        </div>                        <div class="version-item is-active">
+                          <div>
+                            <button class="version-toggle" type="button">
+                              <span></span>
+                              Stable
+                            </button>
+                          </div>
+                          <ul class="versions">
+  <li class="version">
+    <a href="locking.html">
+      4.1.1
+    </a>
+  </li>
+  <li class="version">
+    <a href="../4.0/jpa/locking.html">
+      4.0.7
+    </a>
+  </li>
+  <li class="version">
+    <a href="../3.5/jpa/locking.html">
+      3.5.13
+    </a>
+  </li>
+</ul>                        </div>
+                        <div class="version-item">
+                          <div>
+                            <button class="version-toggle" type="button">
+                              <span></span>
+                              Preview
+                            </button>
+                          </div>
+                          <ul class="versions">
+  <li class="version">
+    <a href="../4.2/jpa/locking.html">
+      4.2.0-M1
+    </a>
+  </li>
+</ul>                        </div>
+                        <div class="version-item">
+                          <div>
+                            <button class="version-toggle" type="button">
+                              <span></span>
+                              Snapshot
+                            </button>
+                          </div>
+                          <ul class="versions">
+  <li class="version">
+    <a href="../4.2-SNAPSHOT/jpa/locking.html">
+      4.2.0-SNAPSHOT
+    </a>
+  </li>
+  <li class="version">
+    <a href="../4.1-SNAPSHOT/jpa/locking.html">
+      4.1.2-SNAPSHOT
+    </a>
+  </li>
+  <li class="version">
+    <a href="../4.0-SNAPSHOT/jpa/locking.html">
+      4.0.8-SNAPSHOT
+    </a>
+  </li>
+  <li class="version">
+    <a href="../3.5-SNAPSHOT/jpa/locking.html">
+      3.5.14-SNAPSHOT
+    </a>
+  </li>
+</ul>                        </div>
+                        
+                      </li>
+                  </ul>
+                </div>
+                <div class="col-right">
+                  <ul class="projects">
+  <li>
+    Related Spring Documentation
+    <ul class="projects-list">
+        <li>
+<a href="https://docs.spring.io/spring-framework/reference/">
+  Spring Framework
+</a>
+</li>
+        <li>
+<a class="anchor"><i class="fa fa-angle-right" aria-hidden="true"></i></a>
+  Spring Data
+<ul>
+    <li>
+<a href="https://docs.spring.io/spring-data/cassandra/reference/">
+  Spring Data Cassandra
+</a>
+</li>
+    <li>
+<a href="https://docs.spring.io/spring-data/commons/reference/">
+  Spring Data Commons
+</a>
+</li>
+    <li>
+<a href="https://docs.spring.io/spring-data/couchbase/reference/">
+  Spring Data Couchbase
+</a>
+</li>
+    <li>
+<a href="https://docs.spring.io/spring-data/elasticsearch/reference/">
+  Spring Data Elasticsearch
+</a>
+</li>
+    <li>
+<a href="https://docs.spring.io/spring-data/jpa/reference/">
+  Spring Data JPA
+</a>
+</li>
+    <li>
+<a href="https://docs.spring.io/spring-data/keyvalue/reference/">
+  Spring Data KeyValue
+</a>
+</li>
+    <li>
+<a href="https://docs.spring.io/spring-data/ldap/reference/">
+  Spring Data LDAP
+</a>
+</li>
+    <li>
+<a href="https://docs.spring.io/spring-data/mongodb/reference/">
+  Spring Data MongoDB
+</a>
+</li>
+    <li>
+<a href="https://docs.spring.io/spring-data/neo4j/reference/">
+  Spring Data Neo4j
+</a>
+</li>
+    <li>
+<a href="https://docs.spring.io/spring-data/redis/reference/">
+  Spring Data Redis
+</a>
+</li>
+    <li>
+<a href="https://docs.spring.io/spring-data/relational/reference/">
+  Spring Data JDBC &amp; R2DBC
+</a>
+</li>
+    <li>
+<a href="https://docs.spring.io/spring-data/rest/reference/">
+  Spring Data REST
+</a>
+</li>
+</ul>
+</li>
+        <li>
+<a href="https://docs.spring.io/spring-graphql/reference/">
+  Spring GraphQL
+</a>
+</li>
+    </ul>
+  </li
+  <li><a href="../spring-projects.html">All Docs...</a></li>
+</ul>
+                </div>
+              </div>
+            </main>
+        </div>
+    </div>
+</div>
+
+</div>
+<footer class="footer flex">
+    <div id="spring-links flex">
+        <img id="springlogo" src="../_/img/spring-logo.svg" alt="Spring">
+        <p class="smallest antialiased">Copyright © 2005 - <script>var d = new Date();
+        document.write(d.getFullYear());</script> Broadcom. All Rights Reserved. The term "Broadcom" refers to Broadcom Inc. and/or its subsidiaries.<br /><a href="https://www.vmware.com/help/legal.html">Terms of Use</a> • <a href="https://www.vmware.com/help/privacy.html" rel="noopener noreferrer">Privacy</a> • <a href="https://spring.io/trademarks">Trademark Guidelines</a> <span id="thank-you-mobile">• <a href="https://spring.io/thank-you">Thank you</a></span> • <a href="https://www.vmware.com/help/privacy/california-privacy-rights.html">Your California Privacy Rights</a> • <a class="ot-sdk-show-settings">Cookie Settings</a> <span id="teconsent"></span></p>
+        <p class="smallest antialiased has-gray-text">Apache®, Apache Tomcat®, Apache Kafka®, Apache Cassandra&trade;, and Apache Geode&trade; are trademarks or registered trademarks of the Apache Software Foundation in the United States and/or other countries. Java&trade;, Java&trade; SE, Java&trade; EE, and OpenJDK&trade; are trademarks of Oracle and/or its affiliates. Kubernetes® is a registered trademark of the Linux Foundation in the United States and other countries. Linux® is the registered trademark of Linus Torvalds in the United States and other countries. Windows® and Microsoft® Azure are registered trademarks of Microsoft Corporation. “AWS” and “Amazon Web Services” are trademarks or registered trademarks of Amazon.com Inc. or its affiliates. All other trademarks and copyrights are property of their respective owners and are only mentioned for informative purposes. Other names may be trademarks of their respective owners.</p>
+    </div>
+    <div id="social-icons" class="flex jc-between">
+        <a href="https://www.youtube.com/user/SpringSourceDev" title="Youtube"><svg id="youtube-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40"><circle class="cls-1" cx="20" cy="20" r="20"/><path class="cls-2" d="M30.91,14.53a2.89,2.89,0,0,0-2-2C27.12,12,20,12,20,12s-7.12,0-8.9.47a2.9,2.9,0,0,0-2,2A30.56,30.56,0,0,0,8.63,20a30.44,30.44,0,0,0,.46,5.47,2.89,2.89,0,0,0,2,2C12.9,28,20,28,20,28s7.12,0,8.9-.47a2.87,2.87,0,0,0,2-2A30.56,30.56,0,0,0,31.37,20,28.88,28.88,0,0,0,30.91,14.53ZM17.73,23.41V16.59L23.65,20Z"/></svg></a>
+        <a href="https://github.com/spring-projects" title="GitHub"><svg id="github-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 75.93 75.93"><path class="cls-1" d="M38,0a38,38,0,1,0,38,38A38,38,0,0,0,38,0Z"/></g><path class="cls-2" d="M38,15.59A22.95,22.95,0,0,0,30.71,60.3c1.15.21,1.57-.5,1.57-1.11s0-2,0-3.9c-6.38,1.39-7.73-3.07-7.73-3.07A6.09,6.09,0,0,0,22,48.86c-2.09-1.42.15-1.39.15-1.39a4.81,4.81,0,0,1,3.52,2.36c2,3.5,5.37,2.49,6.67,1.91a4.87,4.87,0,0,1,1.46-3.07c-5.09-.58-10.45-2.55-10.45-11.34a8.84,8.84,0,0,1,2.36-6.15,8.29,8.29,0,0,1,.23-6.07s1.92-.62,6.3,2.35a21.82,21.82,0,0,1,11.49,0c4.38-3,6.3-2.35,6.3-2.35a8.29,8.29,0,0,1,.23,6.07,8.84,8.84,0,0,1,2.36,6.15c0,8.81-5.37,10.75-10.48,11.32a5.46,5.46,0,0,1,1.56,4.25c0,3.07,0,5.54,0,6.29s.42,1.33,1.58,1.1A22.94,22.94,0,0,0,38,15.59Z"/></svg></a>
+        <a href="https://twitter.com/springcentral" title="Twitter"><svg id="twitter-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 75.93 75.93"><circle class="cls-1" cx="37.97" cy="37.97" r="37.97"/><path id="Twitter-2" data-name="Twitter" class="cls-2" d="M55.2,22.73a15.43,15.43,0,0,1-4.88,1.91,7.56,7.56,0,0,0-5.61-2.49A7.78,7.78,0,0,0,37,30a7.56,7.56,0,0,0,.2,1.79,21.63,21.63,0,0,1-15.84-8.23,8,8,0,0,0,2.37,10.52,7.66,7.66,0,0,1-3.48-1v.09A7.84,7.84,0,0,0,26.45,41a7.54,7.54,0,0,1-2,.28A7.64,7.64,0,0,1,23,41.09a7.71,7.71,0,0,0,7.18,5.47,15.21,15.21,0,0,1-9.55,3.37,15.78,15.78,0,0,1-1.83-.11,21.41,21.41,0,0,0,11.78,3.54c14.13,0,21.86-12,21.86-22.42,0-.34,0-.68,0-1a15.67,15.67,0,0,0,3.83-4.08,14.9,14.9,0,0,1-4.41,1.24A7.8,7.8,0,0,0,55.2,22.73Z"/></svg></a>
+    </div>
+</footer>
+<script src="../_/js/vendor/import.js"></script>
+<script src="../_/js/site.js"></script>
+<script async src="../_/js/vendor/highlight.js"></script>
+<script async src="../_/js/vendor/asciidoctor-tabs.js" data-sync-storage-key="docs:preferred-tab"></script>
+
+<div class="modal micromodal-slide" id="modal-1" aria-hidden="true">
+    <div class="modal__overlay" tabindex="-1" data-micromodal-close>
+        <div class="modal__container" role="dialog" aria-modal="true" aria-labelledby="modal-1-title">
+            <main class="modal__content" id="modal-1-content">
+                <div id="searchbox"></div>
+                <div id="counter"></div>
+                <div class="search-link-box">
+                    <a class="search-link" href="../search.html">Search in all Spring Docs</a>
+                </div>
+                <div class="search-by">
+                    <a target="_blank" rel="noopener noreferrer" href="https://www.algolia.com/" aria-label="Search by Algolia">
+                        <img class="light" width="140" src="../_/img/algolia-light.svg" />
+                        <img class="dark" width="140" src="../_/img/algolia-dark.svg" />
+                    </a>
+                </div>
+                <div id="hits"></div>
+            </main>
+        </div>
+    </div>
+</div>
+
+<script src="../_/js/vendor/hotkeys.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/algoliasearch@4.17.0/dist/algoliasearch-lite.umd.js" integrity="sha256-Lf9DrpGmcRip6OQzbcL6lnvNmoZNSKpyQX5pMlwatWE=" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/instantsearch.js@4.54.1/dist/instantsearch.production.min.js" integrity="sha256-xYsZPDeNjYNTBWLvqD2Lxe98hOxcDgOHyMPfz4tVAbk=" crossorigin="anonymous"></script>
+<script async id="search-script" src="../_/js/vendor/search.js" data-app-id="WB1FQYI187" data-api-key="c2e84f15fa630d534f1c62b1c413bb77" data-index-name="springdocs" data-stylesheet="../_/css/vendor/search.css" data-page-version="4.1.1" data-page-generation="4.1" data-page-component="data-jpa"></script>
+  </body>
+</html>
