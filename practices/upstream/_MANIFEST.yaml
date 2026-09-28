@@ -1,470 +1,346 @@
 version: "1.1"
-generated_at: "2026-05-15T16:30:00Z"
+generated_at: "2026-09-28T13:24:57Z"
 snapshots:
   - id: "spring-jpa-fetching"
     tier: 3
     source: "https://docs.spring.io/spring-data/jpa/reference/jpa/query-methods.html"
     via: "curl"
-    fetched_at: "2026-08-01T02:24:29Z"
-    bytes: 90999
-    sha: "863fe6bb47a82538097a69254a173e7d6c7fc9eaacad6c46ddcc893c389b75bd"
-  - id: "spring-jpa-locking"
-    tier: 3
-    source: "https://docs.spring.io/spring-data/jpa/reference/jpa/locking.html"
-    via: "curl"
-    fetched_at: "2026-08-01T02:24:30Z"
-    bytes: 9538
-    sha: "985042e34cfe04e01ac78e3a47de04143dac02743d9c4f62f967272a6f979506"
+    fetched_at: "2026-09-28T13:24:57Z"
+    bytes: 118485
+    sha: "1e08c4b32aa0c1ed63e36c63b68186d4f9143235987537ca2d57e0b16eb33a36"
   - id: "spring-tx-declarative"
     tier: 3
     source: "https://docs.spring.io/spring-framework/reference/data-access/transaction/declarative/annotations.html"
     via: "curl"
-    fetched_at: "2026-08-01T02:24:33Z"
-    bytes: 58106
-    sha: "bbc51da6a28faf8b435ca3fcef355cdb01cc993f1cd149cc895eda06e539a2bf"
+    fetched_at: "2026-09-28T13:24:57Z"
+    bytes: 150915
+    sha: "a93369890d25d0a285c367c04fe42f4fa8d1ae3fa6cc7602062bc553aab7a29d"
   - id: "spring-aop-proxying"
     tier: 3
     source: "https://docs.spring.io/spring-framework/reference/core/aop/proxying.html"
     via: "curl"
-    fetched_at: "2026-08-01T02:24:26Z"
-    bytes: 33543
-    sha: "37533ff70c405653ef64125abb214d4b037e38127fe99e310996336ad4586254"
+    fetched_at: "2026-09-28T13:24:57Z"
+    bytes: 124949
+    sha: "a629f40255b8161d8ea88e78bacc40b65f336fcc675b533cc8f3b3f77121c401"
   - id: "spring-mvc-modelattribute"
     tier: 3
     source: "https://docs.spring.io/spring-framework/reference/web/webmvc/mvc-controller/ann-methods/modelattrib-method-args.html"
     via: "curl"
-    fetched_at: "2026-08-01T02:24:31Z"
-    bytes: 30006
-    sha: "5dea2b8330f3a2701027ca986145b4670cef46d17bb951ef5b17104225c1ac2c"
+    fetched_at: "2026-09-28T13:24:57Z"
+    bytes: 126345
+    sha: "7e4fd846f1d370787751a89de1c09c62e7aaa267d35c04d8239efbc7b8ca8f9e"
   - id: "spring-beans-scopes"
     tier: 3
     source: "https://docs.spring.io/spring-framework/reference/core/beans/factory-scopes.html"
     via: "curl"
-    fetched_at: "2026-08-01T02:24:26Z"
-    bytes: 63066
-    sha: "c5f44a997b29a3227fbb10317ca06784e8ec7a3731134349b6863e12e15af804"
+    fetched_at: "2026-09-28T13:24:57Z"
+    bytes: 154373
+    sha: "b6162fdec5cb4d599ab323b321a32cdf7c220fc2c967a5927447b9081beae281"
   - id: "spring-beans-constructor-injection"
     tier: 3
     source: "https://docs.spring.io/spring-framework/reference/core/beans/dependencies/factory-collaborators.html"
     via: "curl"
-    fetched_at: "2026-08-01T02:24:26Z"
-    bytes: 51848
-    sha: "d8160a4265375940dfd549ff2ffea2e8e5e2748a38cb5fb6a2aa7d6d15ed0f88"
+    fetched_at: "2026-09-28T13:24:57Z"
+    bytes: 141009
+    sha: "c85b5063f77f0c373267afb098b24a9329b483a331bc9586871cb9787907dbf8"
   - id: "spring-boot-testing"
     tier: 3
     source: "https://docs.spring.io/spring-boot/reference/testing/spring-boot-applications.html"
     via: "curl"
-    fetched_at: "2026-08-01T02:24:28Z"
-    bytes: 216597
-    sha: "fe9b7f368c7d89b8ad040bd447e7930908857bf88e17a705aaf7b67e63fae191"
+    fetched_at: "2026-09-28T13:24:57Z"
+    bytes: 333034
+    sha: "3d9d687c1006ef83bd21d72a1bb416d58fe618bf2098e6e9ecde144d818e11d1"
   - id: "owasp-mass-assignment"
     tier: 3
     source: "https://cheatsheetseries.owasp.org/cheatsheets/Mass_Assignment_Cheat_Sheet.html"
     via: "curl"
-    fetched_at: "2026-08-01T02:24:21Z"
-    bytes: 17569
-    sha: "9ab9ecf5fdfa53f7811b19f131053a7cf82cfc95bae5b71b200086b3415a2359"
+    fetched_at: "2026-09-28T13:24:57Z"
+    bytes: 92865
+    sha: "891ef93b382d1e782ba8e6f4b11beaa8f8d9f1e38f02466b06c73218288cef9a"
   - id: "rest-assured-usage"
     tier: 3
     source: "https://github.com/rest-assured/rest-assured/wiki/Usage"
     via: "curl"
-    fetched_at: "2026-08-01T02:24:22Z"
-    bytes: 195516
-    sha: "7695cf4bf28debcd3c89a318d0a74eef4d13528793c2d11a03ed4298465f7642"
+    fetched_at: "2026-09-28T13:24:57Z"
+    bytes: 747386
+    sha: "50581e5e643b6cdabb3c2181827de4c12e007961661ef14e261da7269ec53ea7"
   - id: "cwe-915"
     tier: 3
     source: "https://cwe.mitre.org/data/definitions/915.html"
     via: "curl"
-    fetched_at: "2026-08-01T02:23:44Z"
-    bytes: 39494
-    sha: "3f750d6f017164ccaad0dde585b34ed968205335c2c148928e2db156b8d4793a"
+    fetched_at: "2026-09-28T13:24:57Z"
+    bytes: 153028
+    sha: "70eba7f6ecca221157e6cb159202572db249d4fa749dff44c9cf70745d1f9075"
   - id: "rfc-7807"
     tier: 3
     source: "https://datatracker.ietf.org/doc/html/rfc7807"
     via: "curl"
-    fetched_at: "2026-08-01T02:24:23Z"
-    bytes: 58630
-    sha: "b8a53ab5274b13431e0bf28f2b54e411c71e45609989912b31c2dcc8865d5fe0"
+    fetched_at: "2026-09-28T13:24:57Z"
+    bytes: 83894
+    sha: "9b6925d7fa5d5b835a40d1b83e90e17ec8f0dcf06658faed5cca9c9984431751"
   - id: "spring-mvc-exception-handler"
     tier: 3
     source: "https://docs.spring.io/spring-framework/reference/web/webmvc/mvc-controller/ann-exceptionhandler.html"
     via: "curl"
-    fetched_at: "2026-08-01T02:24:30Z"
-    bytes: 38933
-    sha: "e2bee6e882b322596d98ee30496b4b16070e9af0cf8217b8645d06a31d1eb840"
+    fetched_at: "2026-09-28T13:24:57Z"
+    bytes: 133289
+    sha: "b3bfb534867c165554dd1083057c05f854753f0de405395218cf3e3f2c0896ec"
   - id: "spring-mvc-controlleradvice"
     tier: 3
     source: "https://docs.spring.io/spring-framework/reference/web/webmvc/mvc-controller/ann-advice.html"
     via: "curl"
-    fetched_at: "2026-08-01T02:24:30Z"
-    bytes: 21283
-    sha: "1d98aad6de46b6e751fbba118ca6c1ff9a7d192333b0cd859b808e9cdd1f43b0"
-  - id: "spring-mvc-requestmapping"
-    tier: 3
-    source: "https://docs.spring.io/spring-framework/reference/web/webmvc/mvc-controller/ann-requestmapping.html"
-    via: "curl"
-    fetched_at: "2026-08-01T02:24:31Z"
-    bytes: 71324
-    sha: "5ae002c265e184a608d0abed41b7ba47bdfff8b536bd9faca702371b93e38d9b"
+    fetched_at: "2026-09-28T13:24:57Z"
+    bytes: 113898
+    sha: "8b2ce4e3efd381282c609c736e8dabcb641b82acfafa2534b5f427c89abf5ad5"
   - id: "owasp-api-error-handling"
     tier: 3
     source: "https://owasp.org/API-Security/editions/2023/en/0xa8-security-misconfiguration/"
     via: "curl"
-    fetched_at: "2026-08-01T02:24:20Z"
-    bytes: 14568
-    sha: "13b4caf037b9568c8cb81d5e9737e83bfb370fcbca70b051020a437293446b3e"
+    fetched_at: "2026-09-28T13:24:57Z"
+    bytes: 40403
+    sha: "5017f8ca69871869697c75389c8cc017836d90ce1f067b24e21aa9a672ddf2fe"
   - id: "slf4j-mdc"
     tier: 3
     source: "https://www.slf4j.org/manual.html"
     via: "curl"
-    fetched_at: "2026-08-01T02:24:25Z"
-    bytes: 45931
-    sha: "f565f9584e3cec034d603f798ba8722472fd0fe0be2c5181c5cbb5dfa7ad0a3d"
+    fetched_at: "2026-09-28T13:24:57Z"
+    bytes: 33430
+    sha: "1653cf93edadda0a2e9f9729c5aaecd5bac9e5aa3ab531af92f4fe71a265f1b6"
   - id: "logback-layouts"
     tier: 3
     source: "https://logback.qos.ch/manual/layouts.html"
     via: "curl"
-    fetched_at: "2026-08-01T02:24:19Z"
-    bytes: 122669
-    sha: "24620573cc47e80ac17c2837e12e733885692eb31b0321571ea376b8504725f6"
+    fetched_at: "2026-09-28T13:24:57Z"
+    bytes: 102210
+    sha: "d03b7550a59ca0c9de7fa7cc246c72c97c3f402c9d2fac54ae0aed9706b2b647"
   - id: "owasp-logging-cheatsheet"
     tier: 3
     source: "https://cheatsheetseries.owasp.org/cheatsheets/Logging_Cheat_Sheet.html"
     via: "curl"
-    fetched_at: "2026-08-01T02:24:20Z"
-    bytes: 60025
-    sha: "a9bd0c232efae68c3c8d3fd8731b026d5646389b20958f6838dfb46954976169"
+    fetched_at: "2026-09-28T13:24:57Z"
+    bytes: 98931
+    sha: "96db232ba8eaca30a8f2272feae33e6e0609f270bd878901a4309e1bce1c9d9f"
   - id: "spring-mvc-validation"
     tier: 3
     source: "https://docs.spring.io/spring-framework/reference/web/webmvc/mvc-controller/ann-validation.html"
     via: "curl"
-    fetched_at: "2026-08-01T02:24:31Z"
-    bytes: 25470
-    sha: "65627aa499f87d05b1610d2b70efd91599e9fe3e2eb79b9996cfd4c2dc7005af"
+    fetched_at: "2026-09-28T13:24:57Z"
+    bytes: 116979
+    sha: "a17466c62c26b496c2550d23f1d99080583a858bd68ff887c127cf1a62a36976"
   - id: "hibernate-validator"
     tier: 3
     source: "https://docs.jboss.org/hibernate/validator/8.0/reference/en-US/html_single/"
     via: "curl"
-    fetched_at: "2026-08-01T02:23:46Z"
-    bytes: 623317
-    sha: "5037fe71a6a20e0ac3116391dad1b425f7af70a30a3facd407f893174feac064"
+    fetched_at: "2026-09-28T13:24:57Z"
+    bytes: 555272
+    sha: "fbdb25a75a46100b5f441871fdf164dfc5d515e02b7a913240c98fb6feb0c09e"
   - id: "jep-444-virtual-threads"
     tier: 3
     source: "https://openjdk.org/jeps/444"
     via: "curl"
-    fetched_at: "2026-08-01T02:24:15Z"
-    bytes: 103803
-    sha: "2b72f498ecc50afa8fbae231d69e5d2409c48867a6b0c8db676fb91b571a17af"
+    fetched_at: "2026-09-28T13:24:57Z"
+    bytes: 73881
+    sha: "12efea1529d32c5928958e4cb162b19eda4b2182a47b99f8afa0dc4263cbf514"
   - id: "spring-task-execution"
     tier: 3
     source: "https://docs.spring.io/spring-boot/reference/features/task-execution-and-scheduling.html"
     via: "curl"
-    fetched_at: "2026-08-01T02:24:32Z"
-    bytes: 38619
-    sha: "0a4dcb005455d74611bc9f60137a553c881fcaab08616f4abdfa4fce348d4e98"
+    fetched_at: "2026-09-28T13:24:57Z"
+    bytes: 116706
+    sha: "03654af1e71f2beace4609a73b7eb18ed92867b801ef2db16417ac8c5f6e7e6c"
   - id: "spring-scheduling"
     tier: 3
     source: "https://docs.spring.io/spring-framework/reference/integration/scheduling.html"
     via: "curl"
-    fetched_at: "2026-08-01T02:24:31Z"
-    bytes: 98997
-    sha: "9626b7754e7c1f24ea7a6b329f695627035ed98560de6d5a5733453d82e3020d"
+    fetched_at: "2026-09-28T13:24:57Z"
+    bytes: 181434
+    sha: "a9d360f3d26ac38d176ef223a409ae4b8e12ebf63d6876fe47661933ecf6dfbf"
   - id: "spring-data-paging"
     tier: 3
     source: "https://docs.spring.io/spring-data/commons/reference/repositories/core-concepts.html"
     via: "curl"
-    fetched_at: "2026-08-01T02:24:29Z"
-    bytes: 14114
-    sha: "25034d4c45bcacfa17181b9e3ef6fee1cf9c9c159893e66dd011b7538700ce33"
+    fetched_at: "2026-09-28T13:24:57Z"
+    bytes: 45279
+    sha: "e730a4b879dbcb6f0e25e398611334fe1b3b702d6de362a3a045ee6341124e83"
   - id: "google-aip-versioning"
     tier: 3
     source: "https://google.aip.dev/180"
     via: "curl"
-    fetched_at: "2026-08-01T02:23:44Z"
-    bytes: 28185
-    sha: "bc45911101f793fdf931fca6ef34491e460f0b8c91ead9776ec3facb0e2e55fa"
+    fetched_at: "2026-09-28T13:24:57Z"
+    bytes: 39738
+    sha: "ed7caa585737a1ca526e62510dcfaf03aaadca73f8c1f44c62b2ca1bb3026b94"
   - id: "gradle-toolchains"
     tier: 3
     source: "https://docs.gradle.org/current/userguide/toolchains.html"
     via: "curl"
-    fetched_at: "2026-08-01T02:23:44Z"
-    bytes: 73230
-    sha: "96da58158bffbd9d95e1b2036c797eea5ed6a6aeea6dc7f896718e1c7ff8774a"
+    fetched_at: "2026-09-28T13:24:57Z"
+    bytes: 218228
+    sha: "85bc4726b8a65bcbd1cc5024d98b84bd53eaac533e6f167c05d5b80fbd1f34d5"
   - id: "spring-dependency-management"
     tier: 3
     source: "https://docs.spring.io/dependency-management-plugin/docs/current/reference/html/"
     via: "curl"
-    fetched_at: "2026-08-01T02:24:29Z"
-    bytes: 52116
-    sha: "af57ed62909196376086deb4c6b33bbb152495c3ae109a807c2ca710846af2cb"
+    fetched_at: "2026-09-28T13:24:57Z"
+    bytes: 50085
+    sha: "734e4263ce9665f0aa779e906d76524afa18e647305eb8ac891e740a4ce38a1d"
   - id: "spring-rest-clients"
     tier: 3
     source: "https://docs.spring.io/spring-framework/reference/integration/rest-clients.html"
     via: "curl"
-    fetched_at: "2026-08-01T02:24:31Z"
-    bytes: 96487
-    sha: "753aac9255fb63616539b2ffd1103f26295e3e27eb2ef158839b7e5bbdef6edf"
+    fetched_at: "2026-09-28T13:24:57Z"
+    bytes: 195945
+    sha: "bbfe46b6420ae68e17b2c0f87ee5bd909f62bdee1f1f651ffe8b480ade16d391"
   - id: "archunit-userguide"
     tier: 3
     source: "https://www.archunit.org/userguide/html/000_Index.html"
     via: "curl"
-    fetched_at: "2026-08-01T02:23:42Z"
-    bytes: 154873
-    sha: "8a39a43d63642703affd180171b0202d5c46f6f026164861faccc316aab5b26d"
+    fetched_at: "2026-09-28T13:24:57Z"
+    bytes: 174849
+    sha: "a635f8b559be79bcda3cc0db6e9b3f092bcb06ed73637a1d0ea665cb612cf08a"
   - id: "jep-395-records"
     tier: 3
     source: "https://openjdk.org/jeps/395"
     via: "curl"
-    fetched_at: "2026-08-01T02:23:56Z"
-    bytes: 55251
-    sha: "2d46d7548ac59a9d1ae879c59d4b169749db7dbe583156fa5123f3b5d3f035f9"
+    fetched_at: "2026-09-28T13:24:57Z"
+    bytes: 40096
+    sha: "5123b7af01cc6e89f2e9b8b511e3f24610cc806f5dd7d726fc1e7c66b24965d5"
   - id: "jep-409-sealed-classes"
     tier: 3
     source: "https://openjdk.org/jeps/409"
     via: "curl"
-    fetched_at: "2026-08-01T02:24:05Z"
-    bytes: 51129
-    sha: "89514626eb58abdd1a4d323dea41ea49b4e79ffc6ada727c9fd33200c5200b97"
+    fetched_at: "2026-09-28T13:24:57Z"
+    bytes: 38566
+    sha: "7fb58efe76ffc86f30eba7f0deadfc7db99bbc01502cc70373eb474a8c1e5b61"
   - id: "spring-boot-external-config"
     tier: 3
     source: "https://docs.spring.io/spring-boot/reference/features/external-config.html"
     via: "curl"
-    fetched_at: "2026-08-01T02:24:27Z"
-    bytes: 162422
-    sha: "8dd40ae5855729f014c04cc2f179a2cdebe152ddce7a88da4e600a295ed7fd76"
+    fetched_at: "2026-09-28T13:24:57Z"
+    bytes: 264026
+    sha: "6e3edf463aaafe803ba6a8c8ddfe5554342914a5a3df3d6fa5a332d6dcf306bf"
   - id: "spring-boot-profiles"
     tier: 3
     source: "https://docs.spring.io/spring-boot/reference/features/profiles.html"
     via: "curl"
-    fetched_at: "2026-08-01T02:24:27Z"
-    bytes: 25037
-    sha: "1b30f93d8146658770a45d0ffa0eb75ae86ab5f0fd2de0f3227c265a6269e7bd"
+    fetched_at: "2026-09-28T13:24:57Z"
+    bytes: 102511
+    sha: "1a993548ba09a7d154eb857bb4a55e348b6a3db3d08e8c8e058db1a014c0f50e"
   - id: "spring-boot-actuator-endpoints"
     tier: 3
     source: "https://docs.spring.io/spring-boot/reference/actuator/endpoints.html"
     via: "curl"
-    fetched_at: "2026-08-01T02:24:27Z"
-    bytes: 120732
-    sha: "f406d4e4a655013ef327675e1ac21874ee752391ad9079e45876d874e9a11d35"
+    fetched_at: "2026-09-28T13:24:57Z"
+    bytes: 235656
+    sha: "6aea695cde64124c7a7499b1aa5ede67ba936862574995f6ecf5df477fa7e04e"
   - id: "spring-security-csrf"
     tier: 3
     source: "https://docs.spring.io/spring-security/reference/servlet/exploits/csrf.html"
     via: "curl"
-    fetched_at: "2026-08-01T02:24:32Z"
-    bytes: 91948
-    sha: "c3b7e20bb9441535af939d6b06b4ffd4f05b167470e0b41c9a2f753da3ef6a31"
+    fetched_at: "2026-09-28T13:24:57Z"
+    bytes: 148331
+    sha: "83473da1baa813e9c656272cc0a5e1593d1c99bcbffe387ed8c7f5f20f9c5adf"
   - id: "spring-security-headers"
     tier: 3
     source: "https://docs.spring.io/spring-security/reference/servlet/exploits/headers.html"
     via: "curl"
-    fetched_at: "2026-08-01T02:24:32Z"
-    bytes: 45784
-    sha: "d02e7c0de8eeda8ad25567bfac7ed6afabc5e1f5a8e80a4a126d5a075f50d2bc"
+    fetched_at: "2026-09-28T13:24:57Z"
+    bytes: 109838
+    sha: "37d20d5db618a7b4d935c498bfd3cfe70e2d0bec4eeb04352ab7c06ad87db113"
   - id: "spring-security-stateless"
     tier: 3
     source: "https://docs.spring.io/spring-security/reference/servlet/authentication/session-management.html"
     via: "curl"
-    fetched_at: "2026-08-01T02:24:32Z"
-    bytes: 62112
-    sha: "3545f416b48993359a78c6437c6f3063a73741875b248da199cc8f65539fea94"
+    fetched_at: "2026-09-28T13:24:57Z"
+    bytes: 120574
+    sha: "0a40baa3ac110bfada7319820c25f93235f80650cc7c37bfd7aa75d224da5b8e"
   - id: "spring-boot-sql-migration"
     tier: 3
     source: "https://docs.spring.io/spring-boot/how-to/data-initialization.html"
     via: "curl"
-    fetched_at: "2026-08-01T02:24:28Z"
-    bytes: 50015
-    sha: "553566e16b6849702d25af61cf3b3e24560e7628b5bb41acef5a60afcadfc3df"
+    fetched_at: "2026-09-28T13:24:57Z"
+    bytes: 115020
+    sha: "e589153061a19e1977d143f58d738047395aca1452bb500fa2bb322a0851bfad"
   - id: "spring-cache-abstraction"
     tier: 3
     source: "https://docs.spring.io/spring-framework/reference/integration/cache/annotations.html"
     via: "curl"
-    fetched_at: "2026-08-01T02:24:29Z"
-    bytes: 85752
-    sha: "33caf7fcd7a773f64e744f5acd15c04806b77da7bd31d9fbbdb5049c91aaec18"
+    fetched_at: "2026-09-28T13:24:57Z"
+    bytes: 162288
+    sha: "3653189c9decbb0360ff64e53aa0e917e58d17b9c0989c5893e826238e8e9972"
   - id: "spring-boot-cache"
     tier: 3
     source: "https://docs.spring.io/spring-boot/reference/io/caching.html"
     via: "curl"
-    fetched_at: "2026-08-01T02:24:27Z"
-    bytes: 49638
-    sha: "2f947f1faca26980266726170849d8c43a86a44b32b9340e7a8477b8f1e2e21b"
+    fetched_at: "2026-09-28T13:24:57Z"
+    bytes: 128915
+    sha: "857ec11fb124d8032317786db3c6ada5ab34c45cf932c708f0a623d509af0463"
   - id: "spring-application-events"
     tier: 3
     source: "https://docs.spring.io/spring-framework/reference/core/beans/context-introduction.html"
     via: "curl"
-    fetched_at: "2026-08-01T02:24:26Z"
-    bytes: 84715
-    sha: "9957ee3b218bcb290005cce23e907cef8d7568fba18df5e047dad0a214e2b591"
-  - id: "pci-dss-saq-a"
+    fetched_at: "2026-09-28T13:24:57Z"
+    bytes: 172135
+    sha: "853d6f1e4fb62a9dffc842732480feacd9bcdc19bb222e6c814f56f83128f168"
+  - id: "spring-jpa-locking"
     tier: 3
-    source: "https://www.pcisecuritystandards.org/document_library/?category=saqs"
-    via: "WebFetch"
-    fetched_at: "2026-08-01T02:24:22Z"
-    bytes: 12706
-    sha: "ab93c27900cea7e4ec1e8f73b3bfab84156bef7706c7dd0f35a0ba8a062956d8"
-  - id: "iso-4217"
+    source: "https://docs.spring.io/spring-data/jpa/reference/jpa/locking.html"
+    via: "curl"
+    fetched_at: "2026-09-28T13:24:57Z"
+    bytes: 40265
+    sha: "a477dbb395a7b7e06cef73b62652d6df033b84ddeef8662e4b4a9ae783d6ba46"
+  - id: "spring-mvc-requestmapping"
     tier: 3
-    source: "https://www.iso.org/iso-4217-currency-codes.html"
-    via: "WebFetch"
-    fetched_at: "2026-07-14T00:00:00Z"
-    bytes: 2967
-    sha: "b339aa4c0bcfb4dd75a97e385d6ca54f16026205e705fe603f89b384945530eb"
-  - id: "opentelemetry-java-2026-05"
-    tier: 3
-    source: "https://opentelemetry.io/docs/languages/java/"
-    via: "WebFetch"
-    fetched_at: "2026-08-01T01:46:34Z"
-    bytes: 11950
-    sha: "eacc79e25aee385203000578edbcdecfcccade5ba3c0cbe5a66aa6a509a3cfde"
-  - id: "micrometer-2026-05"
-    tier: 3
-    source: "https://docs.micrometer.io/micrometer/reference/"
-    via: "WebFetch"
-    fetched_at: "2026-08-01T01:46:34Z"
-    bytes: 3056
-    sha: "0143a0b09d01c5c4a36aff0013d44abf70216cdcddd620a1d220f21050ee857f"
-  - id: "caffeine-2026-05"
-    tier: 3
-    source: "https://github.com/ben-manes/caffeine/wiki/Eviction"
-    via: "WebFetch"
-    fetched_at: "2026-08-01T02:23:42Z"
-    bytes: 21125
-    sha: "3656368b8c8e5a1481e97d9b9e38882fdffe1cba39329e92f3194ac94c665552"
+    source: "https://docs.spring.io/spring-framework/reference/web/webmvc/mvc-controller/ann-requestmapping.html"
+    via: "curl"
+    fetched_at: "2026-09-28T13:24:57Z"
+    bytes: 154879
+    sha: "ef79f6c104545dfcdc3badf420667c737146f0fe97eb88d73ff9300f1e4f176a"
   - id: "spring-cache-2026-05"
     tier: 3
     source: "https://docs.spring.io/spring-framework/reference/integration/cache/specific-config.html"
     via: "curl"
-    fetched_at: "2026-08-01T02:24:28Z"
-    bytes: 30227
-    sha: "312c92691c392011d5d1e0fabada606ecc633c836fad7a828ddb7db2ae043ef6"
-  - id: "resilience4j-2026-05"
+    fetched_at: "2026-09-28T13:24:57Z"
+    bytes: 110722
+    sha: "d1a2ba83d1417782eee4279f98b172a321f5e61c938ab5e7dc06fd9a28a06dea"
+  - id: "caffeine-2026-05"
     tier: 3
-    source: "https://resilience4j.readme.io/docs/"
-    via: "WebFetch"
-    fetched_at: "2026-08-01T01:46:35Z"
-    bytes: 5010
-    sha: "596a63f0ece60a2e2cb40669a08e49dc207bc0761fda7a1caa5cc81eaab5da30"
-  - id: "recharts-2026-05"
+    source: "https://github.com/ben-manes/caffeine/wiki/Eviction"
+    via: "curl"
+    fetched_at: "2026-09-28T13:24:57Z"
+    bytes: 344900
+    sha: "2b1167dbef908b28227e934ab467c1ea10d69f2e687f372cf3316a3a9880e6dc"
+  - id: "iso-4217"
     tier: 3
-    source: "https://recharts.github.io/en-US/api/ResponsiveContainer"
-    via: "WebFetch"
-    fetched_at: "2026-08-01T01:56:10Z"
-    bytes: 37927
-    sha: "bcb370fb282bf90976bf8fc69831881ac37add52053bd3e2829e57c844f444a5"
-  - id: "postgresql-fts-2026-05"
+    source: "https://www.iso.org/iso-4217-currency-codes.html"
+    via: "curl"
+    fetched_at: "2026-09-28T13:24:57Z"
+    bytes: 5507
+    sha: "d8cb16d446faaf4394ceadb31d323390230c5d4dff13bfb874419cc545ee983b"
+  - id: "pci-dss-saq-a"
     tier: 3
-    source: "https://www.postgresql.org/docs/16/textsearch.html"
-    via: "WebFetch"
-    fetched_at: "2026-08-01T01:46:38Z"
-    bytes: 1831
-    sha: "27e5907a2b1148be0bb3e111702537651e46f2bef1b40e782fca022aa1ea3869"
-  - id: "meilisearch-2026-05"
-    tier: 3
-    source: "https://www.meilisearch.com/docs/reference/api/search"
-    via: "WebFetch"
-    fetched_at: "2026-08-01T01:46:40Z"
-    bytes: 32732
-    sha: "b994fe42ab7c79ba2e50c6b0ec131eb9a217eba380e8d7a68d30bc7981ce854a"
-
-  - id: "spring-mvc-sse-2026-05"
-    tier: 2
-    source: "https://docs.spring.io/spring-framework/reference/web/webmvc/mvc-ann-async.html#mvc-ann-async-sse"
-    via: "WebFetch"
-    fetched_at: "2026-08-01T01:46:40Z"
-    bytes: 30171
-    sha: "412dbef768eb3273501ffa5be0861128f029fa02df2ad057888855325f7a3acb"
-    version_observed: "spring-framework@6.x"
-    purpose: "realtime SSE emitter pattern, serverless-safe ConditionalOnProperty opt-in, WebSocket STOMP alternative"
-
-  - id: "next-themes-2026-05"
-    tier: 3
-    source: "https://github.com/pacocoursey/next-themes"
-    via: "WebFetch"
-    fetched_at: "2026-08-01T01:46:41Z"
-    bytes: 20833
-    sha: "49059930118edda8504b54a306601a6e6e5c1ff3d635ab36b19bd26111ae5c69"
-    version_observed: "next-themes@0.3.x"
-    purpose: "Cookie-based SSR theme storage for ThemeSwitcher — eliminates first-paint flicker; SP34 R1 default"
-
+    source: "https://www.pcisecuritystandards.org/document_library/?category=saqs"
+    via: "curl"
+    fetched_at: "2026-09-28T13:24:57Z"
+    bytes: 667741
+    sha: "69574ad38311283022cab128d7917c33fe0d0891d52a5b3f3260597759f87873"
   - id: "wcag-22-techniques-2026-05"
-    tier: 2
+    tier: 3
     source: "https://www.w3.org/WAI/WCAG22/Understanding/status-messages.html"
     via: "curl"
-    fetched_at: "2026-08-01T02:24:33Z"
-    bytes: 51047
-    sha: "44cea79cc21eed61b4046e56c67904165d4ce5ce64e1da307e4b91c19fb22ded"
-    purpose: "WCAG 2.2 SC 4.1.3 Status Messages (Level AA) understanding page — status messages programmatically determined through role/properties (announce-live, impersonation-banner, maintenance-notice, background-poll refresh state)"
-
-  - id: "nts-business-reg-2026-05"
-    tier: 2
-    source: "https://www.data.go.kr/data/15081808/openapi.do"
-    via: "WebFetch"
-    fetched_at: "2026-08-01T01:57:49Z"
-    bytes: 7867
-    sha: "ad395e987713b3dcd1b331fe0dc52cad1cdd34872071ee782a1fb57663d64464"
-    purpose: "NTS 사업자등록번호 checksum algorithm (weights [1,3,7,1,3,7,1,3,5], 9th-digit two-part contribution); public BRN data sources (DART, data.go.kr)"
-
+    fetched_at: "2026-09-28T13:24:57Z"
+    bytes: 60299
+    sha: "d5a085f7be8814e4f01520db08d41d09b62491f40dc0fb6fb4941ec762cf3746"
   - id: "stripe-billing-2026-05"
-    tier: 2
+    tier: 3
     source: "https://docs.stripe.com/billing/subscriptions/overview"
-    via: "curl+snapshot-extract.sh"
-    fetched_at: "2026-07-30T00:51:30Z"
-    bytes: 3394
-    sha: "94287a976a406c8cfcae337374ce1a370e5ecf7aecc45e3c6ac24cd9140a6fee"
-    version_observed: "stripe-api@2024-06-20"
-    curated_sources:
-      - "https://docs.stripe.com/billing/subscriptions/overview (subscription status table)"
-      - "https://docs.stripe.com/api/idempotent_requests (idempotency 24h)"
-      - "https://docs.stripe.com/currencies (zero-decimal currencies)"
-    purpose: "Stripe Billing: subscription lifecycle (trialing/active/past_due/canceled), integer minor-unit amounts, idempotency (24h), webhook events, 300s replay tolerance"
-
+    via: "curl"
+    fetched_at: "2026-09-28T13:24:57Z"
+    bytes: 451728
+    sha: "4abee6352503aae461b2d3c73b3e95ce54998dc2f72f898fdf19b0b1e7878668"
   - id: "toss-billing-2026-05"
-    tier: 2
+    tier: 3
     source: "https://docs.tosspayments.com/guides/billing/overview"
     via: "curl"
-    fetched_at: "2026-08-01T02:24:33Z"
-    bytes: 9635
-    sha: "1e8b1cf00a2962139a3e0b49e4dd2a17247312b1cbe9aa602394901a1ab788e6"
-    version_observed: "toss-payments-api@2024"
-    curated_sources:
-      - "https://docs.tosspayments.com/guides/billing/overview (billingKey flow; merchant builds subscription lifecycle; amount 파라미터)"
-      - "https://docs.tosspayments.com/reference/using-api/idempotency-key (Idempotency-Key header)"
-    purpose: "Toss Payments 정기결제: billingKey flow, KRW amount 파라미터, idempotency header. NOTE: Toss defines NO subscription status enum — the merchant builds the subscription loop; anchors reflect that honestly."
-
-  # ── Korean PG callback signature spec (R14 G11 closure) ──────────────────────
-  # Closes the evidence-anchored rule provenance gap for redirect-style Korean
-  # PGs. ax-template's templates/L4/payment manifest is redirect-style (Korean
-  # market default) but had NO snapshot entries for the three dominant Korean
-  # PG signature specs — fork-receiver rules authored against a Korean adapter
-  # would fail evidence_guard.sh because no upstream_id resolved. These three
-  # entries provide stable anchors; the snapshot bodies record canonical
-  # algorithm + signing string + header/param name + key var.
-  - id: "kg-inicis-signature-2026-05"
-    tier: 2
-    source: "https://manual.inicis.com/"
-    via: "fork-receiver-provided"
-    fetched_at: "2026-08-01T01:46:42Z"
-    bytes: 1675
-    sha: "14954c788a442ac15f54be0bad97ae5ccfa20e2244e16de9d8a59324c9e5a2ff"
-    version_observed: "INIstdpay-manual@v3.2.7-2026-04-10"
-    purpose: "KG이니시스 redirect-style callback signature: SHA-256 hex over (authToken+timestamp), 'signature' query-param, INICIS_SIGN_KEY env, 5min replay window"
-
-  - id: "nice-payments-signature-2026-05"
-    tier: 2
-    source: "https://developers.nicepay.co.kr/"
-    via: "fork-receiver-provided"
-    fetched_at: "2026-08-01T01:46:46Z"
-    bytes: 2889
-    sha: "837f9779979aa630b3f94b094ce1e795993ee71f0844df8d58169a87e06022ad"
-    version_observed: "nicepay-v2-php-sample-2026-03-30"
-    purpose: "NICE페이먼츠 v2 callback signature: SHA-256 hex over (authToken+mid+amount+ediDate+merchantKey), form-POST 'signature', NICEPAY_MERCHANT_KEY env, 10min replay window"
-
-  - id: "kcp-payments-signature-2026-05"
-    tier: 2
-    source: "https://developer.kcp.co.kr/"
-    via: "fork-receiver-provided"
-    fetched_at: "2026-08-01T01:46:46Z"
-    bytes: 2561
-    sha: "d42573c56b6b0e1bba3eaf23021c176fa8e45297cc2653423630ae461ecf04ba"
-    version_observed: "kcp-pp-cli-java-v1.4.0"
-    purpose: "KCP redirect-style callback signature: Base64(SHA-256(site_cd+tno+amount+tran_cd+cust_ip+ediDate+secret_key)), form-POST envelope, KCP_SECRET_KEY + KCP_PRIVATE_KEY env, 3min replay window"
+    fetched_at: "2026-09-28T13:24:57Z"
+    bytes: 300984
+    sha: "bbfe1e0f3b36f6291b6650fbc6e81af3067327adb0a97a64744420ef51a88e2f"
